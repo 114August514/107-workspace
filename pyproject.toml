@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "runbox"
+version = "0.1.0"
+description = "107 RunBox — a beginner-friendly local web GUI over hpc-helper"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    # hpc-helper engine needs these (it is installed editable, not declared here):
+    "click>=8.0",
+    "rich>=13.0",
+    "pyyaml>=6.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
+
+[project.scripts]
+runbox = "runbox.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["runbox*"]
+
+[tool.setuptools.package-data]
+runbox = ["static/**/*"]

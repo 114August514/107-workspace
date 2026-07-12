@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+click>=8.0
+rich>=13.0
+pyyaml>=6.0
+
+[:python_version < "3.11"]
+tomli>=2.0

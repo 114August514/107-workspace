@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>107 RunBox — 集群作业工作台</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --card: #ffffff;
+      --border: #e5e8ec;
+      --border-strong: #d4d9e0;
+      --muted: #6b7280;
+      --muted-2: #9aa3af;
+      --text: #1f2937;
+      --accent: #365ceb;
+      --accent-hover: #2a4fd6;
+      --accent-soft: #eef2fe;
+      --green: #12a150;
+      --red: #e5484d;
+      --yellow: #d99323;
+      --radius: 12px;
+      --shadow: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.05);
+      /* sidebar */
+      --side-bg: #0f172a;
+      --side-fg: #cbd5e1;
+      --side-muted: #64748b;
+      --side-hover: rgba(255,255,255,.06);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── app shell ─────────────────────────────────────────── */
+    .app { display: grid; grid-template-columns: 236px 1fr; min-height: 100vh; }
+
+    .sidebar {
+      background: var(--side-bg); color: var(--side-fg);
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .side-brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; }
+    .side-brand .logo {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: linear-gradient(135deg, #5b83ff, #365ceb);
+      color: #fff; font-weight: 700; font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(54,92,235,.4);
+    }
+    .side-brand .name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: .2px; }
+    .side-brand .ver {
+      margin-left: auto; font-size: 10px; color: var(--side-muted);
+      border: 1px solid rgba(148,163,184,.25); padding: 1px 6px; border-radius: 6px;
+    }
+    .nav-group { font-size: 11px; color: var(--side-muted); text-transform: uppercase;
+      letter-spacing: .07em; padding: 16px 22px 6px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 11px;
+      padding: 9px 14px; margin: 1px 10px; border-radius: 8px;
+      color: var(--side-fg); font-size: 13.5px; cursor: pointer;
+      text-decoration: none; user-select: none;
+    }
+    .nav-item svg { width: 17px; height: 17px; color: var(--side-muted); flex-shrink: 0; }
+    .nav-item:hover { background: var(--side-hover); }
+    .nav-item.active { background: var(--accent); color: #fff; }
+    .nav-item.active svg { color: #fff; }
+    .nav-item.disabled { color: var(--side-muted); cursor: default; }
+    .nav-item.disabled:hover { background: transparent; }
+    .nav-tag {
+      margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 6px;
+      background: rgba(148,163,184,.14); color: #94a3b8; letter-spacing: .02em;
+    }
+    .side-foot {
+      margin-top: auto; padding: 14px 20px;
+      border-top: 1px solid rgba(148,163,184,.12);
+      font-size: 11.5px; color: var(--side-muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── main column ───────────────────────────────────────── */
+    .main { display: flex; flex-direction: column; min-width: 0; }
+    .appbar {
+      height: 56px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px; background: var(--card); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 4;
+    }
+    .appbar .crumb { font-size: 14px; font-weight: 600; }
+    .appbar .crumb span { color: var(--muted-2); font-weight: 500; }
+    .conn-chip {
+      display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
+      background: var(--bg); border: 1px solid var(--border); padding: 5px 12px; border-radius: 20px;
+    }
+    .content { padding: 26px 28px 72px; max-width: 940px; width: 100%; }
+
+    .page-head { margin-bottom: 20px; }
+    .page-head h2 { font-size: 20px; margin: 0 0 4px; font-weight: 650; }
+    .page-head p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+    /* workflow stepper */
+    .stepper {
+      display: flex; align-items: center; background: var(--card);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 20px; margin-bottom: 20px; box-shadow: var(--shadow);
+    }
+    .step { display: flex; align-items: center; gap: 10px; }
+    .step .n {
+      width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      background: var(--accent-soft); color: var(--accent);
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step .st-lbl { font-size: 13px; color: var(--text); font-weight: 500; white-space: nowrap; }
+    .step .st-sub { font-size: 11.5px; color: var(--muted-2); white-space: nowrap; }
+    .step-line { flex: 1; height: 2px; background: var(--border); margin: 0 14px; border-radius: 2px; }
+
+    /* ── cards ─────────────────────────────────────────────── */
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--shadow);
+    }
+    .card-head { display: flex; align-items: center; gap: 11px; margin: 0 0 16px;
+      padding-bottom: 13px; border-bottom: 1px solid var(--border); }
+    .badge {
+      width: 25px; height: 25px; border-radius: 7px;
+      background: var(--accent-soft); color: var(--accent);
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .card-head h3 { font-size: 15px; margin: 0; font-weight: 650; }
+    .card-head .ch-sub { font-size: 12px; color: var(--muted-2); margin-left: 2px; }
+    .card-head .tail { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .pill { font-size: 13px; color: var(--text); }
+    .pill b { font-weight: 600; }
+    .hint { color: var(--muted); font-size: 13px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--muted-2); }
+    .dot.ok { background: var(--green); }
+    .dot.bad { background: var(--red); }
+
+    button {
+      font: inherit; padding: 8px 15px; border-radius: 8px; border: 1px solid var(--border-strong);
+      background: var(--card); color: var(--text); cursor: pointer; transition: all .12s ease;
+    }
+    button:hover { border-color: var(--muted-2); background: #fafbfc; }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button:disabled:hover { background: var(--card); border-color: var(--border-strong); }
+    button.primary:disabled:hover { background: var(--accent); border-color: var(--accent); }
+    .placeholder { color: var(--muted); font-size: 13px; padding: 6px 0; }
+    .muted-line { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+    /* setup form */
+    .setup { display: none; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 18px; }
+    .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .field input, .field select {
+      width: 100%; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: 8px;
+      font: inherit; background: #fff; color: var(--text);
+    }
+    .field input:focus, .field select:focus {
+      outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .test-result { font-size: 13px; margin-top: 10px; min-height: 18px; }
+    .test-result.ok { color: var(--green); }
+    .test-result.bad { color: var(--red); }
+
+    /* terminal */
+    .term { border-radius: 10px; overflow: hidden; border: 1px solid #2a2f37; }
+    .term-bar { display: flex; align-items: center; gap: 6px; background: #282d34; padding: 8px 12px; }
+    .term-bar i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+    .term-bar .t-r { background: #ec6a5e; }
+    .term-bar .t-y { background: #f4bf4f; }
+    .term-bar .t-g { background: #61c554; }
+    .term-bar .t-label { margin-left: 8px; font-size: 12px; color: #9aa2ad; }
+
+    /* toast */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #111827; color: #fff; font-size: 13px; padding: 10px 18px; border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.22); opacity: 0; pointer-events: none;
+      transition: opacity .2s, transform .2s; z-index: 50;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    @media (max-width: 720px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; flex-direction: row; overflow-x: auto; }
+      .nav-group, .side-foot, .side-brand .ver { display: none; }
+      .step .st-sub { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ── SIDEBAR ─────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="side-brand">
+        <span class="logo">R</span>
+        <span class="name">107 RunBox</span>
+        <span class="ver">v0.1</span>
+      </div>
+
+      <div class="nav-group">工作区</div>
+      <a class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        工作台
+      </a>
+      <a class="nav-item disabled" data-soon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+        数据集 <span class="nav-tag">即将上线</span>
+      </a>
+      <a class="nav-item disabled" data-soon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        作业历史 <span class="nav-tag">即将上线</span>
+      </a>
+
+      <div class="nav-group">协作</div>
+      <a class="nav-item disabled" data-soon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        协作空间 <span class="nav-tag">即将上线</span>
+      </a>
+      <a class="nav-item disabled" data-soon>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        资源监控 <span class="nav-tag">即将上线</span>
+      </a>
+
+      <div class="nav-group">系统</div>
+      <a class="nav-item" id="setupToggle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        连接设置
+      </a>
+
+      <div class="side-foot">
+        <span>中国科大 · HPC 作业助手</span>
+      </div>
+    </aside>
+
+    <!-- ── MAIN ────────────────────────────────────────────── -->
+    <div class="main">
+      <header class="appbar">
+        <div class="crumb"><span>工作区 /</span> 工作台</div>
+        <div class="conn-chip"><span class="dot" id="connDot"></span><span id="connText">检查中…</span></div>
+      </header>
+
+      <div class="content">
+        <div class="page-head">
+          <h2>作业工作流</h2>
+          <p>按四步完成一次运行:申请 GPU 节点 → 同步项目代码 → 运行脚本 → 取回结果。</p>
+        </div>
+
+        <!-- workflow stepper -->
+        <div class="stepper">
+          <div class="step"><span class="n">1</span><div><div class="st-lbl">申请节点</div><div class="st-sub">分配 GPU</div></div></div>
+          <div class="step-line"></div>
+          <div class="step"><span class="n">2</span><div><div class="st-lbl">同步代码</div><div class="st-sub">上传项目</div></div></div>
+          <div class="step-line"></div>
+          <div class="step"><span class="n">3</span><div><div class="st-lbl">运行脚本</div><div class="st-sub">提交作业</div></div></div>
+          <div class="step-line"></div>
+          <div class="step"><span class="n">4</span><div><div class="st-lbl">取回结果</div><div class="st-sub">下载产物</div></div></div>
+        </div>
+
+        <!-- SETUP (shown when not configured, or via 连接设置) -->
+        <section class="card setup" id="card-setup">
+          <div class="card-head"><span class="badge">⚙</span><h3>连接设置</h3></div>
+          <p class="hint" style="margin-top:0">填一次集群连接信息,测通后保存。默认值已为本集群预填。</p>
+          <div class="grid2" style="margin-top:12px">
+            <div class="field"><label>SSH 别名 (来自 ~/.ssh/config)</label><input id="f_host"></div>
+            <div class="field"><label>集群用户名</label><input id="f_user"></div>
+            <div class="field"><label>远程 home 目录</label><input id="f_remote_home"></div>
+            <div class="field"><label>默认 conda 环境</label><input id="f_conda_env"></div>
+            <div class="field"><label>Slurm account</label><input id="f_account"></div>
+            <div class="field"><label>Slurm partition</label><input id="f_partition"></div>
+            <div class="field"><label>Slurm QOS</label><input id="f_qos"></div>
+            <div class="field"><label>默认 CPU 数</label><input id="f_cpus" type="number"></div>
+            <div class="field"><label>默认 GPU 数</label><input id="f_gpus" type="number"></div>
+            <div class="field"><label>默认运行时长 (分钟)</label><input id="f_walltime" type="number"></div>
+          </div>
+          <div class="row" style="margin-top:16px">
+            <button id="btnTest">测试连接</button>
+            <button class="primary" id="btnSave">保存</button>
+          </div>
+          <div class="test-result" id="testResult"></div>
+        </section>
+
+        <!-- ① GPU 节点 -->
+        <section class="card" id="card-node">
+          <div class="card-head"><span class="badge">1</span><h3>GPU 节点</h3><span class="ch-sub">分配一个可运行的计算节点</span></div>
+          <div class="row" id="nodeBody">
+            <span class="placeholder">加载中…</span>
+          </div>
+        </section>
+
+        <!-- ② 我的项目 -->
+        <section class="card" id="card-project">
+          <div class="card-head"><span class="badge">2</span><h3>我的项目</h3><span class="ch-sub">扫描本地代码并同步到集群</span></div>
+          <div class="row">
+            <div class="field" style="flex:1; min-width:240px">
+              <label>项目文件夹</label>
+              <div class="row" style="gap:8px">
+                <input id="projPath" placeholder="例如 /home/scc/pb24000216/my-project" style="flex:1">
+                <button id="btnBrowse">浏览…</button>
+                <button class="primary" id="btnScan">扫描</button>
+              </div>
+            </div>
+          </div>
+          <div id="projInfo" class="muted-line" style="display:none">
+            <span id="projName"></span> · <span id="projCount"></span>
+            <div class="muted-line" style="margin-top:6px">远程: <span id="projRemote"></span></div>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="primary" id="btnPush" disabled>↑ 同步到集群</button>
+            <span id="pushStatus" class="hint"></span>
+          </div>
+          <!-- folder browser -->
+          <div id="browser" style="display:none; margin-top:12px; border:1px solid var(--border); border-radius:8px; padding:10px; max-height:260px; overflow:auto">
+            <div class="row" style="margin-bottom:8px">
+              <button id="brUp" title="上级目录">↑</button>
+              <span class="hint" id="brPath" style="flex:1; word-break:break-all"></span>
+              <button class="primary" id="brPick">选定当前目录</button>
+            </div>
+            <div id="brList"></div>
+          </div>
+        </section>
+
+        <!-- ③ 运行 -->
+        <section class="card" id="card-run">
+          <div class="card-head"><span class="badge">3</span><h3>运行</h3><span class="ch-sub">在节点上执行脚本并实时查看输出</span></div>
+          <div class="row">
+            <div class="field" style="flex:1; min-width:240px">
+              <label>脚本</label>
+              <select id="runScript">
+                <option value="">(先扫描项目以选择脚本)</option>
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:12px" id="argsBox">
+            <div class="field" style="flex:1; min-width:200px">
+              <label>参数 (可选,以空格分隔)</label>
+              <input id="runArgs" placeholder="例如 --lr 0.001 --epochs 50">
+            </div>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button class="primary" id="btnRun">▶ 运行</button>
+            <button id="btnStop" disabled>■ 停止</button>
+            <span id="runStatus" class="hint"></span>
+          </div>
+        </section>
+
+        <!-- ④ 输出 -->
+        <section class="card" id="card-output">
+          <div class="card-head"><span class="badge">4</span><h3>输出</h3><span class="ch-sub">运行日志与结果</span></div>
+          <div class="term">
+            <div class="term-bar">
+              <i class="t-r"></i><i class="t-y"></i><i class="t-g"></i>
+              <span class="t-label">终端输出</span>
+              <span id="liveDot" class="dot" style="display:none; margin-left:auto"></span>
+            </div>
+            <pre id="logPanel" style="background:#1b1f24; color:#d4d7db; padding:12px; min-height:200px; max-height:440px; overflow:auto; font-size:12.5px; line-height:1.45; margin:0; white-space:pre-wrap; word-break:break-word; font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace"></pre>
+          </div>
+          <div class="row" style="margin-top:14px">
+            <button id="btnPull">↓ 下载结果</button>
+            <span id="pullStatus" class="hint"></span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    async function api(path, opts) {
+      const res = await fetch(path, opts);
+      let body = null;
+      try { body = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        const e = new Error((body && body.message) || `HTTP ${res.status}`);
+        e.kind = body && body.kind;
+        e.body = body;
+        throw e;
+      }
+      return body;
+    }
+
+    // small toast for "coming soon" nav items and light notices
+    let toastTimer = null;
+    function toast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+    document.querySelectorAll('.nav-item[data-soon]').forEach(a => {
+      a.addEventListener('click', () => toast('该功能正在开发中,敬请期待 🚧'));
+    });
+
+    // Friendly Chinese translations for engine error kinds.
+    function friendly(e) {
+      const m = e.message || '';
+      if (e.kind === 'auth') return '无法连接集群:' + m + '。请检查 SSH 配置或在设置页测试连接。';
+      if (e.kind === 'config') return '尚未完成设置,请先打开「连接设置」填写集群信息。';
+      if (e.kind === 'alloc') {
+        if (/already active/i.test(m)) return '已有一个节点在运行,请先释放。';
+        if (/No active job/i.test(m)) return '还没有 GPU 节点,请先点「申请 GPU 节点」。';
+        if (/No remote project/i.test(m)) return '还没有同步代码,请先在「我的项目」点同步。';
+        if (/disappeared|terminal state/i.test(m)) return '作业未成功启动(可能队列繁忙或额度不足):' + m;
+        return '节点申请失败:' + m;
+      }
+      if (e.kind === 'sync') return '文件同步失败:' + m;
+      return m;
+    }
+
+    function el(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+
+    const SETUP_FIELDS = {
+      host: 'f_host', user: 'f_user', remote_home: 'f_remote_home',
+      conda_env: 'f_conda_env', account: 'f_account', partition: 'f_partition',
+      qos: 'f_qos', cpus: 'f_cpus', gpus: 'f_gpus', walltime: 'f_walltime',
+    };
+
+    function fillForm(data) {
+      for (const [k, id] of Object.entries(SETUP_FIELDS)) {
+        if (data && data[k] != null) document.getElementById(id).value = data[k];
+      }
+    }
+
+    function readForm() {
+      const o = {};
+      for (const [k, id] of Object.entries(SETUP_FIELDS)) o[k] = document.getElementById(id).value;
+      return o;
+    }
+
+    function renderConn(session) {
+      const dot = document.getElementById('connDot');
+      const text = document.getElementById('connText');
+      const setup = document.getElementById('card-setup');
+      if (!session.configured) {
+        dot.className = 'dot bad';
+        text.textContent = '未配置';
+        setup.style.display = 'block';
+      } else {
+        dot.className = 'dot ok';
+        text.textContent = `已连接 · ${session.config.user}`;
+        setup.style.display = 'none';
+      }
+    }
+
+    function renderNode(session) {
+      const body = document.getElementById('nodeBody');
+      const job = session.job;
+      if (!session.configured) {
+        body.innerHTML = '<span class="placeholder">请先完成连接设置(点左侧「连接设置」)。</span>';
+        return;
+      }
+      if (job && job.job_id && job.state === 'running') {
+        const left = job.minutes_left != null ? `剩余 ${Math.floor(job.minutes_left/60)}h${job.minutes_left%60}m` : '';
+        body.innerHTML = `
+          <span class="dot ok"></span>
+          <span class="pill">运行于 <b>${job.node}</b> · 作业 ${job.job_id}${left ? ' · '+left : ''}</span>
+          <button id="btnDown" style="margin-left:auto">释放节点</button>`;
+        document.getElementById('btnDown').onclick = releaseNode;
+      } else {
+        body.innerHTML = `
+          <span class="hint">暂无节点</span>
+          <button class="primary" id="btnUp" style="margin-left:auto">申请 GPU 节点 ▸</button>`;
+        document.getElementById('btnUp').onclick = getGpu;
+      }
+    }
+
+    async function refresh() {
+      try {
+        const s = await api('/api/session');
+        renderConn(s);
+        renderNode(s);
+      } catch (e) {
+        document.getElementById('connText').textContent = '连接出错';
+      }
+    }
+
+    async function loadSetup() {
+      const d = await api('/api/config/defaults');
+      fillForm(d.config || d.defaults);
+      // If remote_home still empty, derive from username.
+      if (!document.getElementById('f_remote_home').value) {
+        const u = document.getElementById('f_user').value;
+        if (u) document.getElementById('f_remote_home').value = `/home/scc/${u}`;
+      }
+    }
+
+    function setTestResult(cls, msg) {
+      const r = document.getElementById('testResult');
+      r.className = 'test-result ' + cls;
+      r.textContent = msg;
+    }
+
+    async function testConn() {
+      const btn = document.getElementById('btnTest');
+      btn.disabled = true; setTestResult('', '测试连接中…');
+      try {
+        await api('/api/config/test', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(readForm()) });
+        setTestResult('ok', '✓ 连接成功');
+      } catch (e) {
+        setTestResult('bad', '✗ ' + friendly(e));
+      } finally { btn.disabled = false; }
+    }
+
+    async function saveCfg() {
+      const btn = document.getElementById('btnSave');
+      btn.disabled = true; setTestResult('', '保存中…');
+      try {
+        await api('/api/config', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(readForm()) });
+        setTestResult('ok', '✓ 已保存');
+        await refresh();
+      } catch (e) {
+        setTestResult('bad', '✗ ' + friendly(e));
+      } finally { btn.disabled = false; }
+    }
+
+    document.getElementById('setupToggle').onclick = () => {
+      const c = document.getElementById('card-setup');
+      const showing = !(c.style.display === 'none' || !c.style.display);
+      c.style.display = showing ? 'none' : 'block';
+      if (!showing) c.scrollIntoView({behavior: 'smooth', block: 'start'});
+    };
+    document.getElementById('btnTest').onclick = testConn;
+    document.getElementById('btnSave').onclick = saveCfg;
+    // Auto-fill remote_home from username as the user types.
+    document.getElementById('f_user').addEventListener('input', () => {
+      const cur = document.getElementById('f_remote_home').value;
+      if (!cur || /^\/home\/scc\//.test(cur)) {
+        document.getElementById('f_remote_home').value = `/home/scc/${document.getElementById('f_user').value}`;
+      }
+    });
+
+    // ── project card ──
+    let scanned = null;  // {python_files, name, ...}
+
+    async function browse(path) {
+      const d = await api('/api/project/browse' + (path ? '?path=' + encodeURIComponent(path) : ''));
+      document.getElementById('brPath').textContent = d.path;
+      const list = document.getElementById('brList');
+      list.innerHTML = '';
+      (d.dirs || []).forEach(name => {
+        const b = el(`<button style="display:block; text-align:left; width:100%; margin-bottom:4px">📁 ${name}</button>`);
+        b.onclick = () => browse(d.path + '/' + name);
+        list.appendChild(b);
+      });
+      if (!d.dirs || d.dirs.length === 0) list.innerHTML = '<span class="hint">(没有子目录)</span>';
+      document.getElementById('brUp').onclick = () => browse(d.parent || d.path);
+      document.getElementById('browser').style.display = 'block';
+      // remember current browse path for "use this folder"
+      list.dataset.path = d.path;
+    }
+    document.getElementById('btnBrowse').onclick = () => browse(document.getElementById('projPath').value || '');
+    // "选定当前目录" button, or double-click the list, picks the browsed folder
+    function pickBrowsed() {
+      const p = document.getElementById('brList').dataset.path;
+      if (p) { document.getElementById('projPath').value = p; document.getElementById('browser').style.display = 'none'; }
+    }
+    document.getElementById('brPick').onclick = pickBrowsed;
+    document.getElementById('brList').addEventListener('dblclick', pickBrowsed);
+
+    async function scanProject() {
+      const path = document.getElementById('projPath').value.trim();
+      if (!path) return;
+      const btn = document.getElementById('btnScan'); btn.disabled = true;
+      document.getElementById('pushStatus').textContent = '扫描中…';
+      try {
+        scanned = await api('/api/project/scan', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({path}) });
+        document.getElementById('projInfo').style.display = 'block';
+        document.getElementById('projName').textContent = scanned.name;
+        document.getElementById('projCount').textContent = `${scanned.total_files} 个文件, ${scanned.changed_files.length} 个待同步, ${scanned.python_files.length} 个 .py`;
+        document.getElementById('projRemote').textContent = scanned.remote_project;
+        document.getElementById('btnPush').disabled = false;
+        document.getElementById('pushStatus').textContent = '';
+        // populate script dropdown
+        const sel = document.getElementById('runScript');
+        sel.innerHTML = '';
+        if (scanned.python_files.length === 0) {
+          sel.innerHTML = '<option value="">(该项目没有 .py 文件)</option>';
+        } else {
+          scanned.python_files.forEach(f => sel.appendChild(el(`<option value="${f}">${f}</option>`)));
+        }
+      } catch (e) {
+        document.getElementById('pushStatus').textContent = '✗ ' + friendly(e);
+      } finally { btn.disabled = false; }
+    }
+    document.getElementById('btnScan').onclick = scanProject;
+    document.getElementById('projPath').addEventListener('keydown', e => { if (e.key === 'Enter') scanProject(); });
+
+    async function pushProject() {
+      const btn = document.getElementById('btnPush'); btn.disabled = true;
+      const st = document.getElementById('pushStatus');
+      st.textContent = '同步中…';
+      try {
+        const r = await api('/api/project/push', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({path: document.getElementById('projPath').value.trim()}) });
+        if (r.skipped) st.textContent = '✓ 无变化,已跳过';
+        else st.textContent = `✓ 已同步 ${r.transferred} 个文件 → ${r.remote_project}`;
+        await refresh();
+      } catch (e) { st.textContent = '✗ ' + friendly(e); }
+      finally { btn.disabled = false; }
+    }
+    document.getElementById('btnPush').onclick = pushProject;
+
+    // ── run / output card ──
+    let runES = null;
+
+    function appendLog(line) {
+      const p = document.getElementById('logPanel');
+      p.textContent += line + '\n';
+      p.scrollTop = p.scrollHeight;
+    }
+
+    function setRunning(on) {
+      document.getElementById('btnRun').disabled = on;
+      document.getElementById('btnStop').disabled = !on;
+      document.getElementById('liveDot').style.display = on ? 'inline-block' : 'none';
+      document.getElementById('liveDot').style.background = on ? 'var(--green)' : 'var(--muted-2)';
+      document.getElementById('liveDot').style.animation = on ? 'pulse 1s infinite' : 'none';
+    }
+
+    async function startRun() {
+      const script = document.getElementById('runScript').value;
+      if (!script) { toast('请先选择脚本'); return; }
+      // simple space-split args; advanced quoting not in MVP scope
+      const args = document.getElementById('runArgs').value.trim().split(/\s+/).filter(Boolean);
+      document.getElementById('logPanel').textContent = '';
+      document.getElementById('runStatus').textContent = '启动中…';
+      setRunning(true);
+      try {
+        await api('/api/run', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({script, args}) });
+        document.getElementById('runStatus').textContent = '运行中…';
+        // attach SSE stream
+        runES = new EventSource('/api/run/stream');
+        runES.addEventListener('line', ev => appendLog(ev.data));
+        runES.addEventListener('exit', ev => {
+          appendLog(`\n[退出码 ${ev.data}]`);
+          document.getElementById('runStatus').textContent = '已结束(退出码 ' + ev.data + ')';
+          setRunning(false);
+          runES.close();
+        });
+        runES.onerror = () => { /* stream closed */ };
+      } catch (e) {
+        document.getElementById('runStatus').textContent = '✗ ' + friendly(e);
+        setRunning(false);
+      }
+    }
+    document.getElementById('btnRun').onclick = startRun;
+
+    async function stopRun() {
+      document.getElementById('btnStop').disabled = true;
+      try { await api('/api/run/stop', { method: 'POST' }); }
+      catch (e) { toast(friendly(e)); }
+      document.getElementById('runStatus').textContent = '已停止';
+    }
+    document.getElementById('btnStop').onclick = stopRun;
+
+    async function pullResults() {
+      const st = document.getElementById('pullStatus'); st.textContent = '下载中…';
+      try {
+        const r = await api('/api/pull', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+        st.textContent = '✓ 结果已下载到 ' + r.local_dest;
+      } catch (e) { st.textContent = '✗ ' + friendly(e); }
+    }
+    document.getElementById('btnPull').onclick = pullResults;
+
+    async function getGpu() {
+      const btn = document.getElementById('btnUp');
+      btn.disabled = true; btn.textContent = '申请中…';
+      const body = document.getElementById('nodeBody');
+      body.innerHTML = `<span class="dot" style="background:var(--yellow);animation:pulse 1s infinite"></span>
+        <span class="hint" id="upStatus">正在启动…</span>`;
+      const es = new EventSource('/api/node/up');
+      es.addEventListener('status', ev => {
+        document.getElementById('upStatus').textContent = ev.data;
+      });
+      es.addEventListener('done', () => { es.close(); refresh(); });
+      es.addEventListener('error', ev => {
+        es.close();
+        // EventSource 'error' fires both on real errors and on the stream
+        // closing without a 'done'; if no node appeared, surface a message.
+        refresh().then(() => {
+          const job = document.querySelector('#nodeBody .pill b');
+          if (!job) toast('GPU 申请失败,请查看状态(若队列繁忙可能需要等待)。');
+        });
+      });
+    }
+    async function releaseNode() {
+      const btn = document.getElementById('btnDown');
+      btn.disabled = true; btn.textContent = '释放中…';
+      try { await api('/api/node/down', { method: 'POST' }); }
+      catch (e) { toast(friendly(e)); }
+      finally { await refresh(); }
+    }
+
+    refresh();
+    loadSetup();
+  </script>
+</body>
+</html>

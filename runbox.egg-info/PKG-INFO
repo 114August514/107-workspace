@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: runbox
+Version: 0.1.0
+Summary: 107 RunBox — a beginner-friendly local web GUI over hpc-helper
+Requires-Python: >=3.10
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.29
+Requires-Dist: click>=8.0
+Requires-Dist: rich>=13.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: tomli>=2.0; python_version < "3.11"
