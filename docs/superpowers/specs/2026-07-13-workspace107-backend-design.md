@@ -395,6 +395,12 @@ changing application service signatures.
 
 The application depends on these operations:
 
+`RunSubmission` contains an opaque resolved `project_uri`. Each dataset mount
+contains its dataset version ID, opaque resolved `source_uri`, and normalized
+relative mount path. The API accepts resource IDs; the application resolves
+these URIs before calling the adapter, so cluster implementations never query
+application repositories.
+
 ```python
 preflight(spec: RunSubmission) -> list[PreflightCheck]
 submit(spec: RunSubmission) -> SubmittedJob
@@ -402,10 +408,13 @@ status(external_job_id: str) -> JobObservation
 cancel(external_job_id: str) -> None
 read_log(external_job_id: str, offset: int) -> LogChunk
 collect_artifacts(external_job_id: str) -> list[CollectedArtifact]
+open_artifact(external_job_id: str, artifact_key: str) -> AsyncIterator[bytes]
 ```
 
-The port uses domain values only. It does not expose subprocess objects,
-Slurm-specific states, filesystem paths, or transport details.
+`collect_artifacts` returns immutable metadata with opaque adapter keys;
+`open_artifact` streams one selected object. The port uses domain values only.
+It does not expose subprocess objects, Slurm-specific states, filesystem paths,
+or transport details.
 
 ### 9.2 ProjectTransferPort
 
@@ -540,7 +549,8 @@ and exposes `reconcile_once()` for deterministic integration tests.
 
 1. Resolve `X-User-Id` and verify workspace membership.
 2. Load active project, template, and exact dataset versions.
-3. Validate entrypoint, mount paths, output paths, environment, and resources.
+3. Validate entrypoint, mount paths, output paths, environment, and resources,
+   then resolve the project and dataset storage URIs.
 4. Ask the selected cluster adapter to perform implementation-specific
    preflight where required.
 5. Create the run, dataset links, immutable snapshot, and initial event in one
@@ -549,8 +559,9 @@ and exposes `reconcile_once()` for deterministic integration tests.
 7. Store the external job ID and transition to `QUEUED`, or record a typed
    failure.
 8. Let the reconciler observe subsequent states.
-9. On terminal completion, store logs and results through `StoragePort`, then
-   create artifact records.
+9. On terminal completion, enumerate adapter artifact metadata, stream each
+   object through `ClusterPort.open_artifact` into `StoragePort`, then create
+   artifact records.
 
 `POST /runs/preflight` runs steps 1 through 4 without creating persistent run
 state. `POST /runs` repeats preflight to avoid trusting a stale client result.
