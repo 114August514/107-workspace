@@ -165,16 +165,35 @@ class ProjectSyncRepository(Protocol):
 
 @runtime_checkable
 class UnitOfWork(Protocol):
-    users: UserRepository
-    workspaces: WorkspaceRepository
-    members: MemberRepository
-    projects: ProjectRepository
-    datasets: DatasetRepository
-    templates: TemplateRepository
-    runs: RunRepository
-    events: RunEventRepository
-    artifacts: ArtifactRepository
-    syncs: ProjectSyncRepository
+    @property
+    def users(self) -> UserRepository: ...
+
+    @property
+    def workspaces(self) -> WorkspaceRepository: ...
+
+    @property
+    def members(self) -> MemberRepository: ...
+
+    @property
+    def projects(self) -> ProjectRepository: ...
+
+    @property
+    def datasets(self) -> DatasetRepository: ...
+
+    @property
+    def templates(self) -> TemplateRepository: ...
+
+    @property
+    def runs(self) -> RunRepository: ...
+
+    @property
+    def events(self) -> RunEventRepository: ...
+
+    @property
+    def artifacts(self) -> ArtifactRepository: ...
+
+    @property
+    def syncs(self) -> ProjectSyncRepository: ...
 
     async def __aenter__(self) -> Self: ...
 
