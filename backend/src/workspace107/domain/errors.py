@@ -24,3 +24,15 @@ class ResourceArchived(DomainError):
 
 class PreflightFailed(DomainError):
     code = "preflight_failed"
+
+
+class ResourceConflict(DomainError):
+    code = "resource_conflict"
+
+
+class FinalOwnerRequired(DomainError):
+    code = "final_owner_required"
+
+
+class InvalidWorkspaceParent(DomainError):
+    code = "invalid_workspace_parent"
