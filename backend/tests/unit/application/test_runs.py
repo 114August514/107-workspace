@@ -385,7 +385,12 @@ def selections(seeded: Seeded) -> tuple[RunDatasetSelection, ...]:
 
 def service_for(seeded: Seeded, cluster: FakeCluster) -> RunService:
     factory = cast(UnitOfWorkFactory, FakeUnitOfWorkFactory(seeded.state))
-    return RunService(factory, cast(ClusterPort, cluster), project_transport="local")
+    return RunService(
+        factory,
+        cast(ClusterPort, cluster),
+        project_transport="local",
+        clock=lambda: NOW,
+    )
 
 
 async def test_preflight_aggregates_checks_without_persisting() -> None:

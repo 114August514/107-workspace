@@ -5,6 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from workspace107.domain.errors import (
+    ClusterUnavailable,
     DomainError,
     FinalOwnerRequired,
     InvalidRunTransition,
@@ -69,20 +70,26 @@ async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:
         status, title = 409, "Resource conflict"
     elif isinstance(exc, InvalidRunTransition):
         status, title = 409, "Invalid run transition"
-    elif isinstance(exc, (InvalidWorkspaceParent, PathOutsideAllowedRoot, PreflightFailed)):
+    elif isinstance(exc, PreflightFailed):
+        status, title = 422, "Run preflight failed"
+    elif isinstance(exc, (InvalidWorkspaceParent, PathOutsideAllowedRoot)):
         status, title = 422, "Validation failed"
+    elif isinstance(exc, ClusterUnavailable):
+        status, title = 503, "Cluster unavailable"
     else:
         status, title = 400, "Domain operation failed"
-    detail = (
-        "A transfer path is outside its configured root."
-        if isinstance(exc, PathOutsideAllowedRoot)
-        else str(exc)
-    )
+    if isinstance(exc, PathOutsideAllowedRoot):
+        detail = "A transfer path is outside its configured root."
+    elif isinstance(exc, ClusterUnavailable):
+        detail = "The configured cluster adapter is unavailable."
+    else:
+        detail = str(exc)
     return problem_response(
         status=status,
         title=title,
         code=exc.code,
         detail=detail,
+        errors=exc.errors if isinstance(exc, PreflightFailed) else None,
     )
 
 

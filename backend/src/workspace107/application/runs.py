@@ -1,7 +1,7 @@
 import json
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID
 
@@ -16,7 +16,9 @@ from workspace107.domain.errors import (
     ResourceNotFound,
 )
 from workspace107.domain.models import (
+    Artifact,
     DatasetMount,
+    LogChunk,
     NewRun,
     NewRunEvent,
     PreflightCheck,
@@ -24,16 +26,19 @@ from workspace107.domain.models import (
     ResourceSpec,
     Run,
     RunDataset,
+    RunEvent,
     RunSubmission,
     RunTemplate,
     utc_now,
 )
 from workspace107.domain.ports.cluster import ClusterPort
 from workspace107.domain.ports.repositories import UnitOfWork, UnitOfWorkFactory
+from workspace107.domain.ports.storage import StoragePort
 from workspace107.domain.state_machine import transition
 
 _TERMINAL = frozenset({RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED})
 _CAS_ATTEMPTS = 4
+_EVENT_STEP = timedelta(microseconds=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +91,31 @@ def _failure_code(error: Exception) -> str:
     return "cluster_unavailable"
 
 
+def _failed_checks(checks: tuple[PreflightCheck, ...]) -> tuple[dict[str, object], ...]:
+    return tuple(
+        {"code": check.code, "message": check.message} for check in checks if not check.passed
+    )
+
+
+async def _authorized_run(
+    uow: UnitOfWork,
+    actor_id: UUID,
+    run_id: UUID,
+    *,
+    minimum: WorkspaceRole = WorkspaceRole.VIEWER,
+) -> Run:
+    run = await uow.runs.get(run_id)
+    if run is None:
+        raise ResourceNotFound(f"run {run_id} not found")
+    await require_workspace_access(
+        uow,
+        actor_id=actor_id,
+        workspace_id=run.workspace_id,
+        minimum=minimum,
+    )
+    return run
+
+
 class RunService:
     def __init__(
         self,
@@ -93,10 +123,12 @@ class RunService:
         cluster: ClusterPort,
         *,
         project_transport: str,
+        clock: Callable[[], datetime] = utc_now,
     ) -> None:
         self._uow_factory = uow_factory
         self._cluster = cluster
         self._project_transport = project_transport
+        self._clock = clock
 
     async def preflight(
         self,
@@ -141,16 +173,23 @@ class RunService:
             datasets=datasets,
         )
         if prepared.submission is None or prepared.snapshot is None:
-            raise PreflightFailed("run preflight failed")
+            raise PreflightFailed(errors=_failed_checks(prepared.checks))
         try:
             adapter_checks = await self._cluster.preflight(prepared.submission)
         except Exception as error:
-            raise PreflightFailed("cluster preflight failed") from error
+            raise PreflightFailed(
+                errors=(
+                    {
+                        "code": "cluster_unavailable",
+                        "message": "The cluster adapter is unavailable.",
+                    },
+                )
+            ) from error
         checks = (*prepared.checks, *adapter_checks)
         if not all(check.passed for check in checks):
-            raise PreflightFailed("run preflight failed")
+            raise PreflightFailed(errors=_failed_checks(checks))
 
-        now = utc_now()
+        now = self._now()
         new_run = NewRun(
             workspace_id=prepared.workspace_id,
             project_id=prepared.project_id,
@@ -194,19 +233,70 @@ class RunService:
             run.id, submitted.external_job_id, submitted.submitted_at
         )
 
+    async def list(
+        self,
+        *,
+        actor_id: UUID,
+        workspace_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[Run, ...]:
+        async with self._uow_factory() as uow:
+            await require_workspace_access(
+                uow,
+                actor_id=actor_id,
+                workspace_id=workspace_id,
+                minimum=WorkspaceRole.VIEWER,
+            )
+            return await uow.runs.list_for_workspace(
+                workspace_id,
+                limit=limit,
+                offset=offset,
+            )
+
+    async def get(self, *, actor_id: UUID, run_id: UUID) -> Run:
+        async with self._uow_factory() as uow:
+            return await _authorized_run(uow, actor_id, run_id)
+
+    async def list_events(self, *, actor_id: UUID, run_id: UUID) -> tuple[RunEvent, ...]:
+        async with self._uow_factory() as uow:
+            await _authorized_run(uow, actor_id, run_id)
+            return await uow.events.list_for_run(run_id)
+
+    async def read_log(self, *, actor_id: UUID, run_id: UUID, offset: int) -> LogChunk:
+        if offset < 0:
+            raise ValueError("log offset must be non-negative")
+        async with self._uow_factory() as uow:
+            run = await _authorized_run(uow, actor_id, run_id)
+        if run.external_job_id is None:
+            if offset != 0:
+                raise ResourceConflict("run has no log at the requested offset")
+            return LogChunk(
+                offset=0,
+                next_offset=0,
+                data="",
+                end_of_stream=run.status in _TERMINAL,
+            )
+        return await self._cluster.read_log(run.external_job_id, offset)
+
     async def cancel(self, *, actor_id: UUID, run_id: UUID) -> Run:
         result: Run | None = None
         external_job_id: str | None = None
         for _ in range(_CAS_ATTEMPTS):
             async with self._uow_factory() as uow:
-                run = await self._authorized_run(uow, actor_id, run_id)
+                run = await _authorized_run(
+                    uow,
+                    actor_id,
+                    run_id,
+                    minimum=WorkspaceRole.MEMBER,
+                )
                 if run.status in _TERMINAL:
                     return run
                 if run.status is RunStatus.CANCELLING:
                     result = run
                     external_job_id = run.external_job_id
                     break
-                now = utc_now()
+                now = self._next_event_time(run)
                 replacement = replace(
                     run,
                     status=transition(run.status, RunStatus.CANCELLING),
@@ -385,12 +475,13 @@ class RunService:
                 if run is None:
                     raise ResourceNotFound(f"run {run_id} not found")
                 if run.status is RunStatus.SUBMITTING:
+                    transition_at = self._next_event_time(run, submitted_at)
                     replacement = replace(
                         run,
                         status=transition(run.status, RunStatus.QUEUED),
                         external_job_id=external_job_id,
                         submitted_at=submitted_at,
-                        updated_at=submitted_at,
+                        updated_at=transition_at,
                     )
                     event = NewRunEvent(
                         run_id=run.id,
@@ -399,14 +490,15 @@ class RunService:
                         to_status=RunStatus.QUEUED,
                         message="Run was accepted by the cluster.",
                         details={"external_job_id": external_job_id},
-                        created_at=submitted_at,
+                        created_at=transition_at,
                     )
                 elif run.status is RunStatus.CANCELLING:
+                    transition_at = self._next_event_time(run, submitted_at)
                     replacement = replace(
                         run,
                         external_job_id=external_job_id,
                         submitted_at=submitted_at,
-                        updated_at=submitted_at,
+                        updated_at=transition_at,
                     )
                     event = NewRunEvent(
                         run_id=run.id,
@@ -415,7 +507,7 @@ class RunService:
                         to_status=RunStatus.CANCELLING,
                         message="Late cluster submission was attached for cancellation.",
                         details={"external_job_id": external_job_id},
-                        created_at=submitted_at,
+                        created_at=transition_at,
                     )
                     cancel_late_job = True
                 else:
@@ -445,7 +537,7 @@ class RunService:
                     raise ResourceNotFound(f"run {run_id} not found")
                 if run.status in _TERMINAL:
                     return run
-                now = utc_now()
+                now = self._next_event_time(run)
                 replacement = replace(
                     run,
                     status=transition(run.status, RunStatus.FAILED),
@@ -473,7 +565,8 @@ class RunService:
 
     async def _record_adapter_error(self, run_id: UUID, operation: str, error: Exception) -> None:
         async with self._uow_factory() as uow:
-            if await uow.runs.get(run_id) is None:
+            run = await uow.runs.get(run_id)
+            if run is None:
                 return
             await uow.events.add(
                 NewRunEvent(
@@ -481,9 +574,22 @@ class RunService:
                     event_type="adapter_error",
                     message="Cluster adapter operation failed.",
                     details={"code": _failure_code(error), "operation": operation},
+                    created_at=self._next_event_time(run),
                 )
             )
             await uow.commit()
+
+    def _now(self) -> datetime:
+        value = self._clock()
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("run service clock must return a timezone-aware datetime")
+        return value.astimezone(UTC)
+
+    def _next_event_time(self, run: Run, candidate: datetime | None = None) -> datetime:
+        value = self._now() if candidate is None else candidate
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("run event time must be timezone-aware")
+        return max(value.astimezone(UTC), run.updated_at.astimezone(UTC) + _EVENT_STEP)
 
     async def _ensure_submittable(
         self,
@@ -535,15 +641,26 @@ class RunService:
             raise ResourceNotFound(f"run template {template_id} not found")
         return project, template
 
-    @staticmethod
-    async def _authorized_run(uow: UnitOfWork, actor_id: UUID, run_id: UUID) -> Run:
-        run = await uow.runs.get(run_id)
-        if run is None:
-            raise ResourceNotFound(f"run {run_id} not found")
-        await require_workspace_access(
-            uow,
-            actor_id=actor_id,
-            workspace_id=run.workspace_id,
-            minimum=WorkspaceRole.MEMBER,
-        )
-        return run
+
+class ArtifactService:
+    def __init__(self, uow_factory: UnitOfWorkFactory, storage: StoragePort) -> None:
+        self._uow_factory = uow_factory
+        self._storage = storage
+
+    async def list(self, *, actor_id: UUID, run_id: UUID) -> tuple[Artifact, ...]:
+        async with self._uow_factory() as uow:
+            await _authorized_run(uow, actor_id, run_id)
+            return await uow.artifacts.list_for_run(run_id)
+
+    async def open(
+        self,
+        *,
+        actor_id: UUID,
+        artifact_id: UUID,
+    ) -> tuple[Artifact, AsyncIterator[bytes]]:
+        async with self._uow_factory() as uow:
+            artifact = await uow.artifacts.get(artifact_id)
+            if artifact is None:
+                raise ResourceNotFound(f"artifact {artifact_id} not found")
+            await _authorized_run(uow, actor_id, artifact.run_id)
+        return artifact, self._storage.open(artifact.storage_key)

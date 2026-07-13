@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+
+
 class DomainError(Exception):
     code = "domain_error"
 
@@ -24,6 +27,15 @@ class ResourceArchived(DomainError):
 
 class PreflightFailed(DomainError):
     code = "preflight_failed"
+
+    def __init__(
+        self,
+        message: str = "One or more run checks failed.",
+        *,
+        errors: tuple[Mapping[str, object], ...] = (),
+    ) -> None:
+        super().__init__(message)
+        self.errors = tuple(dict(error) for error in errors)
 
 
 class ResourceConflict(DomainError):
