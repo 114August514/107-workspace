@@ -170,6 +170,8 @@ class ProjectSyncRepository(Protocol):
 
     async def upsert(self, new: NewProjectSync) -> ProjectSync: ...
 
+    async def get_latest(self, project_id: UUID, transport: str) -> ProjectSync | None: ...
+
 
 @runtime_checkable
 class UnitOfWork(Protocol):

@@ -44,3 +44,7 @@ class InvalidStorageKey(DomainError):
 
 class PathOutsideAllowedRoot(DomainError):
     code = "path_outside_allowed_root"
+
+
+class ClusterUnavailable(DomainError):
+    code = "cluster_unavailable"

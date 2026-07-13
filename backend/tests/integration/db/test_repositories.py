@@ -143,6 +143,7 @@ async def test_save_role_removal_and_sync_upsert(
         assert changed is not None and changed.role is WorkspaceRole.MANAGER
         assert await uow.members.count_owners(workspace.id) == 0
         assert await uow.syncs.get(project.id, "local", "file:///target") == sync
+        assert await uow.syncs.get_latest(project.id, "local") == sync
 
         updated_sync = await uow.syncs.upsert(
             NewProjectSync(

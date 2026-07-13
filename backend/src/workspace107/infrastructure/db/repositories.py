@@ -843,6 +843,22 @@ class SqlAlchemyProjectSyncRepository:
         )
         return _sync(row) if row is not None else None
 
+    async def get_latest(self, project_id: UUID, transport: str) -> ProjectSync | None:
+        row = await self._session.scalar(
+            select(ProjectSyncRow)
+            .where(
+                ProjectSyncRow.project_id == project_id,
+                ProjectSyncRow.transport == transport,
+            )
+            .order_by(
+                ProjectSyncRow.last_synced_at.desc(),
+                ProjectSyncRow.updated_at.desc(),
+                ProjectSyncRow.id.desc(),
+            )
+            .limit(1)
+        )
+        return _sync(row) if row is not None else None
+
     async def upsert(self, new: NewProjectSync) -> ProjectSync:
         row = await self._session.scalar(
             select(ProjectSyncRow).where(
