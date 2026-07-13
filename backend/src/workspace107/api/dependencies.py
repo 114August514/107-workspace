@@ -6,6 +6,7 @@ from fastapi import Depends, Header, Request
 from workspace107.api.errors import ApiProblem
 from workspace107.application.datasets import DatasetService
 from workspace107.application.projects import ProjectService
+from workspace107.application.templates import TemplateService
 from workspace107.application.users import UserService
 from workspace107.application.workspaces import WorkspaceService
 from workspace107.domain.ports.repositories import UnitOfWorkFactory
@@ -50,10 +51,15 @@ def get_dataset_service(
     return DatasetService(uow_factory, storage)
 
 
+def get_template_service(uow_factory: UowFactoryDependency) -> TemplateService:
+    return TemplateService(uow_factory)
+
+
 UserServiceDependency = Annotated[UserService, Depends(get_user_service)]
 WorkspaceServiceDependency = Annotated[WorkspaceService, Depends(get_workspace_service)]
 ProjectServiceDependency = Annotated[ProjectService, Depends(get_project_service)]
 DatasetServiceDependency = Annotated[DatasetService, Depends(get_dataset_service)]
+TemplateServiceDependency = Annotated[TemplateService, Depends(get_template_service)]
 
 
 async def require_identity(
