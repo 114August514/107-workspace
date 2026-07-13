@@ -436,10 +436,19 @@ class IgnoreRules:
 
 
 @dataclass(frozen=True, slots=True)
+class TransferWarning:
+    code: str
+    message: str
+    path: str | None = None
+    size_bytes: int | None = None
+    count: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectSnapshot:
     source: Path
     files: tuple[FileSignature, ...]
-    warnings: tuple[str, ...] = ()
+    warnings: tuple[TransferWarning, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -460,7 +469,7 @@ class TransferResult:
     skipped: tuple[str, ...]
     removed: tuple[str, ...]
     manifest: Mapping[str, FileSignature]
-    warnings: tuple[str, ...] = ()
+    warnings: tuple[TransferWarning, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "transferred", _normalized_paths(self.transferred))

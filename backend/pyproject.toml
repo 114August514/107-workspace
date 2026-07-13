@@ -5,6 +5,7 @@ description = "Backend for the 107 collaborative computing workspace"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "anyio>=4.9,<5",
   "aiosqlite>=0.21,<1",
   "alembic>=1.16,<2",
   "fastapi>=0.116,<1",

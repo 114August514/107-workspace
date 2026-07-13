@@ -2,12 +2,24 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from workspace107.api.dependencies import IdentityDependency, ProjectServiceDependency
-from workspace107.api.schemas.projects import (
-    ProjectCreateRequest,
-    ProjectResponse,
-    ProjectUpdateRequest,
+from workspace107.api.dependencies import (
+    IdentityDependency,
+    ProjectServiceDependency,
+    TransferServiceDependency,
 )
+from workspace107.api.schemas.projects import (
+    FileSignatureResponse,
+    ProjectCreateRequest,
+    ProjectPullRequest,
+    ProjectPushRequest,
+    ProjectResponse,
+    ProjectScanRequest,
+    ProjectScanResponse,
+    ProjectTransferResponse,
+    ProjectUpdateRequest,
+    TransferWarningResponse,
+)
+from workspace107.domain.models import TransferResult
 
 router = APIRouter(tags=["projects"])
 
@@ -83,3 +95,73 @@ async def archive_project(
     service: ProjectServiceDependency,
 ) -> ProjectResponse:
     return ProjectResponse.model_validate(await service.archive(actor_id, project_id))
+
+
+@router.post("/projects/{project_id}/scan", response_model=ProjectScanResponse)
+async def scan_project(
+    project_id: UUID,
+    request: ProjectScanRequest,
+    actor_id: IdentityDependency,
+    service: TransferServiceDependency,
+) -> ProjectScanResponse:
+    snapshot = await service.scan(
+        actor_id=actor_id,
+        project_id=project_id,
+        source_root=request.source_root,
+        ignore_patterns=request.ignore_patterns,
+    )
+    return ProjectScanResponse(
+        files=tuple(FileSignatureResponse.model_validate(item) for item in snapshot.files),
+        warnings=tuple(
+            TransferWarningResponse.model_validate(warning) for warning in snapshot.warnings
+        ),
+    )
+
+
+def _transfer_response(result: TransferResult) -> ProjectTransferResponse:
+    return ProjectTransferResponse(
+        transferred=result.transferred,
+        skipped=result.skipped,
+        removed=result.removed,
+        manifest={
+            path: FileSignatureResponse.model_validate(signature)
+            for path, signature in result.manifest.items()
+        },
+        warnings=tuple(
+            TransferWarningResponse.model_validate(warning) for warning in result.warnings
+        ),
+    )
+
+
+@router.post("/projects/{project_id}/push", response_model=ProjectTransferResponse)
+async def push_project(
+    project_id: UUID,
+    request: ProjectPushRequest,
+    actor_id: IdentityDependency,
+    service: TransferServiceDependency,
+) -> ProjectTransferResponse:
+    result = await service.push(
+        actor_id=actor_id,
+        project_id=project_id,
+        source_root=request.source_root,
+        target_root=request.target_root,
+        ignore_patterns=request.ignore_patterns,
+    )
+    return _transfer_response(result)
+
+
+@router.post("/projects/{project_id}/pull", response_model=ProjectTransferResponse)
+async def pull_project(
+    project_id: UUID,
+    request: ProjectPullRequest,
+    actor_id: IdentityDependency,
+    service: TransferServiceDependency,
+) -> ProjectTransferResponse:
+    result = await service.pull(
+        actor_id=actor_id,
+        project_id=project_id,
+        source_root=request.source_root,
+        target_root=request.target_root,
+        include=request.include,
+    )
+    return _transfer_response(result)

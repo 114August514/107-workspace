@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
@@ -12,15 +15,19 @@ from workspace107.config import get_settings
 from workspace107.domain.errors import DomainError
 from workspace107.domain.ports.repositories import UnitOfWorkFactory
 from workspace107.domain.ports.storage import StoragePort
+from workspace107.domain.ports.transfer import ProjectTransferPort
 from workspace107.infrastructure.db.session import create_engine, create_session_factory
 from workspace107.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from workspace107.infrastructure.storage.local import LocalStorage
+from workspace107.infrastructure.transfer.local import LocalProjectTransfer
 
 
 def create_app(
     *,
     uow_factory: UnitOfWorkFactory | None = None,
     storage: StoragePort | None = None,
+    transfer: ProjectTransferPort | None = None,
+    transfer_roots: Mapping[str, Path] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="107 Workspace API", version="0.1.0")
     if uow_factory is None:
@@ -34,6 +41,9 @@ def create_app(
         app.state.database_engine = engine
     app.state.uow_factory = uow_factory
     app.state.storage = storage or LocalStorage(get_settings().storage_root)
+    configured_roots = dict(transfer_roots or get_settings().transfer_roots)
+    app.state.transfer_roots = configured_roots
+    app.state.transfer = transfer or LocalProjectTransfer(tuple(configured_roots.values()))
 
     app.add_exception_handler(ApiProblem, api_problem_handler)
     app.add_exception_handler(DomainError, domain_error_handler)

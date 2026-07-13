@@ -623,6 +623,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
     { name = "alembic" },
+    { name = "anyio" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "pydantic-settings" },
@@ -645,6 +646,7 @@ dev = [
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21,<1" },
     { name = "alembic", specifier = ">=1.16,<2" },
+    { name = "anyio", specifier = ">=4.9,<5" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "jinja2", specifier = ">=3.1,<4" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },

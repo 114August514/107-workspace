@@ -9,6 +9,7 @@ from workspace107.domain.errors import (
     FinalOwnerRequired,
     InvalidRunTransition,
     InvalidWorkspaceParent,
+    PathOutsideAllowedRoot,
     PreflightFailed,
     ResourceArchived,
     ResourceConflict,
@@ -68,15 +69,20 @@ async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:
         status, title = 409, "Resource conflict"
     elif isinstance(exc, InvalidRunTransition):
         status, title = 409, "Invalid run transition"
-    elif isinstance(exc, (InvalidWorkspaceParent, PreflightFailed)):
+    elif isinstance(exc, (InvalidWorkspaceParent, PathOutsideAllowedRoot, PreflightFailed)):
         status, title = 422, "Validation failed"
     else:
         status, title = 400, "Domain operation failed"
+    detail = (
+        "A transfer path is outside its configured root."
+        if isinstance(exc, PathOutsideAllowedRoot)
+        else str(exc)
+    )
     return problem_response(
         status=status,
         title=title,
         code=exc.code,
-        detail=str(exc),
+        detail=detail,
     )
 
 

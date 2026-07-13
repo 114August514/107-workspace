@@ -40,3 +40,7 @@ class InvalidWorkspaceParent(DomainError):
 
 class InvalidStorageKey(DomainError):
     code = "invalid_storage_key"
+
+
+class PathOutsideAllowedRoot(DomainError):
+    code = "path_outside_allowed_root"
