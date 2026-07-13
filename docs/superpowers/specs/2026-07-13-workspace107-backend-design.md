@@ -672,7 +672,7 @@ settings include:
 
 - Database URL.
 - Storage root.
-- Mock-cluster root and timing.
+- Mock-cluster state root.
 - Cluster adapter: `mock` or `slurm`.
 - Cluster transport: `local` or `ssh`.
 - SSH alias and remote root.

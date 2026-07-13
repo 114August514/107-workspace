@@ -188,7 +188,10 @@ class SshProjectTransfer:
 
     @staticmethod
     def _local_file(root: Path, relative: str) -> Path:
-        path = root.joinpath(*PurePosixPath(relative).parts).resolve(strict=True)
+        try:
+            path = root.joinpath(*PurePosixPath(relative).parts).resolve(strict=True)
+        except FileNotFoundError as error:
+            raise ResourceNotFound(f"project file {relative!r} not found") from error
         if not path.is_relative_to(root):
             raise PathOutsideAllowedRoot("project file resolves outside its source root")
         return path

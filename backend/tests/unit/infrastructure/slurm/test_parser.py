@@ -36,6 +36,14 @@ def test_parse_squeue_empty_means_not_active() -> None:
     assert parse_squeue("\n", NOW) is None
 
 
+def test_parse_squeue_rejects_multiple_active_records() -> None:
+    with pytest.raises(ClusterUnavailable, match="multiple active"):
+        parse_squeue(
+            "123|RUNNING|gpu01|start\n124|PENDING|(null)|N/A\n",
+            NOW,
+        )
+
+
 @pytest.mark.parametrize(
     ("state", "expected", "exit_code"),
     [
@@ -93,8 +101,21 @@ def test_parse_sacct_missing_main_job_is_not_found() -> None:
         parse_sacct("123.batch|COMPLETED|0:0|start|end\n", "123", NOW)
 
 
+def test_parse_sacct_skips_blank_lines_and_rejects_malformed_record() -> None:
+    observation = parse_sacct("\n123|COMPLETED|0:0|start|end\n", "123", NOW)
+    assert observation.status is RunStatus.SUCCEEDED
+
+    with pytest.raises(ClusterUnavailable, match="malformed accounting"):
+        parse_sacct("123|COMPLETED|0:0|start\n", "123", NOW)
+
+
 def test_parse_sbatch_parsable_output() -> None:
     assert parse_sbatch_job_id("12345;cluster\n") == "12345"
+
+
+def test_parse_rejects_non_utf8_command_output() -> None:
+    with pytest.raises(ClusterUnavailable, match="non-UTF-8"):
+        parse_sbatch_job_id(b"\xff")
 
 
 @pytest.mark.parametrize("output", ["", "Submitted batch job 123", "123;bad;extra", "x$(id)"])

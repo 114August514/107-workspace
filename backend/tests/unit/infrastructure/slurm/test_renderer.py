@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import PurePosixPath
 
 import pytest
@@ -99,3 +100,40 @@ def test_render_rejects_unknown_or_incomplete_environment() -> None:
         render_sbatch(render_spec(environment={"kind": "container"}))
     with pytest.raises(ValueError, match="conda environment name"):
         render_sbatch(render_spec(environment={"kind": "conda"}))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("project_path", PurePosixPath("relative/project"), "project_path"),
+        ("log_root", PurePosixPath("/cluster/log root"), "log_root"),
+        ("entrypoint", "../train.py", "safe relative"),
+        ("entrypoint", "{{ unsafe }}", "template marker"),
+    ],
+)
+def test_render_rejects_unsafe_paths(
+    field: str,
+    value: PurePosixPath | str,
+    message: str,
+) -> None:
+    spec = render_spec()
+
+    with pytest.raises(ValueError, match=message):
+        render_sbatch(replace(spec, **{field: value}))
+
+
+@pytest.mark.parametrize(
+    ("resources", "message"),
+    [
+        (ResourceSpec(cpus=0, memory_mb=1, gpus=0, walltime_seconds=1), "cpus"),
+        (ResourceSpec(cpus=1, memory_mb=0, gpus=0, walltime_seconds=1), "memory_mb"),
+        (ResourceSpec(cpus=1, memory_mb=1, gpus=-1, walltime_seconds=1), "gpus"),
+        (ResourceSpec(cpus=1, memory_mb=1, gpus=0, walltime_seconds=0), "walltime"),
+    ],
+)
+def test_render_rejects_non_positive_resources(
+    resources: ResourceSpec,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        render_sbatch(replace(render_spec(), resources=resources))

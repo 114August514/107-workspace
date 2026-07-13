@@ -1,3 +1,4 @@
+import asyncio
 import shlex
 import sys
 
@@ -64,6 +65,42 @@ async def test_local_runner_normalizes_spawn_failure() -> None:
 
     with pytest.raises(ExternalCommandFailed, match="could not be started"):
         await runner.run(("workspace107-command-does-not-exist",))
+
+
+async def test_local_runner_rejects_empty_command() -> None:
+    with pytest.raises(ValueError, match="cannot be empty"):
+        await LocalCommandRunner().run(())
+
+
+async def test_local_runner_terminates_process_when_cancelled() -> None:
+    task = asyncio.create_task(
+        LocalCommandRunner().run((sys.executable, "-c", "import time; time.sleep(30)"))
+    )
+    await asyncio.sleep(0.05)
+
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=2)
+
+
+class MissingReturnCodeProcess:
+    returncode: int | None = None
+
+    async def communicate(self, _: bytes | None = None) -> tuple[bytes, bytes]:
+        return b"", b""
+
+
+async def test_local_runner_rejects_missing_process_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_spawn(*_: object, **__: object) -> MissingReturnCodeProcess:
+        return MissingReturnCodeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_spawn)
+
+    with pytest.raises(ExternalCommandFailed, match="exit code"):
+        await LocalCommandRunner().run(("command",))
 
 
 async def test_ssh_runner_builds_one_quoted_remote_command() -> None:

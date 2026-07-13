@@ -5,6 +5,7 @@ import pytest
 
 from workspace107.config import Settings
 from workspace107.domain.ports.repositories import UnitOfWorkFactory
+from workspace107.infrastructure.cluster.mock import MockClusterAdapter
 from workspace107.infrastructure.cluster.slurm.adapter import SlurmClusterAdapter
 from workspace107.infrastructure.storage.local import LocalStorage
 from workspace107.infrastructure.transfer.local import LocalProjectTransfer
@@ -74,3 +75,45 @@ def test_create_app_requires_host_for_ssh_transport(tmp_path: Path) -> None:
             storage=LocalStorage(tmp_path / "objects"),
             start_reconciler=False,
         )
+
+
+def test_create_app_rejects_non_positive_reconcile_interval(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="reconcile interval"):
+        create_app(
+            settings=settings_for(tmp_path, transport="local"),
+            uow_factory=unused_uow_factory(),
+            storage=LocalStorage(tmp_path / "objects"),
+            start_reconciler=False,
+            reconcile_interval_seconds=0,
+        )
+
+
+def test_create_app_requires_named_cluster_transfer_root(tmp_path: Path) -> None:
+    settings = settings_for(tmp_path, transport="local")
+    settings.transfer_roots.pop("cluster")
+
+    with pytest.raises(RuntimeError, match="transfer root 'cluster'"):
+        create_app(
+            settings=settings,
+            uow_factory=unused_uow_factory(),
+            storage=LocalStorage(tmp_path / "objects"),
+            start_reconciler=False,
+        )
+
+
+async def test_create_app_owns_default_engine_through_lifespan(tmp_path: Path) -> None:
+    settings = Settings(
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'owned.db'}",
+        storage_root=tmp_path / "storage",
+        transfer_roots={
+            "source": tmp_path / "source",
+            "cluster": tmp_path / "cluster",
+            "downloads": tmp_path / "downloads",
+        },
+        mock_cluster_root=tmp_path / "mock",
+    )
+    app = create_app(settings=settings, start_reconciler=False)
+
+    async with app.router.lifespan_context(app):
+        assert isinstance(app.state.cluster, MockClusterAdapter)
+        assert app.state.database_engine is not None

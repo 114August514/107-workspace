@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import PurePosixPath
@@ -8,9 +9,15 @@ from typing import cast
 import pytest
 
 from workspace107.domain.enums import ArtifactKind
+from workspace107.domain.errors import (
+    ClusterUnavailable,
+    ExternalCommandFailed,
+    ResourceConflict,
+    ResourceNotFound,
+)
 from workspace107.domain.models import DatasetMount, ResourceSpec, RunSubmission
 from workspace107.infrastructure.cluster.slurm.adapter import SlurmClusterAdapter
-from workspace107.infrastructure.cluster.slurm.command_runner import CommandResult
+from workspace107.infrastructure.cluster.slurm.command_runner import CommandResult, CommandRunner
 
 from . import test_contract as contract
 from .conftest import ClusterHarness, FakeClock
@@ -176,6 +183,60 @@ class ScriptedSlurmRunner:
         exit_code: int = 0,
     ) -> CommandResult:
         return CommandResult.completed(stdout=stdout, stderr=stderr, exit_code=exit_code)
+
+
+class RoutingRunner:
+    def __init__(self, responses: dict[str, CommandResult] | None = None) -> None:
+        self.responses = responses or {}
+        self.calls: list[tuple[str, ...]] = []
+
+    async def run(
+        self,
+        arguments: tuple[str, ...],
+        *,
+        input_data: bytes | None = None,
+    ) -> CommandResult:
+        del input_data
+        self.calls.append(arguments)
+        return self.responses.get(arguments[0], CommandResult.completed())
+
+
+class OutputOverrideRunner(ScriptedSlurmRunner):
+    find_output: bytes | None = None
+    stat_output: bytes | None = None
+
+    async def run(
+        self,
+        arguments: tuple[str, ...],
+        *,
+        input_data: bytes | None = None,
+    ) -> CommandResult:
+        if arguments[0] == "find" and self.find_output is not None:
+            self.calls.append((arguments, input_data))
+            return self._result(stdout=self.find_output)
+        if arguments[0] == "stat" and self.stat_output is not None:
+            self.calls.append((arguments, input_data))
+            return self._result(stdout=self.stat_output)
+        return await super().run(arguments, input_data=input_data)
+
+
+EDGE_NOW = datetime.fromisoformat("2026-01-01T00:00:00+00:00")
+
+
+def edge_adapter(
+    runner: CommandRunner,
+    *,
+    clock: Callable[[], datetime] = lambda: EDGE_NOW,
+    project_roots: tuple[PurePosixPath, ...] = (PurePosixPath("/projects"),),
+) -> SlurmClusterAdapter:
+    return SlurmClusterAdapter(
+        runner,
+        remote_root=PurePosixPath("/cluster/workspace107"),
+        project_roots=project_roots,
+        dataset_roots=(PurePosixPath("/datasets"),),
+        storage_root=PurePosixPath("/storage"),
+        clock=clock,
+    )
 
 
 def _harness(
@@ -372,3 +433,298 @@ async def test_slurm_output_metadata_survives_adapter_reconstruction(
     )
 
     assert job.external_job_id.encode() in content
+
+
+def test_slurm_constructor_rejects_unsafe_or_missing_roots() -> None:
+    runner = RoutingRunner()
+
+    with pytest.raises(ValueError, match="project root"):
+        edge_adapter(runner, project_roots=())
+    with pytest.raises(ValueError, match="remote_root"):
+        SlurmClusterAdapter(
+            runner,
+            remote_root=PurePosixPath("relative/root"),
+            project_roots=(PurePosixPath("/projects"),),
+            dataset_roots=(PurePosixPath("/datasets"),),
+            storage_root=PurePosixPath("/storage"),
+        )
+
+
+async def test_slurm_preflight_reports_unavailable_partition(
+    valid_submission: RunSubmission,
+) -> None:
+    runner = RoutingRunner({"sinfo": CommandResult.completed(stderr=b"unavailable", exit_code=1)})
+
+    checks = await edge_adapter(runner).preflight(valid_submission)
+
+    assert len(checks) == 1
+    assert checks[0].passed is False
+    assert "unavailable" in checks[0].message
+
+
+async def test_slurm_normalizes_failed_external_command(
+    valid_submission: RunSubmission,
+) -> None:
+    runner = RoutingRunner({"mkdir": CommandResult.completed(exit_code=2)})
+
+    with pytest.raises(ExternalCommandFailed, match="prepare Slurm directories"):
+        await edge_adapter(runner).submit(valid_submission)
+
+
+@pytest.mark.parametrize(
+    ("accounting", "error", "message"),
+    [
+        (
+            CommandResult.completed(exit_code=2),
+            ExternalCommandFailed,
+            "accounting lookup",
+        ),
+        (CommandResult.completed(), ResourceNotFound, "was not found"),
+    ],
+)
+async def test_slurm_status_normalizes_accounting_failures(
+    accounting: CommandResult,
+    error: type[Exception],
+    message: str,
+) -> None:
+    runner = RoutingRunner(
+        {
+            "squeue": CommandResult.completed(exit_code=1),
+            "sacct": accounting,
+        }
+    )
+
+    with pytest.raises(error, match=message):
+        await edge_adapter(runner).status("1001")
+
+
+async def test_slurm_rejects_invalid_job_id_before_running_command() -> None:
+    runner = RoutingRunner()
+
+    with pytest.raises(ResourceNotFound, match="was not found"):
+        await edge_adapter(runner).status("1; scancel 2")
+
+    assert runner.calls == []
+
+
+async def test_slurm_terminal_cancel_is_idempotent() -> None:
+    runner = RoutingRunner(
+        {
+            "squeue": CommandResult.completed(),
+            "sacct": CommandResult.completed(stdout=b"1001|COMPLETED|0:0|start|end\n"),
+        }
+    )
+
+    await edge_adapter(runner).cancel("1001")
+
+    assert not any(call[0] == "scancel" for call in runner.calls)
+
+
+async def test_slurm_log_and_nonterminal_artifact_boundaries() -> None:
+    runner = RoutingRunner(
+        {
+            "squeue": CommandResult.completed(stdout=b"1001|RUNNING|gpu01|start\n"),
+            "test": CommandResult.completed(exit_code=1),
+        }
+    )
+    adapter = edge_adapter(runner)
+
+    with pytest.raises(ValueError, match="non-negative"):
+        await adapter.read_log("1001", -1)
+    chunk = await adapter.read_log("1001", 7)
+    with pytest.raises(ResourceConflict, match="before terminal"):
+        await adapter.collect_artifacts("1001")
+
+    assert chunk.offset == 7
+    assert chunk.next_offset == 7
+    assert chunk.data == ""
+    assert chunk.end_of_stream is False
+
+
+@pytest.mark.parametrize(
+    "project_uri",
+    [
+        "ssh://cluster/projects/demo",
+        "file:///outside/demo",
+        "file:///projects/demo?unexpected=true",
+    ],
+)
+async def test_slurm_rejects_unsupported_project_uri(
+    valid_submission: RunSubmission,
+    project_uri: str,
+) -> None:
+    with pytest.raises(ClusterUnavailable, match="project"):
+        await edge_adapter(RoutingRunner()).submit(
+            replace(valid_submission, project_uri=project_uri)
+        )
+
+
+@pytest.mark.parametrize(
+    "source_uri",
+    [
+        "https://example.invalid/dataset",
+        "storage://host/key",
+        "storage:///../secret",
+        "file:///outside/dataset",
+    ],
+)
+async def test_slurm_rejects_unsupported_dataset_uri(
+    valid_submission: RunSubmission,
+    source_uri: str,
+) -> None:
+    submission = replace(
+        valid_submission,
+        mounts=(
+            DatasetMount(
+                dataset_version_id="version-1",
+                source_uri=source_uri,
+                mount_path="input/data",
+            ),
+        ),
+    )
+
+    with pytest.raises(ClusterUnavailable, match=r"dataset|storage"):
+        await edge_adapter(RoutingRunner()).submit(submission)
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        [],
+        {"outputs": "not-a-list", "work_dir": "/cluster/workspace107/jobs/1001/workspace"},
+        {"outputs": [], "work_dir": 1},
+        {"outputs": [], "work_dir": "/outside/workspace"},
+        {
+            "outputs": ["../secret"],
+            "work_dir": "/cluster/workspace107/jobs/1001/workspace",
+        },
+        {},
+    ],
+)
+async def test_slurm_rejects_malformed_durable_metadata(
+    valid_submission: RunSubmission,
+    record: object,
+) -> None:
+    clock = FakeClock(EDGE_NOW)
+    runner = ScriptedSlurmRunner(clock, queue_seconds=1, run_seconds=1)
+    first = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+    job = await first.adapter.submit(valid_submission)
+    runner.jobs[job.external_job_id].terminal_logged = True
+    runner.files[f"/cluster/workspace107/metadata/{job.external_job_id}.json"] = json.dumps(
+        record
+    ).encode()
+    clock.advance(2)
+    reconstructed = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+
+    with pytest.raises(ClusterUnavailable, match="metadata is malformed"):
+        await reconstructed.adapter.collect_artifacts(job.external_job_id)
+
+
+async def test_slurm_collects_files_under_declared_output_directory(
+    valid_submission: RunSubmission,
+) -> None:
+    clock = FakeClock(EDGE_NOW)
+    runner = ScriptedSlurmRunner(clock, queue_seconds=1, run_seconds=1)
+    harness = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+    job = await harness.adapter.submit(replace(valid_submission, outputs=("results",)))
+    clock.advance(2)
+    await harness.adapter.status(job.external_job_id)
+    work_dir = f"/cluster/workspace107/jobs/{job.external_job_id}/workspace"
+    runner.files.pop(f"{work_dir}/results")
+    runner.files[f"{work_dir}/results/metrics.json"] = b"{}\n"
+
+    artifacts = await harness.adapter.collect_artifacts(job.external_job_id)
+
+    assert any(artifact.artifact_key == "output:results/metrics.json" for artifact in artifacts)
+
+
+@pytest.mark.parametrize(
+    ("find_output", "message"),
+    [
+        (b"\xff\x00", "non-UTF-8"),
+        (b"/outside/result.txt\x00", "outside the run directory"),
+        (
+            b"/cluster/workspace107/jobs/1001/workspace/other.txt\x00",
+            "undeclared output",
+        ),
+    ],
+)
+async def test_slurm_rejects_unsafe_output_enumeration(
+    valid_submission: RunSubmission,
+    find_output: bytes,
+    message: str,
+) -> None:
+    clock = FakeClock(EDGE_NOW)
+    runner = OutputOverrideRunner(clock, queue_seconds=1, run_seconds=1)
+    harness = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+    job = await harness.adapter.submit(replace(valid_submission, outputs=("results",)))
+    clock.advance(2)
+    await harness.adapter.status(job.external_job_id)
+    work_dir = f"/cluster/workspace107/jobs/{job.external_job_id}/workspace"
+    runner.files.pop(f"{work_dir}/results")
+    runner.files[f"{work_dir}/results/placeholder"] = b"x"
+    runner.find_output = find_output
+
+    with pytest.raises(ClusterUnavailable, match=message):
+        await harness.adapter.collect_artifacts(job.external_job_id)
+
+
+async def test_slurm_rejects_malformed_artifact_size(
+    valid_submission: RunSubmission,
+) -> None:
+    clock = FakeClock(EDGE_NOW)
+    runner = OutputOverrideRunner(clock, queue_seconds=1, run_seconds=1)
+    harness = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+    job = await harness.adapter.submit(valid_submission)
+    clock.advance(2)
+    await harness.adapter.status(job.external_job_id)
+    runner.stat_output = b"not-a-size\n"
+
+    with pytest.raises(ClusterUnavailable, match="artifact size"):
+        await harness.adapter.collect_artifacts(job.external_job_id)
+
+
+@pytest.mark.parametrize(
+    "artifact_key",
+    ["unknown", "output:../secret", "output:not-declared.txt"],
+)
+async def test_slurm_rejects_unknown_or_unsafe_artifact_key(
+    valid_submission: RunSubmission,
+    artifact_key: str,
+) -> None:
+    clock = FakeClock(EDGE_NOW)
+    runner = ScriptedSlurmRunner(clock, queue_seconds=1, run_seconds=1)
+    harness = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+    job = await harness.adapter.submit(valid_submission)
+    clock.advance(2)
+
+    with pytest.raises(ResourceNotFound, match="artifact"):
+        await contract.read_all(harness.adapter.open_artifact(job.external_job_id, artifact_key))
+
+
+async def test_slurm_rejects_missing_declared_artifact(
+    valid_submission: RunSubmission,
+) -> None:
+    clock = FakeClock(EDGE_NOW)
+    runner = ScriptedSlurmRunner(clock, queue_seconds=1, run_seconds=1)
+    harness = _harness(clock, runner, queue_seconds=1, run_seconds=1)
+    job = await harness.adapter.submit(valid_submission)
+    clock.advance(2)
+    await harness.adapter.status(job.external_job_id)
+    work_dir = f"/cluster/workspace107/jobs/{job.external_job_id}/workspace"
+    runner.files.pop(f"{work_dir}/result.json", None)
+
+    with pytest.raises(ResourceNotFound, match="artifact"):
+        await contract.read_all(
+            harness.adapter.open_artifact(job.external_job_id, "output:result.json")
+        )
+
+
+async def test_slurm_requires_aware_clock() -> None:
+    runner = RoutingRunner(
+        {"squeue": CommandResult.completed(stdout=b"1001|RUNNING|gpu01|start\n")}
+    )
+    adapter = edge_adapter(runner, clock=lambda: datetime(2026, 1, 1))
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        await adapter.status("1001")
