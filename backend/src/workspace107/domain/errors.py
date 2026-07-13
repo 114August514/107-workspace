@@ -36,3 +36,7 @@ class FinalOwnerRequired(DomainError):
 
 class InvalidWorkspaceParent(DomainError):
     code = "invalid_workspace_parent"
+
+
+class InvalidStorageKey(DomainError):
+    code = "invalid_storage_key"

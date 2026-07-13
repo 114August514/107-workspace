@@ -11,11 +11,17 @@ from workspace107.api.router import router
 from workspace107.config import get_settings
 from workspace107.domain.errors import DomainError
 from workspace107.domain.ports.repositories import UnitOfWorkFactory
+from workspace107.domain.ports.storage import StoragePort
 from workspace107.infrastructure.db.session import create_engine, create_session_factory
 from workspace107.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from workspace107.infrastructure.storage.local import LocalStorage
 
 
-def create_app(*, uow_factory: UnitOfWorkFactory | None = None) -> FastAPI:
+def create_app(
+    *,
+    uow_factory: UnitOfWorkFactory | None = None,
+    storage: StoragePort | None = None,
+) -> FastAPI:
     app = FastAPI(title="107 Workspace API", version="0.1.0")
     if uow_factory is None:
         engine = create_engine(get_settings().database_url)
@@ -27,6 +33,7 @@ def create_app(*, uow_factory: UnitOfWorkFactory | None = None) -> FastAPI:
         uow_factory = configured_uow_factory
         app.state.database_engine = engine
     app.state.uow_factory = uow_factory
+    app.state.storage = storage or LocalStorage(get_settings().storage_root)
 
     app.add_exception_handler(ApiProblem, api_problem_handler)
     app.add_exception_handler(DomainError, domain_error_handler)

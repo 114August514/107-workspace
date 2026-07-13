@@ -457,6 +457,15 @@ class SqlAlchemyProjectRepository:
         row = await self._session.get(ProjectRow, project_id)
         return _project(row) if row is not None else None
 
+    async def get_by_slug(self, workspace_id: UUID, slug: str) -> Project | None:
+        row = await self._session.scalar(
+            select(ProjectRow).where(
+                ProjectRow.workspace_id == workspace_id,
+                ProjectRow.slug == slug,
+            )
+        )
+        return _project(row) if row is not None else None
+
     async def list_for_workspace(
         self, workspace_id: UUID, *, limit: int, offset: int
     ) -> tuple[Project, ...]:
@@ -507,6 +516,15 @@ class SqlAlchemyDatasetRepository:
         row = await self._session.get(DatasetRow, dataset_id)
         return _dataset(row) if row is not None else None
 
+    async def get_by_slug(self, workspace_id: UUID, slug: str) -> Dataset | None:
+        row = await self._session.scalar(
+            select(DatasetRow).where(
+                DatasetRow.workspace_id == workspace_id,
+                DatasetRow.slug == slug,
+            )
+        )
+        return _dataset(row) if row is not None else None
+
     async def list_for_workspace(
         self, workspace_id: UUID, *, limit: int, offset: int
     ) -> tuple[Dataset, ...]:
@@ -549,6 +567,15 @@ class SqlAlchemyDatasetRepository:
 
     async def get_version(self, version_id: UUID) -> DatasetVersion | None:
         row = await self._session.get(DatasetVersionRow, version_id)
+        return _dataset_version(row) if row is not None else None
+
+    async def get_version_by_name(self, dataset_id: UUID, version: str) -> DatasetVersion | None:
+        row = await self._session.scalar(
+            select(DatasetVersionRow).where(
+                DatasetVersionRow.dataset_id == dataset_id,
+                DatasetVersionRow.version == version,
+            )
+        )
         return _dataset_version(row) if row is not None else None
 
     async def list_versions(self, dataset_id: UUID) -> tuple[DatasetVersion, ...]:

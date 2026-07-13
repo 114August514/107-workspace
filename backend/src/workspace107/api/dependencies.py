@@ -4,9 +4,12 @@ from uuid import UUID
 from fastapi import Depends, Header, Request
 
 from workspace107.api.errors import ApiProblem
+from workspace107.application.datasets import DatasetService
+from workspace107.application.projects import ProjectService
 from workspace107.application.users import UserService
 from workspace107.application.workspaces import WorkspaceService
 from workspace107.domain.ports.repositories import UnitOfWorkFactory
+from workspace107.domain.ports.storage import StoragePort
 
 
 def get_uow_factory(request: Request) -> UnitOfWorkFactory:
@@ -19,6 +22,16 @@ def get_uow_factory(request: Request) -> UnitOfWorkFactory:
 UowFactoryDependency = Annotated[UnitOfWorkFactory, Depends(get_uow_factory)]
 
 
+def get_storage(request: Request) -> StoragePort:
+    storage = getattr(request.app.state, "storage", None)
+    if storage is None:
+        raise RuntimeError("storage is not configured")
+    return cast(StoragePort, storage)
+
+
+StorageDependency = Annotated[StoragePort, Depends(get_storage)]
+
+
 def get_user_service(uow_factory: UowFactoryDependency) -> UserService:
     return UserService(uow_factory)
 
@@ -27,8 +40,20 @@ def get_workspace_service(uow_factory: UowFactoryDependency) -> WorkspaceService
     return WorkspaceService(uow_factory)
 
 
+def get_project_service(uow_factory: UowFactoryDependency) -> ProjectService:
+    return ProjectService(uow_factory)
+
+
+def get_dataset_service(
+    uow_factory: UowFactoryDependency, storage: StorageDependency
+) -> DatasetService:
+    return DatasetService(uow_factory, storage)
+
+
 UserServiceDependency = Annotated[UserService, Depends(get_user_service)]
 WorkspaceServiceDependency = Annotated[WorkspaceService, Depends(get_workspace_service)]
+ProjectServiceDependency = Annotated[ProjectService, Depends(get_project_service)]
+DatasetServiceDependency = Annotated[DatasetService, Depends(get_dataset_service)]
 
 
 async def require_identity(

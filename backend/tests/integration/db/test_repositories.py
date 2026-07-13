@@ -101,10 +101,13 @@ async def test_content_repositories_round_trip_and_list(
         assert await uow.members.list_for_workspace(workspace.id) == (member,)
         assert await uow.members.count_owners(workspace.id) == 1
         assert await uow.projects.get(project.id) == project
+        assert await uow.projects.get_by_slug(workspace.id, "demo") == project
         assert await uow.projects.list_for_workspace(workspace.id, limit=10, offset=0) == (project,)
         assert await uow.datasets.get(dataset.id) == dataset
+        assert await uow.datasets.get_by_slug(workspace.id, "images") == dataset
         assert await uow.datasets.list_for_workspace(workspace.id, limit=10, offset=0) == (dataset,)
         assert await uow.datasets.get_version(version.id) == version
+        assert await uow.datasets.get_version_by_name(dataset.id, "v1") == version
         assert await uow.datasets.list_versions(dataset.id) == (version,)
         assert await uow.datasets.count_versions_by_storage_key(version.storage_key) == 1
         assert await uow.templates.get(template.id) == template
