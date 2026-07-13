@@ -60,3 +60,11 @@ class PathOutsideAllowedRoot(DomainError):
 
 class ClusterUnavailable(DomainError):
     code = "cluster_unavailable"
+
+
+class ExternalCommandFailed(DomainError):
+    code = "external_command_failed"
+
+
+class TransferFailed(DomainError):
+    code = "transfer_failed"

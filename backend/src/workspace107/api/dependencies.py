@@ -114,8 +114,14 @@ def get_transfer_service(
     uow_factory: UowFactoryDependency,
     transfer: TransferDependency,
     roots: TransferRootsDependency,
+    project_transport: ProjectTransportDependency,
 ) -> TransferService:
-    return TransferService(uow_factory, transfer, roots)
+    return TransferService(
+        uow_factory,
+        transfer,
+        roots,
+        transport=project_transport,
+    )
 
 
 def get_run_service(

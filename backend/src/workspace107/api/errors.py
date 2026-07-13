@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from workspace107.domain.errors import (
     ClusterUnavailable,
     DomainError,
+    ExternalCommandFailed,
     FinalOwnerRequired,
     InvalidRunTransition,
     InvalidWorkspaceParent,
@@ -15,6 +16,7 @@ from workspace107.domain.errors import (
     ResourceArchived,
     ResourceConflict,
     ResourceNotFound,
+    TransferFailed,
     WorkspaceAccessDenied,
 )
 
@@ -76,12 +78,20 @@ async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:
         status, title = 422, "Validation failed"
     elif isinstance(exc, ClusterUnavailable):
         status, title = 503, "Cluster unavailable"
+    elif isinstance(exc, ExternalCommandFailed):
+        status, title = 503, "External command failed"
+    elif isinstance(exc, TransferFailed):
+        status, title = 502, "Project transfer failed"
     else:
         status, title = 400, "Domain operation failed"
     if isinstance(exc, PathOutsideAllowedRoot):
         detail = "A transfer path is outside its configured root."
     elif isinstance(exc, ClusterUnavailable):
         detail = "The configured cluster adapter is unavailable."
+    elif isinstance(exc, ExternalCommandFailed):
+        detail = "An external cluster command failed."
+    elif isinstance(exc, TransferFailed):
+        detail = "The project transfer failed."
     else:
         detail = str(exc)
     return problem_response(

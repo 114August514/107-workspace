@@ -31,10 +31,15 @@ class TransferService:
         uow_factory: UnitOfWorkFactory,
         transfer: ProjectTransferPort,
         roots: Mapping[str, Path],
+        *,
+        transport: str = "local",
     ) -> None:
+        if transport not in ("local", "ssh"):
+            raise ValueError("project transport must be local or ssh")
         self._uow_factory = uow_factory
         self._transfer = transfer
         self._roots = {name: path.expanduser().resolve() for name, path in roots.items()}
+        self._transport = transport
 
     async def scan(
         self,
@@ -70,7 +75,7 @@ class TransferService:
                 WorkspaceRole.MEMBER,
                 active=True,
             )
-            previous_sync = await uow.syncs.get(project_id, "local", target_uri)
+            previous_sync = await uow.syncs.get(project_id, self._transport, target_uri)
             previous: Mapping[str, FileSignature] = (
                 previous_sync.manifest if previous_sync is not None else {}
             )
@@ -99,7 +104,7 @@ class TransferService:
             await uow.syncs.upsert(
                 NewProjectSync(
                     project_id=project_id,
-                    transport="local",
+                    transport=self._transport,
                     target_uri=target_uri,
                     manifest=current,
                     last_synced_at=now,

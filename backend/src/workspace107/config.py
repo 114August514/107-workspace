@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     mock_cluster_root: Path = Path("var/mock-cluster")
     cluster_adapter: Literal["mock", "slurm"] = "mock"
     cluster_transport: Literal["local", "ssh"] = "local"
+    ssh_host: str | None = None
+    slurm_remote_root: Path = Path("var/slurm")
+    slurm_log_root: Path = Path("var/slurm/logs")
+    slurm_storage_root: Path = Path("var/slurm/storage")
     reconcile_interval_seconds: float = 0.2
 
 
