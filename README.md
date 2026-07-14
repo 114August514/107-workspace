@@ -47,7 +47,9 @@ Run the isolated end-to-end smoke workflow from the repository root:
 
 - [Backend design](docs/superpowers/specs/2026-07-13-workspace107-backend-design.md)
 - [Implementation plan](docs/superpowers/plans/2026-07-13-workspace107-backend.md)
+- [Backend reinitialization review](docs/reviews/2026-07-14-backend-reinitialization/README.md)
 - [Backend development guide](backend/README.md)
 - [RunBox v0 archive](archive/runbox-v0/ARCHIVE.md)
+- [Platform source materials](docs/archive/2026-07-14-platform-materials/README.md)
 - [Product reference](ref.md)
 - [Architecture notes](foo.md)
