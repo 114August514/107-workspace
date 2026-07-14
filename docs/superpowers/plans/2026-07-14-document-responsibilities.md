@@ -41,7 +41,7 @@
 - Move: `docs/archive/2026-07-14-platform-materials/流程参考.md` -> `docs/references/platform/workspace-slurm-apptainer-context.md`
 - Delete after migration: `docs/archive/2026-07-14-platform-materials/README.md`
 
-- [ ] **Step 1: Create the responsibility directories and move source files**
+- [x] **Step 1: Create the responsibility directories and move source files**
 
 Run:
 
@@ -57,7 +57,7 @@ mv docs/archive/2026-07-14-platform-materials/流程参考.md docs/references/pl
 Expected: all five sources exist at their new paths; `foo.md` and `ref.md` no
 longer exist at the repository root.
 
-- [ ] **Step 2: Write the top-level reference index**
+- [x] **Step 2: Write the top-level reference index**
 
 Create `docs/references/README.md` with a short introduction that states:
 
@@ -73,7 +73,7 @@ Link directly to the product vision, initialization guide, platform index,
 accepted backend specification, implementation plan, backend guide, and backend
 review package.
 
-- [ ] **Step 3: Write the platform source index**
+- [x] **Step 3: Write the platform source index**
 
 Create `docs/references/platform/README.md` and list the exact source titles:
 
@@ -87,7 +87,7 @@ For each item, state what question it helps answer. Mark both PDFs as original,
 unchanged source files collected on 2026-07-14 and operational details as
 time-sensitive rather than normative product behavior.
 
-- [ ] **Step 4: Remove the superseded archive index and inspect the tree**
+- [x] **Step 4: Remove the superseded archive index and inspect the tree**
 
 Remove `docs/archive/2026-07-14-platform-materials/README.md`, then run:
 
@@ -112,7 +112,7 @@ checking old locations exit successfully.
 - Modify: `docs/reviews/2026-07-14-backend-reinitialization/01-change-phases.md`
 - Modify: `docs/reviews/2026-07-14-backend-reinitialization/06-commit-index.md`
 
-- [ ] **Step 1: Move the exact-path LFS attributes**
+- [x] **Step 1: Move the exact-path LFS attributes**
 
 Replace `.gitattributes` with:
 
@@ -121,7 +121,7 @@ docs/references/platform/107-cluster-competition-training.pdf filter=lfs diff=lf
 docs/references/platform/computing-platform-track-introduction.pdf filter=lfs diff=lfs merge=lfs -text
 ```
 
-- [ ] **Step 2: Update current navigation and design references**
+- [x] **Step 2: Update current navigation and design references**
 
 Use these mappings in repository navigation, the accepted backend design, and
 the review package:
@@ -136,7 +136,7 @@ Use relative Markdown links from each containing document. Name the targets
 "Product vision", "Initial backend bootstrap guide", and "Platform reference
 materials" rather than the old generic labels.
 
-- [ ] **Step 3: Preserve and annotate historical command paths**
+- [x] **Step 3: Preserve and annotate historical command paths**
 
 At the start of `docs/superpowers/plans/2026-07-13-workspace107-backend.md`, add
 a historical-path note linking `ref.md` and `foo.md` to their new locations.
@@ -144,24 +144,24 @@ State that command blocks retain the paths that existed when the plan was
 executed. Do not rewrite those command blocks, because that would make the
 recorded repository-reset procedure inaccurate.
 
-- [ ] **Step 4: Scan for stale active references**
+- [x] **Step 4: Scan for stale active references**
 
 Run:
 
 ```bash
-rg -n 'docs/archive/2026-07-14-platform-materials|\]\((?:\.\./)*foo\.md\)|\]\((?:\.\./)*ref\.md\)' . --glob '*.md'
+rg -n '\]\([^)]*archive/2026-07-14-platform-materials|\]\((?:\.\./)*foo\.md\)|\]\((?:\.\./)*ref\.md\)' . --glob '*.md'
 ```
 
-Expected: no matches. Plain-text `foo.md` and `ref.md` may remain only in the
-new migration specification, this implementation plan, and the explicitly
-annotated historical backend plan.
+Expected: no active Markdown links target the old locations. Plain-text old
+paths may remain only in the migration mapping and the explicitly annotated
+historical backend plan.
 
 ### Task 3: Verify And Commit The Reorganization
 
 **Files:**
 - Verify: all paths listed in Tasks 1 and 2
 
-- [ ] **Step 1: Verify all local Markdown links**
+- [x] **Step 1: Verify all local Markdown links**
 
 Run this Bash-compatible checker to extract relative inline link targets from
 every tracked Markdown file, ignore external URLs and anchors, and resolve each
@@ -170,6 +170,7 @@ path relative to its containing file with `realpath -e`:
 ```bash
 status=0
 while IFS= read -r -d '' file; do
+  [ -f "$file" ] || continue
   while IFS= read -r target; do
     case "$target" in
       http://*|https://*|mailto:*|'#'*) continue ;;
@@ -180,29 +181,29 @@ while IFS= read -r -d '' file; do
       status=1
     fi
   done < <(perl -ne 'while (/\[[^]]*\]\(([^ )#]+)(?:#[^) ]*)?(?:\s+"[^"]*")?\)/g) { print "$1\n" }' "$file")
-done < <(git ls-files -z '*.md')
+done < <(git ls-files -co --exclude-standard -z -- '*.md')
 exit "$status"
 ```
 
 Expected: every checked local target exists and the checker exits zero.
 
-- [ ] **Step 2: Verify PDF identity and LFS tracking**
+- [x] **Step 2: Verify worktree PDF identity and LFS attributes**
 
 Run:
 
 ```bash
 git check-attr filter diff merge -- docs/references/platform/*.pdf
-git lfs ls-files --long
-git lfs fsck
+sha256sum docs/references/platform/*.pdf
+wc -c docs/references/platform/*.pdf
 ```
 
 Expected: both paths report `filter: lfs`, `diff: lfs`, and `merge: lfs`;
-`git lfs ls-files --long` reports object IDs
+the content hashes are
 `6cbdb7db2a3294746f9c1eca077f643edb20715eace85d2f7f74fa515f9c99eb`
 and `d09a75c373809fa8b8bff3df55f291cbe29742e4df89aa32008464f7bc050d0a`;
-`git lfs fsck` exits successfully.
+the byte sizes are `1103398` and `276026`.
 
-- [ ] **Step 3: Verify scope and formatting**
+- [x] **Step 3: Verify scope and formatting**
 
 Run:
 
@@ -218,7 +219,7 @@ paths changed. Git detects the source documents as moves where similarity
 permits; no application source, test, generated file, or ignored local note is
 included.
 
-- [ ] **Step 4: Stage and verify LFS pointers**
+- [x] **Step 4: Stage and verify LFS pointers**
 
 Stage only the planned paths and inspect both staged PDF blobs:
 
@@ -228,16 +229,20 @@ git add .gitattributes README.md foo.md ref.md \
   docs/references \
   docs/reviews/2026-07-14-backend-reinitialization \
   docs/superpowers/specs/2026-07-13-workspace107-backend-design.md \
-  docs/superpowers/plans/2026-07-13-workspace107-backend.md
+  docs/superpowers/plans/2026-07-13-workspace107-backend.md \
+  docs/superpowers/plans/2026-07-14-document-responsibilities.md
 git show :docs/references/platform/107-cluster-competition-training.pdf
 git show :docs/references/platform/computing-platform-track-introduction.pdf
+git lfs ls-files --long
+git lfs fsck
 ```
 
 Expected: each staged blob is a three-line Git LFS pointer with version URL,
 the expected SHA-256 object ID, and the original byte size (`1103398` and
-`276026`).
+`276026`). `git lfs ls-files --long` reports both new paths with those object
+IDs, and `git lfs fsck` exits successfully.
 
-- [ ] **Step 5: Commit without pushing**
+- [x] **Step 5: Commit without pushing**
 
 Run:
 

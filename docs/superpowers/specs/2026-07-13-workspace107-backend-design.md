@@ -13,10 +13,11 @@ collection into workspace-level projects, datasets, run templates, runs, logs,
 and artifacts.
 
 This design reinitializes the repository around an independent backend. It uses
-`ref.md` and `foo.md` as product inputs, preserves useful behavior from the
-existing RunBox, and selectively internalizes proven ideas from `submit107` and
-`hpc-helper`. The resulting backend has no runtime dependency on any sibling
-repository.
+the [initial backend bootstrap guide](../../references/engineering/initial-backend-bootstrap-guide.md)
+and [product vision](../../references/product/107-workspace-product-vision.md)
+as design inputs, preserves useful behavior from the existing RunBox, and
+selectively internalizes proven ideas from `submit107` and `hpc-helper`. The
+resulting backend has no runtime dependency on any sibling repository.
 
 ## 2. Goals
 

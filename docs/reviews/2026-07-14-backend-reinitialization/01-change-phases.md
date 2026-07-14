@@ -34,7 +34,9 @@
 
 主要变化：
 
-- 将 `ref.md`、`foo.md`、RunBox、`submit107` 和本地 `hpc-helper` 作为设计证据。
+- 将[初始后端搭建指南](../../references/engineering/initial-backend-bootstrap-guide.md)、
+  [产品愿景](../../references/product/107-workspace-product-vision.md)、RunBox、
+  `submit107` 和本地 `hpc-helper` 作为设计证据。
 - 确定模块化单体，而不是拆分微服务。
 - 定义四层依赖、领域模型、端口、HTTP API、安全规则和 12 项验收标准。
 - 将实施过程拆成 15 个可独立提交的任务。

@@ -127,5 +127,6 @@ API 只负责 HTTP 映射。外部参考项目的行为进入基础设施或应�
 - 实施计划：
   [../../superpowers/plans/2026-07-13-workspace107-backend.md](../../superpowers/plans/2026-07-13-workspace107-backend.md)
 - RunBox 归档说明：[../../../archive/runbox-v0/ARCHIVE.md](../../../archive/runbox-v0/ARCHIVE.md)
-- 平台资料归档：[../../archive/2026-07-14-platform-materials/README.md](../../archive/2026-07-14-platform-materials/README.md)
+- 参考资料总览：[../../references/README.md](../../references/README.md)
+- 平台参考资料：[../../references/platform/README.md](../../references/platform/README.md)
 - HTTP 验收脚本：[../../../scripts/smoke-backend.sh](../../../scripts/smoke-backend.sh)

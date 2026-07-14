@@ -35,7 +35,8 @@
 ### 3. `28fc895`
 
 确认旧 RunBox 是移动和归档，而不是被活动后端继续导入；确认生成缓存已删除；
-确认 `ref.md` 和 `foo.md` 只是设计输入。
+确认[初始后端搭建指南](../../references/engineering/initial-backend-bootstrap-guide.md)
+和[产品愿景](../../references/product/107-workspace-product-vision.md)只是设计输入。
 
 ### 4. `409782b`
 

@@ -10,6 +10,13 @@
 
 **Source specification:** `docs/superpowers/specs/2026-07-13-workspace107-backend-design.md`
 
+> **Historical paths:** This plan was executed while the
+> [initial backend bootstrap guide](../../references/engineering/initial-backend-bootstrap-guide.md)
+> and [product vision](../../references/product/107-workspace-product-vision.md)
+> still lived at the repository-root paths `ref.md` and `foo.md`. Command blocks
+> retain those original paths so the recorded repository-reset procedure stays
+> accurate.
+
 ---
 
 ## File Map
