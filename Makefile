@@ -1,6 +1,7 @@
 # Thin convenience wrapper. Windows contributors can invoke WORKSPACE_CLI directly.
 
-include stack.mk
+UV ?= uv
+WORKSPACE_CLI ?= $(UV) run --no-project python scripts/workspace.py
 
 .DEFAULT_GOAL := help
 .PHONY: help setup dev fmt fmt-check lint typecheck test check build ship
