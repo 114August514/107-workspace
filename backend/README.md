@@ -12,14 +12,14 @@ api  →  application  →  domain ports  ←  infrastructure
 src/workspace107/
 ├── domain/           领域对象、枚举、规则、端口定义（不依赖框架）
 │   ├── models.py         可变对象与不可变版本
-│   ├── run_snapshot.py   不可变执行事实（GR-009）
-│   ├── secrets.py        环境变量表达式与 Secret 引用（GR-012）
+│   ├── run_snapshot.py   不可变执行事实（GR-202）
+│   ├── secrets.py        环境变量表达式与 Secret 引用（GR-304）
 │   ├── compute.py        算力方案、请求与调度解析
 │   └── ports/            Scheduler / Storage / SecretVault / Repositories / Clock
 ├── application/      用例编排、权限校验、事务边界
-│   ├── access.py         AccessGuard（GR-001 / GR-013）
+│   ├── access.py         AccessGuard（GR-101 / GR-102 / GR-103）
 │   ├── run_service.py    提交前检查、创建 Run、重跑、取消
-│   └── run_lifecycle.py  状态同步与 Artifact 收集（GR-015）
+│   └── run_lifecycle.py  调度状态同步与 Artifact 收集
 ├── infrastructure/   端口实现：SQLAlchemy 仓储、本地存储、Mock/Slurm 调度
 ├── api/              路由与 schema，不写业务规则
 ├── tools/            OpenAPI 导出、种子数据
@@ -50,8 +50,8 @@ api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
                         不要往 Services 容器里塞端口
 ```
 
-这些约定由 `tests/unit/test_layering.py` 检查，违反了跑测试就红。
-背景见 [ADR-0006](../docs/decisions/0006-dependency-injection-and-api-contract.md)。
+这些约定由 `tests/unit/test_layering.py` 检查，违反了跑测试就红；
+依赖方向以根目录 `DESIGN-final.md` 第 4.3 节为准。
 
 ## 安装与运行
 
@@ -102,7 +102,7 @@ curl -H 'X-User: student' http://127.0.0.1:8000/api/v1/me
 | `slurm` | 通过 Slurm REST API 提交，状态来自 Slurm |
 
 两者都只实现 `submit` / `poll` / `cancel`，没有「标记成功」的入口——
-Run 状态只能由调度系统的轮询结果驱动（GR-015）。
+当前实现中，Run 状态只能由调度系统的轮询结果驱动。
 
 Mock 模式下会把渲染出的 sbatch 脚本写到 `var/storage/runs/<run_id>/job.sh`，
 用户可以直接看到平台替他生成了什么。
@@ -131,17 +131,16 @@ uv run ruff check . && uv run ruff format --check .
 ```text
 tests/unit/         领域规则与不变量，不碰数据库
 tests/integration/  端到端闭环，真实 SQLite + 真实子进程执行
-tests/security/     GR-012 Secret 不落明文、GR-013 无发现权限即不存在
+tests/security/     GR-304 Secret 不落明文、无发现权限即不存在
 tests/contract/     API 契约与错误码映射
 ```
 
 ## 接口契约
 
-改了 DTO 或路由之后必须重新生成契约和前端类型，否则 CI 的
-`api-contract-check` 会失败：
+改了 DTO 或路由之后必须在仓库根目录重新生成契约和前端类型，否则统一检查会失败：
 
 ```bash
-../scripts/sync-api-contract.sh
+make contract
 ```
 
 它会依次导出 `docs/api/openapi.json` 和 `frontend/src/api/schema.d.ts`，

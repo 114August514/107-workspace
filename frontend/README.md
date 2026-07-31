@@ -5,8 +5,8 @@
 ## 运行
 
 ```bash
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 打开 <http://127.0.0.1:5173>。开发服务器把 `/api` 转发到 `http://127.0.0.1:8000`，
@@ -45,7 +45,7 @@ src/
 **不要在前端手写任何接口类型。** 需要新字段先改后端，然后：
 
 ```bash
-./scripts/sync-api-contract.sh      # 在仓库根目录执行
+make contract                       # 在仓库根目录执行
 ```
 
 HTTP 调用走 `openapi-fetch`，泛型参数就是生成的 `paths`：
@@ -61,12 +61,11 @@ await http.GET('/api/v1/projects/{project_id}/files/content', {
 表格列名用 `field<T>('exit_code')` 而不是裸字符串——antd 的 `dataIndex`
 声明成 `string`，不检查字段是否存在，字段改名后表格会安静地渲染成空列。
 
-CI 的 `api-contract-check` 会重新生成并比对差异，所以前端类型不可能悄悄和后端脱节。
-背景见 [ADR-0006](../docs/decisions/0006-dependency-injection-and-api-contract.md)。
+仓库的统一检查会重新生成并比对差异，所以前端类型不能悄悄和后端脱节。
 
 ## 页面对应的核心闭环
 
-Project 页面的四个标签页就是 M1 的闭环顺序：
+Project 页面的四个标签页呈现当前迁移实现已有的本地 Mock 闭环：
 
 ```text
 ① 项目文件  →  ② 版本  →  ③ 运行方案  →  ④ Run 历史
@@ -84,14 +83,14 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 ## 检查
 
 ```bash
-npm run lint
-npm run typecheck        # 同时也在检查前端调用与后端契约是否一致
-npm run test -- --run
-npm run build
-npm run generate:api     # 仅重新生成类型；平时用根目录的 sync-api-contract.sh
+pnpm run lint
+pnpm run typecheck        # 同时也在检查前端调用与后端契约是否一致
+pnpm run test -- --run
+pnpm run build
+pnpm run generate:api     # 仅重新生成类型；平时在根目录用 make contract
 ```
 
-和 CI 执行的是同一组命令，也可以直接跑仓库根目录的 `./scripts/check.sh frontend`。
+仓库根目录执行 `make check-frontend` 会跑与 CI 相同的前端检查。
 
 ## 关于展示内容
 
