@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.12.0"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.18.0"
+
+jobs:
+  check:
+    name: canonical-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: make setup
+      - name: Run the same check used locally
+        run: make check
+
+  migration-check:
+    name: migration-up-down-up
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          python-version: "3.12"
+      - run: uv run --no-project python scripts/workspace.py setup backend
+      - name: Upgrade, downgrade one revision, and upgrade again
+        env:
+          WORKSPACE107_DATABASE_URL: sqlite+aiosqlite:///./var/ci-migration.db
+        run: |
+          uv run --no-project python scripts/workspace.py migrate
+          uv run --no-project python scripts/workspace.py migrate-down
+          uv run --no-project python scripts/workspace.py migrate
+
+  windows-check:
+    name: windows-canonical-check-and-smoke
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Exercise the Make-free Windows entry point
+        run: uv run --no-project python scripts/workspace.py setup
+      - name: Run the full check, including scheduler and storage Windows tests
+        run: uv run --no-project python scripts/workspace.py check
+      - name: Exercise an actual mock Run over HTTP
+        run: uv run --no-project python scripts/workspace.py smoke
+
+  docker-build:
+    name: compose-build-and-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      POSTGRES_PASSWORD: ci-throwaway-password
+      WORKSPACE107_SEED_DEMO: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker compose build
+      - run: docker compose up -d --wait
+      - name: Verify database, proxy, catalog seed, and frontend
+        run: |
+          curl -fsS http://127.0.0.1:8107/api/v1/health | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8107/api/v1/catalog/compute-plans -H 'X-User: ci' | grep -q 'cpu-quick'
+          curl -fsS http://127.0.0.1:8107/ | grep -q '<div id="root">'
+      - name: Print logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Remove CI containers and volumes
+        if: always()
+        run: docker compose down -v

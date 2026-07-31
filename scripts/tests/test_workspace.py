@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+import contextlib
+import io
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPTS_ROOT))
+
+import workspace  # noqa: E402
+from tasks import common, contract, project  # noqa: E402
+from tasks.common import REPO_ROOT, TaskError  # noqa: E402
+
+
+class WorkspaceCliTests(unittest.TestCase):
+    def test_check_defaults_to_all(self) -> None:
+        with mock.patch.object(workspace.quality, "run_check") as run_check:
+            result = workspace.main(["check"])
+
+        self.assertEqual(result, 0)
+        run_check.assert_called_once_with("all")
+
+    def test_frontend_check_target_is_forwarded(self) -> None:
+        with mock.patch.object(workspace.quality, "run_check") as run_check:
+            result = workspace.main(["check", "frontend"])
+
+        self.assertEqual(result, 0)
+        run_check.assert_called_once_with("frontend")
+
+    def test_contract_check_target_is_forwarded(self) -> None:
+        with mock.patch.object(workspace.quality, "run_check") as run_check:
+            result = workspace.main(["check", "contract"])
+
+        self.assertEqual(result, 0)
+        run_check.assert_called_once_with("contract")
+
+    def test_task_error_becomes_stable_exit_code(self) -> None:
+        error = TaskError("expected failure", exit_code=7)
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(workspace.quality, "run_check", side_effect=error),
+            contextlib.redirect_stderr(stderr),
+        ):
+            result = workspace.main(["check"])
+
+        self.assertEqual(result, 7)
+        self.assertIn("expected failure", stderr.getvalue())
+
+    def test_contract_check_refuses_missing_generated_file(self) -> None:
+        missing = REPO_ROOT / "does-not-exist" / "openapi.json"
+        with (
+            mock.patch.object(contract, "OPENAPI_PATH", missing),
+            self.assertRaisesRegex(TaskError, "Missing generated contract"),
+        ):
+            contract.check_contract()
+
+    def test_contract_comparison_normalizes_windows_line_endings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            lf = Path(directory) / "lf.txt"
+            crlf = Path(directory) / "crlf.txt"
+            lf.write_bytes(b'{"ok": true}\n')
+            crlf.write_bytes(b'{"ok": true}\r\n')
+
+            self.assertEqual(contract._normalized_text(lf), contract._normalized_text(crlf))
+
+    def test_tool_version_parser_accepts_node_and_pnpm_versions(self) -> None:
+        self.assertEqual(common._major_version("v24.18.0"), 24)
+        self.assertEqual(common._major_version("11.3.0"), 11)
+
+    def test_tool_version_parser_rejects_unexpected_output(self) -> None:
+        with self.assertRaisesRegex(TaskError, "Could not parse tool version"):
+            common._major_version("unknown")
+
+    def test_smoke_dispatches_the_isolated_demo(self) -> None:
+        with mock.patch.object(project, "demo") as demo:
+            result = workspace.main(["smoke"])
+
+        self.assertEqual(result, 0)
+        demo.assert_called_once_with(smoke=True)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,19 +1,55 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+slurm-jwt*
+
+# Python
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
-.coverage
-htmlcov/
+.mypy_cache/
 .pyright/
-.env
+.coverage
+coverage.xml
+htmlcov/
+
+# Node
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Runtime data
 backend/var/
 backend/.alembic-test/
-hpc-helper/
+*.db
+*.sqlite3
 *.out
+*.log
+hpc-helper/
+
+# Editors, operating systems, and local AI tooling
 .DS_Store
 .idea/
 .vscode/
+!.vscode/extensions.json
+.claude/
+.codex/
+.agents/
+
+# Historical local drafts retained outside the migration commit
 IDEA.md
 PLAN.md
+myself.md
+temp8.md
+todo.md
+temp/

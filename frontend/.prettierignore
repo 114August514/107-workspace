@@ -1,5 +1,6 @@
 # 生成物：由 openapi-typescript 写出，格式跟着它走，不要手动或用 prettier 改。
 src/api/schema.d.ts
+pnpm-lock.yaml
 
 dist
 node_modules

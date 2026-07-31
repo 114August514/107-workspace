@@ -4,15 +4,17 @@
 # 并把 /api 反代到后端——前后端同源，生产环境不需要 CORS。
 
 # ---------- 构建阶段 ----------
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 # ---------- 运行阶段 ----------
 # nginx-unprivileged 以非 root 运行并监听 8080，不需要绑定特权端口的能力。

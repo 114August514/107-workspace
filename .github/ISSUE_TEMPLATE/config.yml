@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 先看协作约定
+    url: https://github.com/114August514/107-workspace/blob/main/GitGuideline.md
+    about: 分支命名、提交格式、PR 规模、Milestone 四要素、标签体系
+  - name: 术语和产品规则
+    url: https://github.com/114August514/107-workspace/blob/main/DESIGN-final.md
+    about: 领域语言以 §3.1 为准；提 Issue 前先确认用词一致

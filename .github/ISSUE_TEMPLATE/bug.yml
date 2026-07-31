@@ -1,0 +1,67 @@
+name: 缺陷
+description: 报一个 bug。必填项是照着"修复必须有回归测试"设计的
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        修 bug 的产物不是"修好的代码"，是**一条先红后绿的回归测试 + 写下来的根因**。
+        所以下面几项不是走过场：没有稳定复现，就只能猜着改。
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 从干净状态开始，一步一步。别人照着做要能重现。
+      placeholder: |
+        1. WORKSPACE107_SCHEDULER=mock 起服务
+        2. 建 Project，配一条引用了不存在 Secret 的 Run Configuration
+        3. POST /runs
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: 期望 vs 实际
+      description: 具体到状态码、字段、数值。不要写"不对"。
+      placeholder: |
+        期望：提交前检查拦住，返回 4xx 并指出缺哪个 Secret
+        实际：Run 创建成功，执行时才失败，Run Snapshot 已经落库
+    validations:
+      required: true
+
+  - type: input
+    id: frequency
+    attributes:
+      label: 必现还是偶发
+      description: 偶发的话，多少次里出现几次？有没有规律？
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      description: |
+        提交哈希、WORKSPACE107_SCHEDULER 的取值（mock 还是真集群，
+        差别很大）以及相关配置。
+      placeholder: |
+        提交：7085435
+        WORKSPACE107_SCHEDULER=mock
+    validations:
+      required: true
+
+  - type: input
+    id: impact
+    attributes:
+      label: 影响
+      description: 丢数据 / 越权泄露 / 用户重试一次就好 / 只是日志难看。这决定优先级。
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 已查到的线索
+      description: 可选。怀疑的位置、试过什么、什么情况下不出现。

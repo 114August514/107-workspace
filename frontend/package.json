@@ -2,6 +2,11 @@
   "name": "workspace107-frontend",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=24 <25",
+    "pnpm": ">=11 <12"
+  },
   "type": "module",
   "description": "107 Workspace 控制台",
   "scripts": {

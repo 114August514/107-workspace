@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Keep the hook fast. Full tests remain in make check and CI.
+set -eu
+
+uv run --no-project python scripts/workspace.py fmt-check
+uv run --no-project python scripts/workspace.py lint
