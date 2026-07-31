@@ -1,0 +1,27 @@
+# CODEOWNERS
+#
+# PR 修改到对应路径时，GitHub 会自动请求这里列出的成员评审。
+# 团队成员确定后，把下面的占位符替换成真实 GitHub 账号或团队。
+#
+# 语法：<路径模式> <@账号或@组织/团队>
+
+# 默认所有者
+*                       @USTC-107/maintainers
+
+# 后端
+/backend/               @USTC-107/backend
+/backend/src/workspace107/domain/    @USTC-107/maintainers
+/backend/migrations/    @USTC-107/maintainers
+
+# 前端
+/frontend/              @USTC-107/frontend
+
+# 工程配置与 CI：改动影响全体成员，由维护者评审
+/.github/               @USTC-107/maintainers
+/.gitattributes         @USTC-107/maintainers
+/.gitignore             @USTC-107/maintainers
+/scripts/               @USTC-107/maintainers
+
+# 产品设计与领域模型：变更需要设计评审
+/docs/product/          @USTC-107/maintainers
+/docs/domain/           @USTC-107/maintainers

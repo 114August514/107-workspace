@@ -1,0 +1,74 @@
+# 107 Workspace 部署编排
+#
+#   cp .env.example .env      填好 POSTGRES_PASSWORD
+#   docker compose up -d --build
+#   打开 http://127.0.0.1:8107
+#
+# 三个容器：db / api / web。前后端同源，/api 由 nginx 反代。
+# 设计说明见 docs/decisions/0005-deployment-topology.md，
+# 部署与运维说明见 deploy/README.md。
+
+name: workspace107
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-workspace107}
+      POSTGRES_USER: ${POSTGRES_USER:-workspace107}
+      # 没设密码就直接失败，不给默认值——默认密码比没有密码更危险。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workspace107} -d ${POSTGRES_DB:-workspace107}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+    image: ${WORKSPACE107_IMAGE_API:-workspace107/api:local}
+    restart: unless-stopped
+    environment:
+      # 写死 production：容器里前后端同源，不需要 CORS。
+      # 不从 .env 读，是因为同一份 .env 也用于本地开发（那边是 local），
+      # 直接复制过来会把开发用的 CORS 放开带进容器。
+      WORKSPACE107_ENV: production
+      WORKSPACE107_LOG_LEVEL: ${WORKSPACE107_LOG_LEVEL:-INFO}
+      WORKSPACE107_DATABASE_URL: >-
+        postgresql+asyncpg://${POSTGRES_USER:-workspace107}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-workspace107}
+      WORKSPACE107_STORAGE_ROOT: /var/lib/workspace107/storage
+      WORKSPACE107_SCHEDULER: ${WORKSPACE107_SCHEDULER:-mock}
+      WORKSPACE107_SLURM_API_BASE_URL: ${WORKSPACE107_SLURM_API_BASE_URL:-}
+      WORKSPACE107_SLURM_API_USER: ${WORKSPACE107_SLURM_API_USER:-}
+      # 等价于密码，只从环境注入，不写进镜像也不进仓库。
+      WORKSPACE107_SLURM_JWT: ${WORKSPACE107_SLURM_JWT:-}
+      WORKSPACE107_AUTH_MODE: ${WORKSPACE107_AUTH_MODE:-dev}
+      WORKSPACE107_SEED_DEMO: ${WORKSPACE107_SEED_DEMO:-false}
+    volumes:
+      # 默认用命名卷。接真实 Slurm 集群时必须改成集群共享存储的挂载点，
+      # 否则计算节点看不到 Run 工作目录——详见 deploy/README.md。
+      - ${WORKSPACE107_STORAGE_MOUNT:-storage-data}:/var/lib/workspace107/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    image: ${WORKSPACE107_IMAGE_WEB:-workspace107/web:local}
+    restart: unless-stopped
+    ports:
+      - "${WORKSPACE107_HTTP_PORT:-8107}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  storage-data:

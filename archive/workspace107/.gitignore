@@ -1,0 +1,48 @@
+# ---------- 密钥与本地配置 ----------
+# 只提交 .env.example，任何真实凭据都不得进入仓库。
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+slurm-jwt*
+
+# ---------- Python ----------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---------- Node ----------
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# ---------- 运行时数据 ----------
+# 平台运行产生的存储、日志、Artifact 和 Mock 集群状态。
+# 这些属于算力平台存储，不是仓库内容。
+backend/var/
+*.db
+*.sqlite3
+*.out
+*.log
+
+# ---------- 工具与系统 ----------
+.DS_Store
+.idea/
+.vscode/
+!.vscode/extensions.json
+# 各人自己的 AI 助手配置，不进仓库
+.claude/
+.codex/
+.agents/
