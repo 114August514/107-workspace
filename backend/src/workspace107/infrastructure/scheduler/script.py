@@ -26,7 +26,7 @@ def render_sbatch_script(submission: SchedulerSubmission) -> str:
     """渲染完整的 sbatch 脚本。
 
     环境变量不写进脚本——Secret 明文只通过进程环境传递，
-    不落到任何可被读取的文件里（GR-012）。
+    不落到任何可被读取的文件里（GR-304）。
     """
     config = submission.configuration
     header = [

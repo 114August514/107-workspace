@@ -196,8 +196,8 @@ async def fork_version(
     """两侧都会校验：源版本可读、目标空间可写。
 
     复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
-    （GR-006）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
-    提交前检查会拦下（GR-012）。
+    （GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
+    提交前检查会拦下（GR-407）。
     """
     project = await services.projects.fork(
         user.id,

@@ -5,8 +5,8 @@
     校验与解析 -> 固定 Run Snapshot -> 准备工作目录 -> 提交调度任务
     -> 关联 Scheduler Job -> 更新执行状态
 
-提交前的每一次引用都要重新校验（GR-007）：历史上曾经成功使用，
-不代表当前仍然可以使用。
+创建或重新执行 Run 时都要按当前权限和资源资格重新校验引用；
+历史上曾经成功使用，不代表当前仍然可以使用（设计稿 §3.4.3）。
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ class RunService:
         """读取 stdout 和 stderr。
 
         返回之前会把已知 Secret 明文抹掉——用户程序自己把 Token 打到 stdout
-        时，这是最后一道防线（GR-012）。
+        时，这是保护日志不展示 Secret 明文的最后一道防线（设计稿 §3.1.4）。
         """
         access = await self._guard.run(user_id, run_id)
         snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
@@ -199,8 +199,8 @@ class RunService:
     async def _require_artifact(self, user_id: str, artifact_id: str) -> Artifact:
         """取 Artifact 并校验访问权。
 
-        Artifact 归属于产生它的 Run（GR-001），所以权限沿 Run 的链路判断。
-        无权访问和不存在返回同一种错误（GR-013）。
+        Artifact 归属于产生它的 Run（设计稿 §3.2.1），所以权限沿 Run 的链路判断。
+        无权访问和不存在返回同一种错误，避免通过错误类型探测对象是否存在。
         """
         artifact = await self._repos.artifacts.get(artifact_id)
         if artifact is None:
@@ -379,8 +379,8 @@ class RunService:
     ) -> RunSubmission:
         """使用相同代码快照和配置重新运行。
 
-        必须创建新的 Run 和新的 Run Snapshot，不能重启原有 Run（GR-009）。
-        所有引用都会重新校验：曾经能跑通不代表现在还能跑（GR-007 / GR-008）。
+        必须创建新的 Run 和新的 Run Snapshot，不能重启原有 Run（GR-306）。
+        同时按重新执行时的权限和资源资格重新校验全部引用（设计稿 §3.4.3）。
         """
         access = await self._guard.run(user_id, run_id, needs=Capability.RUN_SUBMIT)
 
@@ -624,7 +624,7 @@ class RunService:
 
         登记必须**在提交调度任务之前**完成并落库。否则并发的第二个请求会先把
         作业提交出去，再因为键冲突回滚——数据库是干净的，但集群上已经多跑了
-        一个作业，而且没人知道它属于谁（GR-017）。
+        一个作业，而且没人知道它属于谁。因此去重登记必须先于外部副作用落库。
 
         **命中之后要确认这是同一件事，不能只看键相同。** 键的作用域是
         Workspace，而一个 Workspace 里有很多 Project；客户端复用同一个键
@@ -677,8 +677,8 @@ class RunService:
     ) -> list[str]:
         """检查并发上限。
 
-        **数的范围必须和锁的范围一致**：额度按「Workspace × 算力方案」授予
-        （GR-002a），锁的是那一条权益行，所以数的也只能是那个方案上的 Run。
+        **数的范围必须和锁的范围一致**：额度按「Workspace × 算力方案」授予，
+        锁的是那一条权益行，所以数的也只能是那个方案上的 Run。
         早先这里数的是整个 Workspace，比锁的范围大，于是两个请求提交到
         不同方案时锁不到一起，却读同一个计数，双双通过——上限形同虚设。
         顺带还会串味：CPU 作业占掉 GPU 的名额。
@@ -700,7 +700,7 @@ class RunService:
         problems: list[str] = []
         for binding in configuration.input_bindings:
             artifact = await self._repos.artifacts.get(binding.source_id)
-            # 归属 Workspace 不同的一律按「不存在」处理（GR-013）。
+            # 归属 Workspace 不同的一律按「不存在」处理，避免泄露跨空间对象。
             if artifact is None or artifact.workspace_id != workspace_id:
                 problems.append(f"输入 {binding.access_path} 引用的 Artifact 不存在或无权访问")
             elif not artifact.is_available:
@@ -708,7 +708,7 @@ class RunService:
         return problems
 
     async def _revalidate_snapshot(self, snapshot: RunSnapshot, workspace_id: str) -> list[str]:
-        """重跑之前重新校验历史快照中的每一个引用（GR-007 / GR-008）。"""
+        """重跑之前按当前权限和资源资格重新校验历史快照中的每一个引用。"""
         problems: list[str] = []
 
         version = await self._repos.project_versions.get(snapshot.project_version_id)

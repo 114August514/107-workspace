@@ -1,6 +1,6 @@
 """Project、项目文件与版本用例。
 
-Project Working Tree 可变，Project Version 不可变（GR-003）。
+Project Working State 可变，Project Version 不可变（GR-201）。
 保存版本时对当前内容形成快照；恢复历史版本是把快照内容写回工作区，
 不会改变那个历史版本本身。
 """
@@ -371,7 +371,7 @@ class ProjectService:
     async def restore_version(self, user_id: str, version_id: str) -> list[ProjectFile]:
         """把工作区恢复到指定历史版本。
 
-        这是对可变工作区的写操作；历史版本本身不受影响（GR-003）。
+        这是对可变 Working State 的写操作；历史版本本身不受影响（GR-204）。
         """
         version = await self.get_version(user_id, version_id)
         access = await self._guard.project(
@@ -427,18 +427,18 @@ class ProjectService:
     ) -> Project:
         """从一个确定版本派生出新 Project。
 
-        产生的是**新 Project**，不是源 Project 的分支（设计稿 §3.2.7）。
-        新 Project 归目标 Workspace，从此和源 Project 没有任何持续关系（GR-005）。
+        产生的是**新 Project**，不是源 Project 的分支（设计稿 §3.4.2）。
+        新 Project 归目标 Workspace，从此和源 Project 没有任何持续关系（GR-502）。
 
         两侧都要校验：源版本可读、目标空间可写。少任何一边都是越权——
         只查源就等于「谁都能往别人空间里塞项目」，只查目标就等于
         「Fork 一下就能读到看不见的内容」。
 
-        复制什么、不复制什么见 GR-006，下面按顺序标注了。
+        复制什么、不复制什么见 GR-503，下面按顺序标注了。
         **权益、凭据、成员权限、Run 历史一律不复制**——那些属于源 Workspace，
         跟着复制过来就是越权。
 
-        Secret 只复制引用表达式，不复制值（GR-012 规则 4）。值存在
+        Secret 只复制引用表达式，不复制值（GR-407）。值存在
         WorkspaceSecret 里，本来就不在复制路径上；目标空间没有同名 Secret 时
         提交前检查会拦下，这是**正确行为**，比静默降级好。
         """
@@ -465,8 +465,8 @@ class ProjectService:
             workspace_id=target_workspace_id,
             name=name,
             description=description or source_access.project.description,
-            # 环境选择跟着复制（GR-006）。目标空间不一定能用，
-            # 那是创建 Run 时重新校验的事（GR-007）。
+            # 环境选择作为可复用引用跟着复制（GR-503）。目标空间不一定能用，
+            # 创建 Run 时仍需按目标 Workspace 的资格重新校验（GR-401）。
             environment_version_id=source_access.project.environment_version_id,
             created_by=user_id,
             created_at=now,
@@ -515,7 +515,7 @@ class ProjectService:
                     working_directory=configuration.working_directory,
                     command=configuration.command,
                     environment_version_id=configuration.environment_version_id,
-                    # EnvValue 里 Secret 项存的是引用表达式，不是值（GR-012）
+                    # EnvValue 里 Secret 项存的是引用表达式，不是值（GR-407）
                     environment_variables=dict(configuration.environment_variables),
                     input_bindings=configuration.input_bindings,
                     compute_plan_id=configuration.compute_plan_id,

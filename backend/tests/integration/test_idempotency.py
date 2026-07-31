@@ -157,7 +157,7 @@ async def test_登记在提交调度任务之前落库(client: httpx.AsyncClient
 
 
 async def test_登记一定发生在调度提交之前(client: httpx.AsyncClient, monkeypatch) -> None:
-    """GR-017 的实质：**产生外部副作用之前必须先完成去重登记**。
+    """产生外部副作用之前必须先完成去重登记。
 
     上面那条只断言「事后登记行在」——顺序反了它照样绿，因为提交成功之后
     登记一样会落库。它守不住这条规则。

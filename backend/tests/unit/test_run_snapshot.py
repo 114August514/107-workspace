@@ -1,7 +1,7 @@
 """Run Snapshot 的不可变性与序列化。
 
-对应 GR-009：Run Snapshot 创建后不可修改。
-对应 GR-012：Snapshot 不保存 Secret 明文。
+对应 GR-202：Run Snapshot 创建后不可修改。
+对应 GR-304：Snapshot 不保存 Secret 明文。
 """
 
 from __future__ import annotations

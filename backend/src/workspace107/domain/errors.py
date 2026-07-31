@@ -2,7 +2,7 @@
 
 api 层负责把这些错误映射为 HTTP 状态码，领域层不感知 HTTP。
 
-关于 GR-013：调用方没有**发现权限**时必须抛 ``ObjectNotFound``，
+调用方没有**发现权限**时必须抛 ``ObjectNotFound``，
 而不是 ``PermissionDenied``——否则错误码本身就泄露了对象是否存在。
 只有在调用方已经能看见对象、但无权执行该操作时才用 ``PermissionDenied``。
 """
@@ -21,7 +21,7 @@ class DomainError(Exception):
 
 
 class ObjectNotFound(DomainError):
-    """对象不存在，或当前用户没有发现权限（GR-013）。"""
+    """对象不存在，或当前用户没有发现权限。"""
 
     code = "not_found"
 
@@ -51,7 +51,7 @@ class ConflictError(DomainError):
 
 
 class ImmutableObjectError(ConflictError):
-    """试图修改不可变对象（GR-003 / GR-009）。"""
+    """试图修改不可变的 Version、Run Snapshot 或 Artifact 内容（GR-201、GR-202、GR-203）。"""
 
     code = "immutable_object"
 

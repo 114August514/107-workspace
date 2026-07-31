@@ -17,7 +17,7 @@ async def wait_for_run(
     """轮询直到 Run 进入终态，返回 Run 详情。
 
     走的是真实路径：触发状态同步 -> 读取 Run。同步只会把调度系统的实际状态
-    映射过来，不会伪造结果（GR-015）。
+    映射过来，不会伪造结果。
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + RUN_WAIT_TIMEOUT

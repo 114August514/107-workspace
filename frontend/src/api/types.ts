@@ -6,12 +6,12 @@
  *
  *     后端 DTO/路由 → openapi.json → schema.d.ts → 这里 → 组件
  *
- * 所以后端改一个字段，跑一次 `scripts/sync-api-contract.sh`，
- * 前端所有受影响的地方会在 `npm run typecheck` 时全部报出来，
+ * 所以后端改一个字段，跑一次根目录的 `make contract`，
+ * 前端所有受影响的地方会在 `pnpm run typecheck` 时全部报出来，
  * 而不是等到运行时才发现某个字段是 undefined。
  *
  * 这个文件只做两件事：给生成的类型起个符合领域语言的短名字
- * （见 docs/domain/glossary.md），以及放几个纯前端的判断函数。
+ * （见仓库根目录 DESIGN-final.md 第 3.1 节），以及放几个纯前端的判断函数。
  * 想加新类型请先改后端，不要在这里手写。
  */
 

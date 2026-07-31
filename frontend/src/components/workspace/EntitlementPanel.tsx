@@ -65,7 +65,7 @@ export function EntitlementPanel({ workspaceId }: { workspaceId: string }) {
         type="info"
         showIcon
         message="资源权益决定这个 Workspace 能用哪些算力方案"
-        description="M1 阶段新建 Workspace 会自动获得全部公开方案；权益申请与审批属于后续阶段。真实的分区、QoS 和配额以平台页面为准。"
+        description="当前迁移实现会为新 Workspace 自动授予全部公开方案；正式权益申请与审批尚未接入。真实的分区、QoS 和配额以平台页面为准。"
       />
       <AsyncSection
         loading={entitlements.loading || plans.loading}

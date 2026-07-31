@@ -34,13 +34,13 @@ DEFAULT_ENTITLEMENT_CONCURRENCY = 2
 def _reject_owner_role(role: WorkspaceRole) -> None:
     """挡住一切「把 role 直接写成 owner」的路径。
 
-    ``memberships.role == owner`` 这个值**只能由转让流程写入**（ADR-0008 第 3 节）。
+    ``memberships.role == owner`` 这个值**只能由所有权转让流程写入**（GR-104）。
     否则一个 Admin 就能凭空造出第二个所有者：对方接受邀请后拿到
     ``ownership.transfer``，转手把整个空间转走。
 
     这条规则当初只写在改角色那条路上，邀请接口漏了，被审查实跑复现出来。
-    所以现在收成一个函数，**每个写 role 的入口都要调它**——
-    新增接口时先回答「我属于 ADR-0008 那张路径表的哪一行」。
+    所以现在收成一个函数，**每个写 role 的入口都要调它**；
+    新增入口也必须明确自己是否属于所有权转让流程。
     """
     if role is WorkspaceRole.OWNER:
         raise ConflictError("不能直接把成员设为 Owner，请使用转让所有权")
@@ -52,7 +52,7 @@ class WorkspaceView:
 
     能力由后端算好交给前端，前端不要自己按角色推导——
     推导就意味着规则有两份，早晚会不一致。前端权限只管「显不显示入口」，
-    真正的拦截永远在后端（GR-001）。
+    真正的 Membership 与 Role 校验永远在后端（GR-102、GR-103）。
     """
 
     workspace: Workspace
@@ -178,8 +178,8 @@ class WorkspaceService:
     async def _grant_default_entitlements(self, workspace_id: str) -> None:
         """为新 Workspace 授予平台默认算力方案的使用资格。
 
-        真实平台上这里应该由权益申请与审批流程产生（V1）；
-        M1 阶段直接授予全部公开方案，保证核心闭环可用。
+        正式平台应通过管理或申请审批流程产生权益；当前迁移实现为保证
+        本地 Mock 闭环可用，直接授予全部公开方案。
         """
         for plan in await self._repos.compute_plans.list_all():
             await self._repos.entitlements.add(
@@ -221,7 +221,7 @@ class WorkspaceService:
         """我收到的、还没处理的邀请。
 
         **不走 AccessGuard**：被邀请的人对这个空间还没有访问权，
-        用 guard 查会被判成看不见（GR-013），那样他就永远看不到邀请，
+        用 guard 查会被判成看不见，那样他就永远看不到邀请，
         也就永远进不来。这里只按「这条 membership 是不是发给我的」过滤。
         """
         views: list[InvitationView] = []
@@ -539,7 +539,7 @@ class WorkspaceService:
 
         # 降级的是**在册的那个所有者**（workspace.owner_id），不是碰巧发起调用的人。
         #
-        # 按 ADR-0008，owner_id 和「role 为 owner 的 membership」必须一一对应。
+        # GR-104 要求唯一有效 Owner，因此 owner_id 和 owner membership 必须一一对应。
         # 早先这里降的是 user_id，正常路径下两者相同看不出问题；一旦出现过
         # 第二个 role=owner 的成员（邀请接口的漏洞造出来的），由他发起转让就会
         # 只降他自己，把真正的 owner 留在 owner 角色上——一个 role=owner
@@ -625,7 +625,7 @@ class WorkspaceService:
         await self._repos.variables.delete(workspace_id, name)
 
     async def list_secret_names(self, user_id: str, workspace_id: str) -> list[str]:
-        """只返回名称。Secret 的值没有任何读取路径（GR-012）。"""
+        """只返回名称。Secret 的值没有任何读取路径（设计稿 §3.1.4）。"""
         await self._guard.workspace(user_id, workspace_id, needs=Capability.CONFIG_VIEW)
         return sorted(await self._secrets.list_names(workspace_id))
 

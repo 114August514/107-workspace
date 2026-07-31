@@ -1,7 +1,7 @@
 """领域错误 -> HTTP 状态码。
 
 注意 :class:`ObjectNotFound` 和 :class:`PermissionDenied` 的区别：
-按 GR-013，没有发现权限时领域层抛的是 ObjectNotFound，最终返回 404，
+没有发现权限时领域层抛 ``ObjectNotFound`` 并最终返回 404，
 错误信息里也不区分「不存在」和「无权访问」。
 """
 

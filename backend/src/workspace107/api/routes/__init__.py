@@ -12,7 +12,7 @@ from . import catalog, health, home, notifications, projects, runs, workspaces
 COMMON_ERRORS: dict[int | str, dict[str, Any]] = {
     400: {"model": ErrorOut, "description": "请求不合法"},
     403: {"model": ErrorOut, "description": "对象可见，但当前角色无权执行该操作"},
-    404: {"model": ErrorOut, "description": "对象不存在，或当前用户没有发现权限（GR-013）"},
+    404: {"model": ErrorOut, "description": "对象不存在，或当前用户没有发现权限"},
     409: {"model": ErrorOut, "description": "与现有状态冲突，例如重名或对象不可修改"},
     422: {"model": ErrorOut, "description": "参数校验或提交前检查未通过，problems 列出全部原因"},
     502: {"model": ErrorOut, "description": "底层调度系统返回错误"},

@@ -4,8 +4,8 @@
 所以每一格都要显式写出来——**测试失败时应该先想「这是不是我要的」，
 而不是顺手改断言**。
 
-设计稿只规定了有哪四个角色，没规定各自能做什么。矩阵的理由见
-docs/decisions/0008-capability-based-authorization.md。
+设计稿 GR-103 规定操作受 Membership Role 约束，但没有给出完整矩阵。
+这里逐项锁定当前仓库采用的授权策略，避免安全边界被无意改动。
 """
 
 from __future__ import annotations
@@ -69,7 +69,8 @@ EXPECTED: dict[WorkspaceRole, set[Capability]] = {
 @pytest.mark.parametrize("role", list(WorkspaceRole), ids=lambda r: r.value)
 def test_角色能力与矩阵一致(role: WorkspaceRole) -> None:
     assert capabilities_of(role) == EXPECTED[role], (
-        f"{role.value} 的能力和预期不一致。如果这是有意的改动，请同步更新 ADR-0008 和这里的期望表。"
+        f"{role.value} 的能力和预期不一致。如果这是有意的改动，"
+        "请同步更新 domain/capabilities.py 的策略说明和这里的期望表。"
     )
 
 

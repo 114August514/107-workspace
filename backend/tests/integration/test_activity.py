@@ -159,7 +159,7 @@ async def test_看不见的空间就看不见它的活动(client: httpx.AsyncCli
     await client.get("/api/v1/me", headers=BOB)
 
     blocked = await client.get(f"/api/v1/workspaces/{workspace_id}/activities", headers=BOB)
-    # GR-013：没有发现权限时返回 404，不泄露「这个空间存在」
+    # 没有发现权限时返回 404，不泄露「这个空间存在」
     assert blocked.status_code == 404
 
 

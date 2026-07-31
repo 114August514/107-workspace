@@ -6,11 +6,11 @@
                  + 已解析并固定的 Run Configuration
                  + Resolved Scheduler Configuration
 
-不变量（GR-009）：创建后不允许修改代码版本、执行命令、工作目录、环境版本、
+不变量（GR-202）：创建后不允许修改代码版本、执行命令、工作目录、环境版本、
 输入来源、算力请求、最终调度配置和 Artifact 收集规则。需要改变任何一项，
 都必须创建新的 Run。
 
-不变量（GR-012）：不保存 Secret 明文，只保存引用关系，执行时由平台注入。
+不变量（GR-304）：不保存 Secret 明文，只保存引用关系，执行时由平台注入。
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ def build_snapshot(
     """组装 Run Snapshot。
 
     调用方必须先完成全部校验和解析——到这一步所有可变引用都应该已经
-    变成确定版本、确定内容或确定配置（GR-004 / GR-007）。
+    变成确定版本、确定内容或确定配置（GR-205、GR-302）。
     """
     return RunSnapshot(
         id=snapshot_id,

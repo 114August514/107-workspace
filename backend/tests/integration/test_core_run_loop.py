@@ -1,4 +1,4 @@
-"""M1 核心运行闭环端到端测试。
+"""本地 Mock 核心运行闭环端到端测试。
 
     创建 Project -> 准备代码 -> 保存 Project Version -> 配置运行方案
     -> 提交前检查 -> 提交 Run -> 状态流转 -> 日志 -> Artifact -> 复现快照
@@ -132,7 +132,7 @@ async def test_完整核心闭环(client: httpx.AsyncClient) -> None:
 
 
 async def test_失败的作业被如实记录为_failed(client: httpx.AsyncClient) -> None:
-    """退出码非 0 就是失败。平台不会替用户把它变成成功（GR-015）。"""
+    """退出码非 0 就是失败，平台不会替用户把它变成成功。"""
     await use_default_environment(client)
     project = await create_project_with_version(
         client, name="会失败的项目", files={"main.py": "import sys; sys.exit(3)"}

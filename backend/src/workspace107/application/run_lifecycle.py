@@ -1,6 +1,6 @@
 """Run 状态同步与 Artifact 收集。
 
-GR-015：底层调度系统是实际状态的事实来源。这里只做「读取调度状态 ->
+当前实现把底层调度系统作为实际状态来源。这里只做「读取调度状态 ->
 映射为产品状态」，不提供任何直接把 Run 标记成功的入口。
 调度系统查不到任务时保留异常状态并记录事件，不伪造成功。
 """
@@ -60,8 +60,8 @@ class RunLifecycleService:
         其他 Run 的状态再也推不动。
 
         每个 Run 包在自己的 SAVEPOINT 里：光 try/except 不够，
-        ORM flush 失败会把整个 session 标记成需要回滚，后面的 Run 一个也写不进去
-        （和活动、通知踩的是同一个坑，见 ADR-0003 的补充）。
+        ORM flush 失败会把整个 session 标记成需要回滚，后面的 Run 一个也写不进去。
+        这是活动和通知写入同样需要 SAVEPOINT 的原因。
         """
         changed = 0
         for run in await self._repos.runs.list_unfinished():
@@ -140,7 +140,7 @@ class RunLifecycleService:
                 RunEventType.FINISHED,
                 f"任务结束，状态 {run.status}，退出码 {run.exit_code}",
             )
-            # 终态只有这里知道（GR-015：状态来自调度系统的轮询结果），
+            # 终态只有调度状态轮询路径知道，
             # 所以「跑完了」这条活动也只能在这里记。
             #
             # actor 记的是提交这次 Run 的人。结束不是他「做」的，但这条活动
@@ -155,7 +155,7 @@ class RunLifecycleService:
                 target_name=run.name,
                 detail=str(run.status.value),
             )
-            # 终态只有这里知道（GR-015），所以结束通知也只能从这里发出。
+            # 终态只有调度状态轮询路径知道，所以结束通知也只能从这里发出。
             # 取消是用户自己刚做的动作，不用再通知一遍。
             if run.status is not RunStatus.CANCELLED:
                 await self._notifier.run_finished(

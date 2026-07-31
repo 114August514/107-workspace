@@ -162,7 +162,7 @@ class RunConfigurationService:
         for raw in data.input_bindings or []:
             source_type = InputSourceType(raw.get("source_type", InputSourceType.ARTIFACT.value))
             if source_type is not InputSourceType.ARTIFACT:
-                raise ValidationFailed("M1 阶段只支持把 Artifact 作为 Run 输入")
+                raise ValidationFailed("当前迁移实现只支持把 Artifact 作为 Run 输入")
             binding = InputBinding(
                 source_type=source_type,
                 source_id=raw["source_id"],

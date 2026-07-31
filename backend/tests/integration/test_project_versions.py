@@ -1,6 +1,6 @@
 """项目文件与版本管理。
 
-对应 GR-003：Project Working Tree 可变，Project Version 不可变。
+对应 GR-201：Project Working State 可变，Project Version 不可变。
 """
 
 from __future__ import annotations

@@ -87,8 +87,8 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
     # 活动记录需要开 SAVEPOINT，所以这里把 session 传进去。
     # 用例层只认 SupportsNestedTransaction 那一个方法，不认识 SQLAlchemy。
     activity = ActivityRecorder(repos, context.clock, session)
-    # 通知的出口只有这一个端口。V1 加邮件时换成组合实现（站内 + 邮件），
-    # 各个用例里的调用一行都不用改——这是 ADR-0003 留这个端口的唯一理由。
+    # 通知的出口只有这一个端口。以后增加邮件时换成组合实现（站内 + 邮件），
+    # 各个用例里的调用不需要改变；端口就是为了隔离具体送达方式。
     publisher: NotificationPublisher = DatabaseNotificationPublisher(repos.notifications)
     notifier = Notifier(publisher, context.clock, session)
 

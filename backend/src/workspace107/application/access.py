@@ -1,10 +1,10 @@
 """访问控制。
 
-GR-001：Workspace 是基础归属边界。所有读写路径都必须先经过这里，
-由它根据 Membership 解析当前用户在目标 Workspace 中的角色。
+GR-101、GR-102 和 GR-103 共同定义 Workspace 归属与成员操作边界。
+所有读写路径都必须先经过这里，由它根据 Membership 解析当前用户在目标 Workspace 中的角色。
 API 层不允许直接拿 ``project_id`` 查询而跳过归属校验。
 
-GR-013：没有发现权限时统一抛 :class:`ObjectNotFound`，**不抛**
+没有发现权限时统一抛 :class:`ObjectNotFound`，**不抛**
 :class:`PermissionDenied`——否则错误码本身就泄露了对象是否存在。
 只有在用户已经能看见对象、但能力不足以执行该操作时才用 PermissionDenied。
 

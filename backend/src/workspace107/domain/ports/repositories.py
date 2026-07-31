@@ -3,7 +3,7 @@
 application 层通过 :class:`Repositories` 访问持久化，不认识 SQLAlchemy。
 
 不可变对象（ProjectVersion、RunSnapshot）的仓储刻意只有 ``add`` 和读取方法，
-没有 ``update``——修改不可变内容必须创建新对象（GR-003 / GR-009）。
+没有 ``update``——修改不可变内容必须创建新对象（GR-201、GR-202）。
 """
 
 from __future__ import annotations

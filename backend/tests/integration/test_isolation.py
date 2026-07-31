@@ -1,4 +1,4 @@
-"""GR-001：Workspace 是基础归属边界。
+"""GR-101、GR-102：Workspace 是对象归属与成员操作边界。
 
 Run、Log、Artifact 的归属 Workspace 由 Project 决定；
 Membership 只在对应 Workspace 内生效，不会传播到别的空间。

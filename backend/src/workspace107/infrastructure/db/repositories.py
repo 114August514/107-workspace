@@ -714,7 +714,7 @@ class RunConfigurationRepositoryImpl:
 
 
 class RunSnapshotRepositoryImpl:
-    """不可变对象仓储：只有 add 和 get，刻意没有 update（GR-009）。"""
+    """不可变对象仓储：只有 add 和 get，刻意没有 update（GR-202）。"""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -831,7 +831,7 @@ class RunRepositoryImpl:
     async def count_unfinished_for_plan(self, workspace_id: str, compute_plan_id: str) -> int:
         """数「这个 Workspace 在这个算力方案上」还有几个未结束的 Run。
 
-        必须带 compute_plan_id：额度是按「Workspace × 方案」授予的（GR-002a），
+        必须带 compute_plan_id：当前实现按「Workspace × 方案」授予并发额度，
         锁的也是那一条权益行。**计数范围大于加锁范围就等于没锁**——
         两个请求提交到不同方案时锁的是不同的行，谁都不阻塞谁，
         却都读到同一个更大范围的计数，双双通过。
@@ -956,7 +956,7 @@ class ArtifactRepositoryImpl:
         row = await self._session.get(t.ArtifactRow, artifact.id)
         if row is None:
             return
-        # 内容不可变，只允许更新展示元数据和清理状态（GR-016）。
+        # Artifact 内容不可变（GR-203），只允许更新展示元数据和清理状态。
         row.name = artifact.name
         row.description = artifact.description
         row.status = artifact.status.value
@@ -1209,7 +1209,7 @@ class SqlRepositories:
 
 
 def _visible_workspace_ids(user_id: str):
-    """当前用户可见的 Workspace 子查询（GR-001 / GR-013）。"""
+    """按有效 Membership 返回当前用户可见的 Workspace（GR-102）。"""
     member_ids = select(t.MembershipRow.workspace_id).where(
         t.MembershipRow.user_id == user_id,
         t.MembershipRow.status == MembershipStatus.ACTIVE.value,

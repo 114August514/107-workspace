@@ -34,7 +34,7 @@ export function RunPage() {
   const detail = useAsync<RunDetail>(() => api.getRun(runId), [runId])
   // 取消和重跑都是写操作。不按能力收敛的话，Viewer 看得到按钮、
   // 点了必然 403——后端拦得住，但让用户点一个注定失败的按钮不是好体验
-  // （ADR-0008：前端权限管「显不显示入口」）。
+  // 前端能力只管「显不显示入口」，真正的授权仍由后端逐请求校验。
   const workspace = useAsync<Workspace | undefined>(
     async () => (detail.data ? api.getWorkspace(detail.data.run.workspace_id) : undefined),
     [detail.data?.run.workspace_id],

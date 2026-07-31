@@ -13,7 +13,7 @@ import { AsyncSection } from '../common/AsyncSection'
  * Workspace 配置变量与 Secret。
  *
  * 两者的界面刻意不同：Variable 的值可以看，Secret 只列名称——
- * 后端根本没有读取 Secret 值的接口（GR-012）。
+ * 后端根本没有读取 Secret 值的接口（DESIGN-final.md 第 3.1.4 节）。
  */
 export function VariablePanel({ workspace }: { workspace: Workspace }) {
   const variables = useAsync<Variable[]>(() => api.listVariables(workspace.id), [workspace.id])

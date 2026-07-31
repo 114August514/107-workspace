@@ -6,7 +6,7 @@ import { toApiError } from './client'
  * 错误信封的解析。
  *
  * **字段名对不对不用测**——`toApiError` 读的是契约里的 `ErrorOut`，
- * 后端改字段名会在 `npm run typecheck` 时报错。
+ * 后端改字段名会在 `pnpm run typecheck` 时报错。
  *
  * 这里守的是另一半：**响应体不是我们的信封时会怎样**。
  * 网关超时、nginx 直接返回 HTML、代理吞掉响应体，这些线上都会遇到，

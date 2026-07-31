@@ -254,7 +254,7 @@ async def test_被邀请的人能看到并接受邀请(client: httpx.AsyncClient
     # 还没接受：空间列表里没有它
     workspaces = (await client.get("/api/v1/workspaces", headers=BOB)).json()
     assert workspace_id not in [w["id"] for w in workspaces]
-    # 也确实进不去（GR-013）
+    # 移除后没有有效 Membership，也确实进不去
     assert (await client.get(f"/api/v1/workspaces/{workspace_id}", headers=BOB)).status_code == 404
 
     # 但邀请看得到，而且带着做决定需要的信息

@@ -52,7 +52,7 @@ class ProjectStatus(StrEnum):
 class RunStatus(StrEnum):
     """Run 执行状态。
 
-    状态只能由调度系统的轮询结果驱动（GR-015），
+    当前实现中状态只能由调度系统的轮询结果驱动，
     平台自身不提供「把 Run 直接标记为成功」的路径。
     """
 
@@ -101,7 +101,7 @@ class LogStream(StrEnum):
 class ArtifactStatus(StrEnum):
     """Artifact 状态。
 
-    清理只删除存储内容并置为 cleaned，不删除记录本身（GR-016）。
+    当前清理流程只删除存储内容并置为 cleaned，不删除记录本身。
     """
 
     AVAILABLE = "available"
@@ -111,7 +111,7 @@ class ArtifactStatus(StrEnum):
 class InputSourceType(StrEnum):
     """Input Binding 的来源类型。
 
-    M1 只支持 artifact；shared_resource_version 已建模但能力未开放。
+    当前迁移实现只支持 artifact；shared_resource_version 已建模但能力未开放。
     """
 
     ARTIFACT = "artifact"

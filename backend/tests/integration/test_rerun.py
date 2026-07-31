@@ -1,7 +1,7 @@
 """重跑与引用重新校验。
 
-对应 GR-007：所有外部引用在使用时重新校验；曾经成功不代表现在还能用。
-对应 GR-009：重跑必须创建新的 Run 和新的 Run Snapshot。
+对应设计稿 §3.4.3：重跑时按当前权限和资源资格重新校验外部引用。
+对应 GR-306：重跑必须创建新的 Run 和新的 Run Snapshot。
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ async def test_修改运行方案不影响已创建的_run(client: httpx.AsyncCl
 
 
 async def test_环境版本下架后不能重跑(client: httpx.AsyncClient, session) -> None:
-    """历史 Run 仍然能看，但不能再跑起来（GR-007 / GR-008）。"""
+    """历史 Run 仍然能看，但当前资源资格失效后不能再跑起来。"""
     from sqlalchemy import update
 
     from workspace107.infrastructure.db import tables as t

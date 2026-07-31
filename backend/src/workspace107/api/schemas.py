@@ -1,6 +1,6 @@
 """API 请求与响应模型。
 
-字段名与领域语言保持一致（见 docs/domain/glossary.md），
+字段名与领域语言保持一致（见仓库根目录 ``DESIGN-final.md`` 第 3.1 节），
 不在这一层另起别名。
 """
 
@@ -500,7 +500,7 @@ class NotificationOut(Model):
     target_type: TargetType | None
     target_id: str | None
     mandatory: bool
-    """不可关闭的重要通知。M2 还没有偏好设置，标记先带上。"""
+    """不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。"""
     created_at: datetime
     read_at: datetime | None
 

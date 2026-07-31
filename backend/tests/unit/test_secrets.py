@@ -57,7 +57,7 @@ def test_解析后_variable_变成字面值_secret_只留引用() -> None:
 
     assert problems == []
     assert resolved.literals == {"BATCH_SIZE": "32", "LOG_LEVEL": "INFO"}
-    # GR-012：Secret 只保存引用关系，值不出现在解析结果里。
+    # GR-304：Secret 只保存引用关系，值不出现在解析结果里。
     assert resolved.secret_refs == {"TOKEN": "HF_TOKEN"}
     assert "TOKEN" not in resolved.literals
 

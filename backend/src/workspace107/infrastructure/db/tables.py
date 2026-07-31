@@ -227,7 +227,7 @@ class RunConfigurationRow(Base):
 
 
 class RunSnapshotRow(Base):
-    """不可变执行事实。只 INSERT，不 UPDATE（GR-009）。"""
+    """不可变执行事实。只 INSERT，不 UPDATE（GR-202）。"""
 
     __tablename__ = "run_snapshots"
 
@@ -243,7 +243,7 @@ class RunRow(Base):
     workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     snapshot_id: Mapped[str] = mapped_column(ID, ForeignKey("run_snapshots.id"))
     # 从快照里冗余出来的一列。快照是 JSON，没法索引也没法跨库稳定地查；
-    # 而并发上限的口径是「Workspace × 算力方案」（GR-002a），
+    # 而当前实现的并发上限口径是「Workspace × 算力方案」，
     # 数未结束 Run 时必须能按方案过滤。方案在快照创建时就固定、之后不再变，
     # 冗余是安全的。
     compute_plan_id: Mapped[str] = mapped_column(ID, index=True)

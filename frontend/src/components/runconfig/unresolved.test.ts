@@ -6,7 +6,7 @@ const HAS_NOTHING = { secrets: [], variables: [] }
 
 describe('findMissingReferences', () => {
   it('Fork 过来的 Secret 引用在新空间里找不到', () => {
-    // GR-012 规则 4：表达式跟着复制，值留在源空间
+    // GR-407：表达式可以复制，值和访问权限留在源 Workspace
     const missing = findMissingReferences({ TOKEN: '${{ secrets.HF_TOKEN }}' }, HAS_NOTHING)
 
     expect(missing).toEqual([{ envName: 'TOKEN', kind: 'secret', name: 'HF_TOKEN' }])

@@ -57,7 +57,7 @@ def build_context(settings: Settings) -> AppContext:
 async def _sync_loop(app: FastAPI, interval: float) -> None:
     """周期性把调度系统的任务状态同步到 Run。
 
-    这是 Run 状态的唯一来源（GR-015）。同步失败只记录日志，
+    这是当前实现中 Run 状态的唯一来源。同步失败只记录日志，
     不改动 Run 状态——宁可保留过期状态，也不伪造结果。
     """
     context: AppContext = app.state.context
@@ -103,7 +103,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         description=(
             "面向 USTC 107 算力平台的协作式计算工作空间。\n\n"
-            "当前实现范围为 M1 Core Run Loop，详见 docs/milestones/M1-core-run-loop.md。"
+            "当前迁移实现支持本地 Mock 执行闭环；真实 Worker、Git / Shared FS "
+            "和 Slurm 链路尚未完成验证。"
         ),
         lifespan=lifespan,
     )

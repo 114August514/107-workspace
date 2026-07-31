@@ -171,7 +171,7 @@ async def delete_variable(
 async def list_secret_names(
     workspace_id: str, user: CurrentUser, services: ServicesDep
 ) -> list[str]:
-    """只返回名称。Secret 的值没有任何读取接口（GR-012）。"""
+    """只返回名称。Secret 的值没有任何读取接口（DESIGN-final.md 第 3.1.4 节）。"""
     return await services.workspaces.list_secret_names(user.id, workspace_id)
 
 

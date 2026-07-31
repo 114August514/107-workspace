@@ -1,6 +1,6 @@
 """Fork：从确定版本派生 Project。
 
-ADR-0001 说「实现时对着这张表写测试」，这个文件就是那张表——
+这里按 GR-501、GR-502 和 GR-503 把 Fork 行为拆成一张可执行的表——
 **复制什么**一组，**不复制什么**一组。后一组更重要：
 复制多了是越权，而越权不会自己报错。
 """
@@ -225,12 +225,12 @@ async def test_不是_fork_出来的项目没有来源记录(client: httpx.Async
 
 
 # --------------------------------------------------------------------------
-# 不复制什么（GR-006）
+# 不复制什么（GR-503）
 # --------------------------------------------------------------------------
 
 
 async def test_两边后续修改互不影响(client: httpx.AsyncClient) -> None:
-    """GR-005：复制产生独立内容，Fork Relation 不是同步通道。"""
+    """GR-502：复制产生独立内容，Fork Relation 不是同步通道。"""
     source_workspace, version_id = await _shared_project(client, "member")
     source_project_id = (
         await client.get(f"/api/v1/workspaces/{source_workspace}/projects", headers=ALICE)
@@ -305,7 +305,7 @@ async def test_不复制_run_历史(client: httpx.AsyncClient) -> None:
 
 
 async def test_不复制_secret_的值_只复制引用(client: httpx.AsyncClient) -> None:
-    """GR-012 规则 4，也是最容易搞错的一条。
+    """GR-407，也是最容易搞错的一条。
 
     表达式跟着走，值留在源空间。目标空间没有同名 Secret 时，
     提交前检查必须拦下——**不能静默降级成空字符串**。
@@ -444,7 +444,7 @@ async def test_看不到源版本就_fork_不了(client: httpx.AsyncClient) -> N
         json={"target_workspace_id": bob_personal, "name": "偷来的"},
         headers=BOB,
     )
-    # GR-013：没有发现权限时当作不存在
+    # 没有发现权限时当作不存在，避免泄露源 Project 是否存在
     assert blocked.status_code == 404
 
 

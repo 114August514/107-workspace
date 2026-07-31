@@ -1,7 +1,7 @@
 """Artifact 作为后续 Run 的输入。
 
-对应 GR-010：Artifact 不必先发布为 Shared Resource 就能作为输入。
-对应 GR-011：输入默认只读，Run 不得原地修改输入对象。
+对应 GR-403、GR-405：同一 Workspace 的 Artifact 可以直接作为输入。
+对应 GR-404：输入只读，Run 不得原地修改输入对象。
 """
 
 from __future__ import annotations

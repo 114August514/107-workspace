@@ -1,4 +1,4 @@
-"""GR-012：Secret 不得通过普通对象传播，也不得出现在快照、日志和响应里。"""
+"""GR-304 与设计稿 §3.1.4：Secret 不得出现在快照、日志和响应里。"""
 
 from __future__ import annotations
 

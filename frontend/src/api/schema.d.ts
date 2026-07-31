@@ -614,8 +614,8 @@ export interface paths {
          * @description 两侧都会校验：源版本可读、目标空间可写。
          *
          *     复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
-         *     （GR-006）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
-         *     提交前检查会拦下（GR-012）。
+         *     （GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
+         *     提交前检查会拦下（GR-407）。
          */
         post: operations["fork_version_api_v1_versions__version_id__fork_post"];
         delete?: never;
@@ -808,7 +808,7 @@ export interface paths {
         };
         /**
          * List Secret Names
-         * @description 只返回名称。Secret 的值没有任何读取接口（GR-012）。
+         * @description 只返回名称。Secret 的值没有任何读取接口（DESIGN-final.md 第 3.1.4 节）。
          */
         get: operations["list_secret_names_api_v1_workspaces__workspace_id__secrets_get"];
         /** Set Secret */
@@ -983,7 +983,7 @@ export interface components {
          * ArtifactStatus
          * @description Artifact 状态。
          *
-         *     清理只删除存储内容并置为 cleaned，不删除记录本身（GR-016）。
+         *     当前清理流程只删除存储内容并置为 cleaned，不删除记录本身。
          * @enum {string}
          */
         ArtifactStatus: "available" | "cleaned";
@@ -1237,7 +1237,7 @@ export interface components {
          * InputSourceType
          * @description Input Binding 的来源类型。
          *
-         *     M1 只支持 artifact；shared_resource_version 已建模但能力未开放。
+         *     当前迁移实现只支持 artifact；shared_resource_version 已建模但能力未开放。
          * @enum {string}
          */
         InputSourceType: "artifact" | "shared_resource_version";
@@ -1791,7 +1791,7 @@ export interface components {
          * RunStatus
          * @description Run 执行状态。
          *
-         *     状态只能由调度系统的轮询结果驱动（GR-015），
+         *     当前实现中状态只能由调度系统的轮询结果驱动，
          *     平台自身不提供「把 Run 直接标记为成功」的路径。
          * @enum {string}
          */
@@ -1975,7 +1975,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2053,7 +2053,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2129,7 +2129,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2205,7 +2205,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2279,7 +2279,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2355,7 +2355,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2431,7 +2431,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2514,7 +2514,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2590,7 +2590,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2666,7 +2666,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2742,7 +2742,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2820,7 +2820,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2902,7 +2902,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -2985,7 +2985,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3063,7 +3063,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3141,7 +3141,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3223,7 +3223,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3301,7 +3301,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3381,7 +3381,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3463,7 +3463,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3547,7 +3547,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3625,7 +3625,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3703,7 +3703,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3785,7 +3785,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3868,7 +3868,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3960,7 +3960,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4042,7 +4042,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4125,7 +4125,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4207,7 +4207,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4281,7 +4281,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4372,7 +4372,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4448,7 +4448,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4522,7 +4522,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4600,7 +4600,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4678,7 +4678,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4756,7 +4756,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4844,7 +4844,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4922,7 +4922,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5002,7 +5002,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5082,7 +5082,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5164,7 +5164,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5242,7 +5242,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5318,7 +5318,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5398,7 +5398,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5476,7 +5476,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5558,7 +5558,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5641,7 +5641,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5719,7 +5719,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5799,7 +5799,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5875,7 +5875,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5953,7 +5953,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6035,7 +6035,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6112,7 +6112,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6195,7 +6195,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6278,7 +6278,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6360,7 +6360,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6438,7 +6438,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6518,7 +6518,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6595,7 +6595,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6672,7 +6672,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6750,7 +6750,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6832,7 +6832,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6909,7 +6909,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限（GR-013） */
+            /** @description 对象不存在，或当前用户没有发现权限 */
             404: {
                 headers: {
                     [name: string]: unknown;

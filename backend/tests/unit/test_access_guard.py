@@ -1,7 +1,7 @@
 """AccessGuard 权限解析。
 
-对应 GR-001：Workspace 是基础归属边界。
-对应 GR-013：无发现权限时对象视为不存在——抛 ObjectNotFound 而不是 PermissionDenied。
+对应 GR-101、GR-102、GR-103：Workspace 是对象归属和成员操作边界。
+无发现权限时对象视为不存在——抛 ObjectNotFound 而不是 PermissionDenied。
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
 """通知的产生与读取。
 
 产生点集中在这里，不下沉到仓储：**每处都要能说清「为什么这个人需要知道」**，
-只有用例知道这件事。见 [ADR-0003](
-../../../../docs/decisions/0003-activity-and-notification.md) 第 4 节。
+只有用例知道这件事。
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ class Notifier:
     而看到报错。所以吞掉异常——但光 try/except 是不够的，写入必须包在
     SAVEPOINT 里，否则 ORM flush 失败会把整个 session 标记成需要回滚，
     请求结束时 commit 抛 PendingRollbackError，主用例的数据一起丢。
-    这个坑 Issue 3 踩过，补在了 ADR-0003 里。
+    因此通知写入必须放在独立 SAVEPOINT 中。
 
     **不给自己发通知。** 自己做的事自己知道，通知里全是自己的操作会让
     未读数变成噪音，真正需要关注的反而被淹掉。所以每个产生点都要判断
@@ -100,7 +99,7 @@ class Notifier:
             body=f"角色：{role}。在首页可以接受或拒绝。",
             workspace_id=workspace_id,
             # **不给跳转目标。** 还没接受之前他对这个空间没有访问权，
-            # 链到 /workspaces/{id} 只会是 404（GR-013）。
+            # 链到 /workspaces/{id} 只会是 404，因为邀请尚未形成有效成员权限。
             # 处理入口在首页的邀请列表，不在那个空间里。
             #
             # 早先这里链的就是那个空间，正文还写着「在空间列表里可以接受」——

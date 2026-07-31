@@ -4,9 +4,8 @@
 翻一遍，而且很容易漏——漏掉的那处就是一个越权。所以判断的对象是**能力**，
 角色只是能力的一个命名集合。
 
-设计稿（§2.2 C）只规定了有 Owner / Admin / Member / Viewer 四个角色，
-没有规定各自能做什么。下面这张表是本项目的选择，理由见
-[ADR-0008](../../../../docs/decisions/0008-capability-based-authorization.md)。
+设计稿（§2.2 C、GR-103）规定操作受 Membership Role 约束，但没有给出完整
+能力矩阵。下面这张表是当前仓库的授权策略，并由单元测试逐项锁定。
 
 判断权限时永远问「有没有这个能力」，不要问「是不是某个角色」。
 """
@@ -36,7 +35,7 @@ class Capability(StrEnum):
 
     # -- 配置与权益 ------------------------------------------------------
     CONFIG_VIEW = "config.view"
-    """查看 Variable 的值和 Secret 的名称。Secret 的值任何角色都读不到（GR-012）。"""
+    """查看 Variable 的值和 Secret 的名称；任何角色都读不到 Secret 值（§3.1.4）。"""
     CONFIG_MANAGE = "config.manage"
     ENTITLEMENT_VIEW = "entitlement.view"
 

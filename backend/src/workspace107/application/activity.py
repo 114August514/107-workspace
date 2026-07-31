@@ -2,8 +2,6 @@
 
 放在 application 层而不是仓储层，因为**只有用例知道这次操作在业务上叫什么**。
 仓储只看到「往 runs 表插了一行」，分不清这是「提交 Run」还是「重跑」。
-
-详见 [ADR-0003](../../../../docs/decisions/0003-activity-and-notification.md)。
 """
 
 from __future__ import annotations
@@ -28,8 +26,8 @@ class SupportsNestedTransaction(Protocol):
     """能开启嵌套事务的会话。
 
     这里只声明用得到的那一个方法，而不是直接依赖 ``AsyncSession``——
-    application 层不该认识 SQLAlchemy（见 ADR-0006 的分层规则，
-    有测试守着：``tests/unit/test_layering.py``）。
+    application 层不该认识 SQLAlchemy；这个依赖方向由
+    ``DESIGN-final.md`` 第 4.3 节定义，并由 ``tests/unit/test_layering.py`` 守住。
     """
 
     def begin_nested(self) -> AbstractAsyncContextManager[object]: ...
@@ -115,7 +113,8 @@ class ActivityService:
 
     **没有单独的「查看活动」能力。** 活动回答的是「这个空间里发生了什么」，
     能看见这个空间的人就该看得见——包括 Viewer，他们本来就是来观摩的。
-    所以直接复用 WORKSPACE_VIEW / PROJECT_VIEW（见 ADR-0008 的能力矩阵）。
+    所以直接复用 ``WORKSPACE_VIEW`` / ``PROJECT_VIEW``；能力矩阵定义在
+    :mod:`workspace107.domain.capabilities`，并由单元测试完整锁定。
     """
 
     def __init__(self, repos: Repositories, guard: AccessGuard) -> None:

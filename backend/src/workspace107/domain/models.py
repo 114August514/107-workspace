@@ -1,11 +1,12 @@
 """领域对象。
 
-可变对象与不可变版本必须分离（GR-003）：
+可变对象与不可变版本必须分离（GR-201、GR-202、GR-203）：
 
     可变：  Workspace、Project、ProjectFile、RunConfiguration、Environment
     不可变：ProjectVersion、EnvironmentVersion、RunSnapshot、Artifact 内容
 
-不可变对象在这里是 ``frozen`` dataclass，仓储层对它们只有 INSERT，没有 UPDATE。
+Project Version、Environment Version 和 Run Snapshot 在代码及仓储层都不可变；
+Artifact 的内容不可变，但展示元数据和清理状态可以更新。
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ class User:
     """平台中的自然人身份。
 
     User 本身不是 Project、Run 或资源的所有权边界——用户创建的对象归属于
-    操作发生时所在的 Workspace（GR-001）。
+    操作发生时所在的 Workspace 层级（设计稿 §3.2.1）。
     """
 
     id: str
@@ -101,7 +102,7 @@ class WorkspaceSecret:
     """由 Workspace 安全保存的敏感键值配置。
 
     领域对象里刻意不携带秘密值：读取路径只暴露名称，
-    值的获取由 ``SecretVault`` 端口在执行阶段完成（GR-012）。
+    值的获取由 ``SecretVault`` 端口在执行阶段完成（设计稿 §3.1.4）。
     """
 
     workspace_id: str
@@ -220,7 +221,7 @@ class InputBinding:
     """把一份确定内容绑定到 Run 中指定访问路径的关系。
 
     统一引用一份确定内容，不针对来源类型设计不同结构。
-    绑定的内容只读提供给 Run（GR-011）。
+    绑定的内容只读提供给 Run（GR-404）。
     """
 
     source_type: InputSourceType
@@ -304,7 +305,7 @@ class Run:
     workspace_id: str
     snapshot_id: str
     compute_plan_id: str
-    """本次运行占用的算力方案。并发额度按「Workspace × 方案」计（GR-002a）。"""
+    """本次运行占用的算力方案。当前实现按「Workspace × 方案」计算并发额度。"""
     source_run_configuration_id: str | None
     """仅用于来源追踪和配置复用，不作为执行依据。"""
     source_run_id: str | None
@@ -369,7 +370,7 @@ class Artifact:
     """某次 Run 产生并保存的不可变结果。
 
     内容不可修改；名称和说明等展示元数据可以在允许范围内修改。
-    清理只删除存储内容并置 ``status = cleaned``，记录本身保留（GR-016）。
+    当前清理流程只删除存储内容并置 ``status = cleaned``，记录本身保留。
     """
 
     id: str
@@ -397,7 +398,8 @@ class Activity:
     """「这里最近发生了什么」的一条记录。
 
     面向对象（Workspace / Project），不面向人——面向人的是 Notification。
-    两者是两条独立的数据流，理由见 ADR-0003。
+    两者是两条独立的数据流：Activity 回答「这里发生了什么」，Notification
+    回答「这个人需要关注什么」。
 
     **actor_name 和 target_name 是写入时抄下来的，不是查出来的。**
     活动是历史事实：「alice 删掉了 Project foo」这句话在 foo 已经不存在之后
@@ -433,7 +435,7 @@ class Notification:
     """「有什么需要我关注」的一条记录。
 
     面向人，不面向对象——面向对象的是 :class:`Activity`。两者是两条独立的
-    数据流，理由见 ADR-0003。关键差别在数量关系：一次「移除成员」产生
+    数据流。关键差别在数量关系：一次「移除成员」产生
     **一条活动**（这个空间少了个人），但要产生**两条通知**（被移除的人要知道，
     Owner 要有记录）。
 
@@ -458,7 +460,7 @@ class Notification:
     mandatory: bool = False
     """不可关闭的重要通知（设计稿 §2.10 C）。
 
-    M2 还没有偏好设置，但标记要先带上——否则 V1 加偏好时，
+    当前迁移实现还没有偏好设置，但标记要先带上——否则后续增加偏好时，
     历史数据分不出哪些是当初就不允许屏蔽的。
     """
     read_at: datetime | None = None
@@ -472,7 +474,7 @@ class Notification:
 class ForkRelation:
     """新 Project 与它来源版本之间的一条**不可变来源记录**。
 
-    只是记录，**不是同步通道**（GR-005）：源内容后续变化不影响副本，
+    只是记录，**不是同步通道**（GR-502）：源内容后续变化不影响副本，
     副本后续变化也不影响源内容。「看看来源有没有出新版本」属于 V2，
     而且即使做了也是用户主动发起的一次性比较，不是自动跟随。
 

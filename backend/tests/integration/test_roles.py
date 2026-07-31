@@ -243,7 +243,7 @@ async def test_个人空间的所有者拥有全部能力(client: httpx.AsyncCli
 
 
 async def test_不能把人直接邀请成_owner(client: httpx.AsyncClient) -> None:
-    """ADR-0008：``memberships.role == owner`` 只能由转让流程写入。
+    """GR-104：``memberships.role == owner`` 只能由所有权转让流程写入。
 
     这条规则当初只在改角色那条路上落地，邀请接口漏了——审查时实跑复现出
     完整的夺权链：Admin 邀请一个 owner，对方接受后拿到 ownership.transfer，

@@ -13,7 +13,7 @@ Variable 和 Secret::
     字面值和 Variable -> 解析后固定到 Run Snapshot
     Secret            -> Run Snapshot 只保存引用表达式，执行时由平台注入
 
-对应 GR-012：Run Snapshot、日志和 API 响应都不得出现 Secret 明文。
+对应 GR-304 及设计稿 §3.1.4：Run Snapshot、日志和 API 响应不得出现 Secret 明文。
 """
 
 from __future__ import annotations
@@ -97,7 +97,8 @@ def resolve_env(
     """把环境变量配置解析为可固定进 Run Snapshot 的形式。
 
     返回解析结果和问题列表。引用了不存在的 Variable 或 Secret 时，
-    对应条目不会进入结果，并在问题列表中给出说明（GR-007：引用在使用时重新校验）。
+    对应条目不会进入结果，并在问题列表中给出说明；创建 Run 时必须校验引用
+    的 Variable 和 Secret 是否存在且可用（设计稿 §3.1.4）。
     """
     literals: dict[str, str] = {}
     secret_refs: dict[str, str] = {}

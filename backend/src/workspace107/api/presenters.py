@@ -1,6 +1,6 @@
 """领域对象 -> API 响应模型。
 
-Secret 只输出名称和引用关系，任何路径都不输出值（GR-012）。
+Secret 只输出名称和引用关系，任何路径都不输出值（DESIGN-final.md 第 3.1.4 节）。
 """
 
 from __future__ import annotations

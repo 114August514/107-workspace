@@ -24,7 +24,7 @@ class RunPaths:
     work: Path
     """工作目录根，Project Version 的文件被materialize到这里。"""
     inputs: Path
-    """输入内容的挂载根。其下的内容只读（GR-011）。"""
+    """输入内容的挂载根。其下的内容只读（GR-404）。"""
     logs: Path
 
     @property
@@ -106,6 +106,6 @@ class StoragePort(Protocol):
     async def delete_artifact_content(self, artifact_id: str) -> None:
         """删除 Artifact 的存储内容。
 
-        只删内容，不删记录——历史 Run 仍要能看到标识、摘要和清理状态（GR-016）。
+        当前实现只删内容、不删记录，使历史 Run 仍能显示标识、摘要和清理状态。
         """
         ...
