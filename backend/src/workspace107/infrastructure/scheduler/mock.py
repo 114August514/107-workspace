@@ -3,7 +3,7 @@
 它在本机以子进程**真实执行**作业，而不是伪造状态——这样开发、测试和演示
 走的是同一条代码路径，只有排队和资源分配被省略了。
 
-依然遵守 GR-015：状态来自子进程的真实退出码，适配器不提供任何
+状态来自子进程的真实退出码，适配器不提供任何
 「把任务标记为成功」的入口。查不到任务时返回 ``UNKNOWN``，
 由上层保留异常状态，不伪造成功。
 """
@@ -64,6 +64,7 @@ class MockScheduler:
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
         stderr = submission.stderr_path.open("ab")
+        shell_options = {} if os.name == "nt" else {"executable": "/bin/bash"}
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -72,7 +73,7 @@ class MockScheduler:
                 stdout=stdout,
                 stderr=stderr,
                 env=environment,
-                executable="/bin/bash",
+                **shell_options,
             )
         except OSError as exc:  # pragma: no cover - 取决于宿主机环境
             stdout.close()

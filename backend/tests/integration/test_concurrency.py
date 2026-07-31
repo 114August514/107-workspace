@@ -149,7 +149,7 @@ async def test_project_重名撞车也报冲突(client, session) -> None:
 
 
 async def test_不同算力方案的名额互不挤占(client: httpx.AsyncClient) -> None:
-    """GR-002a：额度按「Workspace × 算力方案」计。
+    """当前实现的并发额度按「Workspace × 算力方案」计。
 
     这是口径不一致时最直观的症状：CPU 作业把 GPU 的名额吃掉。
     早先计数数的是整个 Workspace，比锁的范围大——两个请求提交到不同方案时
@@ -158,14 +158,14 @@ async def test_不同算力方案的名额互不挤占(client: httpx.AsyncClient
     """
     workspace_id = await use_default_environment(client)
     project = await create_project_with_version(
-        client, name="并发口径", files={"run.sh": "sleep 5"}
+        client, name="并发口径", files={"slow.py": "import time; time.sleep(5)"}
     )
 
     async def configuration(name: str, plan: str) -> str:
         body = (
             await client.post(
                 f"/api/v1/projects/{project['id']}/run-configurations",
-                json={"name": name, "command": "bash run.sh", "compute_plan_id": plan},
+                json={"name": name, "command": "python slow.py", "compute_plan_id": plan},
             )
         ).json()
         return str(body["id"])
