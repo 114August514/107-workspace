@@ -1,124 +1,80 @@
-from collections.abc import Sequence
+"""领域错误 -> HTTP 状态码。
 
-from fastapi import Request
+注意 :class:`ObjectNotFound` 和 :class:`PermissionDenied` 的区别：
+按 GR-013，没有发现权限时领域层抛的是 ObjectNotFound，最终返回 404，
+错误信息里也不区分「不存在」和「无权访问」。
+"""
+
+from __future__ import annotations
+
+from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from workspace107.domain.errors import (
-    ClusterUnavailable,
+from ..domain.errors import (
+    ConflictError,
     DomainError,
-    ExternalCommandFailed,
-    FinalOwnerRequired,
-    InvalidRunTransition,
-    InvalidWorkspaceParent,
-    PathOutsideAllowedRoot,
-    PreflightFailed,
-    ResourceArchived,
-    ResourceConflict,
-    ResourceNotFound,
-    TransferFailed,
-    WorkspaceAccessDenied,
+    ObjectNotFound,
+    PermissionDenied,
+    PreflightRejected,
+    SchedulerError,
+    ValidationFailed,
 )
+from ..observability import current_request_id
+
+# 422 直接写数值：Starlette 在 1.x 把常量名从 UNPROCESSABLE_ENTITY 改成了
+# UNPROCESSABLE_CONTENT，写死数值可以同时兼容两个版本。
+HTTP_422 = 422
+
+_STATUS_BY_TYPE: list[tuple[type[DomainError], int]] = [
+    (ObjectNotFound, status.HTTP_404_NOT_FOUND),
+    (PermissionDenied, status.HTTP_403_FORBIDDEN),
+    # ImmutableObjectError 是 ConflictError 的子类，同样返回 409。
+    (ConflictError, status.HTTP_409_CONFLICT),
+    (PreflightRejected, HTTP_422),
+    (ValidationFailed, HTTP_422),
+    (SchedulerError, status.HTTP_502_BAD_GATEWAY),
+]
 
 
-class ApiProblem(Exception):
-    def __init__(self, *, status: int, title: str, code: str, detail: str) -> None:
-        super().__init__(detail)
-        self.status = status
-        self.title = title
-        self.code = code
-        self.detail = detail
+def status_for(error: DomainError) -> int:
+    for error_type, http_status in _STATUS_BY_TYPE:
+        if isinstance(error, error_type):
+            return http_status
+    return status.HTTP_400_BAD_REQUEST
 
 
-def problem_response(
-    *,
-    status: int,
-    title: str,
-    code: str,
-    detail: str,
-    errors: Sequence[dict[str, object]] | None = None,
-) -> JSONResponse:
-    body: dict[str, object] = {
-        "type": f"https://workspace107.local/problems/{code.replace('_', '-')}",
-        "title": title,
-        "status": status,
-        "detail": detail,
-        "code": code,
-    }
-    if errors is not None:
-        body["errors"] = list(errors)
-    return JSONResponse(status_code=status, content=body, media_type="application/problem+json")
-
-
-async def api_problem_handler(_: Request, exc: Exception) -> JSONResponse:
-    if not isinstance(exc, ApiProblem):
-        raise exc
-    return problem_response(
-        status=exc.status,
-        title=exc.title,
-        code=exc.code,
-        detail=exc.detail,
-    )
-
-
-async def domain_error_handler(_: Request, exc: Exception) -> JSONResponse:
-    if not isinstance(exc, DomainError):
-        raise exc
-    if isinstance(exc, WorkspaceAccessDenied):
-        status, title = 403, "Workspace access denied"
-    elif isinstance(exc, ResourceNotFound):
-        status, title = 404, "Resource not found"
-    elif isinstance(exc, (ResourceConflict, ResourceArchived, FinalOwnerRequired)):
-        status, title = 409, "Resource conflict"
-    elif isinstance(exc, InvalidRunTransition):
-        status, title = 409, "Invalid run transition"
-    elif isinstance(exc, PreflightFailed):
-        status, title = 422, "Run preflight failed"
-    elif isinstance(exc, (InvalidWorkspaceParent, PathOutsideAllowedRoot)):
-        status, title = 422, "Validation failed"
-    elif isinstance(exc, ClusterUnavailable):
-        status, title = 503, "Cluster unavailable"
-    elif isinstance(exc, ExternalCommandFailed):
-        status, title = 503, "External command failed"
-    elif isinstance(exc, TransferFailed):
-        status, title = 502, "Project transfer failed"
-    else:
-        status, title = 400, "Domain operation failed"
-    if isinstance(exc, PathOutsideAllowedRoot):
-        detail = "A transfer path is outside its configured root."
-    elif isinstance(exc, ClusterUnavailable):
-        detail = "The configured cluster adapter is unavailable."
-    elif isinstance(exc, ExternalCommandFailed):
-        detail = "An external cluster command failed."
-    elif isinstance(exc, TransferFailed):
-        detail = "The project transfer failed."
-    else:
-        detail = str(exc)
-    return problem_response(
-        status=status,
-        title=title,
-        code=exc.code,
-        detail=detail,
-        errors=exc.errors if isinstance(exc, PreflightFailed) else None,
-    )
-
-
-async def request_validation_handler(_: Request, exc: Exception) -> JSONResponse:
-    if not isinstance(exc, RequestValidationError):
-        raise exc
-    errors: list[dict[str, object]] = []
-    for error in exc.errors():
-        errors.append(
-            {
-                "location": [str(part) for part in error["loc"]],
-                "message": str(error["msg"]),
-                "type": str(error["type"]),
-            }
+def register_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(DomainError)
+    async def handle_domain_error(_: Request, error: DomainError) -> JSONResponse:
+        problems = error.problems if isinstance(error, PreflightRejected) else []
+        return JSONResponse(
+            status_code=status_for(error),
+            content={
+                "code": error.code,
+                "message": error.message,
+                "problems": problems,
+                "request_id": current_request_id(),
+            },
         )
-    return problem_response(
-        status=422,
-        title="Request validation failed",
-        code="request_validation_failed",
-        detail="The request payload or parameters are invalid.",
-        errors=errors,
-    )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation(_: Request, error: RequestValidationError) -> JSONResponse:
+        """把框架的参数校验错误也转成同一种错误体。
+
+        FastAPI 默认返回 HTTPValidationError，形状和领域错误不一样。
+        两种形状意味着前端要写两套解析——统一成一种，契约里也只需声明一种。
+        """
+        problems = [
+            f"{'.'.join(str(part) for part in item['loc'][1:]) or '请求体'}：{item['msg']}"
+            for item in error.errors()
+        ]
+        return JSONResponse(
+            status_code=HTTP_422,
+            content={
+                "code": "validation_failed",
+                "message": "请求参数不合法",
+                "problems": problems,
+                "request_id": current_request_id(),
+            },
+        )

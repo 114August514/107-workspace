@@ -1,195 +1,156 @@
-# 107 Workspace Backend
+# 后端
 
-The independent FastAPI backend for 107 Workspace. It is a layered modular
-monolith for collaborative projects, versioned data, and local or Slurm-backed
-run execution.
+107 Workspace 的 FastAPI 服务。模块化单体，依赖方向单向：
 
-## Prerequisites
+```text
+api  →  application  →  domain ports  ←  infrastructure
+```
 
-- Python 3.12
-- [uv](https://docs.astral.sh/uv/)
-- `curl` for the live smoke workflow
-- A filesystem location writable by the backend
+## 目录
 
-Slurm is optional. Local Slurm mode requires `sinfo`, `sbatch`, `squeue`,
-`sacct`, and `scancel` on the backend host. SSH mode additionally requires the
-system `ssh` client and a preconfigured SSH host alias. The default Mock adapter
-needs neither Slurm nor SSH.
+```text
+src/workspace107/
+├── domain/           领域对象、枚举、规则、端口定义（不依赖框架）
+│   ├── models.py         可变对象与不可变版本
+│   ├── run_snapshot.py   不可变执行事实（GR-009）
+│   ├── secrets.py        环境变量表达式与 Secret 引用（GR-012）
+│   ├── compute.py        算力方案、请求与调度解析
+│   └── ports/            Scheduler / Storage / SecretVault / Repositories / Clock
+├── application/      用例编排、权限校验、事务边界
+│   ├── access.py         AccessGuard（GR-001 / GR-013）
+│   ├── run_service.py    提交前检查、创建 Run、重跑、取消
+│   └── run_lifecycle.py  状态同步与 Artifact 收集（GR-015）
+├── infrastructure/   端口实现：SQLAlchemy 仓储、本地存储、Mock/Slurm 调度
+├── api/              路由与 schema，不写业务规则
+├── tools/            OpenAPI 导出、种子数据
+└── main.py           唯一的装配点
+```
 
-## Quick Start
+## 依赖注入
 
-Run all commands in this section from `backend/`:
+具体实现只在**两个组合根**里被构造，别处一律拿协议：
+
+```text
+domain/ports/     用 Protocol 描述「需要什么能力」
+application/      构造函数注入，只认这些协议
+infrastructure/   实现协议
+main.py           进程级装配：数据库引擎、存储、调度器、时钟
+api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
+```
+
+路由通过 `Services` 容器拿用例服务，而 `Services` **只暴露 application 层的服务**——
+拿不到仓储和端口，也就没办法绕过用例层。绕过用例层等于绕过权限校验、
+事务边界和领域规则，所以这是一条安全边界，不是风格偏好。
+
+需要新能力时：
+
+```text
+需要一种新的外部能力   → 先在 domain/ports/ 定义协议，再在 infrastructure/ 实现
+需要一类新的操作       → 加用例服务，或给现有服务加方法
+                        不要往 Services 容器里塞端口
+```
+
+这些约定由 `tests/unit/test_layering.py` 检查，违反了跑测试就红。
+背景见 [ADR-0006](../docs/decisions/0006-dependency-injection-and-api-contract.md)。
+
+## 安装与运行
 
 ```bash
 uv sync --all-extras
 uv run alembic upgrade head
+uv run python -m workspace107.tools.seed
 uv run uvicorn workspace107.main:create_app --factory --reload
 ```
 
-The defaults create a SQLite database and runtime data beneath `backend/var/`.
-The server does not run migrations automatically, so apply them before the
-first start and after pulling a migration.
+接口文档：<http://127.0.0.1:8000/docs>
 
-Use these endpoints to inspect a running service:
+## 配置
 
-- Health: `http://127.0.0.1:8000/health`
-- OpenAPI UI: `http://127.0.0.1:8000/docs`
-- OpenAPI document: `http://127.0.0.1:8000/openapi.json`
+全部通过环境变量注入，变量清单见仓库根目录的 `.env.example`。
+本地把它复制成 `backend/.env` 即可：
 
-Application endpoints use the `/api/v1` prefix. `POST /api/v1/users` creates a
-development identity; authenticated endpoints currently expect its UUID in
-the `X-User-Id` header. This header is an explicit backend-stage identity
-boundary, not a production authentication mechanism.
+```bash
+cp ../.env.example .env
+```
 
-## Architecture
+关键项：
+
+| 变量 | 说明 |
+| :--- | :--- |
+| `WORKSPACE107_DATABASE_URL` | 默认 SQLite；部署时改 PostgreSQL |
+| `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
+| `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
+| `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
+| `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |
+
+## 开发模式下的身份
+
+`WORKSPACE107_AUTH_MODE=dev` 时用 `X-User` 请求头识别用户，
+首次出现会自动建号并准备 Personal Workspace：
+
+```bash
+curl -H 'X-User: student' http://127.0.0.1:8000/api/v1/me
+```
+
+接入学校统一身份认证后只需替换 `api/deps.py` 中的 `get_current_user`。
+
+## 调度适配器
+
+| 适配器 | 行为 |
+| :--- | :--- |
+| `mock` | 在本机以子进程**真实执行**作业，状态来自真实退出码 |
+| `slurm` | 通过 Slurm REST API 提交，状态来自 Slurm |
+
+两者都只实现 `submit` / `poll` / `cancel`，没有「标记成功」的入口——
+Run 状态只能由调度系统的轮询结果驱动（GR-015）。
+
+Mock 模式下会把渲染出的 sbatch 脚本写到 `var/storage/runs/<run_id>/job.sh`，
+用户可以直接看到平台替他生成了什么。
+
+## 迁移
+
+```bash
+uv run alembic upgrade head                       # 应用到最新
+uv run alembic revision --autogenerate -m "说明"  # 改了 tables.py 之后
+uv run alembic downgrade -1                       # 回退一步
+```
+
+迁移文件必须提交。
+
+## 测试
+
+```bash
+uv run pytest                       # 全部
+uv run pytest tests/unit            # 只跑单元测试
+uv run pytest --cov                 # 带覆盖率
+uv run ruff check . && uv run ruff format --check .
+```
+
+测试分层：
 
 ```text
-workspace107.api -> workspace107.application -> workspace107.domain
-                                                   ^
-                                                   |
-                              workspace107.infrastructure
+tests/unit/         领域规则与不变量，不碰数据库
+tests/integration/  端到端闭环，真实 SQLite + 真实子进程执行
+tests/security/     GR-012 Secret 不落明文、GR-013 无发现权限即不存在
+tests/contract/     API 契约与错误码映射
 ```
 
-The layers have distinct responsibilities:
+## 接口契约
 
-| Layer | Responsibility |
-| --- | --- |
-| `domain` | Standard-library-only values, policies, state transitions, models, and ports |
-| `application` | Use cases, permission checks, immutable run snapshots, and transaction boundaries |
-| `infrastructure` | SQLAlchemy, local storage, project transfer, Mock, Slurm, SSH, and reconciliation implementations |
-| `api` | FastAPI dependencies, request/response schemas, routes, SSE, and Problem Details mapping |
-
-[`workspace107.main:create_app`](src/workspace107/main.py) is the composition
-root. Infrastructure implements domain ports, so application services do not
-depend on SQLAlchemy, Slurm commands, SSH, or FastAPI. Adapter calls are kept
-outside database transactions, and run state is reconciled with compare-and-set
-updates.
-
-The backend contains no active imports from RunBox, `submit107`, or
-`hpc-helper`. Their useful behavior is represented by local policies and
-adapters rather than runtime dependencies.
-
-## Runtime Adapters
-
-### Mock
-
-`WORKSPACE107_CLUSTER_ADAPTER=mock` is the default. Each submitted external job
-is stored as an atomic JSON record under `WORKSPACE107_MOCK_CLUSTER_ROOT`, with
-logs and result data beside it. This external state survives API process
-restarts; durable domain run state remains in the configured database.
-
-The background reconciler polls non-terminal runs, records state events,
-collects terminal logs and results into object storage, and continues after a
-transient adapter failure. Mock runs exercise the same domain port and HTTP
-workflow as Slurm runs.
-
-### Slurm
-
-Select Slurm explicitly:
+改了 DTO 或路由之后必须重新生成契约和前端类型，否则 CI 的
+`api-contract-check` 会失败：
 
 ```bash
-export WORKSPACE107_CLUSTER_ADAPTER=slurm
-export WORKSPACE107_CLUSTER_TRANSPORT=local
+../scripts/sync-api-contract.sh
 ```
 
-Local transport executes argument arrays on the backend host. This mode is
-appropriate when the API runs on a Slurm login node and the configured project,
-log, and storage roots are local paths.
+它会依次导出 `docs/api/openapi.json` 和 `frontend/src/api/schema.d.ts`，
+两个生成物都要提交。前端所有类型从后者派生，所以**后端改一个字段，
+前端受影响的地方会在类型检查时全部报出来**。
 
-For SSH transport:
+写 DTO 时让契约说实话，生成的类型才有约束力：
 
-```bash
-export WORKSPACE107_CLUSTER_ADAPTER=slurm
-export WORKSPACE107_CLUSTER_TRANSPORT=ssh
-export WORKSPACE107_SSH_HOST=ustc-cluster
-export WORKSPACE107_SLURM_REMOTE_ROOT=project/workspace107/runs
-export WORKSPACE107_SLURM_LOG_ROOT=project/workspace107/logs
-export WORKSPACE107_SLURM_STORAGE_ROOT=project/workspace107/storage
-```
-
-`WORKSPACE107_SSH_HOST` is a trusted service-side host or SSH alias, never a
-request value. Configure credentials and host keys outside this repository.
-Selecting SSH also selects the SSH project-transfer adapter, keeping project
-sync and run submission on the same transport.
-
-Slurm scripts are rendered with strict Jinja values and validated paths.
-Commands use argument arrays; only the SSH transport constructs a quoted remote
-command. Contract tests use scripted runners and do not require a cluster.
-
-## Configuration
-
-Settings use the `WORKSPACE107_` prefix and may be provided through the
-environment or `backend/.env`.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `WORKSPACE107_DATABASE_URL` | `sqlite+aiosqlite:///./var/workspace107.db` | SQLAlchemy async database URL |
-| `WORKSPACE107_STORAGE_ROOT` | `var/storage` | Content-addressed dataset and artifact storage |
-| `WORKSPACE107_TRANSFER_ROOTS` | `source`, `cluster`, and `downloads` under `var/transfer` | JSON object of named project-transfer roots |
-| `WORKSPACE107_MOCK_CLUSTER_ROOT` | `var/mock-cluster` | Durable Mock scheduler state, logs, and results |
-| `WORKSPACE107_CLUSTER_ADAPTER` | `mock` | `mock` or `slurm` |
-| `WORKSPACE107_CLUSTER_TRANSPORT` | `local` | `local` or `ssh`; shared by project transfer and cluster commands |
-| `WORKSPACE107_SSH_HOST` | unset | Required service-configured host when the transport is `ssh` |
-| `WORKSPACE107_SLURM_REMOTE_ROOT` | `var/slurm` | Slurm run working root |
-| `WORKSPACE107_SLURM_LOG_ROOT` | `var/slurm/logs` | Slurm stdout/stderr root |
-| `WORKSPACE107_SLURM_STORAGE_ROOT` | `var/slurm/storage` | Slurm-side dataset and collected-output root |
-| `WORKSPACE107_RECONCILE_INTERVAL_SECONDS` | `0.2` | Background reconciliation and SSE polling interval |
-
-Complex settings use JSON. For example:
-
-```bash
-export WORKSPACE107_TRANSFER_ROOTS='{"source":"/srv/workspace107/source","cluster":"/srv/workspace107/cluster","downloads":"/srv/workspace107/downloads"}'
-```
-
-For SSH transport, `source` and `downloads` are local allowed roots while
-`cluster` is a remote POSIX root. All configured roots are validated before
-transfer.
-
-## Migrations
-
-Apply, inspect, or reverse migrations with Alembic:
-
-```bash
-uv run alembic current
-uv run alembic upgrade head
-uv run alembic downgrade base
-uv run alembic upgrade head
-```
-
-The downgrade command removes the backend schema and is intended for migration
-verification against disposable data. SQLite connections enable foreign keys
-and WAL mode.
-
-## Tests and Quality Gates
-
-Run the normal test suite and focused checks from `backend/`:
-
-```bash
-uv run pytest -q
-uv run pytest tests/integration/api -q
-uv run pytest --cov=workspace107 --cov-report=term-missing --cov-fail-under=90
-uv run ruff format --check .
-uv run ruff check .
-uv run pyright
-uv lock --check
-```
-
-The live HTTP smoke test is skipped by the normal pytest suite because it needs
-an external server. Run its isolated harness from the repository root:
-
-```bash
-./scripts/smoke-backend.sh
-```
-
-The script creates a temporary database and all runtime roots, applies
-migrations, starts Uvicorn on `127.0.0.1:8760`, and runs a complete workflow
-over TCP. It creates users and a course workspace, adds a member, pushes a
-project, uploads a dataset version, creates a run template, preflights and
-submits a Mock run, observes queued/running/succeeded states, reads logs, and
-verifies a downloaded result against its SHA-256 metadata. Set
-`WORKSPACE107_SMOKE_PORT` to use another local port.
-
-See the repository-level [backend design](../docs/superpowers/specs/2026-07-13-workspace107-backend-design.md)
-and [implementation plan](../docs/superpowers/plans/2026-07-13-workspace107-backend.md)
-for the full domain model, API inventory, security decisions, and acceptance
-criteria.
+- 是枚举就写成枚举（`status: RunStatus`），不要写 `str`
+- 结构固定就定义模型，不要用 `dict[str, object]`
+- 可以不传的字段写 `X | None = None`，不要用空字符串当默认值
+- 新增的错误类型记得在 `api/routes/__init__.py` 的 `COMMON_ERRORS` 里体现

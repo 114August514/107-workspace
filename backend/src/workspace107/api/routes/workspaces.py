@@ -1,140 +1,227 @@
-from uuid import UUID
+"""Workspace 路由。"""
 
-from fastapi import APIRouter, Query, Response, status
+from __future__ import annotations
 
-from workspace107.api.dependencies import IdentityDependency, WorkspaceServiceDependency
-from workspace107.api.schemas.workspaces import (
-    MemberCreateRequest,
-    MemberResponse,
-    MemberUpdateRequest,
-    WorkspaceCreateRequest,
-    WorkspaceResponse,
-    WorkspaceUpdateRequest,
-)
+from fastapi import APIRouter, status
 
-router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+from ...domain.enums import WorkspaceRole
+from .. import presenters as p
+from .. import schemas as s
+from ..deps import CurrentUser, PageDep, ServicesDep
+
+router = APIRouter(prefix="/workspaces", tags=["workspace"])
 
 
-@router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
+@router.get("", response_model=list[s.WorkspaceOut])
+async def list_workspaces(user: CurrentUser, services: ServicesDep) -> list[s.WorkspaceOut]:
+    views = await services.workspaces.list_for_user(user.id)
+    return [p.workspace_out(view) for view in views]
+
+
+@router.post("", response_model=s.WorkspaceOut, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
-    request: WorkspaceCreateRequest,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> WorkspaceResponse:
-    workspace = await service.create(
-        actor_id=actor_id,
-        kind=request.kind,
-        name=request.name,
-        slug=request.slug,
-        description=request.description,
-        parent_id=request.parent_id,
+    payload: s.WorkspaceCreateIn, user: CurrentUser, services: ServicesDep
+) -> s.WorkspaceOut:
+    view = await services.workspaces.create_collaborative(
+        user.id, payload.name, payload.description
     )
-    return WorkspaceResponse.model_validate(workspace)
+    return p.workspace_out(view)
 
 
-@router.get("", response_model=list[WorkspaceResponse])
-async def list_workspaces(
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-    limit: int = Query(default=50, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-) -> list[WorkspaceResponse]:
-    workspaces = await service.list_visible(actor_id, limit=limit, offset=offset)
-    return [WorkspaceResponse.model_validate(workspace) for workspace in workspaces]
-
-
-@router.get("/{workspace_id}", response_model=WorkspaceResponse)
+@router.get("/{workspace_id}", response_model=s.WorkspaceOut)
 async def get_workspace(
-    workspace_id: UUID,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> WorkspaceResponse:
-    return WorkspaceResponse.model_validate(await service.get(actor_id, workspace_id))
+    workspace_id: str, user: CurrentUser, services: ServicesDep
+) -> s.WorkspaceOut:
+    return p.workspace_out(await services.workspaces.get(user.id, workspace_id))
 
 
-@router.patch("/{workspace_id}", response_model=WorkspaceResponse)
+@router.patch("/{workspace_id}", response_model=s.WorkspaceOut)
 async def update_workspace(
-    workspace_id: UUID,
-    request: WorkspaceUpdateRequest,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> WorkspaceResponse:
-    workspace = await service.update(
-        actor_id=actor_id,
-        workspace_id=workspace_id,
-        name=request.name,
-        slug=request.slug,
-        description=request.description,
+    workspace_id: str,
+    payload: s.WorkspaceUpdateIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.WorkspaceOut:
+    await services.workspaces.update(
+        user.id,
+        workspace_id,
+        name=payload.name,
+        description=payload.description,
+        default_environment_version_id=payload.default_environment_version_id,
     )
-    return WorkspaceResponse.model_validate(workspace)
+    return p.workspace_out(await services.workspaces.get(user.id, workspace_id))
 
 
-@router.post("/{workspace_id}/archive", response_model=WorkspaceResponse)
-async def archive_workspace(
-    workspace_id: UUID,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> WorkspaceResponse:
-    return WorkspaceResponse.model_validate(await service.archive(actor_id, workspace_id))
+# -- 成员 -------------------------------------------------------------------
 
 
-@router.get("/{workspace_id}/members", response_model=list[MemberResponse])
+@router.get("/{workspace_id}/members", response_model=list[s.MemberOut])
 async def list_members(
-    workspace_id: UUID,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> list[MemberResponse]:
-    members = await service.list_members(actor_id, workspace_id)
-    return [MemberResponse.model_validate(member) for member in members]
+    workspace_id: str, user: CurrentUser, services: ServicesDep
+) -> list[s.MemberOut]:
+    views = await services.workspaces.list_members(user.id, workspace_id)
+    return [p.member_out(v) for v in views]
 
 
 @router.post(
-    "/{workspace_id}/members",
-    response_model=MemberResponse,
-    status_code=status.HTTP_201_CREATED,
+    "/{workspace_id}/members", response_model=s.MemberOut, status_code=status.HTTP_201_CREATED
 )
-async def add_member(
-    workspace_id: UUID,
-    request: MemberCreateRequest,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> MemberResponse:
-    member = await service.add_member(
-        actor_id=actor_id,
-        workspace_id=workspace_id,
-        user_id=request.user_id,
-        role=request.role,
+async def invite_member(
+    workspace_id: str,
+    payload: s.MemberInviteIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.MemberOut:
+    await services.workspaces.invite_member(
+        user.id, workspace_id, payload.username, WorkspaceRole(payload.role)
     )
-    return MemberResponse.model_validate(member)
+    views = await services.workspaces.list_members(user.id, workspace_id)
+    invited = next(v for v in views if v.user.username == payload.username)
+    return p.member_out(invited)
 
 
-@router.patch("/{workspace_id}/members/{user_id}", response_model=MemberResponse)
+@router.patch("/{workspace_id}/members/{target_user_id}", response_model=s.MemberOut)
 async def change_member_role(
-    workspace_id: UUID,
-    user_id: UUID,
-    request: MemberUpdateRequest,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> MemberResponse:
-    member = await service.change_role(
-        actor_id=actor_id,
-        workspace_id=workspace_id,
-        user_id=user_id,
-        role=request.role,
+    workspace_id: str,
+    target_user_id: str,
+    payload: s.MemberRoleUpdateIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.MemberOut:
+    await services.workspaces.change_member_role(
+        user.id, workspace_id, target_user_id, payload.role
     )
-    return MemberResponse.model_validate(member)
+    views = await services.workspaces.list_members(user.id, workspace_id)
+    changed = next(view for view in views if view.user.id == target_user_id)
+    return p.member_out(changed)
 
 
-@router.delete("/{workspace_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{workspace_id}/members/{target_user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
-    workspace_id: UUID,
-    user_id: UUID,
-    actor_id: IdentityDependency,
-    service: WorkspaceServiceDependency,
-) -> Response:
-    await service.remove_member(
-        actor_id=actor_id,
-        workspace_id=workspace_id,
-        user_id=user_id,
+    workspace_id: str, target_user_id: str, user: CurrentUser, services: ServicesDep
+) -> None:
+    await services.workspaces.remove_member(user.id, workspace_id, target_user_id)
+
+
+@router.post("/{workspace_id}/invitation", status_code=status.HTTP_204_NO_CONTENT)
+async def respond_to_invitation(
+    workspace_id: str,
+    payload: s.InvitationResponseIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> None:
+    await services.workspaces.respond_to_invitation(user.id, workspace_id, accept=payload.accept)
+
+
+@router.post("/{workspace_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_workspace(workspace_id: str, user: CurrentUser, services: ServicesDep) -> None:
+    await services.workspaces.leave(user.id, workspace_id)
+
+
+@router.post(
+    "/{workspace_id}/transfer-ownership/{target_user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def transfer_ownership(
+    workspace_id: str, target_user_id: str, user: CurrentUser, services: ServicesDep
+) -> None:
+    await services.workspaces.transfer_ownership(user.id, workspace_id, target_user_id)
+
+
+# -- 资源权益 ---------------------------------------------------------------
+
+
+@router.get("/{workspace_id}/entitlements", response_model=list[s.EntitlementOut])
+async def list_entitlements(
+    workspace_id: str, user: CurrentUser, services: ServicesDep
+) -> list[s.EntitlementOut]:
+    views = await services.workspaces.list_entitlements(user.id, workspace_id)
+    return [p.entitlement_out(v) for v in views]
+
+
+# -- Variable 与 Secret -----------------------------------------------------
+
+
+@router.get("/{workspace_id}/variables", response_model=list[s.VariableOut])
+async def list_variables(
+    workspace_id: str, user: CurrentUser, services: ServicesDep
+) -> list[s.VariableOut]:
+    variables = await services.workspaces.list_variables(user.id, workspace_id)
+    return [s.VariableOut(name=v.name, value=v.value) for v in variables]
+
+
+@router.put("/{workspace_id}/variables", response_model=s.VariableOut)
+async def set_variable(
+    workspace_id: str, payload: s.VariableIn, user: CurrentUser, services: ServicesDep
+) -> s.VariableOut:
+    variable = await services.workspaces.set_variable(
+        user.id, workspace_id, payload.name, payload.value
     )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return s.VariableOut(name=variable.name, value=variable.value)
+
+
+@router.delete("/{workspace_id}/variables/{name}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_variable(
+    workspace_id: str, name: str, user: CurrentUser, services: ServicesDep
+) -> None:
+    await services.workspaces.delete_variable(user.id, workspace_id, name)
+
+
+@router.get("/{workspace_id}/secrets", response_model=list[str])
+async def list_secret_names(
+    workspace_id: str, user: CurrentUser, services: ServicesDep
+) -> list[str]:
+    """只返回名称。Secret 的值没有任何读取接口（GR-012）。"""
+    return await services.workspaces.list_secret_names(user.id, workspace_id)
+
+
+@router.put("/{workspace_id}/secrets", status_code=status.HTTP_204_NO_CONTENT)
+async def set_secret(
+    workspace_id: str, payload: s.SecretIn, user: CurrentUser, services: ServicesDep
+) -> None:
+    await services.workspaces.set_secret(user.id, workspace_id, payload.name, payload.value)
+
+
+@router.delete("/{workspace_id}/secrets/{name}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_secret(
+    workspace_id: str, name: str, user: CurrentUser, services: ServicesDep
+) -> None:
+    await services.workspaces.delete_secret(user.id, workspace_id, name)
+
+
+# -- Project ----------------------------------------------------------------
+
+
+@router.get("/{workspace_id}/projects", response_model=s.PageOut[s.ProjectOut])
+async def list_projects(
+    workspace_id: str, user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ProjectOut]:
+    result = await services.projects.list_for_workspace(user.id, workspace_id, page)
+    return p.page_out(result, p.project_out)
+
+
+@router.post(
+    "/{workspace_id}/projects", response_model=s.ProjectOut, status_code=status.HTTP_201_CREATED
+)
+async def create_project(
+    workspace_id: str,
+    payload: s.ProjectCreateIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.ProjectOut:
+    project = await services.projects.create(
+        user.id, workspace_id, payload.name, payload.description
+    )
+    return p.project_out(project)
+
+
+@router.get(
+    "/{workspace_id}/activities",
+    response_model=s.PageOut[s.ActivityOut],
+    summary="Workspace 近期活动",
+)
+async def list_workspace_activities(
+    workspace_id: str, user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ActivityOut]:
+    result = await services.activities.list_for_workspace(user.id, workspace_id, page)
+    return p.page_out(result, p.activity_out)

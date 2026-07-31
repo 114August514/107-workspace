@@ -1,0 +1,22 @@
+# 构建上下文里不该出现的东西。
+#
+# 特别注意 .env 和 var/：一个 COPY . . 就会把真实凭据和本地数据库
+# 一起烤进镜像。
+
+.env
+.env.*
+!.env.example
+
+.venv/
+var/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+tests/
+Dockerfile
+.dockerignore
