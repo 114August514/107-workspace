@@ -4,7 +4,7 @@
 Workspace 和 Project、保存 Project Version、配置并提交 Run，以及查看日志和
 Artifact。
 
-当前仓库是**可运行的开发基线**，不是 `DESIGN-final.md` 路线图中 M1 已完成的声明。
+当前仓库是**可运行的开发基线**，不是 `docs/product/design.md` 路线图中 M1 已完成的声明。
 现有实现覆盖 FastAPI 后端、React 控制台、数据库迁移、本地内容存储、Mock 调度和
 Slurm REST 适配器；真实 Git、Shared FS、独立 Worker、Apptainer、学校认证和真实
 Slurm 环境仍需要按现行 Milestone 验证或实现。
@@ -13,11 +13,11 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 
 | 内容 | 位置 |
 | :--- | :--- |
-| 产品能力、领域术语与规则 | [`DESIGN-final.md`](DESIGN-final.md) |
-| Git、分支、提交与评审 | [`GitGuideline.md`](GitGuideline.md) |
+| 产品能力、领域术语与规则 | [`docs/product/design.md`](docs/product/design.md) |
+| Git、分支、提交与评审 | [`docs/contributing/git-workflow.md`](docs/contributing/git-workflow.md) |
 | AI 与工程协作入口 | [`AGENTS.md`](AGENTS.md) |
 | 高影响工程决策 | [`docs/decisions/`](docs/decisions/README.md) |
-| 在途和迁移记录 | [`docs/journal/`](docs/journal/) |
+| 在途工作记录 | [`docs/journal/`](docs/journal/) |
 
 迁移来源 `workspace107@293c8d8` 的完整快照保存在
 [`archive/workspace107/`](archive/workspace107/ARCHIVE.md)。归档只用于审查和追溯，
@@ -71,7 +71,7 @@ api -> application -> domain ports <- infrastructure
 - `frontend/`：React、TypeScript、Vite 和从 OpenAPI 生成的接口类型。
 - `docs/api/`：活动后端导出的 OpenAPI 契约。
 - `scripts/`：跨平台 Python 任务实现，以及位于平台边缘的引导脚本。
-- `deploy/`：当前容器部署方式和上线前仍需满足的约束。
+- `docs/operations/`：当前容器部署方式和上线前仍需满足的约束。
 
 本地 `mock` 调度器会通过宿主机 shell **真实执行用户命令**，仅适合开发、测试和
 受信任演示。它不是沙箱，也不能替代真实集群验收。
@@ -85,4 +85,4 @@ docker compose up -d --build
 ```
 
 浏览器访问 <http://127.0.0.1:8107>。部署和共享存储约束见
-[`deploy/README.md`](deploy/README.md)。
+[`docs/operations/deployment.md`](docs/operations/deployment.md)。

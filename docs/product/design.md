@@ -1,4 +1,4 @@
-# 产品设计最终稿
+# 产品设计
 
 ## 一. 顶级结构
 
@@ -2512,13 +2512,16 @@ API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port�
 │   └── uv.lock
 │
 ├── docs/
+│   ├── product/
+│   ├── contributing/
+│   ├── operations/
 │   ├── decisions/
-│   └── journal/
-├── deploy/
+│   ├── journal/
+│   ├── references/
+│   └── archive/
 ├── scripts/
 ├── .github/
 ├── Makefile
-├── TODO.md
 └── README.md
 ```
 
@@ -2618,7 +2621,7 @@ make check
 | Pull Request | 对 Issue 的实际代码变更及验证结果 |
 | ADR | 已确定的高影响设计或工程决策 |
 | Journal | 跨会话、并行或存在仓外副作用工作的在途记录 |
-| TODO.md | 已识别但当前明确延后的产品或领域设计事项 |
+| `docs/product/deferred.md` | 已识别但当前明确延后的产品或领域设计事项 |
 | AGENTS.md | 长期有效的 AI 协作规则与工作入口 |
 
 Issue 应至少明确目标、验收条件和必要约束，并作为具体任务的权威描述；需求变化时应更新 Issue，而不是只保留在聊天记录中。
@@ -2634,11 +2637,9 @@ Journal 仅补充 Issue 和 Git 难以表达的在途状态、影响范围、仓
 当前代码事实  → main
 设计决策      → Design Document / ADR
 在途状态      → Journal
-延后设计      → TODO.md
+延后设计      → docs/product/deferred.md
 协作规则      → AGENTS.md
 ```
-
-可以，建议把第六章压缩成下面这版：保留 **开发策略、Walking Skeleton、Milestone、范围控制、Roadmap**，但不展开重复解释。
 
 ## 六. 开发与迭代规划
 

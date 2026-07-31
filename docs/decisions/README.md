@@ -10,6 +10,7 @@
 | 编号 | 决策 | 状态 |
 | :--- | :--- | :--- |
 | [0001](0001-workspace107-migration-baseline.md) | 以 workspace107 已实现部分替换活动开发基线 | 已接受 |
+| [0002](0002-documentation-topology.md) | 区分活动文档、参考材料与历史归档 | 已接受 |
 
 `archive/workspace107/docs/decisions/` 中的文件属于来源快照，只解释来源实现的历史，
 不是当前仓库的活动 ADR。

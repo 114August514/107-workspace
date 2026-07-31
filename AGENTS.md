@@ -7,14 +7,14 @@ Run 的可复现工作流。
 > 已经有专门文档的东西**一律不在这里重复**，重复的两份一定会有一份过期。
 
 | 想知道 | 看 |
-|---|---|
-| 产品能力、**领域语言与规则** | `DESIGN-final.md`（现行、已确认）——**术语以它 §3.1 为准** |
-| 分支 / 提交 / PR / Milestone / 标签 / LFS | `GitGuideline.md` |
+| --- | --- |
+| 产品能力、**领域语言与规则** | `docs/product/design.md`（现行、已确认）——**术语以它 §3.1 为准** |
+| 分支 / 提交 / PR / Milestone / 标签 / LFS | `docs/contributing/git-workflow.md` |
 | 在途工作、谁在做什么 | `docs/journal/` + `make journal` |
 | 为什么这么设计 | `docs/decisions/` |
 
-`archive/`、`docs/references/`、`docs/reviews/` 和 `docs/superpowers/` 保存历史实现、
-输入材料与过程记录，不是活动规范。与它们冲突时以 `DESIGN-final.md` 为准。
+`archive/`、`docs/archive/` 和 `docs/references/` 保存历史实现、过程记录与输入材料，
+不是活动规范。与它们冲突时以 `docs/product/design.md` 为准。
 
 ## 验证
 
@@ -42,12 +42,12 @@ make journal        # 有没有在途工作、孤儿锁
 make doctor         # 工程基线还缺什么
 ```
 
-任务逻辑集中在 `scripts/workspace.py` 与 `scripts/tasks/`；`Makefile` 和 `stack.mk`
-只负责转发。平台专属引导脚本只放在 `scripts/platform/` 的对应目录。
+任务逻辑集中在 `scripts/workspace.py` 与 `scripts/tasks/`；`Makefile` 只负责转发。
+平台专属引导脚本只放在 `scripts/platform/` 的对应目录。
 
 ## 目录
 
-```
+```text
 backend/src/workspace107/
 ├── api/              # 路由与依赖注入 —— 只做协议转换，不写业务判断
 ├── application/      # 用例编排、事务边界
@@ -64,13 +64,13 @@ docs/journal/         # 在途工作
 
 ## 命名
 
-**以 `DESIGN-final.md` §3.1 的术语表为唯一事实源**：User / Workspace /
+**以 `docs/product/design.md` §3.1 的术语表为唯一事实源**：User / Workspace /
 Membership / Project / Project Version / Run Configuration / Run Snapshot /
 Environment / Shared Resource / Content Version / Input Binding /
 Compute Plan / Resource Entitlement …
 
 代码标识符、数据库列、接口字段、日志字段全用同一个词。
-**需要新概念时，先往 DESIGN-final.md §3.1 加一行，再写代码。**
+**需要新概念时，先往 `docs/product/design.md` §3.1 加一行，再写代码。**
 
 特别注意几组**容易混**的：
 
@@ -80,7 +80,7 @@ Compute Plan / Resource Entitlement …
 
 ## 不变量
 
-`DESIGN-final.md` §3.3 的 Active GR 和 §3.1 的领域约束是本项目的不变量，
+`docs/product/design.md` §3.3 的 Active GR 和 §3.1 的领域约束是本项目的不变量，
 其中最硬的几条：
 
 - **Run Snapshot 创建后不得修改**；执行时不得重新读取当前 Run Configuration

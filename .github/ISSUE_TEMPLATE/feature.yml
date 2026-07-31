@@ -1,21 +1,21 @@
 name: 功能 / 任务
-description: 按 GitGuideline.md §4.1 的五要素开一个任务
+description: 按 docs/contributing/git-workflow.md §4.1 的五要素开一个任务
 labels: ["type: feature"]
 body:
   - type: markdown
     attributes:
       value: |
-        `GitGuideline.md` §4.1：Issue 至少写清楚 **背景 / 目标 / 范围 / 验收条件 / 不做什么**。
+        `docs/contributing/git-workflow.md` §4.1：Issue 至少写清楚 **背景 / 目标 / 范围 / 验收条件 / 不做什么**。
         一个 Issue 控制在**半天到三天**内完成，过大就拆。
 
-        术语请用 `DESIGN-final.md` §3.1 的名字（Workspace / Project Version /
+        术语请用 `docs/product/design.md` §3.1 的名字（Workspace / Project Version /
         Run Snapshot / Input Binding …），别另造词。
 
   - type: textarea
     id: background
     attributes:
       label: 背景
-      description: 为什么现在做这个。对应 DESIGN-final.md 的哪一节 / 哪条能力。
+      description: 为什么现在做这个。对应 docs/product/design.md 的哪一节 / 哪条能力。
       placeholder: |
         DESIGN-final §2.8 A [Core] 从 Project 发起 Run。
         当前 Run 只能通过 API 直接构造，没有走 Run Configuration 解析。

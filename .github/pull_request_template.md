@@ -1,4 +1,4 @@
-<!-- 五个小节来自 GitGuideline.md §4.7，别删。 -->
+<!-- 五个小节来自 docs/contributing/git-workflow.md §4.7，别删。 -->
 
 ## 关联 Issue
 
@@ -34,7 +34,7 @@ Closes #
 
 - [ ] `make check` 全绿，输出贴在上面了
 - [ ] 测试**先跑过红的**（不是写完实现再补的）
-- [ ] 术语和 `DESIGN-final.md` §3.1 一致，没有另造词
+- [ ] 术语和 `docs/product/design.md` §3.1 一致，没有另造词
 - [ ] diff 在 300～500 行人工修改以内（GitGuideline §7.1；生成文件另说）
 - [ ] 没有偷偷新增依赖
 - [ ] `domain/` 里没有 import 数据库 / HTTP / 文件 / 时钟 / 随机数

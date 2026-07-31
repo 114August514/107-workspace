@@ -245,7 +245,7 @@ export const api = {
     )
   },
 
-  /** 只返回名称。Secret 的值没有任何读取接口（DESIGN-final.md 第 3.1.4 节）。 */
+  /** 只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。 */
   listSecretNames: async (id: string): Promise<string[]> =>
     unwrap(
       await http.GET('/api/v1/workspaces/{workspace_id}/secrets', {

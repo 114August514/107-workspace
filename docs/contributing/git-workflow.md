@@ -1,4 +1,4 @@
-# Git 使用指南
+# Git 与协作工作流
 
 ## 一. Git vs. Github
 
@@ -898,91 +898,35 @@ MVP
 完成标准
 ```
 
-例如：
-
-````markdown
-## Milestone：M1 核心运行闭环
-
-**目标**
-
-用户可以从项目文件出发，在不直接编写 Slurm 命令的情况下提交一次作业，并查看结果。
-
-**包含**
-
-* 创建个人 Workspace
-* 创建 Project
-* 选择项目入口和运行参数
-* 生成 Slurm 作业描述
-* 提交作业
-* 查看状态和日志
-* 归档输出结果
-
-**不包含**
-
-* 协作成员管理
-* 完整文件同步客户端
-* 权益申请
-* 高级资源推荐
-* 教学结果收集
-
-**完成标准**
-
-```text
-创建项目
-→ 准备代码
-→ 配置运行
-→ 提交 Slurm
-→ 查看状态
-→ 查看日志
-→ 获取结果
-```
-
-整条链路可以在演示环境中稳定完成。
-````
-
-这才是一个可验收的 Milestone。
+Milestone 的产品范围和名称以 [`../product/design.md`](../product/design.md) 的 Roadmap
+为准，不在 Git 指南中维护另一套阶段定义。
 
 #### 6.2.2 每个 Milestone 建议固定一个描述模板
 
 ```markdown
-# M1 - Core Run Loop
+# <阶段编号> - <可验收结果>
 
 ## 目标
 
-让单个用户在 107 Workspace 中完成一次端到端算力运行。
+说明这个阶段最终让用户完成什么。
 
 ## 用户结果
 
-用户不需要直接执行 sbatch、squeue 等命令，
-即可提交作业、查看状态、读取日志并获取输出。
+用用户可观察的结果描述价值。
 
 ## 范围
 
-- Personal Workspace
-- Project
-- Run Configuration
-- Slurm Submission
-- Run Status
-- Logs
-- Outputs
+- <本阶段包含的能力>
 
 ## 非目标
 
-- Collaborative Workspace
-- Membership
-- Entitlement Application
-- Local Sync Client
-- Advanced Resource Recommendation
+- <明确延后的能力>
 
 ## 完成标准
 
-- [ ] 演示环境可以创建项目
-- [ ] 可以提交一个真实 Slurm 作业
-- [ ] 状态能够从 Pending 更新到 Running 和 Completed
-- [ ] 可以查看 stdout 和 stderr
-- [ ] 可以查看并下载输出
-- [ ] 核心测试通过
-- [ ] README 已更新
+- [ ] <可重复验证的用户结果>
+- [ ] 统一检查通过
+- [ ] 文档与实际状态一致
 ```
 
 其中“非目标”非常重要。它能够防止开发过程中不断把别的能力顺手塞进当前阶段。
@@ -1049,14 +993,7 @@ priority: P1 - 应在当前实现
 priority: P2 - 可以延后
 ```
 
-阶段使用 Milestone：
-
-```text
-M0 - Engineering Foundation
-M1 - Core Run Loop
-M2 - Collaborative Workspace
-M3 - Competition MVP
-```
+阶段名称和顺序从产品设计的 Roadmap 建立到 GitHub Milestone，不在这里硬编码副本。
 
 ### 6.4 版本发布和 Tag
 
@@ -1131,25 +1068,25 @@ Reviewer 按以下顺序检查：
 
 ## 八. 针对 107 Workspace 的 CI
 
-> 这节不用管，我来处理。
-
-`main` 至少要求这些检查通过：
-
-```text
-backend-lint
-backend-test
-frontend-lint
-frontend-typecheck
-frontend-test
-api-contract-check
-```
-
-后端使用 `uv` 时，可以从以下命令开始：
+`main` 的本地与 CI 统一入口是：
 
 ```bash
-uv sync --frozen
-uv run ruff check .
-uv run pytest
+make check
+```
+
+Windows 没有 Make 时使用同一份 Python 实现：
+
+```powershell
+uv run --no-project python scripts/workspace.py check
+```
+
+统一检查至少覆盖：
+
+```text
+workflow lint / tests
+backend lint / format / tests
+frontend format / lint / typecheck / tests / build
+OpenAPI 与前端类型契约
 ```
 
 接口发生变化时：
@@ -1164,16 +1101,9 @@ uv run pytest
 CI 检查生成文件是否存在未提交差异
 ```
 
-后续再增加：
-
-```text
-docker-build
-database-migration-check
-security-check
-end-to-end-test
-```
-
-不要一开始把 CI 做得特别复杂；先确保每次 PR 都能自动完成 lint、测试和类型检查。
+CI 还单独验证数据库 migration 的升级、回退和再升级、Windows 无 Make 入口，以及
+Compose 构建与 HTTP smoke。不要在 workflow 中复制另一套检查命令；新的质量门应先
+进入 `scripts/workspace.py`，再由本地与 CI 共同调用。
 
 ---
 

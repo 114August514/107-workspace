@@ -51,7 +51,7 @@ api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
 ```
 
 这些约定由 `tests/unit/test_layering.py` 检查，违反了跑测试就红；
-依赖方向以根目录 `DESIGN-final.md` 第 4.3 节为准。
+依赖方向以 `docs/product/design.md` 第 4.3 节为准。
 
 ## 安装与运行
 

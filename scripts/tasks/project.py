@@ -433,7 +433,11 @@ def journal(
         return
 
     heading("Work journal")
-    paths = sorted(journal_dir.glob("*.md")) if journal_dir.is_dir() else []
+    paths = (
+        sorted(path for path in journal_dir.glob("*.md") if path.name != "README.md")
+        if journal_dir.is_dir()
+        else []
+    )
     if not paths:
         print("No journal entries.")
         return
@@ -541,10 +545,17 @@ def doctor() -> None:
     heading("Engineering baseline doctor")
     required_files = [
         "AGENTS.md",
-        "DESIGN-final.md",
-        "GitGuideline.md",
+        "docs/product/design.md",
+        "docs/product/deferred.md",
+        "docs/contributing/git-workflow.md",
+        "docs/operations/deployment.md",
+        "docs/README.md",
+        "docs/decisions/README.md",
+        "docs/journal/README.md",
+        "docs/references/README.md",
+        "docs/archive/README.md",
+        "archive/README.md",
         "Makefile",
-        "stack.mk",
         ".gitignore",
         ".gitattributes",
         ".editorconfig",

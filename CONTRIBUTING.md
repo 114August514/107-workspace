@@ -1,12 +1,13 @@
 # 参与开发
 
-本文件只提供入口，完整规则以 [`GitGuideline.md`](GitGuideline.md) 为准，产品术语与
-领域约束以 [`DESIGN-final.md`](DESIGN-final.md) 为准。
+本文件只提供入口，完整规则以
+[`docs/contributing/git-workflow.md`](docs/contributing/git-workflow.md) 为准，产品术语与
+领域约束以 [`docs/product/design.md`](docs/product/design.md) 为准。
 
 ## 开始之前
 
 1. 用 Issue 写清背景、目标、范围、验收条件和非目标。
-2. 从最新 `main` 创建符合 `GitGuideline.md` 命名规则的短期分支。
+2. 从最新 `main` 创建符合 Git 协作规范命名规则的短期分支。
 3. 阅读根目录 `AGENTS.md` 和改动目录附近的说明。
 4. 跨会话、多人并行或有仓外副作用的工作，在 `docs/journal/` 记录状态。
 

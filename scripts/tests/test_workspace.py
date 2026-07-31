@@ -82,6 +82,22 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         demo.assert_called_once_with(smoke=True)
 
+    def test_journal_listing_ignores_directory_readme(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            journal_dir = Path(directory) / "docs" / "journal"
+            journal_dir.mkdir(parents=True)
+            (journal_dir / "README.md").write_text("# Journal index\n", encoding="utf-8")
+            stdout = io.StringIO()
+
+            with (
+                mock.patch.object(project, "REPO_ROOT", Path(directory)),
+                contextlib.redirect_stdout(stdout),
+            ):
+                project.journal()
+
+        self.assertIn("No journal entries.", stdout.getvalue())
+        self.assertNotIn("Journal index", stdout.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

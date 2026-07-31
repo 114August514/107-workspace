@@ -27,7 +27,7 @@ class SupportsNestedTransaction(Protocol):
 
     这里只声明用得到的那一个方法，而不是直接依赖 ``AsyncSession``——
     application 层不该认识 SQLAlchemy；这个依赖方向由
-    ``DESIGN-final.md`` 第 4.3 节定义，并由 ``tests/unit/test_layering.py`` 守住。
+    ``docs/product/design.md`` 第 4.3 节定义，并由 ``tests/unit/test_layering.py`` 守住。
     """
 
     def begin_nested(self) -> AbstractAsyncContextManager[object]: ...

@@ -39,7 +39,7 @@ API 容器启动时会执行 Alembic 升级和幂等的平台目录 seed，然�
 
 ## 关键配置
 
-完整变量和默认值见 [`.env.example`](../.env.example)。
+完整变量和默认值见 [`.env.example`](../../.env.example)。
 
 | 变量 | 说明 |
 | :--- | :--- |
@@ -104,7 +104,7 @@ WORKSPACE107_SLURM_JWT=<secret>
 和错误响应。seed 中的计算方案与环境值是开发数据，不是 107 平台配置事实。
 
 现有实现也没有独立 Background Worker、Git 版本存储和 Apptainer 准备链路；这些是
-`DESIGN-final.md` M1 Walking Skeleton 的缺口，不能由 API 容器或 Mock 路径代替。
+`docs/product/design.md` M1 Walking Skeleton 的缺口，不能由 API 容器或 Mock 路径代替。
 
 ## 探针和排障
 

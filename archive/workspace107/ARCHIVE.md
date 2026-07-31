@@ -8,9 +8,11 @@ historical comparison.
 - Archived on: 2026-08-01
 - Snapshot method: `git archive` of the source commit
 
-Only files tracked by the source repository are present. The source `.git/`
-directory, virtual environments, dependency directories, build output, caches,
-runtime databases, and other ignored files were not copied.
+Apart from `ARCHIVE.md` and `MIGRATION.md`, only files tracked by the source
+repository are present. The source `.git/` directory, virtual environments,
+dependency directories, build output, caches, runtime databases, and other
+ignored files were not copied. `MIGRATION.md` records how this snapshot became
+the active baseline; it is metadata, not part of the source tree.
 
 The archive is reference material. It is excluded from active builds, tests,
 formatting, linting, type checking, and generated-contract checks. Do not make

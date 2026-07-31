@@ -808,7 +808,7 @@ export interface paths {
         };
         /**
          * List Secret Names
-         * @description 只返回名称。Secret 的值没有任何读取接口（DESIGN-final.md 第 3.1.4 节）。
+         * @description 只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。
          */
         get: operations["list_secret_names_api_v1_workspaces__workspace_id__secrets_get"];
         /** Set Secret */
