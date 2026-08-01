@@ -27,7 +27,7 @@ GitHub
    ↓ git push
 GitHub 远程仓库
    ↓ Pull Request
-评审、测试、合并到 main
+评审、测试、合并到默认分支
 ```
 
 ---
@@ -168,10 +168,15 @@ git remote remove <远程仓库名称>
 
 ## 三. 分支模型
 
-只保留一个长期分支 `main`：
+项目最终只保留一个长期分支 `main`。当前远程默认分支仍为 `master`；在 GitHub 默认
+分支、保护规则和协作者设置完成迁移前，`master` 仍是共享主分支，本文命令中的
+`main` 应替换为 `master`。
 
-> **main** 始终代表：
->
+CI 暂时同时监听 `main` 和 `master`，只用于覆盖改名窗口，不表示并行维护两条主线。
+迁移完成后应删除 `master` 监听和本段过渡说明。
+
+无论主分支当前叫什么，它始终代表：
+
 > 可以正常安装
 > 可以通过测试
 > 可以启动基本服务
@@ -223,7 +228,8 @@ zxb_final
 
 ### 3.2 开发分支如何同步最新 main
 
-标准开发流程见**第四节**，本节仅讲述在一个 Issue 开发过程中，如个应对 `main` 已经发生变化的同步问题。
+标准开发流程见**第四节**，本节仅讲述在一个 Issue 开发过程中，如何应对 `main`
+已经发生变化的同步问题。
 
 开发分支需要获取最新 `main` 时，执行：
 
@@ -315,22 +321,39 @@ GitHub 删除远程开发分支
 
 所有正式工作原则上先建立 Issue。
 
-Issue 至少写清楚：
+GitHub 已关闭空白 Issue。按工作性质选择最具体的入口：
+
+| 模板     | 使用场景                               | 额外信息                             |
+| -------- | -------------------------------------- | ------------------------------------ |
+| 缺陷报告 | 已有行为不符合预期                     | 复现步骤、期望与实际行为、环境、影响 |
+| 功能请求 | 新增或改变用户可观察的能力             | 产品设计、原型或依赖 Issue（如有）   |
+| 工程任务 | 重构、测试、文档、CI、依赖维护或技术债 | 任务类型、风险与回退（如有）         |
+
+无论选择哪种入口，Issue 都至少写清楚：
 
 ```text
 背景
 目标
 范围
 验收条件
-不做什么
+非目标（不做什么）
 ```
 
 例如：
 
 ```markdown
+## 背景
+
+Workspace Owner 目前无法在平台内邀请协作者，只能由维护者直接修改数据。
+
 ## 目标
 
-支持用户在 Collaborative Workspace 中邀请成员。
+支持 Owner 在 Collaborative Workspace 中邀请成员。
+
+## 范围
+
+- 邀请已有平台用户加入 Workspace
+- 提供邀请入口、接口和活动记录
 
 ## 验收条件
 
@@ -339,7 +362,7 @@ Issue 至少写清楚：
 - 非 Owner 返回 403
 - 邀请操作写入活动记录
 
-## 不包含
+## 非目标
 
 - 邮件通知
 - 批量邀请
@@ -507,7 +530,7 @@ PR 标题也采用相同格式：
 feat(workspace): 支持创建协作空间
 ```
 
-PR 描述至少填写：
+PR 描述保留模板中的固定信息，并填写实际证据：
 
 ```markdown
 ## 关联 Issue
@@ -520,11 +543,10 @@ Closes #123
 - 新增名称和所有者校验
 - 新增 service 单元测试
 
-## 验证方式
+## 验证证据
 
-- `uv run ruff check .`
-- `uv run pytest`
-- 手动调用 POST /api/v1/workspaces 验证
+- `make check`：通过
+- 手动调用 `POST /api/v1/workspaces`：返回 201，响应不包含 Secret 明文
 
 ## 影响范围
 
@@ -532,10 +554,16 @@ Closes #123
 - 新增 API endpoint
 - 前端暂未接入
 
-## 截图
+## 截图（仅界面改动）
 
-涉及界面时必须提供。
+<关键状态截图>
 ```
+
+验证证据写出实际命令、环境和关键结果，不需要粘贴整段日志。涉及集群行为时注明使用
+`mock` 还是真实集群；未执行的验证必须明确说明。截图只在界面发生变化时提供。
+
+模板末尾的按需检查项只保留本 PR 实际涉及的 API 契约、数据库迁移、认证授权、
+Secret 或界面证据，并在验证完成后勾选；没有适用项时删除该小节。
 
 ### 4.8 评审并合并 PR
 
@@ -963,11 +991,11 @@ Milestone 的产品范围和名称以 [`../product/design.md`](../product/design
 ```text
 type: feature
 type: bug
-type: refactor
-type: test
-type: docs
-type: spike
+type: task
 ```
+
+三类 Issue 表单会申请对应的类型标签；仓库维护者需要预先创建这些标签。工程任务的
+具体性质在表单中选择，不再为重构、测试、文档和调研各维护一组互斥类型标签。
 
 模块：
 
@@ -993,6 +1021,9 @@ priority: P1 - 应在当前实现
 priority: P2 - 可以延后
 ```
 
+模块和优先级标签由维护者在 Issue triage 时补充，Issue 表单中的普通字段不会自动
+转换成 GitHub 标签。
+
 阶段名称和顺序从产品设计的 Roadmap 建立到 GitHub Milestone，不在这里硬编码副本。
 
 ### 6.4 版本发布和 Tag
@@ -1006,7 +1037,22 @@ git tag -a v0.1.0 -m "完成核心运行闭环"
 git push origin v0.1.0
 ```
 
-然后在 GitHub 创建 Release，填写：
+推送 Tag 本身不会发布镜像。确认 Tag 与 CI 后，在 GitHub Actions 中手动运行
+`Release` workflow：
+
+```text
+source_ref: v0.1.0
+version: 0.1.0（不带 v，不使用 +build metadata）
+publish_latest: 仅稳定版本按需选择
+```
+
+`source_ref` 必须是与 `version` 匹配的 `v<SemVer>` annotated Tag。工作流显式检出
+`refs/tags/<source_ref>` 并解析为不可变提交，再为 API 与 Web 构建并发布带版本号的
+GHCR 镜像；只有显式选择时才更新 `latest`，预发布版本不能更新 `latest`。为避免不同
+版本折叠到同一个 OCI Tag，发布版本不接受 SemVer build metadata。工作流不会创建或
+移动 Tag，也不会代替 GitHub Release notes。
+
+镜像发布成功后，在 GitHub 创建 Release，填写：
 
 ```text
 本版本目标
@@ -1068,7 +1114,7 @@ Reviewer 按以下顺序检查：
 
 ## 八. 针对 107 Workspace 的 CI
 
-`main` 的本地与 CI 统一入口是：
+共享主分支的本地与 CI 统一入口是：
 
 ```bash
 make check

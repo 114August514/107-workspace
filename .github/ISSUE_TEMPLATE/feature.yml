@@ -1,24 +1,17 @@
-name: 功能 / 任务
-description: 按 docs/contributing/git-workflow.md §4.1 的五要素开一个任务
+name: 功能请求
+description: 提出一项用户可感知的产品能力
 labels: ["type: feature"]
 body:
   - type: markdown
     attributes:
       value: |
-        `docs/contributing/git-workflow.md` §4.1：Issue 至少写清楚 **背景 / 目标 / 范围 / 验收条件 / 不做什么**。
-        一个 Issue 控制在**半天到三天**内完成，过大就拆。
-
-        术语请用 `docs/product/design.md` §3.1 的名字（Workspace / Project Version /
-        Run Snapshot / Input Binding …），别另造词。
+        产品术语和边界以 `docs/product/design.md` 为准。请用可观察的用户结果描述需求。
 
   - type: textarea
     id: background
     attributes:
       label: 背景
-      description: 为什么现在做这个。对应 docs/product/design.md 的哪一节 / 哪条能力。
-      placeholder: |
-        DESIGN-final §2.8 A [Core] 从 Project 发起 Run。
-        当前 Run 只能通过 API 直接构造，没有走 Run Configuration 解析。
+      description: 谁在什么场景遇到了什么限制，为什么现在需要处理？
     validations:
       required: true
 
@@ -26,7 +19,18 @@ body:
     id: goal
     attributes:
       label: 目标
-      description: 一句话说清楚做完之后**用户能做什么**（不是"重构了某个模块"）。
+      description: 一句话说明完成后用户能够做什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      description: 列出本 Issue 涉及的能力、模块或界面边界。
+      placeholder: |
+        - 支持 Owner 从确定的 Project Version 创建 Run
+        - 涉及 Run 创建接口与提交界面
     validations:
       required: true
 
@@ -34,47 +38,24 @@ body:
     id: acceptance
     attributes:
       label: 验收条件
-      description: |
-        一条一行，**要能被机器判定**。至少写一条异常路径。
-        "用户友好""性能好"不是验收条件。
+      description: 逐条写出可演示或可自动验证的结果，并覆盖必要的异常路径。
       placeholder: |
-        - Owner 可以从 Project 的确定版本发起 Run
-        - Run 创建后 Run Snapshot 不可修改，尝试修改返回 409
-        - 引用的 Secret 在目标 Workspace 不存在时，提交前检查拦住并说明缺哪个
-        - 非成员访问该 Project 的 Run 返回 403
+        - Owner 可以从确定的 Project Version 创建 Run
+        - 非成员访问对应 Project 时返回 403 或 404
+        - `make check` 通过
     validations:
       required: true
 
   - type: textarea
-    id: non-goals
+    id: non_goals
     attributes:
-      label: 不做什么
-      description: |
-        **这一项比"做什么"更重要。** 不划边界，范围会在实现中无声膨胀。
-        可以直接引用 DESIGN-final 的阶段标记（把 [V1]/[V2] 的部分列进来）。
-      placeholder: |
-        - 不做 Run 批量创建（DESIGN-final §2.8 E，[V2]）
-        - 不做自动重试（[V2]）
-        - 不做 Metric 上报（本 Issue 只到 Run 提交为止）
+      label: 非目标
+      description: 明确本 Issue 不包含的相邻能力；没有时填写“无”。
     validations:
       required: true
 
-  - type: input
-    id: scope
+  - type: textarea
+    id: references
     attributes:
-      label: 范围（会碰哪些目录）
-      description: 顺便说明**不碰**哪些。多人并行时这是避免撞车的依据。
-      placeholder: 碰 backend/src/workspace107/application/ 与 api/；不碰 infrastructure/cluster/
-    validations:
-      required: true
-
-  - type: dropdown
-    id: priority
-    attributes:
-      label: 优先级
-      options:
-        - "P0 - 阻塞级"
-        - "P1 - 应在当前实现"
-        - "P2 - 可以延后"
-    validations:
-      required: true
+      label: 相关信息
+      description: 可选。附产品设计章节、ADR、原型、依赖 Issue 或 Milestone。

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 先看协作约定
-    url: https://github.com/114August514/107-workspace/blob/main/docs/contributing/git-workflow.md
-    about: 分支命名、提交格式、PR 规模、Milestone 四要素、标签体系
-  - name: 术语和产品规则
-    url: https://github.com/114August514/107-workspace/blob/main/docs/product/design.md
-    about: 领域语言以 §3.1 为准；提 Issue 前先确认用词一致
+  - name: Git 协作规范
+    url: https://github.com/114August514/107-workspace/blob/HEAD/docs/contributing/git-workflow.md
+    about: 查看 Issue、分支、提交、Pull Request、标签与发布约定
+  - name: 产品设计与术语
+    url: https://github.com/114August514/107-workspace/blob/HEAD/docs/product/design.md
+    about: 查看现行领域语言、产品规则与 Roadmap
