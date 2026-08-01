@@ -37,6 +37,7 @@ from .common import (
 
 TERMINAL_RUN_STATUSES = {"succeeded", "failed", "cancelled", "submit_failed"}
 JOURNAL_FIELD = re.compile(r"^-\s*([^:：]+)[:：]\s*(.*)$")
+COMPOSE_FILE = REPO_ROOT / "deploy" / "compose.yaml"
 
 
 def migrate(direction: str) -> None:
@@ -122,12 +123,22 @@ def ship() -> None:
 def compose(action: str) -> None:
     require_commands("docker")
     arguments: dict[str, list[str]] = {
-        "build": ["compose", "build"],
-        "config": ["compose", "config"],
-        "up": ["compose", "up", "--build"],
-        "down": ["compose", "down"],
+        "build": ["build"],
+        "config": ["config"],
+        "up": ["up", "--build"],
+        "down": ["down"],
     }
-    run(["docker", *arguments[action]])
+    run(
+        [
+            "docker",
+            "compose",
+            "--project-directory",
+            REPO_ROOT,
+            "--file",
+            COMPOSE_FILE,
+            *arguments[action],
+        ]
+    )
 
 
 def install_hooks() -> None:
@@ -549,6 +560,8 @@ def doctor() -> None:
         "docs/product/deferred.md",
         "docs/contributing/git-workflow.md",
         "docs/operations/deployment.md",
+        "deploy/README.md",
+        "deploy/compose.yaml",
         "docs/README.md",
         "docs/decisions/README.md",
         "docs/journal/README.md",

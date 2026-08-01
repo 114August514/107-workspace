@@ -63,8 +63,7 @@ def _active_files() -> list[Path]:
             REPO / "frontend" / "Dockerfile",
             REPO / "frontend" / "nginx.conf",
             REPO / "deploy" / "README.md",
-            REPO / "docker" / "README.md",
-            REPO / "docker-compose.yml",
+            REPO / "deploy" / "compose.yaml",
         )
         if path.exists()
     )

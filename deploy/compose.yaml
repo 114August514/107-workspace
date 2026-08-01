@@ -12,7 +12,10 @@ services:
       - db-data:/var/lib/postgresql/data
     healthcheck:
       test:
-        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workspace107} -d ${POSTGRES_DB:-workspace107}"]
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-workspace107} -d ${POSTGRES_DB:-workspace107}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 20

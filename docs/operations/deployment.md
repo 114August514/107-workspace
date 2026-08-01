@@ -2,22 +2,25 @@
 
 这里说明当前 107 Workspace 应用容器的运行方式，以及它距离真实集群部署还差什么。
 容器编排是开发和受信任演示基线，不代表生产验收已经完成。
+可执行清单及目录边界见 [`deploy/README.md`](../../deploy/README.md)。以下命令均在仓库
+根目录运行。
 
 ## 本机演示
 
 ```bash
 cp .env.example .env
 # 编辑 .env，至少设置 POSTGRES_PASSWORD
-docker compose up -d --build
+docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
 打开 <http://127.0.0.1:8107>。停止服务但保留数据：
 
 ```bash
-docker compose down
+docker compose --project-directory . --file deploy/compose.yaml down
 ```
 
-`docker compose down -v` 会删除数据库和存储卷，只能在明确不需要其中数据时执行。
+`docker compose --project-directory . --file deploy/compose.yaml down -v` 会删除数据库和
+存储卷，只能在明确不需要其中数据时执行。
 
 ## 拓扑
 
@@ -118,10 +121,10 @@ GET /api/v1/ready    检查数据库是否可用
 常用命令：
 
 ```bash
-docker compose ps
-docker compose logs -f api
-docker compose exec api alembic current
-docker compose exec api alembic history
+docker compose --project-directory . --file deploy/compose.yaml ps
+docker compose --project-directory . --file deploy/compose.yaml logs -f api
+docker compose --project-directory . --file deploy/compose.yaml exec api alembic current
+docker compose --project-directory . --file deploy/compose.yaml exec api alembic history
 ```
 
 ## 上线前最低条件

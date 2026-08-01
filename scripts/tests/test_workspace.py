@@ -82,6 +82,26 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         demo.assert_called_once_with(smoke=True)
 
+    def test_compose_uses_deploy_manifest(self) -> None:
+        with (
+            mock.patch.object(project, "require_commands") as require_commands,
+            mock.patch.object(project, "run") as run,
+        ):
+            project.compose("config")
+
+        require_commands.assert_called_once_with("docker")
+        run.assert_called_once_with(
+            [
+                "docker",
+                "compose",
+                "--project-directory",
+                REPO_ROOT,
+                "--file",
+                REPO_ROOT / "deploy" / "compose.yaml",
+                "config",
+            ]
+        )
+
     def test_journal_listing_ignores_directory_readme(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             journal_dir = Path(directory) / "docs" / "journal"

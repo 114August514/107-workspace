@@ -1293,7 +1293,7 @@ uv.lock
 数据库迁移文件
 .env.example
 Dockerfile
-docker-compose 配置
+Compose 编排文件
 CI workflow
 必要的 OpenAPI Contract
 .gitattributes

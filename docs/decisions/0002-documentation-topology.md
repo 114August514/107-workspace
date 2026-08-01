@@ -15,7 +15,8 @@
 
 ## 决定
 
-- 根目录只保留自动发现入口、仓库级配置、薄 `Makefile` 和 Compose 文件。
+- 根目录只保留自动发现入口、仓库级配置和薄 `Makefile`；可执行部署编排放在
+  `deploy/`，各服务的镜像构建文件仍由服务目录维护。
 - 产品设计与延后事项放在 `docs/product/`，Git 协作规范放在 `docs/contributing/`，
   部署说明放在 `docs/operations/`。
 - `docs/journal/` 只保存进行中记录；完成或放弃的记录进入对应归档。

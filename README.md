@@ -18,6 +18,7 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 | AI 与工程协作入口 | [`AGENTS.md`](AGENTS.md) |
 | 高影响工程决策 | [`docs/decisions/`](docs/decisions/README.md) |
 | 在途工作记录 | [`docs/journal/`](docs/journal/) |
+| 部署入口与运行边界 | [`deploy/`](deploy/README.md) 与 [`docs/operations/`](docs/operations/deployment.md) |
 
 迁移来源 `workspace107@293c8d8` 的完整快照保存在
 [`archive/workspace107/`](archive/workspace107/ARCHIVE.md)。归档只用于审查和追溯，
@@ -69,6 +70,7 @@ api -> application -> domain ports <- infrastructure
 
 - `backend/`：FastAPI、SQLAlchemy/Alembic、Scheduler/Storage 适配器和测试。
 - `frontend/`：React、TypeScript、Vite 和从 OpenAPI 生成的接口类型。
+- `deploy/`：可执行的容器编排和部署入口，不存放服务自己的镜像构建文件。
 - `docs/api/`：活动后端导出的 OpenAPI 契约。
 - `scripts/`：跨平台 Python 任务实现，以及位于平台边缘的引导脚本。
 - `docs/operations/`：当前容器部署方式和上线前仍需满足的约束。
@@ -81,7 +83,7 @@ api -> application -> domain ports <- infrastructure
 ```bash
 cp .env.example .env
 # 设置 POSTGRES_PASSWORD
-docker compose up -d --build
+docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
 浏览器访问 <http://127.0.0.1:8107>。部署和共享存储约束见

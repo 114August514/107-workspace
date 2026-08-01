@@ -8,7 +8,7 @@
 | 延后但尚未进入正式设计的事项 | [`product/deferred.md`](product/deferred.md) |
 | Git、Issue、分支、提交和 PR | [`contributing/git-workflow.md`](contributing/git-workflow.md) |
 | AI 协作和统一验证入口 | [`../AGENTS.md`](../AGENTS.md) |
-| 部署方式与生产边界 | [`operations/deployment.md`](operations/deployment.md) |
+| 部署方式与生产边界 | [`operations/deployment.md`](operations/deployment.md)，可执行清单见 [`../deploy/`](../deploy/README.md) |
 | 高影响技术决定 | [`decisions/`](decisions/README.md) |
 | 当前跨会话工作 | [`journal/`](journal/README.md) |
 | 生成的 API 契约 | [`api/openapi.json`](api/openapi.json) |

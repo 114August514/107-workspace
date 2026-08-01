@@ -2511,6 +2511,10 @@ API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port�
 │   ├── pyproject.toml
 │   └── uv.lock
 │
+├── deploy/
+│   ├── README.md
+│   └── compose.yaml
+│
 ├── docs/
 │   ├── product/
 │   ├── contributing/
