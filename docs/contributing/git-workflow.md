@@ -430,7 +430,7 @@ git diff --staged
 
 ```bash
 git add backend/src/workspace107/application/workspace_service.py
-git add backend/tests/integration/test_roles.py
+git add backend/tests/unit/domain/test_compute.py
 ```
 
 或者逐块检查：

@@ -108,6 +108,18 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         demo.assert_called_once_with(smoke=True)
 
+    def test_coverage_reports_without_a_global_gate(self) -> None:
+        with (
+            mock.patch.object(project, "ensure_backend_dependencies"),
+            mock.patch.object(project, "backend_uv") as backend_uv,
+        ):
+            project.coverage()
+
+        arguments = backend_uv.call_args.args
+        self.assertEqual(arguments[:2], ("run", "pytest"))
+        self.assertIn("--cov=workspace107", arguments)
+        self.assertFalse(any(str(value).startswith("--cov-fail-under") for value in arguments))
+
     def test_compose_uses_deploy_manifest(self) -> None:
         with (
             mock.patch.object(project, "require_commands") as require_commands,

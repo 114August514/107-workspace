@@ -33,6 +33,9 @@ src/
 │   └── run/            提交弹窗、Run 列表、事件时间线、日志、产物、复现快照
 ├── pages/              HomePage / WorkspacePage / ProjectPage / RunPage
 └── utils/format.ts     展示格式化
+
+tests/
+└── unit/               当前保留的 API 错误降级与引用解析单元测试
 ```
 
 页面只做编排，数据获取和交互细节都在组件里。跨页面复用的展示逻辑
@@ -93,6 +96,10 @@ pnpm run generate:api     # 仅重新生成类型；平时在根目录用 make c
 ```
 
 仓库根目录执行 `make check-frontend` 会跑与 CI 相同的前端检查。
+
+当前 UI 是后续重构的旧实现，因此不保留绑定 Ant Design 组件、私有 class 或视觉偏好的
+测试。新组件和页面切片进入实现时，按 [`../docs/testing/README.md`](../docs/testing/README.md)
+定义的 unit、component、feature 和 e2e 粒度重新建立测试。
 
 ## 关于展示内容
 

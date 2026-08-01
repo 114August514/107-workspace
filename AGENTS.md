@@ -14,6 +14,7 @@ Run 的可复现工作流。
 | 为什么这么设计 | `docs/decisions/` |
 | 容器部署入口与生产边界 | `deploy/README.md` + `docs/operations/deployment.md` |
 | 前后端 API 机器契约 | `contracts/README.md` + `make contract` |
+| 测试粒度、目录与重构期基线 | `docs/testing/README.md` |
 
 `archive/`、`docs/archive/` 和 `docs/references/` 保存历史实现、过程记录与输入材料，
 不是活动规范。与它们冲突时以 `docs/product/design.md` 为准。
@@ -39,7 +40,7 @@ uv run --no-project python scripts/workspace.py check
 make dev            # 起后端
 make migrate        # alembic 升到最新
 make migrate-down   # 回滚一步（合并前必须实际验证过）
-make coverage       # 带 90% 门槛
+make coverage       # 生成后端覆盖率报告
 make journal        # 有没有在途工作、孤儿锁
 make doctor         # 工程基线还缺什么
 ```
@@ -55,7 +56,7 @@ backend/src/workspace107/
 ├── application/      # 用例编排、事务边界
 ├── domain/           # 业务规则与模型 —— **不 import 任何 IO**
 └── infrastructure/   # db / scheduler / storage 等外部依赖
-backend/tests/        # unit / integration / contract / security
+backend/tests/        # 测试粒度与目录以 docs/testing/README.md 为准
 frontend/             # React + TypeScript 控制台
 contracts/            # 跨组件机器契约；生成物不得手改
 deploy/               # 可执行部署编排；服务镜像构建文件仍由服务目录维护
@@ -67,6 +68,9 @@ docs/journal/         # 在途工作
 毫秒级的纯单元测试密集覆盖。时钟和随机数也算 IO，当参数传进去。
 
 ## 命名
+
+代码标识符统一使用英文；中文用于注释、文档、日志与面向用户的展示文本，不混入函数名、
+类名或变量名。
 
 **以 `docs/product/design.md` §3.1 的术语表为唯一事实源**：User / Workspace /
 Membership / Project / Project Version / Run Configuration / Run Snapshot /
@@ -117,7 +121,8 @@ Compute Plan / Resource Entitlement …
 **① 越权。** 平台是多用户多 Workspace 的，`WHERE id = ?` 这种查询在功能测试里
 完全正常（你用自己的账号点，看到的都是自己的数据），只有**换个账号带别人的 ID**
 才会暴露。过滤必须落到数据访问层，并且写进方法签名让"忘了传"编译不过。
-每个涉及资源的接口都要有一条「用别人的 ID → 403/404」的测试。
+重构切片新增或重写资源接口时，每个接口都必须同步补一条「用别人的 ID → 403/404」
+的测试；当前旧 API 的退出测试不作为目标架构已覆盖的证据。
 
 **② 不可变性。** Snapshot / Version 类对象一旦创建就不能改。写更新逻辑前先问：
 这个对象是不是快照？是的话就该创建新的，而不是改旧的。

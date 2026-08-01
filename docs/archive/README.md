@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-test-baseline-reset.md`](2026-08-01-test-baseline-reset.md)：
+  删除绑定旧实现的测试，并建立重构期测试边界、收集范围和覆盖率报告口径。
 - [`2026-08-01-active-guidance-alignment.md`](2026-08-01-active-guidance-alignment.md)：
   清理旧工具链与协作口径，并明确目标设计和当前旧实现的边界。
 - [`2026-08-01-openapi-operation-docs.md`](2026-08-01-openapi-operation-docs.md)：

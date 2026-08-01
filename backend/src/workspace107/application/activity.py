@@ -27,7 +27,7 @@ class SupportsNestedTransaction(Protocol):
 
     这里只声明用得到的那一个方法，而不是直接依赖 ``AsyncSession``——
     application 层不该认识 SQLAlchemy；这个依赖方向由
-    ``docs/product/design.md`` 第 4.3 节定义，并由 ``tests/unit/test_layering.py`` 守住。
+    ``docs/product/design.md`` 第 4.3 节定义。
     """
 
     def begin_nested(self) -> AbstractAsyncContextManager[object]: ...
@@ -50,8 +50,7 @@ class ActivityRecorder:
     **主用例的数据会一起丢掉**，正好是这条规则想避免的事。
     所以写入包在 SAVEPOINT 里，失败只回滚这一小段。
 
-    这两种做法的差别验证过（``tests/integration/test_activity.py``）：
-    不加 SAVEPOINT 时主用例数据确实会丢。
+    SAVEPOINT 把活动记录失败限制在嵌套事务内，避免主用例数据一起回滚。
     """
 
     def __init__(

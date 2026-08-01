@@ -52,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("migrate", help="upgrade the database to the latest revision")
     subparsers.add_parser("migrate-down", help="downgrade the database by one revision")
-    subparsers.add_parser("coverage", help="run backend tests with the coverage gate")
+    subparsers.add_parser("coverage", help="report backend test coverage without a global gate")
     subparsers.add_parser("demo", help="run the isolated core Run demonstration")
     subparsers.add_parser("smoke", help="run the isolated HTTP core Run smoke test")
     subparsers.add_parser("ship", help="deploy the application when a production target exists")

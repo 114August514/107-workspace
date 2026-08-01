@@ -28,7 +28,7 @@ src/workspace107/
 
 ## 依赖注入
 
-具体实现只在**两个组合根**里被构造，别处一律拿协议：
+当前旧实现只在两个组合入口里构造具体实现，别处一律拿协议：
 
 ```text
 domain/ports/     用 Protocol 描述「需要什么能力」
@@ -50,8 +50,8 @@ api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
                         不要往 Services 容器里塞端口
 ```
 
-这些约定由 `tests/unit/test_layering.py` 检查，违反了跑测试就红；
-依赖方向以 `docs/product/design.md` 第 4.3 节为准。
+这两处入口是当前代码事实，不是未来组合根数量门禁。目标架构还需要独立 Worker 入口；
+依赖方向和未来模块边界以 `docs/product/design.md` 为准。
 
 ## 安装与运行
 
@@ -120,20 +120,27 @@ uv run alembic downgrade -1                       # 回退一步
 ## 测试
 
 ```bash
-uv run pytest                       # 全部
-uv run pytest tests/unit            # 只跑单元测试
-uv run pytest --cov                 # 带覆盖率
+uv run pytest                              # 当前活动测试
+uv run pytest tests/unit                   # 纯领域与 Application 单元测试
+uv run pytest tests/integration            # 单个 Adapter 的集成测试
+uv run pytest tests/architecture           # 仓库与文档约束
 uv run ruff check . && uv run ruff format --check .
 ```
 
-测试分层：
+当前测试基线：
 
 ```text
-tests/unit/         领域规则与不变量，不碰数据库
-tests/integration/  端到端闭环，真实 SQLite + 真实子进程执行
-tests/security/     GR-304 Secret 不落明文、无发现权限即不存在
-tests/contract/     API 契约与错误码映射
+tests/unit/domain/          纯领域规则与不变量
+tests/unit/application/     不接真实基础设施的用例逻辑
+tests/unit/observability/   请求标识上下文与日志格式化
+tests/integration/storage/  本地存储与配置行为
+tests/integration/scheduler/ Mock Scheduler 平台适配
+tests/architecture/         依赖方向、活动文档和仓库引用约束
 ```
+
+旧 ASGI / SQLite 产品流程测试已经退出活动基线，不能把当前测试数量理解为目标架构覆盖率。
+完整粒度、未来目录和覆盖率策略见 [`../docs/testing/README.md`](../docs/testing/README.md)。
+在仓库根目录运行 `make coverage` 生成报告；重构期不设失真的全仓百分比门槛。
 
 ## 接口契约
 

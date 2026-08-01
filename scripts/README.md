@@ -20,6 +20,7 @@ contract sync|check    重新生成或核对 OpenAPI 与前端类型
 dev                    启动前后端开发服务
 demo / smoke           验证隔离的 Project 到 Artifact 工作流
 migrate / migrate-down 升级或回退一个数据库版本
+coverage               生成后端覆盖率报告（重构期不设全仓门槛）
 journal / audit        检查在途记录和需要评审的改动
 doctor                 检查本地工程基线
 ```

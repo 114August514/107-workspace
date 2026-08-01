@@ -48,14 +48,13 @@ def migrate(direction: str) -> None:
 
 
 def coverage() -> None:
-    heading("Backend coverage")
+    heading("Backend coverage report")
     ensure_backend_dependencies(quiet=True)
     backend_uv(
         "run",
         "pytest",
         "--cov=workspace107",
         "--cov-report=term-missing",
-        "--cov-fail-under=90",
     )
 
 
