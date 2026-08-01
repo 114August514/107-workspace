@@ -37,8 +37,8 @@ def command_text(command: Sequence[str | os.PathLike[str]]) -> str:
     return shlex.join(values)
 
 
-def resolve_executable(name: str, *, path: str | None = None) -> str:
-    resolved = shutil.which(name, path=path)
+def resolve_executable(name: str) -> str:
+    resolved = shutil.which(name)
     if resolved is None:
         raise TaskError(f"Missing required command: {name}")
     return resolved
@@ -48,31 +48,6 @@ def require_commands(*names: str) -> None:
     missing = [name for name in names if shutil.which(name) is None]
     if missing:
         raise TaskError("Missing required command(s): " + ", ".join(missing))
-
-
-def _process_environment(
-    overrides: Mapping[str, str] | None = None,
-) -> dict[str, str]:
-    environment = os.environ.copy()
-    if overrides is not None:
-        environment.update(overrides)
-
-    path = environment.get("PATH")
-    if not path or not environment.get("UV_RUN_RECURSION_DEPTH"):
-        return environment
-
-    entries = path.split(os.pathsep)
-    interpreter_dir = os.path.normcase(os.path.abspath(Path(sys.executable).parent))
-    normalized_entries = [os.path.normcase(os.path.abspath(entry)) for entry in entries]
-    if (
-        normalized_entries
-        and normalized_entries[0] == interpreter_dir
-        and interpreter_dir in normalized_entries[1:]
-    ):
-        # uv prepends the Python directory even when it already exists later in PATH.
-        # Removing only that duplicate restores the caller's tool priority.
-        environment["PATH"] = os.pathsep.join(entries[1:])
-    return environment
 
 
 def run(
@@ -88,10 +63,13 @@ def run(
     if not values:
         raise ValueError("command cannot be empty")
 
-    process_env = _process_environment(env)
-    values[0] = resolve_executable(values[0], path=process_env.get("PATH"))
+    values[0] = resolve_executable(values[0])
     if not quiet:
         print(f"$ {command_text(values)}", flush=True)
+
+    process_env = os.environ.copy()
+    if env is not None:
+        process_env.update(env)
 
     try:
         return subprocess.run(

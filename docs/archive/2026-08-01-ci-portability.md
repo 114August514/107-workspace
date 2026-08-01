@@ -1,6 +1,6 @@
-# CI 跨平台修复
+# CI 跨平台修复（首轮）
 
-- 状态：已完成
+- 状态：已替代
 - 认领：August / Codex
 - 上下文：PR #2 / Actions run 30692294918
 - 开始：2026-08-01 16:57 +0800
@@ -40,10 +40,12 @@ pnpm 11 的硬门槛。
 
 ## 结果
 
-- `uv run --no-project` 仅在 Python 目录重复出现在 PATH 首尾时移除新增的首项，恢复调用
-  前原有工具优先级；独立的 uv-managed Python 目录保持不变。
-- Node.js 版本检查仍严格要求 24.x，pnpm 仍严格要求 11.x。
 - Alembic 配置改用 ASCII 注释，可由 Windows `cp1252` 代码页读取。
-- 工作流 15 项、后端 102 项、前端 14 项、前端构建与 OpenAPI 合同均通过；构建仍有
-  已知的约 1.29 MB 主 chunk 警告，本任务不处理分包设计。
+- 首轮 PATH 推断通过本地测试，但 PR run `30693031752` 证明它没有覆盖 GitHub Linux
+  runner 的实际 Python 目录形态，Node 仍被解析为 22.23.1。
+- Windows 已越过 Alembic 读取，随后暴露 `seed.py` 向 cp1252 stdout 输出中文时的
+  `UnicodeEncodeError`。
+- PATH 推断及其测试已由后续的
+  [`2026-08-01-ci-runtime-provisioning.md`](2026-08-01-ci-runtime-provisioning.md) 删除；
+  Python 与编码改由 GitHub Actions 配置。
 - `docs/product/design.md`、`docs/contributing/git-workflow.md`、业务实现和依赖均未修改。

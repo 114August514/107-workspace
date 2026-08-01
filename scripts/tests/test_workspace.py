@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import os
 import sys
 import tempfile
 import unittest
@@ -101,29 +100,6 @@ class WorkspaceCliTests(unittest.TestCase):
     def test_tool_version_parser_rejects_unexpected_output(self) -> None:
         with self.assertRaisesRegex(TaskError, "Could not parse tool version"):
             common._major_version("unknown")
-
-    def test_uv_run_restores_the_callers_tool_path_priority(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            interpreter_dir = root / "python"
-            node_dir = root / "node-24"
-            original_path = os.pathsep.join((str(node_dir), str(interpreter_dir)))
-            uv_path = os.pathsep.join((str(interpreter_dir), original_path))
-
-            with (
-                mock.patch.dict(
-                    os.environ,
-                    {"PATH": uv_path, "UV_RUN_RECURSION_DEPTH": "1"},
-                ),
-                mock.patch.object(
-                    common.sys,
-                    "executable",
-                    str(interpreter_dir / "python"),
-                ),
-            ):
-                environment = common._process_environment()
-
-        self.assertEqual(environment["PATH"], original_path)
 
     def test_smoke_dispatches_the_isolated_demo(self) -> None:
         with mock.patch.object(project, "demo") as demo:

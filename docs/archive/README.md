@@ -22,8 +22,10 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-ci-runtime-provisioning.md`](2026-08-01-ci-runtime-provisioning.md)：
+  由 GitHub Actions 显式配置 Python 3.12 与 Windows UTF-8，并撤掉任务脚本的 PATH 推断。
 - [`2026-08-01-ci-portability.md`](2026-08-01-ci-portability.md)：
-  修复统一任务入口的 Linux Node PATH 优先级与 Windows Alembic 配置编码问题。
+  记录首轮 Alembic 配置修复及随后被替代的 PATH 推断方案。
 - [`2026-08-01-pre-publish-test-review.md`](2026-08-01-pre-publish-test-review.md)：
   修正发布前复核发现的假断言、依赖方向解析漏洞和无断言测试。
 - [`2026-08-01-test-baseline-reset.md`](2026-08-01-test-baseline-reset.md)：
