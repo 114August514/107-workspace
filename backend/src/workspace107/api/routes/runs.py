@@ -15,19 +15,31 @@ from ..deps import CurrentUser, PageDep, ServicesDep
 router = APIRouter(tags=["run"])
 
 
-@router.get("/projects/{project_id}/runs", response_model=s.PageOut[s.RunOut])
+@router.get(
+    "/projects/{project_id}/runs",
+    response_model=s.PageOut[s.RunOut],
+    summary="列出 Project 的 Run",
+)
 async def list_runs(
     project_id: str, user: CurrentUser, services: ServicesDep, page: PageDep
 ) -> s.PageOut[s.RunOut]:
+    """分页返回当前用户可访问的 Project 中的 Run；无发现权限时按不存在处理。"""
     result = await services.runs.list_for_project(user.id, project_id, page)
     return p.page_out(result, p.run_out)
 
 
-@router.post("/projects/{project_id}/runs/preflight", response_model=s.PreflightOut)
+@router.post(
+    "/projects/{project_id}/runs/preflight",
+    response_model=s.PreflightOut,
+    summary="检查 Run 提交条件",
+)
 async def preflight(
     project_id: str, payload: s.RunDraftIn, user: CurrentUser, services: ServicesDep
 ) -> s.PreflightOut:
-    """提交前检查。只读，不创建任何对象。"""
+    """需要提交 Run 权限；一次性检查版本、环境、资源权益、配置与输入。
+
+    此操作只读，会返回全部阻止提交的问题，不创建 Run 或 Run Snapshot。
+    """
     result = await services.runs.preflight(user.id, project_id, _to_draft(payload))
     return s.PreflightOut(
         ok=result.ok,
@@ -47,6 +59,7 @@ async def preflight(
     "/projects/{project_id}/runs",
     response_model=s.RunOut,
     status_code=status.HTTP_201_CREATED,
+    summary="提交 Run",
     responses={200: {"model": s.RunOut, "description": "幂等重放，返回上一次提交的 Run"}},
 )
 async def create_run(
@@ -57,7 +70,9 @@ async def create_run(
     response: Response,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> s.RunOut:
-    """提交 Run。
+    """需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。
+
+    提交失败仍会保留 Run，作为可排查的历史事实。
 
     带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），
     不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。
@@ -70,8 +85,9 @@ async def create_run(
     return p.run_out(submission.run)
 
 
-@router.get("/runs/{run_id}", response_model=s.RunDetailOut)
+@router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
 async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
+    """仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。"""
     detail = await services.runs.get_detail(user.id, run_id)
     return s.RunDetailOut(
         run=p.run_out(detail.run),
@@ -81,8 +97,13 @@ async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.Ru
     )
 
 
-@router.get("/runs/{run_id}/logs", response_model=list[s.LogChunkOut])
+@router.get(
+    "/runs/{run_id}/logs",
+    response_model=list[s.LogChunkOut],
+    summary="读取 Run 日志",
+)
 async def read_logs(run_id: str, user: CurrentUser, services: ServicesDep) -> list[s.LogChunkOut]:
+    """仅对可访问所属 Run 的用户返回 stdout 和 stderr 尾部，并抹除已知 Secret 明文。"""
     chunks = await services.runs.read_logs(user.id, run_id)
     return [
         s.LogChunkOut(stream=c.stream.value, content=c.content, truncated=c.truncated)
@@ -90,8 +111,13 @@ async def read_logs(run_id: str, user: CurrentUser, services: ServicesDep) -> li
     ]
 
 
-@router.post("/runs/{run_id}/cancel", response_model=s.RunOut)
+@router.post("/runs/{run_id}/cancel", response_model=s.RunOut, summary="取消 Run")
 async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunOut:
+    """需要取消 Run 权限，且 Run 尚未进入终态。
+
+    已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务
+    会直接标记为已取消。
+    """
     run = await services.runs.cancel(user.id, run_id)
     return p.run_out(run)
 
@@ -100,6 +126,7 @@ async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s
     "/runs/{run_id}/rerun",
     response_model=s.RunOut,
     status_code=status.HTTP_201_CREATED,
+    summary="重新运行 Run",
     responses={200: {"model": s.RunOut, "description": "幂等重放，返回上一次重跑的 Run"}},
 )
 async def rerun(
@@ -109,18 +136,23 @@ async def rerun(
     response: Response,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> s.RunOut:
+    """需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。
+
+    重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带
+    ``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。
+    """
     submission = await services.runs.rerun(user.id, run_id, idempotency_key=idempotency_key)
     if not submission.created:
         response.status_code = status.HTTP_200_OK
     return p.run_out(submission.run)
 
 
-@router.post("/runs/sync", response_model=s.SyncOut)
+@router.post("/runs/sync", response_model=s.SyncOut, summary="同步 Run 状态")
 async def sync_runs(services: ServicesDep) -> s.SyncOut:
-    """主动触发一次状态同步。
+    """无需用户身份，主动轮询全部未结束 Run 的调度状态。
 
-    生产环境由后台任务周期执行；前端在轮询时也可以调用它，
-    让状态立刻反映调度系统的实际情况。
+    状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会
+    中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。
     """
     return s.SyncOut(changed=await services.lifecycle.sync_all())
 
@@ -128,10 +160,15 @@ async def sync_runs(services: ServicesDep) -> s.SyncOut:
 # -- Artifact ---------------------------------------------------------------
 
 
-@router.get("/artifacts/{artifact_id}/files", response_model=list[s.ArtifactEntryOut])
+@router.get(
+    "/artifacts/{artifact_id}/files",
+    response_model=list[s.ArtifactEntryOut],
+    summary="列出 Artifact 文件",
+)
 async def list_artifact_files(
     artifact_id: str, user: CurrentUser, services: ServicesDep
 ) -> list[s.ArtifactEntryOut]:
+    """仅在当前用户可访问所属 Run 且 Artifact 内容仍可用时，返回文件路径与大小。"""
     entries = await services.runs.list_artifact_files(user.id, artifact_id)
     return [s.ArtifactEntryOut(path=e.path, size=e.size) for e in entries]
 
@@ -141,6 +178,7 @@ async def list_artifact_files(
 # 生成的前端类型会跟着错，调用方只能靠强制转换绕过去。
 @router.get(
     "/artifacts/{artifact_id}/download",
+    summary="下载 Artifact 文件",
     # response_class 决定契约里默认写哪种 media type。不写的话默认是
     # JSONResponse，即使这里又声明了 octet-stream，契约也会同时留着
     # application/json——等于告诉调用方「可能返回 JSON」，而它从来不会。
@@ -160,6 +198,7 @@ async def download_artifact_file(
     services: ServicesDep,
     path: str = Query(min_length=1),
 ) -> Response:
+    """仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。"""
     data, filename = await services.runs.read_artifact_file(user.id, artifact_id, path)
     return Response(
         content=data,

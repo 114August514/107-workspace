@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Download Artifact File */
+        /**
+         * 下载 Artifact 文件
+         * @description 仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。
+         */
         get: operations["download_artifact_file_api_v1_artifacts__artifact_id__download_get"];
         put?: never;
         post?: never;
@@ -28,7 +31,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Artifact Files */
+        /**
+         * 列出 Artifact 文件
+         * @description 仅在当前用户可访问所属 Run 且 Artifact 内容仍可用时，返回文件路径与大小。
+         */
         get: operations["list_artifact_files_api_v1_artifacts__artifact_id__files_get"];
         put?: never;
         post?: never;
@@ -45,7 +51,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Compute Plans */
+        /**
+         * 列出算力方案
+         * @description 登录后只读返回平台全部算力方案；列表不表示当前 Workspace 已获得对应权益。
+         */
         get: operations["list_compute_plans_api_v1_catalog_compute_plans_get"];
         put?: never;
         post?: never;
@@ -62,7 +71,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Environments */
+        /**
+         * 列出运行环境
+         * @description 登录后只读返回平台统一维护的运行环境及其全部已发布版本，不按用户区分。
+         */
         get: operations["list_environments_api_v1_catalog_environments_get"];
         put?: never;
         post?: never;
@@ -80,8 +92,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Health
-         * @description 进程是否活着。不检查任何外部依赖，所以它不会因为数据库抖动而失败。
+         * 检查服务存活状态
+         * @description 无需登录，只报告 API 进程是否存活。
+         *
+         *     此探针不检查数据库等外部依赖，因此依赖短暂故障不会触发容器重启。
          */
         get: operations["health_api_v1_health_get"];
         put?: never;
@@ -123,7 +137,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Home */
+        /**
+         * 获取个人首页
+         * @description 返回当前用户、可见 Workspace，以及最近使用的十个 Project 和 Run。
+         */
         get: operations["home_api_v1_me_get"];
         put?: never;
         post?: never;
@@ -140,7 +157,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 我的通知 */
+        /**
+         * 我的通知
+         * @description 分页返回当前用户收到的通知，可筛选未读项，不重新校验关联 Workspace 权限。
+         */
         get: operations["list_notifications_api_v1_notifications_get"];
         put?: never;
         post?: never;
@@ -159,7 +179,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 全部标记为已读 */
+        /**
+         * 全部标记为已读
+         * @description 将当前用户的全部未读通知标记为已读，并返回归零后的未读数。
+         */
         post: operations["mark_all_read_api_v1_notifications_read_all_post"];
         delete?: never;
         options?: never;
@@ -174,7 +197,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 未读数 */
+        /**
+         * 未读数
+         * @description 仅统计当前用户收到且尚未读取的通知。
+         */
         get: operations["unread_count_api_v1_notifications_unread_count_get"];
         put?: never;
         post?: never;
@@ -193,7 +219,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 标记一条为已读 */
+        /**
+         * 将通知标记为已读
+         * @description 仅处理当前用户的通知；不存在、已读或不属于当前用户时同样返回成功。
+         */
         post: operations["mark_read_api_v1_notifications__notification_id__read_post"];
         delete?: never;
         options?: never;
@@ -208,14 +237,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Project */
+        /**
+         * 获取 Project 详情
+         * @description 校验当前用户可查看该 Project 后，返回项目设置与当前状态。
+         */
         get: operations["get_project_api_v1_projects__project_id__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Project */
+        /**
+         * 更新 Project 设置
+         * @description 要求 Project 更新权限，修改基本信息、环境、默认运行方案或状态。
+         *
+         *     更新项目设置会刷新修改时间并记录项目更新活动。
+         */
         patch: operations["update_project_api_v1_projects__project_id__patch"];
         trace?: never;
     };
@@ -226,7 +263,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Project 近期活动 */
+        /**
+         * Project 近期活动
+         * @description 校验 Project 查看权限后，分页返回该项目的近期操作记录。
+         */
         get: operations["list_project_activities_api_v1_projects__project_id__activities_get"];
         put?: never;
         post?: never;
@@ -243,7 +283,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Working Changes */
+        /**
+         * 查看 Project 未保存变更
+         * @description 校验 Project 查看权限后，比较当前文件与最近保存版本的内容摘要。
+         *
+         *     尚无历史版本时以空内容为基线，结果只表示新增、修改或删除，不写入数据。
+         */
         get: operations["working_changes_api_v1_projects__project_id__changes_get"];
         put?: never;
         post?: never;
@@ -260,12 +305,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Files */
+        /**
+         * 列出 Project 文件
+         * @description 校验 Project 查看权限后，按路径排序返回当前工作区的文件元数据。
+         */
         get: operations["list_files_api_v1_projects__project_id__files_get"];
-        /** Write File */
+        /**
+         * 写入 Project 文本文件
+         * @description 要求内容写入权限，以 UTF-8 创建或覆盖指定文件并刷新项目修改时间。
+         */
         put: operations["write_file_api_v1_projects__project_id__files_put"];
         post?: never;
-        /** Delete Path */
+        /**
+         * 删除 Project 文件或目录
+         * @description 要求内容写入权限，删除指定文件或递归删除目录并刷新项目修改时间。
+         */
         delete: operations["delete_path_api_v1_projects__project_id__files_delete"];
         options?: never;
         head?: never;
@@ -279,7 +333,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read File */
+        /**
+         * 读取 Project 文件内容
+         * @description 校验 Project 查看权限后读取文本预览，最多返回前 256 KiB。
+         *
+         *     非 UTF-8 字节以替代字符解码；内容超出预览上限时 ``truncated`` 为真。
+         */
         get: operations["read_file_api_v1_projects__project_id__files_content_get"];
         put?: never;
         post?: never;
@@ -298,7 +357,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Move Path */
+        /**
+         * 移动 Project 文件或目录
+         * @description 要求内容写入权限，重命名文件或递归移动目录并返回移动后的文件。
+         */
         post: operations["move_path_api_v1_projects__project_id__files_move_post"];
         delete?: never;
         options?: never;
@@ -315,7 +377,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload Files */
+        /**
+         * 上传 Project 文件
+         * @description 要求内容写入权限，将多个上传文件写入可选路径前缀并返回文件元数据。
+         *
+         *     同路径文件会被覆盖，每个文件均受服务端单文件大小限制。
+         */
         post: operations["upload_files_api_v1_projects__project_id__files_upload_post"];
         delete?: never;
         options?: never;
@@ -330,7 +397,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 这个 Project 从哪儿来的 */
+        /**
+         * 这个 Project 从哪儿来的
+         * @description 校验 Project 查看权限后返回固定的派生来源记录；非派生项目返回空。
+         */
         get: operations["fork_source_api_v1_projects__project_id__fork_source_get"];
         put?: never;
         post?: never;
@@ -347,10 +417,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Run Configurations */
+        /**
+         * 列出 Project 运行方案
+         * @description 校验 Project 查看权限后，返回项目当前可编辑的全部运行方案。
+         */
         get: operations["list_run_configurations_api_v1_projects__project_id__run_configurations_get"];
         put?: never;
-        /** Create Run Configuration */
+        /**
+         * 创建 Project 运行方案
+         * @description 要求运行方案管理权限，校验算力与运行参数后创建方案。
+         *
+         *     Project 尚无默认运行方案时，新建方案会自动成为默认项。
+         */
         post: operations["create_run_configuration_api_v1_projects__project_id__run_configurations_post"];
         delete?: never;
         options?: never;
@@ -365,12 +443,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Runs */
+        /**
+         * 列出 Project 的 Run
+         * @description 分页返回当前用户可访问的 Project 中的 Run；无发现权限时按不存在处理。
+         */
         get: operations["list_runs_api_v1_projects__project_id__runs_get"];
         put?: never;
         /**
-         * Create Run
-         * @description 提交 Run。
+         * 提交 Run
+         * @description 需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。
+         *
+         *     提交失败仍会保留 Run，作为可排查的历史事实。
          *
          *     带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），
          *     不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。
@@ -392,8 +475,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preflight
-         * @description 提交前检查。只读，不创建任何对象。
+         * 检查 Run 提交条件
+         * @description 需要提交 Run 权限；一次性检查版本、环境、资源权益、配置与输入。
+         *
+         *     此操作只读，会返回全部阻止提交的问题，不创建 Run 或 Run Snapshot。
          */
         post: operations["preflight_api_v1_projects__project_id__runs_preflight_post"];
         delete?: never;
@@ -409,10 +494,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Versions */
+        /**
+         * 列出 Project 历史版本
+         * @description 校验 Project 查看权限后，分页返回已保存的不可变历史版本。
+         */
         get: operations["list_versions_api_v1_projects__project_id__versions_get"];
         put?: never;
-        /** Save Version */
+        /**
+         * 保存 Project 新版本
+         * @description 要求内容写入权限，将当前全部文件保存为新的不可变版本并记录活动。
+         *
+         *     空 Project 或与最近版本内容完全相同时不会创建新版本。
+         */
         post: operations["save_version_api_v1_projects__project_id__versions_post"];
         delete?: never;
         options?: never;
@@ -428,8 +521,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Ready
-         * @description 依赖是否都通。数据库连不上就返回 503，让上游把流量转走。
+         * 检查服务就绪状态
+         * @description 无需登录，检查接收流量所需的数据库连接。
+         *
+         *     依赖可用时返回 200；数据库不可用时返回 503，且不向调用方暴露底层异常细节。
          */
         get: operations["ready_api_v1_ready_get"];
         put?: never;
@@ -448,10 +543,18 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update Run Configuration */
+        /**
+         * 更新 Project 运行方案
+         * @description 要求运行方案管理权限，以请求内容更新方案并重新校验运行参数。
+         *
+         *     修改只影响之后创建的 Run，已有 Run 使用各自已固定的运行快照。
+         */
         put: operations["update_run_configuration_api_v1_run_configurations__configuration_id__put"];
         post?: never;
-        /** Delete Run Configuration */
+        /**
+         * 删除 Project 运行方案
+         * @description 要求运行方案管理权限并删除方案；删除默认项时自动选择剩余方案。
+         */
         delete: operations["delete_run_configuration_api_v1_run_configurations__configuration_id__delete"];
         options?: never;
         head?: never;
@@ -468,11 +571,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Sync Runs
-         * @description 主动触发一次状态同步。
+         * 同步 Run 状态
+         * @description 无需用户身份，主动轮询全部未结束 Run 的调度状态。
          *
-         *     生产环境由后台任务周期执行；前端在轮询时也可以调用它，
-         *     让状态立刻反映调度系统的实际情况。
+         *     状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会
+         *     中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。
          */
         post: operations["sync_runs_api_v1_runs_sync_post"];
         delete?: never;
@@ -488,7 +591,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Run */
+        /**
+         * 获取 Run 详情
+         * @description 仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。
+         */
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;
         post?: never;
@@ -507,7 +613,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel Run */
+        /**
+         * 取消 Run
+         * @description 需要取消 Run 权限，且 Run 尚未进入终态。
+         *
+         *     已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务
+         *     会直接标记为已取消。
+         */
         post: operations["cancel_run_api_v1_runs__run_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -522,7 +634,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read Logs */
+        /**
+         * 读取 Run 日志
+         * @description 仅对可访问所属 Run 的用户返回 stdout 和 stderr 尾部，并抹除已知 Secret 明文。
+         */
         get: operations["read_logs_api_v1_runs__run_id__logs_get"];
         put?: never;
         post?: never;
@@ -541,7 +656,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rerun */
+        /**
+         * 重新运行 Run
+         * @description 需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。
+         *
+         *     重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带
+         *     ``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。
+         */
         post: operations["rerun_api_v1_runs__run_id__rerun_post"];
         delete?: never;
         options?: never;
@@ -556,7 +677,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Version */
+        /**
+         * 获取 Project 版本详情
+         * @description 校验所属 Project 的查看权限后，返回版本信息及完整文件清单。
+         */
         get: operations["get_version_api_v1_versions__version_id__get"];
         put?: never;
         post?: never;
@@ -573,7 +697,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Diff Versions */
+        /**
+         * 比较 Project 历史版本
+         * @description 校验两个版本均可查看，返回从 ``base`` 到目标版本的文件级差异。
+         *
+         *     仅允许比较同一个 Project 的版本，不读取或返回文件正文。
+         */
         get: operations["diff_versions_api_v1_versions__version_id__diff_get"];
         put?: never;
         post?: never;
@@ -590,7 +719,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read Version File */
+        /**
+         * 读取历史版本文件内容
+         * @description 校验所属 Project 的查看权限后，读取历史版本文件的文本预览。
+         *
+         *     最多返回前 256 KiB；非 UTF-8 字节会被替换，且不会修改历史版本。
+         */
         get: operations["read_version_file_api_v1_versions__version_id__files_content_get"];
         put?: never;
         post?: never;
@@ -610,7 +744,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 从这个版本派生一个新 Project
+         * 从历史版本派生新 Project
          * @description 两侧都会校验：源版本可读、目标空间可写。
          *
          *     复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
@@ -633,7 +767,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Restore Version */
+        /**
+         * 将 Project 恢复到历史版本
+         * @description 要求所属 Project 的内容写入权限，以指定版本整体替换当前工作内容。
+         *
+         *     历史版本本身保持不变；恢复会刷新项目修改时间并记录恢复活动。
+         */
         post: operations["restore_version_api_v1_versions__version_id__restore_post"];
         delete?: never;
         options?: never;
@@ -648,10 +787,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Workspaces */
+        /**
+         * 列出我的 Workspace
+         * @description 返回当前用户拥有或已加入的 Workspace，并附带其角色与可用能力。
+         */
         get: operations["list_workspaces_api_v1_workspaces_get"];
         put?: never;
-        /** Create Workspace */
+        /**
+         * 创建协作 Workspace
+         * @description 创建协作 Workspace，当前用户成为 Owner，同时授予默认资源权益并记录活动。
+         */
         post: operations["create_workspace_api_v1_workspaces_post"];
         delete?: never;
         options?: never;
@@ -666,14 +811,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Workspace */
+        /**
+         * 获取 Workspace 详情
+         * @description 仅对可访问该 Workspace 的用户返回详情、当前角色和可用能力。
+         */
         get: operations["get_workspace_api_v1_workspaces__workspace_id__get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update Workspace */
+        /**
+         * 更新 Workspace 设置
+         * @description 需要修改空间设置权限；更新请求中提供的字段，并记录 Workspace 更新活动。
+         */
         patch: operations["update_workspace_api_v1_workspaces__workspace_id__patch"];
         trace?: never;
     };
@@ -684,7 +835,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Workspace 近期活动 */
+        /**
+         * 列出 Workspace 活动
+         * @description 可查看 Workspace 的成员均可分页读取其活动流，无需额外的活动查看权限。
+         */
         get: operations["list_workspace_activities_api_v1_workspaces__workspace_id__activities_get"];
         put?: never;
         post?: never;
@@ -701,7 +855,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Entitlements */
+        /**
+         * 列出 Workspace 资源权益
+         * @description 需要查看资源权益权限；返回 Workspace 可用的算力方案及并发额度。
+         */
         get: operations["list_entitlements_api_v1_workspaces__workspace_id__entitlements_get"];
         put?: never;
         post?: never;
@@ -720,7 +877,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Respond To Invitation */
+        /**
+         * 处理 Workspace 邀请
+         * @description 处理当前用户自己的待定邀请；接受会激活成员并记录活动，拒绝不写入活动流。
+         */
         post: operations["respond_to_invitation_api_v1_workspaces__workspace_id__invitation_post"];
         delete?: never;
         options?: never;
@@ -737,7 +897,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Leave Workspace */
+        /**
+         * 退出 Workspace
+         * @description 退出当前用户已加入的协作 Workspace；Owner 必须先转让所有权。
+         */
         post: operations["leave_workspace_api_v1_workspaces__workspace_id__leave_post"];
         delete?: never;
         options?: never;
@@ -752,10 +915,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Members */
+        /**
+         * 列出 Workspace 成员
+         * @description 需要查看成员权限；Personal Workspace 返回其所有者对应的虚拟成员。
+         */
         get: operations["list_members_api_v1_workspaces__workspace_id__members_get"];
         put?: never;
-        /** Invite Member */
+        /**
+         * 邀请 Workspace 成员
+         * @description 需要管理成员权限；向协作 Workspace 发出非 Owner 角色邀请，并记录活动、通知用户。
+         */
         post: operations["invite_member_api_v1_workspaces__workspace_id__members_post"];
         delete?: never;
         options?: never;
@@ -773,11 +942,17 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove Member */
+        /**
+         * 移除 Workspace 成员
+         * @description 需要管理成员权限；不能移除 Owner，首次移除会记录活动并通知成员。
+         */
         delete: operations["remove_member_api_v1_workspaces__workspace_id__members__target_user_id__delete"];
         options?: never;
         head?: never;
-        /** Change Member Role */
+        /**
+         * 修改 Workspace 成员角色
+         * @description 需要管理成员权限；仅修改有效成员，Owner 需走转让接口，成功后记录活动并通知成员。
+         */
         patch: operations["change_member_role_api_v1_workspaces__workspace_id__members__target_user_id__patch"];
         trace?: never;
     };
@@ -788,10 +963,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Projects */
+        /**
+         * 列出 Workspace 的 Project
+         * @description 需要查看 Project 权限；分页返回指定 Workspace 中的 Project。
+         */
         get: operations["list_projects_api_v1_workspaces__workspace_id__projects_get"];
         put?: never;
-        /** Create Project */
+        /**
+         * 创建 Workspace Project
+         * @description 需要创建 Project 权限；名称在 Workspace 内唯一，创建成功后记录活动。
+         */
         post: operations["create_project_api_v1_workspaces__workspace_id__projects_post"];
         delete?: never;
         options?: never;
@@ -807,11 +988,14 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Secret Names
-         * @description 只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。
+         * 列出 Workspace Secret 名称
+         * @description 需要查看配置权限。只返回名称。Secret 的值没有任何读取接口（设计稿 §3.1.4）。
          */
         get: operations["list_secret_names_api_v1_workspaces__workspace_id__secrets_get"];
-        /** Set Secret */
+        /**
+         * 设置 Workspace Secret
+         * @description 需要管理配置权限；写入非空 Secret 值，但响应及后续读取均不返回明文。
+         */
         put: operations["set_secret_api_v1_workspaces__workspace_id__secrets_put"];
         post?: never;
         delete?: never;
@@ -830,7 +1014,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Secret */
+        /**
+         * 删除 Workspace Secret
+         * @description 需要管理配置权限；按名称删除 Workspace Secret。
+         */
         delete: operations["delete_secret_api_v1_workspaces__workspace_id__secrets__name__delete"];
         options?: never;
         head?: never;
@@ -846,7 +1033,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Transfer Ownership */
+        /**
+         * 转让 Workspace 所有权
+         * @description 仅 Owner 可将协作 Workspace 转给有效成员；原 Owner 保留为 Admin。
+         */
         post: operations["transfer_ownership_api_v1_workspaces__workspace_id__transfer_ownership__target_user_id__post"];
         delete?: never;
         options?: never;
@@ -861,9 +1051,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Variables */
+        /**
+         * 列出 Workspace 变量
+         * @description 需要查看配置权限；返回 Workspace Variable 的名称和值。
+         */
         get: operations["list_variables_api_v1_workspaces__workspace_id__variables_get"];
-        /** Set Variable */
+        /**
+         * 设置 Workspace 变量
+         * @description 需要管理配置权限；按名称新增 Variable，或覆盖其现有值。
+         */
         put: operations["set_variable_api_v1_workspaces__workspace_id__variables_put"];
         post?: never;
         delete?: never;
@@ -882,7 +1078,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Variable */
+        /**
+         * 删除 Workspace 变量
+         * @description 需要管理配置权限；按名称删除 Workspace Variable。
+         */
         delete: operations["delete_variable_api_v1_workspaces__workspace_id__variables__name__delete"];
         options?: never;
         head?: never;

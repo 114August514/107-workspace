@@ -15,8 +15,9 @@ from ..deps import CurrentUser, ServicesDep
 router = APIRouter(tags=["home"])
 
 
-@router.get("/me", response_model=s.HomeOut)
+@router.get("/me", response_model=s.HomeOut, summary="获取个人首页")
 async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
+    """返回当前用户、可见 Workspace，以及最近使用的十个 Project 和 Run。"""
     workspaces = await services.workspaces.list_for_user(user.id)
     return s.HomeOut(
         user=p.user_out(user),

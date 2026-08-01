@@ -2668,6 +2668,7 @@
   "paths": {
     "/api/v1/artifacts/{artifact_id}/download": {
       "get": {
+        "description": "仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。",
         "operationId": "download_artifact_file_api_v1_artifacts__artifact_id__download_get",
         "parameters": [
           {
@@ -2779,7 +2780,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Download Artifact File",
+        "summary": "下载 Artifact 文件",
         "tags": [
           "run"
         ]
@@ -2787,6 +2788,7 @@
     },
     "/api/v1/artifacts/{artifact_id}/files": {
       "get": {
+        "description": "仅在当前用户可访问所属 Run 且 Artifact 内容仍可用时，返回文件路径与大小。",
         "operationId": "list_artifact_files_api_v1_artifacts__artifact_id__files_get",
         "parameters": [
           {
@@ -2891,7 +2893,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Artifact Files",
+        "summary": "列出 Artifact 文件",
         "tags": [
           "run"
         ]
@@ -2899,6 +2901,7 @@
     },
     "/api/v1/catalog/compute-plans": {
       "get": {
+        "description": "登录后只读返回平台全部算力方案；列表不表示当前 Workspace 已获得对应权益。",
         "operationId": "list_compute_plans_api_v1_catalog_compute_plans_get",
         "parameters": [
           {
@@ -2994,7 +2997,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Compute Plans",
+        "summary": "列出算力方案",
         "tags": [
           "catalog"
         ]
@@ -3002,6 +3005,7 @@
     },
     "/api/v1/catalog/environments": {
       "get": {
+        "description": "登录后只读返回平台统一维护的运行环境及其全部已发布版本，不按用户区分。",
         "operationId": "list_environments_api_v1_catalog_environments_get",
         "parameters": [
           {
@@ -3097,7 +3101,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Environments",
+        "summary": "列出运行环境",
         "tags": [
           "catalog"
         ]
@@ -3105,7 +3109,7 @@
     },
     "/api/v1/health": {
       "get": {
-        "description": "进程是否活着。不检查任何外部依赖，所以它不会因为数据库抖动而失败。",
+        "description": "无需登录，只报告 API 进程是否存活。\n\n此探针不检查数据库等外部依赖，因此依赖短暂故障不会触发容器重启。",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -3179,7 +3183,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Health",
+        "summary": "检查服务存活状态",
         "tags": [
           "health"
         ]
@@ -3291,6 +3295,7 @@
     },
     "/api/v1/me": {
       "get": {
+        "description": "返回当前用户、可见 Workspace，以及最近使用的十个 Project 和 Run。",
         "operationId": "home_api_v1_me_get",
         "parameters": [
           {
@@ -3382,7 +3387,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Home",
+        "summary": "获取个人首页",
         "tags": [
           "home"
         ]
@@ -3390,6 +3395,7 @@
     },
     "/api/v1/notifications": {
       "get": {
+        "description": "分页返回当前用户收到的通知，可筛选未读项，不重新校验关联 Workspace 权限。",
         "operationId": "list_notifications_api_v1_notifications_get",
         "parameters": [
           {
@@ -3528,6 +3534,7 @@
     },
     "/api/v1/notifications/read-all": {
       "post": {
+        "description": "将当前用户的全部未读通知标记为已读，并返回归零后的未读数。",
         "operationId": "mark_all_read_api_v1_notifications_read_all_post",
         "parameters": [
           {
@@ -3627,6 +3634,7 @@
     },
     "/api/v1/notifications/unread-count": {
       "get": {
+        "description": "仅统计当前用户收到且尚未读取的通知。",
         "operationId": "unread_count_api_v1_notifications_unread_count_get",
         "parameters": [
           {
@@ -3726,6 +3734,7 @@
     },
     "/api/v1/notifications/{notification_id}/read": {
       "post": {
+        "description": "仅处理当前用户的通知；不存在、已读或不属于当前用户时同样返回成功。",
         "operationId": "mark_read_api_v1_notifications__notification_id__read_post",
         "parameters": [
           {
@@ -3819,7 +3828,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "标记一条为已读",
+        "summary": "将通知标记为已读",
         "tags": [
           "notification"
         ]
@@ -3827,6 +3836,7 @@
     },
     "/api/v1/projects/{project_id}": {
       "get": {
+        "description": "校验当前用户可查看该 Project 后，返回项目设置与当前状态。",
         "operationId": "get_project_api_v1_projects__project_id__get",
         "parameters": [
           {
@@ -3927,12 +3937,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Get Project",
+        "summary": "获取 Project 详情",
         "tags": [
           "project"
         ]
       },
       "patch": {
+        "description": "要求 Project 更新权限，修改基本信息、环境、默认运行方案或状态。\n\n更新项目设置会刷新修改时间并记录项目更新活动。",
         "operationId": "update_project_api_v1_projects__project_id__patch",
         "parameters": [
           {
@@ -4043,7 +4054,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Update Project",
+        "summary": "更新 Project 设置",
         "tags": [
           "project"
         ]
@@ -4051,6 +4062,7 @@
     },
     "/api/v1/projects/{project_id}/activities": {
       "get": {
+        "description": "校验 Project 查看权限后，分页返回该项目的近期操作记录。",
         "operationId": "list_project_activities_api_v1_projects__project_id__activities_get",
         "parameters": [
           {
@@ -4186,6 +4198,7 @@
     },
     "/api/v1/projects/{project_id}/changes": {
       "get": {
+        "description": "校验 Project 查看权限后，比较当前文件与最近保存版本的内容摘要。\n\n尚无历史版本时以空内容为基线，结果只表示新增、修改或删除，不写入数据。",
         "operationId": "working_changes_api_v1_projects__project_id__changes_get",
         "parameters": [
           {
@@ -4290,7 +4303,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Working Changes",
+        "summary": "查看 Project 未保存变更",
         "tags": [
           "project"
         ]
@@ -4298,6 +4311,7 @@
     },
     "/api/v1/projects/{project_id}/files": {
       "delete": {
+        "description": "要求内容写入权限，删除指定文件或递归删除目录并刷新项目修改时间。",
         "operationId": "delete_path_api_v1_projects__project_id__files_delete",
         "parameters": [
           {
@@ -4401,12 +4415,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Delete Path",
+        "summary": "删除 Project 文件或目录",
         "tags": [
           "project"
         ]
       },
       "get": {
+        "description": "校验 Project 查看权限后，按路径排序返回当前工作区的文件元数据。",
         "operationId": "list_files_api_v1_projects__project_id__files_get",
         "parameters": [
           {
@@ -4511,12 +4526,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Files",
+        "summary": "列出 Project 文件",
         "tags": [
           "project"
         ]
       },
       "put": {
+        "description": "要求内容写入权限，以 UTF-8 创建或覆盖指定文件并刷新项目修改时间。",
         "operationId": "write_file_api_v1_projects__project_id__files_put",
         "parameters": [
           {
@@ -4627,7 +4643,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Write File",
+        "summary": "写入 Project 文本文件",
         "tags": [
           "project"
         ]
@@ -4635,6 +4651,7 @@
     },
     "/api/v1/projects/{project_id}/files/content": {
       "get": {
+        "description": "校验 Project 查看权限后读取文本预览，最多返回前 256 KiB。\n\n非 UTF-8 字节以替代字符解码；内容超出预览上限时 ``truncated`` 为真。",
         "operationId": "read_file_api_v1_projects__project_id__files_content_get",
         "parameters": [
           {
@@ -4745,7 +4762,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Read File",
+        "summary": "读取 Project 文件内容",
         "tags": [
           "project"
         ]
@@ -4753,6 +4770,7 @@
     },
     "/api/v1/projects/{project_id}/files/move": {
       "post": {
+        "description": "要求内容写入权限，重命名文件或递归移动目录并返回移动后的文件。",
         "operationId": "move_path_api_v1_projects__project_id__files_move_post",
         "parameters": [
           {
@@ -4867,7 +4885,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Move Path",
+        "summary": "移动 Project 文件或目录",
         "tags": [
           "project"
         ]
@@ -4875,6 +4893,7 @@
     },
     "/api/v1/projects/{project_id}/files/upload": {
       "post": {
+        "description": "要求内容写入权限，将多个上传文件写入可选路径前缀并返回文件元数据。\n\n同路径文件会被覆盖，每个文件均受服务端单文件大小限制。",
         "operationId": "upload_files_api_v1_projects__project_id__files_upload_post",
         "parameters": [
           {
@@ -4999,7 +5018,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Upload Files",
+        "summary": "上传 Project 文件",
         "tags": [
           "project"
         ]
@@ -5007,6 +5026,7 @@
     },
     "/api/v1/projects/{project_id}/fork-source": {
       "get": {
+        "description": "校验 Project 查看权限后返回固定的派生来源记录；非派生项目返回空。",
         "operationId": "fork_source_api_v1_projects__project_id__fork_source_get",
         "parameters": [
           {
@@ -5123,6 +5143,7 @@
     },
     "/api/v1/projects/{project_id}/run-configurations": {
       "get": {
+        "description": "校验 Project 查看权限后，返回项目当前可编辑的全部运行方案。",
         "operationId": "list_run_configurations_api_v1_projects__project_id__run_configurations_get",
         "parameters": [
           {
@@ -5227,12 +5248,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Run Configurations",
+        "summary": "列出 Project 运行方案",
         "tags": [
           "project"
         ]
       },
       "post": {
+        "description": "要求运行方案管理权限，校验算力与运行参数后创建方案。\n\nProject 尚无默认运行方案时，新建方案会自动成为默认项。",
         "operationId": "create_run_configuration_api_v1_projects__project_id__run_configurations_post",
         "parameters": [
           {
@@ -5343,7 +5365,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Create Run Configuration",
+        "summary": "创建 Project 运行方案",
         "tags": [
           "project"
         ]
@@ -5351,6 +5373,7 @@
     },
     "/api/v1/projects/{project_id}/runs": {
       "get": {
+        "description": "分页返回当前用户可访问的 Project 中的 Run；无发现权限时按不存在处理。",
         "operationId": "list_runs_api_v1_projects__project_id__runs_get",
         "parameters": [
           {
@@ -5478,13 +5501,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Runs",
+        "summary": "列出 Project 的 Run",
         "tags": [
           "run"
         ]
       },
       "post": {
-        "description": "提交 Run。\n\n带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），\n不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。",
+        "description": "需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。\n\n提交失败仍会保留 Run，作为可排查的历史事实。\n\n带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），\n不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。",
         "operationId": "create_run_api_v1_projects__project_id__runs_post",
         "parameters": [
           {
@@ -5621,7 +5644,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Create Run",
+        "summary": "提交 Run",
         "tags": [
           "run"
         ]
@@ -5629,7 +5652,7 @@
     },
     "/api/v1/projects/{project_id}/runs/preflight": {
       "post": {
-        "description": "提交前检查。只读，不创建任何对象。",
+        "description": "需要提交 Run 权限；一次性检查版本、环境、资源权益、配置与输入。\n\n此操作只读，会返回全部阻止提交的问题，不创建 Run 或 Run Snapshot。",
         "operationId": "preflight_api_v1_projects__project_id__runs_preflight_post",
         "parameters": [
           {
@@ -5740,7 +5763,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Preflight",
+        "summary": "检查 Run 提交条件",
         "tags": [
           "run"
         ]
@@ -5748,6 +5771,7 @@
     },
     "/api/v1/projects/{project_id}/versions": {
       "get": {
+        "description": "校验 Project 查看权限后，分页返回已保存的不可变历史版本。",
         "operationId": "list_versions_api_v1_projects__project_id__versions_get",
         "parameters": [
           {
@@ -5875,12 +5899,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Versions",
+        "summary": "列出 Project 历史版本",
         "tags": [
           "project"
         ]
       },
       "post": {
+        "description": "要求内容写入权限，将当前全部文件保存为新的不可变版本并记录活动。\n\n空 Project 或与最近版本内容完全相同时不会创建新版本。",
         "operationId": "save_version_api_v1_projects__project_id__versions_post",
         "parameters": [
           {
@@ -5991,7 +6016,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Save Version",
+        "summary": "保存 Project 新版本",
         "tags": [
           "project"
         ]
@@ -5999,7 +6024,7 @@
     },
     "/api/v1/ready": {
       "get": {
-        "description": "依赖是否都通。数据库连不上就返回 503，让上游把流量转走。",
+        "description": "无需登录，检查接收流量所需的数据库连接。\n\n依赖可用时返回 200；数据库不可用时返回 503，且不向调用方暴露底层异常细节。",
         "operationId": "ready_api_v1_ready_get",
         "responses": {
           "200": {
@@ -6083,7 +6108,7 @@
             "description": "依赖不可用，不应接收流量"
           }
         },
-        "summary": "Ready",
+        "summary": "检查服务就绪状态",
         "tags": [
           "health"
         ]
@@ -6091,6 +6116,7 @@
     },
     "/api/v1/run-configurations/{configuration_id}": {
       "delete": {
+        "description": "要求运行方案管理权限并删除方案；删除默认项时自动选择剩余方案。",
         "operationId": "delete_run_configuration_api_v1_run_configurations__configuration_id__delete",
         "parameters": [
           {
@@ -6184,12 +6210,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Delete Run Configuration",
+        "summary": "删除 Project 运行方案",
         "tags": [
           "project"
         ]
       },
       "put": {
+        "description": "要求运行方案管理权限，以请求内容更新方案并重新校验运行参数。\n\n修改只影响之后创建的 Run，已有 Run 使用各自已固定的运行快照。",
         "operationId": "update_run_configuration_api_v1_run_configurations__configuration_id__put",
         "parameters": [
           {
@@ -6300,7 +6327,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Update Run Configuration",
+        "summary": "更新 Project 运行方案",
         "tags": [
           "project"
         ]
@@ -6308,7 +6335,7 @@
     },
     "/api/v1/runs/sync": {
       "post": {
-        "description": "主动触发一次状态同步。\n\n生产环境由后台任务周期执行；前端在轮询时也可以调用它，\n让状态立刻反映调度系统的实际情况。",
+        "description": "无需用户身份，主动轮询全部未结束 Run 的调度状态。\n\n状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会\n中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。",
         "operationId": "sync_runs_api_v1_runs_sync_post",
         "responses": {
           "200": {
@@ -6382,7 +6409,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Sync Runs",
+        "summary": "同步 Run 状态",
         "tags": [
           "run"
         ]
@@ -6390,6 +6417,7 @@
     },
     "/api/v1/runs/{run_id}": {
       "get": {
+        "description": "仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。",
         "operationId": "get_run_api_v1_runs__run_id__get",
         "parameters": [
           {
@@ -6490,7 +6518,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Get Run",
+        "summary": "获取 Run 详情",
         "tags": [
           "run"
         ]
@@ -6498,6 +6526,7 @@
     },
     "/api/v1/runs/{run_id}/cancel": {
       "post": {
+        "description": "需要取消 Run 权限，且 Run 尚未进入终态。\n\n已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务\n会直接标记为已取消。",
         "operationId": "cancel_run_api_v1_runs__run_id__cancel_post",
         "parameters": [
           {
@@ -6598,7 +6627,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Cancel Run",
+        "summary": "取消 Run",
         "tags": [
           "run"
         ]
@@ -6606,6 +6635,7 @@
     },
     "/api/v1/runs/{run_id}/logs": {
       "get": {
+        "description": "仅对可访问所属 Run 的用户返回 stdout 和 stderr 尾部，并抹除已知 Secret 明文。",
         "operationId": "read_logs_api_v1_runs__run_id__logs_get",
         "parameters": [
           {
@@ -6710,7 +6740,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Read Logs",
+        "summary": "读取 Run 日志",
         "tags": [
           "run"
         ]
@@ -6718,6 +6748,7 @@
     },
     "/api/v1/runs/{run_id}/rerun": {
       "post": {
+        "description": "需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。\n\n重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带\n``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。",
         "operationId": "rerun_api_v1_runs__run_id__rerun_post",
         "parameters": [
           {
@@ -6844,7 +6875,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Rerun",
+        "summary": "重新运行 Run",
         "tags": [
           "run"
         ]
@@ -6852,6 +6883,7 @@
     },
     "/api/v1/versions/{version_id}": {
       "get": {
+        "description": "校验所属 Project 的查看权限后，返回版本信息及完整文件清单。",
         "operationId": "get_version_api_v1_versions__version_id__get",
         "parameters": [
           {
@@ -6952,7 +6984,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Get Version",
+        "summary": "获取 Project 版本详情",
         "tags": [
           "project"
         ]
@@ -6960,6 +6992,7 @@
     },
     "/api/v1/versions/{version_id}/diff": {
       "get": {
+        "description": "校验两个版本均可查看，返回从 ``base`` 到目标版本的文件级差异。\n\n仅允许比较同一个 Project 的版本，不读取或返回文件正文。",
         "operationId": "diff_versions_api_v1_versions__version_id__diff_get",
         "parameters": [
           {
@@ -7074,7 +7107,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Diff Versions",
+        "summary": "比较 Project 历史版本",
         "tags": [
           "project"
         ]
@@ -7082,6 +7115,7 @@
     },
     "/api/v1/versions/{version_id}/files/content": {
       "get": {
+        "description": "校验所属 Project 的查看权限后，读取历史版本文件的文本预览。\n\n最多返回前 256 KiB；非 UTF-8 字节会被替换，且不会修改历史版本。",
         "operationId": "read_version_file_api_v1_versions__version_id__files_content_get",
         "parameters": [
           {
@@ -7192,7 +7226,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Read Version File",
+        "summary": "读取历史版本文件内容",
         "tags": [
           "project"
         ]
@@ -7311,7 +7345,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "从这个版本派生一个新 Project",
+        "summary": "从历史版本派生新 Project",
         "tags": [
           "project"
         ]
@@ -7319,6 +7353,7 @@
     },
     "/api/v1/versions/{version_id}/restore": {
       "post": {
+        "description": "要求所属 Project 的内容写入权限，以指定版本整体替换当前工作内容。\n\n历史版本本身保持不变；恢复会刷新项目修改时间并记录恢复活动。",
         "operationId": "restore_version_api_v1_versions__version_id__restore_post",
         "parameters": [
           {
@@ -7423,7 +7458,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Restore Version",
+        "summary": "将 Project 恢复到历史版本",
         "tags": [
           "project"
         ]
@@ -7431,6 +7466,7 @@
     },
     "/api/v1/workspaces": {
       "get": {
+        "description": "返回当前用户拥有或已加入的 Workspace，并附带其角色与可用能力。",
         "operationId": "list_workspaces_api_v1_workspaces_get",
         "parameters": [
           {
@@ -7526,12 +7562,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Workspaces",
+        "summary": "列出我的 Workspace",
         "tags": [
           "workspace"
         ]
       },
       "post": {
+        "description": "创建协作 Workspace，当前用户成为 Owner，同时授予默认资源权益并记录活动。",
         "operationId": "create_workspace_api_v1_workspaces_post",
         "parameters": [
           {
@@ -7633,7 +7670,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Create Workspace",
+        "summary": "创建协作 Workspace",
         "tags": [
           "workspace"
         ]
@@ -7641,6 +7678,7 @@
     },
     "/api/v1/workspaces/{workspace_id}": {
       "get": {
+        "description": "仅对可访问该 Workspace 的用户返回详情、当前角色和可用能力。",
         "operationId": "get_workspace_api_v1_workspaces__workspace_id__get",
         "parameters": [
           {
@@ -7741,12 +7779,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Get Workspace",
+        "summary": "获取 Workspace 详情",
         "tags": [
           "workspace"
         ]
       },
       "patch": {
+        "description": "需要修改空间设置权限；更新请求中提供的字段，并记录 Workspace 更新活动。",
         "operationId": "update_workspace_api_v1_workspaces__workspace_id__patch",
         "parameters": [
           {
@@ -7857,7 +7896,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Update Workspace",
+        "summary": "更新 Workspace 设置",
         "tags": [
           "workspace"
         ]
@@ -7865,6 +7904,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/activities": {
       "get": {
+        "description": "可查看 Workspace 的成员均可分页读取其活动流，无需额外的活动查看权限。",
         "operationId": "list_workspace_activities_api_v1_workspaces__workspace_id__activities_get",
         "parameters": [
           {
@@ -7992,7 +8032,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Workspace 近期活动",
+        "summary": "列出 Workspace 活动",
         "tags": [
           "workspace"
         ]
@@ -8000,6 +8040,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/entitlements": {
       "get": {
+        "description": "需要查看资源权益权限；返回 Workspace 可用的算力方案及并发额度。",
         "operationId": "list_entitlements_api_v1_workspaces__workspace_id__entitlements_get",
         "parameters": [
           {
@@ -8104,7 +8145,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Entitlements",
+        "summary": "列出 Workspace 资源权益",
         "tags": [
           "workspace"
         ]
@@ -8112,6 +8153,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/invitation": {
       "post": {
+        "description": "处理当前用户自己的待定邀请；接受会激活成员并记录活动，拒绝不写入活动流。",
         "operationId": "respond_to_invitation_api_v1_workspaces__workspace_id__invitation_post",
         "parameters": [
           {
@@ -8215,7 +8257,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Respond To Invitation",
+        "summary": "处理 Workspace 邀请",
         "tags": [
           "workspace"
         ]
@@ -8223,6 +8265,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/leave": {
       "post": {
+        "description": "退出当前用户已加入的协作 Workspace；Owner 必须先转让所有权。",
         "operationId": "leave_workspace_api_v1_workspaces__workspace_id__leave_post",
         "parameters": [
           {
@@ -8316,7 +8359,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Leave Workspace",
+        "summary": "退出 Workspace",
         "tags": [
           "workspace"
         ]
@@ -8324,6 +8367,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/members": {
       "get": {
+        "description": "需要查看成员权限；Personal Workspace 返回其所有者对应的虚拟成员。",
         "operationId": "list_members_api_v1_workspaces__workspace_id__members_get",
         "parameters": [
           {
@@ -8428,12 +8472,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Members",
+        "summary": "列出 Workspace 成员",
         "tags": [
           "workspace"
         ]
       },
       "post": {
+        "description": "需要管理成员权限；向协作 Workspace 发出非 Owner 角色邀请，并记录活动、通知用户。",
         "operationId": "invite_member_api_v1_workspaces__workspace_id__members_post",
         "parameters": [
           {
@@ -8544,7 +8589,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Invite Member",
+        "summary": "邀请 Workspace 成员",
         "tags": [
           "workspace"
         ]
@@ -8552,6 +8597,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/members/{target_user_id}": {
       "delete": {
+        "description": "需要管理成员权限；不能移除 Owner，首次移除会记录活动并通知成员。",
         "operationId": "remove_member_api_v1_workspaces__workspace_id__members__target_user_id__delete",
         "parameters": [
           {
@@ -8654,12 +8700,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Remove Member",
+        "summary": "移除 Workspace 成员",
         "tags": [
           "workspace"
         ]
       },
       "patch": {
+        "description": "需要管理成员权限；仅修改有效成员，Owner 需走转让接口，成功后记录活动并通知成员。",
         "operationId": "change_member_role_api_v1_workspaces__workspace_id__members__target_user_id__patch",
         "parameters": [
           {
@@ -8779,7 +8826,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Change Member Role",
+        "summary": "修改 Workspace 成员角色",
         "tags": [
           "workspace"
         ]
@@ -8787,6 +8834,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/projects": {
       "get": {
+        "description": "需要查看 Project 权限；分页返回指定 Workspace 中的 Project。",
         "operationId": "list_projects_api_v1_workspaces__workspace_id__projects_get",
         "parameters": [
           {
@@ -8914,12 +8962,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Projects",
+        "summary": "列出 Workspace 的 Project",
         "tags": [
           "workspace"
         ]
       },
       "post": {
+        "description": "需要创建 Project 权限；名称在 Workspace 内唯一，创建成功后记录活动。",
         "operationId": "create_project_api_v1_workspaces__workspace_id__projects_post",
         "parameters": [
           {
@@ -9030,7 +9079,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Create Project",
+        "summary": "创建 Workspace Project",
         "tags": [
           "workspace"
         ]
@@ -9038,7 +9087,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/secrets": {
       "get": {
-        "description": "只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。",
+        "description": "需要查看配置权限。只返回名称。Secret 的值没有任何读取接口（设计稿 §3.1.4）。",
         "operationId": "list_secret_names_api_v1_workspaces__workspace_id__secrets_get",
         "parameters": [
           {
@@ -9143,12 +9192,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Secret Names",
+        "summary": "列出 Workspace Secret 名称",
         "tags": [
           "workspace"
         ]
       },
       "put": {
+        "description": "需要管理配置权限；写入非空 Secret 值，但响应及后续读取均不返回明文。",
         "operationId": "set_secret_api_v1_workspaces__workspace_id__secrets_put",
         "parameters": [
           {
@@ -9252,7 +9302,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Set Secret",
+        "summary": "设置 Workspace Secret",
         "tags": [
           "workspace"
         ]
@@ -9260,6 +9310,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/secrets/{name}": {
       "delete": {
+        "description": "需要管理配置权限；按名称删除 Workspace Secret。",
         "operationId": "delete_secret_api_v1_workspaces__workspace_id__secrets__name__delete",
         "parameters": [
           {
@@ -9362,7 +9413,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Delete Secret",
+        "summary": "删除 Workspace Secret",
         "tags": [
           "workspace"
         ]
@@ -9370,6 +9421,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/transfer-ownership/{target_user_id}": {
       "post": {
+        "description": "仅 Owner 可将协作 Workspace 转给有效成员；原 Owner 保留为 Admin。",
         "operationId": "transfer_ownership_api_v1_workspaces__workspace_id__transfer_ownership__target_user_id__post",
         "parameters": [
           {
@@ -9472,7 +9524,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Transfer Ownership",
+        "summary": "转让 Workspace 所有权",
         "tags": [
           "workspace"
         ]
@@ -9480,6 +9532,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/variables": {
       "get": {
+        "description": "需要查看配置权限；返回 Workspace Variable 的名称和值。",
         "operationId": "list_variables_api_v1_workspaces__workspace_id__variables_get",
         "parameters": [
           {
@@ -9584,12 +9637,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "List Variables",
+        "summary": "列出 Workspace 变量",
         "tags": [
           "workspace"
         ]
       },
       "put": {
+        "description": "需要管理配置权限；按名称新增 Variable，或覆盖其现有值。",
         "operationId": "set_variable_api_v1_workspaces__workspace_id__variables_put",
         "parameters": [
           {
@@ -9700,7 +9754,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Set Variable",
+        "summary": "设置 Workspace 变量",
         "tags": [
           "workspace"
         ]
@@ -9708,6 +9762,7 @@
     },
     "/api/v1/workspaces/{workspace_id}/variables/{name}": {
       "delete": {
+        "description": "需要管理配置权限；按名称删除 Workspace Variable。",
         "operationId": "delete_variable_api_v1_workspaces__workspace_id__variables__name__delete",
         "parameters": [
           {
@@ -9810,7 +9865,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "Delete Variable",
+        "summary": "删除 Workspace 变量",
         "tags": [
           "workspace"
         ]

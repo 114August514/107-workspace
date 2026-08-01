@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-openapi-operation-docs.md`](2026-08-01-openapi-operation-docs.md)：
+  为全部公开 API operation 补齐中文摘要与说明，并加入契约回归测试。
 - [`2026-08-01-openapi-descriptions.md`](2026-08-01-openapi-descriptions.md)：
   修复 Pydantic 字段说明未进入 OpenAPI 与前端生成类型的问题。
 - [`2026-08-01-api-contract-location.md`](2026-08-01-api-contract-location.md)：

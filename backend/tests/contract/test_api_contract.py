@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import httpx
 import pytest
 
@@ -179,6 +181,27 @@ async def test_openapi_保留已编写的字段说明(client: httpx.AsyncClient)
     for (model, field), prefix in expected.items():
         description = schema["components"]["schemas"][model]["properties"][field]["description"]
         assert description.startswith(prefix), f"{model}.{field} 没有保留源码中的字段说明"
+
+
+async def test_公开接口有中文摘要和说明(client: httpx.AsyncClient) -> None:
+    schema = (await client.get("/openapi.json")).json()
+    methods = {"get", "post", "put", "patch", "delete"}
+    problems: list[str] = []
+
+    for path, path_item in schema["paths"].items():
+        if not path.startswith("/api/v1"):
+            continue
+        for method, operation in path_item.items():
+            if method not in methods:
+                continue
+            summary = operation.get("summary", "")
+            description = operation.get("description", "")
+            if not re.search(r"[\u4e00-\u9fff]", summary):
+                problems.append(f"{method.upper()} {path}: 缺少中文 summary")
+            if not re.search(r"[\u4e00-\u9fff]", description):
+                problems.append(f"{method.upper()} {path}: 缺少中文 description")
+
+    assert not problems, "公开接口文档不完整：\n" + "\n".join(problems)
 
 
 async def test_下载接口在契约里声明的是二进制(client: httpx.AsyncClient) -> None:
