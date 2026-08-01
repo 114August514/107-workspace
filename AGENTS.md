@@ -13,6 +13,7 @@ Run 的可复现工作流。
 | 在途工作、谁在做什么 | `docs/journal/` + `make journal` |
 | 为什么这么设计 | `docs/decisions/` |
 | 容器部署入口与生产边界 | `deploy/README.md` + `docs/operations/deployment.md` |
+| 前后端 API 机器契约 | `contracts/README.md` + `make contract` |
 
 `archive/`、`docs/archive/` 和 `docs/references/` 保存历史实现、过程记录与输入材料，
 不是活动规范。与它们冲突时以 `docs/product/design.md` 为准。
@@ -56,6 +57,7 @@ backend/src/workspace107/
 └── infrastructure/   # db / scheduler / storage 等外部依赖
 backend/tests/        # unit / integration / contract / security
 frontend/             # React + TypeScript 控制台
+contracts/            # 跨组件机器契约；生成物不得手改
 deploy/               # 可执行部署编排；服务镜像构建文件仍由服务目录维护
 docs/decisions/       # ADR
 docs/journal/         # 在途工作

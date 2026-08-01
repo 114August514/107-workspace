@@ -13,7 +13,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "generate:api": "openapi-typescript ../docs/api/openapi.json -o src/api/schema.d.ts",
+    "generate:api": "openapi-typescript ../contracts/openapi.json -o src/api/schema.d.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",

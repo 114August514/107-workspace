@@ -26,7 +26,7 @@ uv run --no-project python scripts/workspace.py check
 ```
 
 修改 API DTO 或路由后运行 `make contract`，并提交
-`docs/api/openapi.json` 与 `frontend/src/api/schema.d.ts` 的对应变化。
+`contracts/openapi.json` 与 `frontend/src/api/schema.d.ts` 的对应变化。
 
 提交前检查 `git status` 和暂存区 diff，只提交与当前 Issue 相关的文件。不要提交
 `.env`、密钥、数据库、用户文件、Run 输出、虚拟环境、依赖目录或构建产物。

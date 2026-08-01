@@ -501,7 +501,7 @@ def audit(*, base: str | None = None, max_lines: int = 400) -> None:
     print(f"Changed files: {len(names)}; review lines: {changed_lines}/{max_lines}")
     flags: list[str] = []
     sensitive_patterns = {
-        "API contract": ("docs/api/", "frontend/src/api/schema.d.ts"),
+        "API contract": ("contracts/", "frontend/src/api/schema.d.ts"),
         "database migration": ("backend/migrations/",),
         "authentication or authorization": ("auth", "permission", "role", "token", "session"),
         "dependency manifest": ("pyproject.toml", "package.json"),
@@ -581,7 +581,8 @@ def doctor() -> None:
         "frontend/pnpm-lock.yaml",
         "frontend/pnpm-workspace.yaml",
         ".node-version",
-        "docs/api/openapi.json",
+        "contracts/README.md",
+        "contracts/openapi.json",
         "frontend/src/api/schema.d.ts",
     ]
     failures: list[str] = []

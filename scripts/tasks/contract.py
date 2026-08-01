@@ -16,7 +16,7 @@ from .common import (
     heading,
 )
 
-OPENAPI_PATH = REPO_ROOT / "docs" / "api" / "openapi.json"
+OPENAPI_PATH = REPO_ROOT / "contracts" / "openapi.json"
 SCHEMA_PATH = FRONTEND_ROOT / "src" / "api" / "schema.d.ts"
 
 

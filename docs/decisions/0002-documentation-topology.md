@@ -16,11 +16,12 @@
 ## 决定
 
 - 根目录只保留自动发现入口、仓库级配置和薄 `Makefile`；可执行部署编排放在
-  `deploy/`，各服务的镜像构建文件仍由服务目录维护。
+  `deploy/`，跨组件机器契约放在 `contracts/`，各服务自己的构建文件仍由服务目录维护。
 - 产品设计与延后事项放在 `docs/product/`，Git 协作规范放在 `docs/contributing/`，
   部署说明放在 `docs/operations/`。
 - `docs/journal/` 只保存进行中记录；完成或放弃的记录进入对应归档。
 - `docs/references/` 只保留仍需核验的外部原始材料和来源记录。
+- 生成的 OpenAPI 与其他跨组件机器契约不放入人工文档树，统一由 `contracts/` 管理。
 - 旧后端规格、计划、审阅与派生说明从 HEAD 淘汰，由祖先提交 `374aa9f` 和
   `docs/archive/README.md` 提供取回入口，不在当前树复制第二份。
 - `hpc-helper` 只记录固定上游提交和吸收边界，不复制源码或 Git 历史。

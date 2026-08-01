@@ -33,7 +33,7 @@ Dockerfile text eol=lf
 # Generated files remain committed but are folded in GitHub language statistics.
 backend/uv.lock linguist-generated=true
 frontend/pnpm-lock.yaml linguist-generated=true
-docs/api/openapi.json linguist-generated=true
+contracts/openapi.json linguist-generated=true
 frontend/src/api/schema.d.ts linguist-generated=true
 
 # The two preserved platform source documents are managed through Git LFS.

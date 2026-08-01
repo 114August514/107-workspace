@@ -76,6 +76,7 @@ def _maintained_documents() -> list[Path]:
         for path in (
             REPO / "AGENTS.md",
             REPO / "CONTRIBUTING.md",
+            REPO / "contracts" / "README.md",
             REPO / "docs" / "README.md",
             REPO / "docs" / "product" / "design.md",
             REPO / "docs" / "product" / "deferred.md",

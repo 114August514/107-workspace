@@ -11,7 +11,6 @@
 | 部署方式与生产边界 | [`operations/deployment.md`](operations/deployment.md)，可执行清单见 [`../deploy/`](../deploy/README.md) |
 | 高影响技术决定 | [`decisions/`](decisions/README.md) |
 | 当前跨会话工作 | [`journal/`](journal/README.md) |
-| 生成的 API 契约 | [`api/openapi.json`](api/openapi.json) |
 
 ## 证据与历史
 
@@ -20,3 +19,5 @@
 迁移前实现快照位于仓库根目录的 [`archive/`](../archive/README.md)。
 
 历史材料与活动文档冲突时，以 [`product/design.md`](product/design.md) 和活动 ADR 为准。
+跨前后端的生成式 API 契约不属于人工文档，统一保存在
+[`contracts/`](../contracts/README.md)。

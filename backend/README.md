@@ -143,7 +143,7 @@ tests/contract/     API 契约与错误码映射
 make contract
 ```
 
-它会依次导出 `docs/api/openapi.json` 和 `frontend/src/api/schema.d.ts`，
+它会依次导出 `contracts/openapi.json` 和 `frontend/src/api/schema.d.ts`，
 两个生成物都要提交。前端所有类型从后者派生，所以**后端改一个字段，
 前端受影响的地方会在类型检查时全部报出来**。
 

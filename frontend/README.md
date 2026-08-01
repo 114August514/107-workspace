@@ -18,7 +18,7 @@ pnpm run dev
 ```text
 src/
 ├── api/
-│   ├── schema.d.ts     由 docs/api/openapi.json 生成，不要手改
+│   ├── schema.d.ts     由 contracts/openapi.json 生成，不要手改
 │   ├── types.ts        从 schema.d.ts 派生，只负责起短名字
 │   ├── client.ts       基于 openapi-fetch 的类型安全调用
 │   └── useAsync.ts     加载与轮询钩子
@@ -39,7 +39,7 @@ src/
 ## 接口类型来自契约，不是手写的
 
 ```text
-后端 DTO / 路由 → docs/api/openapi.json → src/api/schema.d.ts → src/api/types.ts → 组件
+后端 DTO / 路由 → contracts/openapi.json → src/api/schema.d.ts → src/api/types.ts → 组件
 ```
 
 **不要在前端手写任何接口类型。** 需要新字段先改后端，然后：

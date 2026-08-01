@@ -1,9 +1,9 @@
 """导出 OpenAPI Contract。
 
-    uv run python -m workspace107.tools.export_openapi ../docs/api/openapi.json
+    uv run python -m workspace107.tools.export_openapi ../contracts/openapi.json
 
 CI 会重新生成并检查是否存在未提交差异，所以改了 DTO 或路由之后
-必须执行 ``scripts/sync-api-contract.sh`` 并提交结果。
+必须在仓库根目录执行 ``make contract`` 并提交结果。
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
  * 后端接口类型。
  *
  * **这里没有一行是手写的类型定义**——全部从 `schema.d.ts` 派生，
- * 而 `schema.d.ts` 由 `docs/api/openapi.json` 生成，`openapi.json` 又由后端导出。
+ * 而 `schema.d.ts` 由 `contracts/openapi.json` 生成，`openapi.json` 又由后端导出。
  *
  *     后端 DTO/路由 → openapi.json → schema.d.ts → 这里 → 组件
  *
