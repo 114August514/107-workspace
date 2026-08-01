@@ -1,19 +1,52 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+slurm-jwt*
+
+# Python
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
-.coverage
-htmlcov/
+.mypy_cache/
 .pyright/
-.env
+.coverage
+coverage.xml
+htmlcov/
+
+# Node
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Runtime data
 backend/var/
 backend/.alembic-test/
-hpc-helper/
+*.db
+*.sqlite3
 *.out
+*.log
+
+# Optional external reference checkout (never a runtime dependency)
+/hpc-helper/
+
+# Editors, operating systems, and local AI tooling
 .DS_Store
 .idea/
 .vscode/
-IDEA.md
-PLAN.md
+!.vscode/extensions.json
+.claude/
+.codex/
+.agents/
+
+# Local notes and scratch data kept outside the shared project tree
+/.local/

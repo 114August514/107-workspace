@@ -1,0 +1,67 @@
+name: 工程任务
+description: 记录重构、测试、文档、CI、依赖或技术债工作
+labels: ["type: task"]
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: 任务类型
+      options:
+        - 重构
+        - 测试
+        - 文档
+        - CI / 工程配置
+        - 依赖维护
+        - 技术债 / 调研
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 当前工程状态有什么问题或风险，为什么现在需要处理？
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 描述完成后的工程状态，而不是实现步骤。
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      description: 列出会修改的目录、配置或流程，以及需要保持不变的边界。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      description: 逐条写出可检查的完成标准；重构任务应说明如何确认外部行为不变。
+      placeholder: |
+        - 统一入口在 Linux 与 Windows 上执行同一任务实现
+        - 现有对外行为和接口契约不变
+        - 统一检查通过（填写实际命令）
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: 非目标
+      description: 明确不随本任务处理的功能或相邻重构；没有时填写“无”。
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: 风险与回退
+      description: 可选。说明潜在影响、需要重点评审的位置和回退方式。

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Git 协作规范
+    url: https://github.com/114August514/107-workspace/blob/HEAD/docs/contributing/git-workflow.md
+    about: 查看 Issue、分支、提交、Pull Request、标签与发布约定
+  - name: 产品设计与术语
+    url: https://github.com/114August514/107-workspace/blob/HEAD/docs/product/design.md
+    about: 查看现行领域语言、产品规则与 Roadmap

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 贡献流程与 Git 规范
+    url: https://github.com/USTC-107/workspace107/blob/main/CONTRIBUTING.md
+    about: 提 Issue 之前先看这里，了解分支、Commit 和 PR 规范。
+  - name: 产品设计最终稿
+    url: https://github.com/USTC-107/workspace107/blob/main/docs/product/design-final.md
+    about: 讨论产品范围和领域模型之前，先确认设计稿里是怎么定义的。

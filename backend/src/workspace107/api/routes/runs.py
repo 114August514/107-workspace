@@ -1,215 +1,237 @@
-import asyncio
-import json
-from collections.abc import AsyncIterator
+"""Run、日志与 Artifact 路由。"""
+
+from __future__ import annotations
+
 from typing import Annotated
-from uuid import UUID
+from urllib.parse import quote
 
-from fastapi import APIRouter, Header, Query, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Header, Query, Response, status
 
-from workspace107.api.dependencies import IdentityDependency, RunServiceDependency
-from workspace107.api.errors import ApiProblem
-from workspace107.api.schemas.runs import (
-    LogChunkResponse,
-    PreflightCheckResponse,
-    PreflightResponse,
-    RunEventResponse,
-    RunRequest,
-    RunResponse,
+from ...application.run_service import RunDraft
+from .. import presenters as p
+from .. import schemas as s
+from ..deps import CurrentUser, PageDep, ServicesDep
+
+router = APIRouter(tags=["run"])
+
+
+@router.get(
+    "/projects/{project_id}/runs",
+    response_model=s.PageOut[s.RunOut],
+    summary="列出 Project 的 Run",
 )
-from workspace107.application.runs import RunDatasetSelection, RunService
-from workspace107.domain.enums import RunStatus
-
-router = APIRouter(tags=["runs"])
-_TERMINAL = frozenset({RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED})
-
-
-def _selections(request: RunRequest) -> tuple[RunDatasetSelection, ...]:
-    return tuple(
-        RunDatasetSelection(
-            dataset_version_id=dataset.dataset_version_id,
-            mount_path=dataset.mount_path,
-        )
-        for dataset in request.datasets
-    )
-
-
-@router.post("/runs/preflight", response_model=PreflightResponse)
-async def preflight_run(
-    request: RunRequest,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-) -> PreflightResponse:
-    checks = await service.preflight(
-        actor_id=actor_id,
-        project_id=request.project_id,
-        template_id=request.template_id,
-        datasets=_selections(request),
-    )
-    return PreflightResponse(
-        passed=all(check.passed for check in checks),
-        checks=tuple(PreflightCheckResponse.model_validate(check) for check in checks),
-    )
-
-
-@router.post(
-    "/runs",
-    response_model=RunResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def submit_run(
-    request: RunRequest,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-) -> RunResponse:
-    run = await service.submit(
-        actor_id=actor_id,
-        project_id=request.project_id,
-        template_id=request.template_id,
-        datasets=_selections(request),
-    )
-    return RunResponse.model_validate(run)
-
-
-@router.get("/runs", response_model=list[RunResponse])
 async def list_runs(
-    workspace_id: UUID,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-    limit: int = Query(default=50, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-) -> list[RunResponse]:
-    runs = await service.list(
-        actor_id=actor_id,
-        workspace_id=workspace_id,
-        limit=limit,
-        offset=offset,
-    )
-    return [RunResponse.model_validate(run) for run in runs]
-
-
-@router.get("/runs/{run_id}", response_model=RunResponse)
-async def get_run(
-    run_id: UUID,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-) -> RunResponse:
-    return RunResponse.model_validate(await service.get(actor_id=actor_id, run_id=run_id))
+    project_id: str, user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.RunOut]:
+    """分页返回当前用户可访问的 Project 中的 Run；无发现权限时按不存在处理。"""
+    result = await services.runs.list_for_project(user.id, project_id, page)
+    return p.page_out(result, p.run_out)
 
 
 @router.post(
-    "/runs/{run_id}/cancel",
-    response_model=RunResponse,
-    status_code=status.HTTP_202_ACCEPTED,
+    "/projects/{project_id}/runs/preflight",
+    response_model=s.PreflightOut,
+    summary="检查 Run 提交条件",
 )
-async def cancel_run(
-    run_id: UUID,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-) -> RunResponse:
-    return RunResponse.model_validate(await service.cancel(actor_id=actor_id, run_id=run_id))
+async def preflight(
+    project_id: str, payload: s.RunDraftIn, user: CurrentUser, services: ServicesDep
+) -> s.PreflightOut:
+    """需要提交 Run 权限；一次性检查版本、环境、资源权益、配置与输入。
 
-
-@router.get("/runs/{run_id}/events", response_model=list[RunEventResponse])
-async def list_run_events(
-    run_id: UUID,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-) -> list[RunEventResponse]:
-    events = await service.list_events(actor_id=actor_id, run_id=run_id)
-    return [RunEventResponse.model_validate(event) for event in events]
-
-
-@router.get("/runs/{run_id}/logs", response_model=LogChunkResponse)
-async def read_run_log(
-    run_id: UUID,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-    offset: int = Query(default=0, ge=0),
-) -> LogChunkResponse:
-    chunk = await service.read_log(actor_id=actor_id, run_id=run_id, offset=offset)
-    return LogChunkResponse.model_validate(chunk)
-
-
-def _log_offset(offset: int | None, last_event_id: str | None) -> int:
-    if offset is not None:
-        return offset
-    if last_event_id is None:
-        return 0
-    try:
-        parsed = int(last_event_id)
-    except ValueError as exc:
-        raise ApiProblem(
-            status=422,
-            title="Invalid log offset",
-            code="invalid_log_offset",
-            detail="Last-Event-ID must be a non-negative byte offset.",
-        ) from exc
-    if parsed < 0:
-        raise ApiProblem(
-            status=422,
-            title="Invalid log offset",
-            code="invalid_log_offset",
-            detail="Last-Event-ID must be a non-negative byte offset.",
-        )
-    return parsed
-
-
-async def _stream_log_events(
-    *,
-    actor_id: UUID,
-    run_id: UUID,
-    service: RunService,
-    offset: int,
-    poll_seconds: float,
-) -> AsyncIterator[str]:
-    current = offset
-    while True:
-        chunk = await service.read_log(actor_id=actor_id, run_id=run_id, offset=current)
-        current = chunk.next_offset
-        if chunk.data:
-            payload = json.dumps(
-                {"offset": current, "data": chunk.data},
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-            yield f"id: {current}\nevent: line\ndata: {payload}\n\n"
-        run = await service.get(actor_id=actor_id, run_id=run_id)
-        if chunk.end_of_stream or run.status in _TERMINAL:
-            payload = json.dumps(
-                {"offset": current, "status": run.status.value},
-                separators=(",", ":"),
-            )
-            yield f"id: {current}\nevent: end\ndata: {payload}\n\n"
-            return
-        await asyncio.sleep(poll_seconds)
-
-
-@router.get("/runs/{run_id}/logs/stream")
-async def stream_run_log(
-    run_id: UUID,
-    request: Request,
-    actor_id: IdentityDependency,
-    service: RunServiceDependency,
-    offset: int | None = Query(default=None, ge=0),
-    last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
-) -> StreamingResponse:
-    start = _log_offset(offset, last_event_id)
-    await service.get(actor_id=actor_id, run_id=run_id)
-    poll_seconds = getattr(request.app.state, "log_poll_interval_seconds", 0.2)
-    if not isinstance(poll_seconds, (int, float)) or poll_seconds <= 0:
-        raise RuntimeError("log poll interval is not configured")
-    return StreamingResponse(
-        _stream_log_events(
-            actor_id=actor_id,
-            run_id=run_id,
-            service=service,
-            offset=start,
-            poll_seconds=float(poll_seconds),
+    此操作只读，会返回全部阻止提交的问题，不创建 Run 或 Run Snapshot。
+    """
+    result = await services.runs.preflight(user.id, project_id, _to_draft(payload))
+    return s.PreflightOut(
+        ok=result.ok,
+        problems=result.problems,
+        project_version_id=result.project_version.id if result.project_version else None,
+        environment_version_id=(
+            result.environment_version.id if result.environment_version else None
         ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        compute_plan_id=result.compute_plan.id if result.compute_plan else None,
+        compute_request=p.compute_request_out(result.compute_request),
+        resolved_environment_variables=result.resolved_env_literals,
+        secret_references=result.resolved_env_secret_refs,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/runs",
+    response_model=s.RunOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="提交 Run",
+    responses={200: {"model": s.RunOut, "description": "幂等重放，返回上一次提交的 Run"}},
+)
+async def create_run(
+    project_id: str,
+    payload: s.RunDraftIn,
+    user: CurrentUser,
+    services: ServicesDep,
+    response: Response,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> s.RunOut:
+    """需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。
+
+    提交失败仍会保留 Run，作为可排查的历史事实。
+
+    带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），
+    不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。
+    """
+    submission = await services.runs.create(
+        user.id, project_id, _to_draft(payload), idempotency_key=idempotency_key
+    )
+    if not submission.created:
+        response.status_code = status.HTTP_200_OK
+    return p.run_out(submission.run)
+
+
+@router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
+async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
+    """仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。"""
+    detail = await services.runs.get_detail(user.id, run_id)
+    return s.RunDetailOut(
+        run=p.run_out(detail.run),
+        snapshot=p.snapshot_out(detail.snapshot),
+        events=[p.run_event_out(e) for e in detail.events],
+        artifacts=[p.artifact_out(a) for a in detail.artifacts],
+    )
+
+
+@router.get(
+    "/runs/{run_id}/logs",
+    response_model=list[s.LogChunkOut],
+    summary="读取 Run 日志",
+)
+async def read_logs(run_id: str, user: CurrentUser, services: ServicesDep) -> list[s.LogChunkOut]:
+    """仅对可访问所属 Run 的用户返回 stdout 和 stderr 尾部，并抹除已知 Secret 明文。"""
+    chunks = await services.runs.read_logs(user.id, run_id)
+    return [
+        s.LogChunkOut(stream=c.stream.value, content=c.content, truncated=c.truncated)
+        for c in chunks
+    ]
+
+
+@router.post("/runs/{run_id}/cancel", response_model=s.RunOut, summary="取消 Run")
+async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunOut:
+    """需要取消 Run 权限，且 Run 尚未进入终态。
+
+    已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务
+    会直接标记为已取消。
+    """
+    run = await services.runs.cancel(user.id, run_id)
+    return p.run_out(run)
+
+
+@router.post(
+    "/runs/{run_id}/rerun",
+    response_model=s.RunOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="重新运行 Run",
+    responses={200: {"model": s.RunOut, "description": "幂等重放，返回上一次重跑的 Run"}},
+)
+async def rerun(
+    run_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    response: Response,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> s.RunOut:
+    """需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。
+
+    重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带
+    ``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。
+    """
+    submission = await services.runs.rerun(user.id, run_id, idempotency_key=idempotency_key)
+    if not submission.created:
+        response.status_code = status.HTTP_200_OK
+    return p.run_out(submission.run)
+
+
+@router.post("/runs/sync", response_model=s.SyncOut, summary="同步 Run 状态")
+async def sync_runs(services: ServicesDep) -> s.SyncOut:
+    """无需用户身份，主动轮询全部未结束 Run 的调度状态。
+
+    状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会
+    中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。
+    """
+    return s.SyncOut(changed=await services.lifecycle.sync_all())
+
+
+# -- Artifact ---------------------------------------------------------------
+
+
+@router.get(
+    "/artifacts/{artifact_id}/files",
+    response_model=list[s.ArtifactEntryOut],
+    summary="列出 Artifact 文件",
+)
+async def list_artifact_files(
+    artifact_id: str, user: CurrentUser, services: ServicesDep
+) -> list[s.ArtifactEntryOut]:
+    """仅在当前用户可访问所属 Run 且 Artifact 内容仍可用时，返回文件路径与大小。"""
+    entries = await services.runs.list_artifact_files(user.id, artifact_id)
+    return [s.ArtifactEntryOut(path=e.path, size=e.size) for e in entries]
+
+
+# 不声明 responses 的话，FastAPI 会按默认填成 application/json + 空 schema，
+# 契约里就写着这个接口返回 JSON——而它实际返回的是二进制文件。
+# 生成的前端类型会跟着错，调用方只能靠强制转换绕过去。
+@router.get(
+    "/artifacts/{artifact_id}/download",
+    summary="下载 Artifact 文件",
+    # response_class 决定契约里默认写哪种 media type。不写的话默认是
+    # JSONResponse，即使这里又声明了 octet-stream，契约也会同时留着
+    # application/json——等于告诉调用方「可能返回 JSON」，而它从来不会。
+    response_class=Response,
+    responses={
+        200: {
+            "description": "产物文件内容",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+            },
+        }
+    },
+)
+async def download_artifact_file(
+    artifact_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    path: str = Query(min_length=1),
+) -> Response:
+    """仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。"""
+    data, filename = await services.runs.read_artifact_file(user.id, artifact_id, path)
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": _content_disposition(filename)},
+    )
+
+
+def _content_disposition(filename: str) -> str:
+    """按 RFC 6266 拼下载头。
+
+    HTTP 头只能是 latin-1，中文文件名直接塞进去会在 Starlette 编码响应头时
+    抛 UnicodeEncodeError，而那不是 DomainError，没有 handler 接，
+    最后是一个裸 500——**产物名字带中文就下载不了**。
+
+    所以给两份：``filename`` 用 ASCII 兜底保证老客户端能用，
+    ``filename*`` 用 RFC 5987 的百分号编码带上真实名字，现代浏览器优先取它。
+    """
+    fallback = filename.encode("ascii", errors="replace").decode("ascii").replace('"', "_")
+    quoted = quote(filename, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quoted}"
+
+
+def _to_draft(payload: s.RunDraftIn) -> RunDraft:
+    return RunDraft(
+        run_configuration_id=payload.run_configuration_id,
+        project_version_id=payload.project_version_id,
+        name=payload.name or "",
+        command_override=payload.command_override or "",
+        working_directory_override=payload.working_directory_override or "",
+        compute_request_override=(
+            payload.compute_request_override.model_dump()
+            if payload.compute_request_override
+            else None
+        ),
     )

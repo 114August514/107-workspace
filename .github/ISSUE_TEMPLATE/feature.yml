@@ -1,0 +1,61 @@
+name: 功能请求
+description: 提出一项用户可感知的产品能力
+labels: ["type: feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        产品术语和边界以 `docs/product/design.md` 为准。请用可观察的用户结果描述需求。
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 谁在什么场景遇到了什么限制，为什么现在需要处理？
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 目标
+      description: 一句话说明完成后用户能够做什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      description: 列出本 Issue 涉及的能力、模块或界面边界。
+      placeholder: |
+        - 支持 Owner 从确定的 Project Version 创建 Run
+        - 涉及 Run 创建接口与提交界面
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      description: 逐条写出可演示或可自动验证的结果，并覆盖必要的异常路径。
+      placeholder: |
+        - Owner 可以从确定的 Project Version 创建 Run
+        - 非成员访问对应 Project 时返回 403 或 404
+        - 统一检查通过（填写实际命令）
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: 非目标
+      description: 明确本 Issue 不包含的相邻能力；没有时填写“无”。
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 相关信息
+      description: 可选。附产品设计章节、ADR、原型、依赖 Issue 或 Milestone。

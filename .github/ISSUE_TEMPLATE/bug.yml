@@ -1,0 +1,103 @@
+name: 缺陷报告
+description: 报告可复现且不符合预期的行为
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请提供足够的信息，让协作者能复现问题、判断影响并验证修复。
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: 问题发生在什么工作流中，为什么需要处理？
+      placeholder: 用户从 Project Version 创建 Run 时，提交停留在 pending 状态。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 从已知初始状态开始，逐步写出最小复现过程。
+      placeholder: |
+        1. 启动服务并登录
+        2. 创建 Project Version 与 Run Configuration
+        3. 提交 Run
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: 期望行为与实际行为
+      description: 分别说明预期结果和实际结果；可附错误信息、日志片段或截图。
+      placeholder: |
+        期望：Run 进入 queued 状态并显示作业编号。
+        实际：Run 一直停留在 pending，响应中没有作业编号。
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境
+      description: 提供提交哈希、运行方式、调度适配器及其他与复现相关的信息。
+      placeholder: |
+        Commit: abc1234
+        运行方式: 本地 Compose
+        WORKSPACE107_SCHEDULER=mock
+        浏览器: Edge 140（仅界面问题需要）
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响
+      description: 说明受影响的用户或流程，以及是否涉及数据、权限或 Secret。
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: 修复目标
+      description: 说明修复后应恢复的行为。
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 范围
+      description: 写出已知受影响的模块、接口或页面，以及需要保持不变的边界。
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      description: 逐条写出可重复验证的修复结果和回归条件。
+      placeholder: |
+        - 相同输入下 Run 能进入 queued 状态
+        - 对应回归测试在修复前失败、修复后通过
+        - 统一检查通过（填写实际命令）
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: 非目标
+      description: 明确本 Issue 不处理的相邻问题；没有时填写“无”。
+    validations:
+      required: true
+
+  - type: textarea
+    id: investigation
+    attributes:
+      label: 已排查信息
+      description: 可选。记录已经验证的假设、相关提交或临时规避方式。

@@ -1,0 +1,64 @@
+name: workspace107
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-workspace107}
+      POSTGRES_USER: ${POSTGRES_USER:-workspace107}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-workspace107} -d ${POSTGRES_DB:-workspace107}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+    image: ${WORKSPACE107_IMAGE_API:-workspace107/api:local}
+    restart: unless-stopped
+    environment:
+      WORKSPACE107_ENV: production
+      WORKSPACE107_LOG_LEVEL: ${WORKSPACE107_LOG_LEVEL:-INFO}
+      WORKSPACE107_LOG_FORMAT: json
+      WORKSPACE107_MAX_REQUEST_BYTES: ${WORKSPACE107_MAX_REQUEST_BYTES:-134217728}
+      WORKSPACE107_MAX_FILE_BYTES: ${WORKSPACE107_MAX_FILE_BYTES:-33554432}
+      WORKSPACE107_DATABASE_URL: >-
+        postgresql+asyncpg://${POSTGRES_USER:-workspace107}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-workspace107}
+      WORKSPACE107_STORAGE_ROOT: /var/lib/workspace107/storage
+      WORKSPACE107_SCHEDULER: ${WORKSPACE107_SCHEDULER:-mock}
+      WORKSPACE107_SLURM_API_BASE_URL: ${WORKSPACE107_SLURM_API_BASE_URL:-}
+      WORKSPACE107_SLURM_API_USER: ${WORKSPACE107_SLURM_API_USER:-}
+      WORKSPACE107_SLURM_JWT: ${WORKSPACE107_SLURM_JWT:-}
+      WORKSPACE107_AUTH_MODE: ${WORKSPACE107_AUTH_MODE:-dev}
+      WORKSPACE107_RUN_SYNC_INTERVAL_SECONDS: ${WORKSPACE107_RUN_SYNC_INTERVAL_SECONDS:-1.0}
+      WORKSPACE107_SEED_DEMO: ${WORKSPACE107_SEED_DEMO:-false}
+    volumes:
+      - ${WORKSPACE107_STORAGE_MOUNT:-storage-data}:/var/lib/workspace107/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+    image: ${WORKSPACE107_IMAGE_WEB:-workspace107/web:local}
+    restart: unless-stopped
+    ports:
+      - "${WORKSPACE107_HTTP_PORT:-8107}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  storage-data:

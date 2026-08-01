@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 同一分支上只保留最新一次运行
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.11.32"
+  NODE_VERSION: "22"
+
+jobs:
+  backend-lint:
+    name: backend-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --frozen --all-extras
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  backend-test:
+    name: backend-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync --frozen --all-extras
+      - name: 检查 Alembic 迁移可以从空库执行到最新
+        run: uv run alembic upgrade head
+        env:
+          WORKSPACE107_DATABASE_URL: sqlite+aiosqlite:///./var/ci.db
+      - run: uv run pytest --cov --cov-report=term-missing
+
+  frontend-lint:
+    name: frontend-lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # 格式和规则一起跑：都是「看代码本身」的检查，分成两个 job
+      # 只会多花一次装依赖的时间。
+      - run: npm run format:check
+      - run: npm run lint
+
+  frontend-typecheck:
+    name: frontend-typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
+  frontend-test:
+    name: frontend-test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test -- --run
+      - run: npm run build
+
+  # 这一项保证前端类型不会和后端脱节：
+  # 后端 DTO → openapi.json → 前端 schema.d.ts，中间任何一环忘了同步都会失败。
+  api-contract-check:
+    name: api-contract-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 重新生成契约与前端类型
+        run: ./scripts/sync-api-contract.sh
+
+      - name: 检查生成文件是否存在未提交差异
+        run: |
+          if ! git diff --exit-code -- docs/api/openapi.json frontend/src/api/schema.d.ts; then
+            echo "::error::接口契约或前端类型与后端不一致。请在本地执行 ./scripts/sync-api-contract.sh 后提交生成结果。"
+            exit 1
+          fi
+
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    # CI 里只用来满足 compose 的必填校验，不是任何真实环境的口令。
+    env:
+      POSTGRES_PASSWORD: ci-throwaway-password
+      WORKSPACE107_SEED_DEMO: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 构建镜像
+        run: docker compose build
+
+      - name: 启动并等待健康检查通过
+        run: docker compose up -d --wait
+
+      # 这一步同时验证了三件事：迁移能在 PostgreSQL 上跑通、
+      # 平台目录种子生效、nginx 到后端的反代通路正确。
+      - name: 冒烟检查
+        run: |
+          curl -fsS http://127.0.0.1:8107/api/v1/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -fsS http://127.0.0.1:8107/api/v1/catalog/compute-plans -H 'X-User: ci' \
+            | tee /dev/stderr | grep -q 'cpu-quick'
+          curl -fsS http://127.0.0.1:8107/ | grep -q '<div id="root">'
+
+      - name: 失败时打印容器日志
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: 清理
+        if: always()
+        run: docker compose down -v

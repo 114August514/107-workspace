@@ -1,33 +1,13 @@
-# Platform Reference Materials
+# 平台原始材料
 
-These materials document the environment in which 107 Workspace is intended
-to operate. They were collected on 2026-07-14 and are informative rather than
-normative product specifications. Operational details such as versions,
-partitions, endpoints, and examples may change over time and should be checked
-against the live platform before use.
+这些材料记录 107 Workspace 预期运行环境的原始输入。它们采集于 2026-07-14，仅供
+参考；版本、分区、地址和示例等运行参数必须在实际使用前向平台重新核实。
 
-## Sources
+| 来源 | 内容 |
+| :--- | :--- |
+| [`107-cluster-competition-training.pdf`](107-cluster-competition-training.pdf) | 中国科大“一〇七杯”算力与智能体开发大赛算力平台赛道培训，59 页 |
+| [`computing-platform-track-introduction.pdf`](computing-platform-track-introduction.pdf) | 算力平台及算力平台赛道介绍，8 页 |
 
-### 中国科大“一〇七杯”算力与智能体开发大赛算力平台赛道培训
-
-[107-cluster-competition-training.pdf](107-cluster-competition-training.pdf) is
-the original 59-page training deck. It covers platform architecture, Slurm
-concepts and commands, SCOW operation, REST APIs, monitoring, examples, and
-troubleshooting. The PDF content is preserved unchanged.
-
-### 算力平台及算力平台赛道介绍
-
-[computing-platform-track-introduction.pdf](computing-platform-track-introduction.pdf)
-is the original 8-page overview. It provides a concise introduction to compute
-clusters, getting started, and selecting a competition topic. The PDF content
-is preserved unchanged.
-
-### 107 Workspace、Slurm 与 Apptainer 职责说明
-
-[workspace-slurm-apptainer-context.md](workspace-slurm-apptainer-context.md)
-explains how the product layer, scheduler, storage, and runtime environment
-relate. It helps distinguish what 107 Workspace owns from capabilities it uses
-below the application layer.
-
-For current backend boundaries and accepted scope, use the
-[backend specification](../../superpowers/specs/2026-07-13-workspace107-backend-design.md).
+两份 PDF 由 Git LFS 管理并保持原始内容。此前的二次解释文档已被现行设计取代，取回
+方式见 [`../../archive/README.md`](../../archive/README.md)。当前系统边界以
+[`../../product/design.md`](../../product/design.md) 为准。

@@ -1,31 +1,13 @@
-# Reference Materials
+# 参考材料
 
-This directory preserves informative source material used to shape 107
-Workspace. These files are design evidence, not current backend requirements.
+这里保存形成 107 Workspace 设计时使用的外部输入和来源记录。它们用于核实环境、追溯
+设计来源，不是当前产品或实现规范。
 
-## Responsibilities
+| 分类 | 内容 |
+| :--- | :--- |
+| [`platform/`](platform/README.md) | 107 集群与比赛培训的原始 PDF |
+| [`engineering/hpc-helper.md`](engineering/hpc-helper.md) | 外部 `hpc-helper` 的固定来源与吸收边界 |
 
-- [Product vision](product/107-workspace-product-vision.md) explains the
-  intended users, value, domain language, and long-term product scope.
-- [Initial backend bootstrap guide](engineering/initial-backend-bootstrap-guide.md)
-  records the early engineering direction used before the current backend was
-  implemented.
-- [Platform reference materials](platform/README.md) describe the 107 cluster,
-  competition track, Slurm, SCOW, and Apptainer context.
-
-## Current Documentation
-
-Use each current document for its stated responsibility:
-
-- [Accepted backend specification](../superpowers/specs/2026-07-13-workspace107-backend-design.md)
-  defines accepted scope, architecture, and constraints.
-- [Backend development guide](../../backend/README.md) describes current setup,
-  configuration, operation, and verification commands.
-- [Backend reinitialization review](../reviews/2026-07-14-backend-reinitialization/README.md)
-  records the implementation and acceptance evidence at the review snapshot.
-- [Backend implementation plan](../superpowers/plans/2026-07-13-workspace107-backend.md)
-  preserves the historical execution sequence.
-
-The product and engineering inputs remain useful for intent and provenance,
-but they do not override accepted specifications, current guides, or current
-implementation behavior.
+早期产品愿景、后端初始化指南和派生的平台说明已被现行设计取代，不再保留在活动树；
+取回方式见 [`../archive/README.md`](../archive/README.md)。当前产品事实以
+[`../product/design.md`](../product/design.md) 为准。
