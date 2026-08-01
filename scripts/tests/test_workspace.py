@@ -12,6 +12,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 import workspace  # noqa: E402
+from tasks import check as quality  # noqa: E402
 from tasks import common, contract, project  # noqa: E402
 from tasks.common import REPO_ROOT, TaskError  # noqa: E402
 
@@ -30,6 +31,24 @@ class WorkspaceCliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_check.assert_called_once_with("frontend")
+
+    def test_frontend_tests_pass_run_without_an_extra_separator(self) -> None:
+        with (
+            mock.patch.object(quality, "_prepare"),
+            mock.patch.object(quality, "frontend_pnpm") as frontend_pnpm,
+        ):
+            quality.test("frontend")
+
+        frontend_pnpm.assert_called_once_with("run", "test", "--run")
+
+        with (
+            mock.patch.object(quality, "_prepare"),
+            mock.patch.object(quality, "frontend_pnpm") as frontend_pnpm,
+        ):
+            quality.run_check("frontend")
+
+        self.assertIn(mock.call("run", "test", "--run"), frontend_pnpm.call_args_list)
+        self.assertNotIn(mock.call("run", "test", "--", "--run"), frontend_pnpm.call_args_list)
 
     def test_contract_check_target_is_forwarded(self) -> None:
         with mock.patch.object(workspace.quality, "run_check") as run_check:

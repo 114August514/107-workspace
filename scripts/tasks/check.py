@@ -35,6 +35,11 @@ def _prepare(target: Target, *, force: bool = False) -> None:
         ensure_frontend_dependencies(force=force, quiet=not force)
 
 
+def _run_frontend_tests() -> None:
+    # pnpm 11 passes an extra `--` through, so Vitest treats `--run` as a filter.
+    frontend_pnpm("run", "test", "--run")
+
+
 def setup(target: Target = "all") -> None:
     heading(f"Setup ({target})")
     _prepare(target, force=True)
@@ -78,7 +83,7 @@ def test(target: Target = "all") -> None:
     if _uses_backend(target):
         backend_uv("run", "pytest", "-q")
     if _uses_frontend(target):
-        frontend_pnpm("run", "test", "--", "--run")
+        _run_frontend_tests()
 
 
 def build(target: Target = "all") -> None:
@@ -148,7 +153,7 @@ def run_check(target: Target = "all") -> None:
                 ),
                 (
                     "frontend tests",
-                    lambda: frontend_pnpm("run", "test", "--", "--run"),
+                    _run_frontend_tests,
                 ),
                 ("frontend build", lambda: frontend_pnpm("run", "build")),
             ]
