@@ -29,7 +29,7 @@ from ..domain.enums import (
 
 
 class Model(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, use_attribute_docstrings=True)
 
 
 class PageOut[T](Model):

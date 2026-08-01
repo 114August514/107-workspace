@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-openapi-descriptions.md`](2026-08-01-openapi-descriptions.md)：
+  修复 Pydantic 字段说明未进入 OpenAPI 与前端生成类型的问题。
 - [`2026-08-01-api-contract-location.md`](2026-08-01-api-contract-location.md)：
   生成的 OpenAPI 从人工文档树迁入根 `contracts/`，前后端契约链路保持不变。
 - [`2026-08-01-deploy-layout.md`](2026-08-01-deploy-layout.md)：

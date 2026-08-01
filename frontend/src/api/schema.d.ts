@@ -1149,7 +1149,10 @@ export interface components {
         };
         /** FileWriteIn */
         FileWriteIn: {
-            /** Content */
+            /**
+             * Content
+             * @description 文本内容。二进制文件请使用 multipart 上传接口。
+             */
             content: string;
             /** Path */
             path: string;
@@ -1163,6 +1166,7 @@ export interface components {
             description: string;
             /**
              * Name
+             * @description 留空表示沿用源 Project 的名称。
              * @default
              */
             name: string;
@@ -1319,7 +1323,10 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
-            /** Mandatory */
+            /**
+             * Mandatory
+             * @description 不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。
+             */
             mandatory: boolean;
             /** Read At */
             read_at: string | null;
@@ -1424,7 +1431,10 @@ export interface components {
             resolved_environment_variables: {
                 [key: string]: string;
             };
-            /** Secret References */
+            /**
+             * Secret References
+             * @description 环境变量名 -> Secret 名称。永远只有名称，没有值。
+             */
             secret_references: {
                 [key: string]: string;
             };
@@ -1888,7 +1898,11 @@ export interface components {
         WorkspaceKind: "personal" | "collaborative";
         /** WorkspaceOut */
         WorkspaceOut: {
-            /** Capabilities */
+            /**
+             * Capabilities
+             * @description 当前用户在这个空间里能做什么。前端据此决定显不显示入口，
+             *     但真正的拦截在后端——前端权限是体验，后端权限才是边界。
+             */
             capabilities?: components["schemas"]["Capability"][];
             /** Created At */
             created_at: string | null;

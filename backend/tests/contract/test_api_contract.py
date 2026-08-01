@@ -166,6 +166,21 @@ async def test_openapi_可以生成(client: httpx.AsyncClient) -> None:
     assert "/api/v1/projects/{project_id}/runs" in schema["paths"]
 
 
+async def test_openapi_保留已编写的字段说明(client: httpx.AsyncClient) -> None:
+    schema = (await client.get("/openapi.json")).json()
+    expected = {
+        ("WorkspaceOut", "capabilities"): "当前用户在这个空间里能做什么。",
+        ("FileWriteIn", "content"): "文本内容。",
+        ("PreflightOut", "secret_references"): "环境变量名 -> Secret 名称。",
+        ("NotificationOut", "mandatory"): "不可关闭的重要通知。",
+        ("ForkIn", "name"): "留空表示沿用源 Project 的名称。",
+    }
+
+    for (model, field), prefix in expected.items():
+        description = schema["components"]["schemas"][model]["properties"][field]["description"]
+        assert description.startswith(prefix), f"{model}.{field} 没有保留源码中的字段说明"
+
+
 async def test_下载接口在契约里声明的是二进制(client: httpx.AsyncClient) -> None:
     """返回文件的接口不能在契约里写着返回 JSON。
 
