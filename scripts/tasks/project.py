@@ -58,6 +58,23 @@ def coverage() -> None:
     )
 
 
+def _backend_python_executable() -> str:
+    """Resolve the project interpreter for directly managed server processes."""
+    result = backend_uv(
+        "run",
+        "--no-sync",
+        "python",
+        "-c",
+        "import sys; print(sys.executable)",
+        capture=True,
+        quiet=True,
+    )
+    executable = result.stdout.strip()
+    if not executable:
+        raise TaskError("uv did not report the backend Python executable")
+    return executable
+
+
 def run_dev(component: str = "all") -> None:
     heading(f"Development server ({component})")
     if component in {"all", "backend"}:
@@ -70,8 +87,8 @@ def run_dev(component: str = "all") -> None:
         commands.append(
             (
                 [
-                    resolve_executable("uv"),
-                    "run",
+                    _backend_python_executable(),
+                    "-m",
                     "uvicorn",
                     "workspace107.main:create_app",
                     "--factory",
@@ -253,8 +270,8 @@ def demo(*, smoke: bool = False) -> None:
         backend_uv("run", "python", "-m", "workspace107.tools.seed", env=environment, quiet=smoke)
 
         command = [
-            resolve_executable("uv"),
-            "run",
+            _backend_python_executable(),
+            "-m",
             "uvicorn",
             "workspace107.main:create_app",
             "--factory",

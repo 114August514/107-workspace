@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-windows-process-lifecycle.md`](2026-08-01-windows-process-lifecycle.md)：
+  统一 Linux 与 Windows 的长期后端进程启动方式，确保 smoke 清理前实际服务已经退出。
 - [`2026-08-01-ci-runtime-provisioning.md`](2026-08-01-ci-runtime-provisioning.md)：
   由 GitHub Actions 显式配置 Python 3.12 与 Windows UTF-8，并撤掉任务脚本的 PATH 推断。
 - [`2026-08-01-ci-portability.md`](2026-08-01-ci-portability.md)：

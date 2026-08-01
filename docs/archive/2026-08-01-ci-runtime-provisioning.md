@@ -47,4 +47,7 @@
 - 工作流 YAML 结构解析通过；本地运行时确认 Python 3.12、Node 24 和 UTF-8 中文输出。
 - `make check` 全部通过，包括工作流 14 项、后端 102 项、前端 14 项、生产构建和
   OpenAPI 契约；约 1.29 MB 主 chunk 警告按既定范围暂不处理。
-- PR CI 是合并前的最终 Linux 与 Windows runner 验收门槛。
+- PR run `30694129625` 的 Linux 统一检查、migration 与 Compose 均通过；Windows 也已
+  通过完整检查、迁移和 UTF-8 中文输出，最后只在清理仍由 Uvicorn 子进程占用的 SQLite
+  文件时失败。进程生命周期修复见
+  [`2026-08-01-windows-process-lifecycle.md`](2026-08-01-windows-process-lifecycle.md)。

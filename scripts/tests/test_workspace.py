@@ -101,6 +101,23 @@ class WorkspaceCliTests(unittest.TestCase):
         with self.assertRaisesRegex(TaskError, "Could not parse tool version"):
             common._major_version("unknown")
 
+    def test_backend_python_executable_is_resolved_by_uv(self) -> None:
+        expected = r"C:\workspace\backend\.venv\Scripts\python.exe"
+        with mock.patch.object(project, "backend_uv") as backend_uv:
+            backend_uv.return_value.stdout = f"{expected}\n"
+            executable = project._backend_python_executable()
+
+        self.assertEqual(executable, expected)
+        backend_uv.assert_called_once_with(
+            "run",
+            "--no-sync",
+            "python",
+            "-c",
+            "import sys; print(sys.executable)",
+            capture=True,
+            quiet=True,
+        )
+
     def test_smoke_dispatches_the_isolated_demo(self) -> None:
         with mock.patch.object(project, "demo") as demo:
             result = workspace.main(["smoke"])
