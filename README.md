@@ -63,7 +63,7 @@ uv run --no-project python scripts/workspace.py check
 
 ## 架构
 
-后端是分层单体，依赖方向为：
+后端是模块化单体，内部依赖按层次单向流动：
 
 ```text
 api -> application -> domain ports <- infrastructure

@@ -48,7 +48,7 @@ body:
       placeholder: |
         - 统一入口在 Linux 与 Windows 上执行同一任务实现
         - 现有对外行为和接口契约不变
-        - `make check` 通过
+        - 统一检查通过（填写实际命令）
     validations:
       required: true
 

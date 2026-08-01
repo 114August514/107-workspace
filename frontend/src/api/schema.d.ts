@@ -2088,10 +2088,7 @@ export interface components {
         };
         /**
          * WorkspaceKind
-         * @description Workspace 类型。
-         *
-         *     Course 不构成第三种类型：Course Workspace 是启用了 Course Profile 的
-         *     Collaborative Workspace。
+         * @description Workspace 的基础归属类型。
          * @enum {string}
          */
         WorkspaceKind: "personal" | "collaborative";

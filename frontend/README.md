@@ -1,6 +1,8 @@
 # 前端
 
 107 Workspace 控制台。React + TypeScript + Vite，组件库使用 Ant Design。
+工具链统一使用 Node.js 24 LTS 与 pnpm 11；版本约束同时记录在 `.node-version`、
+`package.json` 和 CI 中。
 
 ## 运行
 
@@ -85,7 +87,7 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 ```bash
 pnpm run lint
 pnpm run typecheck        # 同时也在检查前端调用与后端契约是否一致
-pnpm run test -- --run
+pnpm run test --run
 pnpm run build
 pnpm run generate:api     # 仅重新生成类型；平时在根目录用 make contract
 ```

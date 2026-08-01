@@ -50,11 +50,3 @@ backend/.alembic-test/
 
 # Local notes and scratch data kept outside the shared project tree
 /.local/
-
-# Legacy local-note locations; move existing files into .local/ when convenient
-/IDEA.md
-/PLAN.md
-/myself.md
-/temp8.md
-/todo.md
-/temp/

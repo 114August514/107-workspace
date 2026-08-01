@@ -84,7 +84,7 @@ body:
       placeholder: |
         - 相同输入下 Run 能进入 queued 状态
         - 对应回归测试在修复前失败、修复后通过
-        - `make check` 通过
+        - 统一检查通过（填写实际命令）
     validations:
       required: true
 

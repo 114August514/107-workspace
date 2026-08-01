@@ -192,7 +192,7 @@ CI 暂时同时监听 `main` 和 `master`，只用于覆盖改名窗口，不表
 <类型>/<Issue编号>-<简短描述>
 ```
 
-例如：
+以下是格式示例，不代表当前产品尚未实现对应能力：
 
 ```text
 feat/123-create-workspace
@@ -429,8 +429,8 @@ git diff --staged
 推荐：
 
 ```bash
-git add apps/api/src/workspace/service.py
-git add tests/workspace/test_service.py
+git add backend/src/workspace107/application/workspace_service.py
+git add backend/tests/integration/test_roles.py
 ```
 
 或者逐块检查：
@@ -530,7 +530,7 @@ PR 标题也采用相同格式：
 feat(workspace): 支持创建协作空间
 ```
 
-PR 描述保留模板中的固定信息，并填写实际证据：
+PR 描述保留模板中的固定信息，并填写实际证据。以下内容继续使用上面的虚构场景：
 
 ```markdown
 ## 关联 Issue
@@ -1374,4 +1374,4 @@ SLURM_JWT=
 
 大型数据集和模型结果也不应通过普通 Git 保存。确实需要版本化的少量二进制资源可以后续评估 Git LFS，但 HPC 数据、模型 checkpoint 和 Run 产物应由平台存储系统管理。
 
-**Issue 说明要做什么，分支隔离修改，Commit 记录过程，PR 完成评审，CI 保证基本质量，main 保存可信版本。**
+**Issue 说明要做什么，分支隔离修改，Commit 记录过程，PR 完成评审，CI 保证基本质量，默认分支保存可信版本。**

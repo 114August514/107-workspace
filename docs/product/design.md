@@ -973,15 +973,7 @@ Membership
 └── Status
 ```
 
-值得说明的是，Course 不构成第三种 Workspace 类型。
-
-```text
-Course Workspace
-=
-启用了 Course Profile 的 Collaborative Workspace
-```
-
-Profile 不改变 Workspace 的基础归属和权限边界。
+Profile 不改变 Workspace 的基础归属和权限边界。Course Profile 及课程专用领域对象尚未进入正式设计，统一记录在 `docs/product/deferred.md`。
 
 #### 3.1.2 Project 与版本
 
@@ -2339,7 +2331,9 @@ Domain 不依赖 FastAPI、PostgreSQL、Slurm 等具体技术
 
 ### 4.2 系统总体架构
 
-系统采用模块化单体架构，主要由 API Backend 与 Background Worker 两类运行组件组成。二者共享同一套 Application、Domain 和基础设施接口，但具有不同的运行入口和生命周期。
+目标系统采用模块化单体架构，主要由 API Backend 与 Background Worker 两类运行组件组成。
+二者共享同一套 Application、Domain 和基础设施接口，但具有不同的运行入口和生命周期；
+当前先有限实现模块化单体，等之后稳定了再拆分微服务。
 
 API Backend 负责处理用户发起的 HTTP 请求；Background Worker 负责脱离 HTTP 请求生命周期的后台任务。系统任务还可以通过 Scheduled Task Adapter 定时触发。不同入口最终统一调用 Application，由 Application 编排领域操作，并通过 Port 使用数据库、版本控制、调度器、存储和 Secret 等外部能力。
 
@@ -2445,15 +2439,48 @@ Application 和 Domain 不直接依赖 PostgreSQL、Slurm、Shared FS 等具体�
 
 API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port，仅具有不同的调用入口。
 
+### 4.4 前端核心技术选型
+
+| 类别 | 技术选型 | 主要职责 |
+| ---- | ----- | --------- |
+| JavaScript 运行时 | **Node.js 24 LTS** | 前端开发、构建、测试及代码生成 |
+| 包管理器 | **pnpm 11** | 依赖安装、脚本执行及前端 Workspace 管理 |
+| 前端框架 | **React** | 构建组件化用户界面 |
+| 开发语言 | **TypeScript** | 提供静态类型检查和前端模型约束 |
+| 构建工具 | **Vite** | 开发服务器、热更新及生产构建 |
+| 页面路由 | **React Router** | 路由匹配、嵌套路由、页面布局及路由参数管理 |
+| 主组件库 | **Primer React** | 提供 GitHub 风格的基础组件、导航、表单和页面布局组件 |
+| 设计变量 | **Primer Primitives** | 管理颜色、间距、圆角、字体及亮暗主题 |
+| 图标库 | **Primer Octicons** | 提供与 Primer 视觉体系一致的图标 |
+| 自定义样式 | **CSS Modules** | 实现 107 Workspace 专属布局和业务组件样式 |
+| 服务端状态 | **TanStack Query** | API 数据查询、缓存、刷新、Mutation 和错误状态管理 |
+| API 类型生成 | **openapi-typescript** | 根据 FastAPI OpenAPI 文档生成 TypeScript 接口类型 |
+| HTTP 客户端 | **openapi-fetch** | 基于 OpenAPI 类型执行类型安全的 HTTP 请求 |
+| Query API 集成 | **openapi-react-query** | 将类型安全 API 请求与 TanStack Query 集成 (可选) |
+| 表单管理 | **React Hook Form** | 管理表单字段、提交状态和校验错误 |
+| 输入校验 | **Zod** | 前端输入运行时校验及 TypeScript 类型推导 |
+| 单元测试 | **Vitest** | 测试工具函数、模型转换和业务逻辑 |
+| 组件测试 | **React Testing Library** | 从用户操作角度测试组件行为 |
+| API Mock | **MSW** | 在测试和独立前端开发中模拟后端 API |
+| 端到端测试 | **Playwright** | 测试登录、Workspace 管理、Run 提交等完整业务流程 |
+
+前端技术栈最终确定为：
+
+```text
+React + TypeScript + Vite
+Primer React + Primer Primitives + Primer Octicons
+CSS Modules
+React Router
+TanStack Query
+OpenAPI 类型安全客户端
+React Hook Form + Zod
+Vitest + React Testing Library + MSW + Playwright
+```
+
 ### 4.4 技术选型与运行形态
 
 | 范围 | 选型 |
 | --- | --- |
-| 前端语言 | TypeScript |
-| 前端框架 | React |
-| UI 组件与样式 | shadcn/ui + Tailwind CSS |
-| 前端设计参考 | GitHub / Primer 的布局、信息层级与交互模式，不直接绑定 Primer |
-| 图标 | Lucide |
 | 后端语言 | Python |
 | Python 项目与依赖管理 | uv |
 | Web Backend | FastAPI |
@@ -2471,7 +2498,8 @@ API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port�
 | 后台任务 | Async Work Boundary + Background Worker |
 | 部署形态 | Container-ready |
 
-前端使用 shadcn/ui 与 Tailwind CSS 构建界面，并参考 GitHub / Primer 的布局模式与信息层级；后端采用模块化单体架构，API Backend 与 Background Worker 共享 Application、Domain 与 Infrastructure 代码。
+前端参考 GitHub / Primer 的布局模式与信息层级；
+后端暂采用模块化单体架构。API Backend 与 Background Worker 共享 Application、Domain 与 Infrastructure 代码。
 
 ## 五. 工程实现规划
 
@@ -2483,7 +2511,7 @@ API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port�
 
 ```text
 107-workspace/
-├── frontend/
+├── frontend/ # 暂未形成稳定版本，fronted 需要重构，当前代码仅作为参考
 │   ├── src/
 │   │   ├── app/
 │   │   ├── features/
@@ -2528,6 +2556,9 @@ API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port�
 │   ├── references/
 │   └── archive/
 ├── scripts/
+│   ├── workspace.py
+│   ├── tasks/
+│   └── platform/
 ├── .github/
 ├── Makefile
 └── README.md
@@ -2571,7 +2602,7 @@ Port / Infrastructure
 
 ### 5.3 重构与兼容性边界
 
-正式投产并形成兼容义务之前，`main` 表示当前有效、可运行、可验证的集成基线，而不是内部实现的永久兼容基线。
+正式投产并形成兼容义务之前，当前默认分支表示有效、可运行、可验证的集成基线，而不是内部实现的永久兼容基线。
 
 应区分：
 
@@ -2616,7 +2647,7 @@ make test
 make check
 ```
 
-具体前后端工具可以不同，但本地开发、CI 和自动化统一通过项目级命令执行；`make check` 作为提交和合并前的主要验证入口。
+具体前后端工具可以不同，但本地开发、CI 和自动化统一通过项目级命令执行。`Makefile`是薄入口；原生 Windows 没有 Make 时，使用 `uv run --no-project python scripts/workspace.py check` 执行同一份任务实现。
 
 ### 5.5 工程协作与状态记录
 
@@ -2642,7 +2673,7 @@ Journal 仅补充 Issue 和 Git 难以表达的在途状态、影响范围、仓
 阶段目标      → Milestone
 当前任务      → Open Issue
 任务要求      → Issue
-当前代码事实  → main
+当前代码事实  → 当前默认分支
 设计决策      → Design Document / ADR
 在途状态      → Journal
 延后设计      → docs/product/deferred.md
@@ -2731,7 +2762,7 @@ Pull Request
    ↓
 验证
    ↓
-main
+当前默认分支
 ```
 
 进入某个 Milestone 时再拆分具体 Issue，不提前固定整个 V1 的全部任务。
@@ -2742,7 +2773,7 @@ Milestone 完成时至少要求：
 - 相关验收条件满足；
 - 关键路径经过验证；
 - `make check` 通过；
-- `main` 保持完整、一致、可继续开发。
+- 当前默认分支保持完整、一致、可继续开发。
 
 Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式更新对应记录，不在开发过程中静默扩大目标。
 

@@ -14,7 +14,7 @@ Closes #
 
 <!-- 写出实际运行的命令及关键结果。保留结论和数量即可，不需要粘贴整段日志。 -->
 
-- `make check`：
+- 统一检查（例如 `make check` 或 `uv run --no-project python scripts/workspace.py check`）：
 - 其他验证：
 
 ## 影响范围

@@ -42,7 +42,7 @@ body:
       placeholder: |
         - Owner 可以从确定的 Project Version 创建 Run
         - 非成员访问对应 Project 时返回 403 或 404
-        - `make check` 通过
+        - 统一检查通过（填写实际命令）
     validations:
       required: true
 

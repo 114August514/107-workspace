@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-active-guidance-alignment.md`](2026-08-01-active-guidance-alignment.md)：
+  清理旧工具链与协作口径，并明确目标设计和当前旧实现的边界。
 - [`2026-08-01-openapi-operation-docs.md`](2026-08-01-openapi-operation-docs.md)：
   为全部公开 API operation 补齐中文摘要与说明，并加入契约回归测试。
 - [`2026-08-01-openapi-descriptions.md`](2026-08-01-openapi-descriptions.md)：

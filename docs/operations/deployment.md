@@ -86,13 +86,18 @@ shared filesystem
 compute node reads/writes it
 ```
 
-Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节点的要求。真实接入时
-应把 `WORKSPACE107_STORAGE_MOUNT` 设置为已经挂载的共享文件系统路径，并验证：
+Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节点的要求。Compose 中
+`WORKSPACE107_STORAGE_MOUNT` 只决定 API 容器的挂载来源，容器内应用路径固定为
+`/var/lib/workspace107/storage`。Run 提交给 Slurm 时使用的是这个应用可见路径，因此真实
+接入时应把同一共享文件系统也挂载到各计算节点的 `/var/lib/workspace107/storage`，并验证：
 
-1. API 主机和计算节点看到完全相同的路径字符串。
+1. API 容器和计算节点都能以 `/var/lib/workspace107/storage` 访问同一份内容。
 2. API 容器 UID/GID `10001:10001` 与共享目录权限匹配。
 3. 只读 Input Binding 在目标文件系统和运行身份下确实不可修改。
 4. 日志与 Artifact 的并发写入、清理和失败恢复行为符合平台要求。
+
+只修改 `WORKSPACE107_STORAGE_MOUNT` 不会改变容器内应用路径；如果计算节点不能提供上述
+固定路径，必须先调整部署映射和应用配置并完成端到端验证。
 
 ### Slurm 与运行环境
 
