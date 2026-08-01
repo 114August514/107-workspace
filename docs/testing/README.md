@@ -30,7 +30,8 @@ frontend/tests/
 
 当前只保留以下已实现且不绑定旧产品流程的基础保护：
 
-- 后端单元规则：算力校验、路径规范化、Run Snapshot、Variable 与 Secret 解析。
+- 后端单元规则：算力校验、路径规范化、Run Snapshot 序列化与路径约束、Variable 与
+  Secret 解析。
 - 后端横切单元：请求标识上下文与日志格式化。
 - 后端 Adapter：本地存储配置、文件权限和 Mock Scheduler 平台行为。
 - 架构治理：Domain 与 Application 依赖方向，以及活动文档、GR、ADR 和本地链接引用。

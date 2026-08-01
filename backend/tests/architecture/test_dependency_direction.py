@@ -17,10 +17,15 @@ def _module_imports(path: Path) -> set[str]:
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and node.module:
-                names.add(node.module)
-            elif node.module:
-                names.add("." * node.level + node.module)
+            prefix = "." * node.level
+            module = f"{prefix}{node.module or ''}"
+            if module:
+                names.add(module)
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                separator = "." if node.module else ""
+                names.add(f"{module}{separator}{alias.name}")
     return names
 
 
@@ -41,6 +46,23 @@ def _imports_layer(names: set[str], layer: str) -> bool:
     )
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import workspace107.infrastructure.db",
+        "from workspace107 import infrastructure",
+        "from workspace107.infrastructure import db",
+        "from .. import infrastructure",
+        "from ..infrastructure import db",
+    ],
+)
+def test_import_parser_recognizes_layer_variants(tmp_path: Path, source: str) -> None:
+    module = tmp_path / "module.py"
+    module.write_text(source, encoding="utf-8")
+
+    assert _imports_layer(_module_imports(module), "infrastructure")
+
+
 @pytest.mark.parametrize("path", _layer_modules("domain"), ids=_relative)
 def test_domain_does_not_depend_on_frameworks_or_outer_layers(path: Path) -> None:
     names = _module_imports(path)
@@ -51,6 +73,7 @@ def test_domain_does_not_depend_on_frameworks_or_outer_layers(path: Path) -> Non
     assert not _imports_layer(names, "infrastructure"), (
         f"{_relative(path)} 依赖了 infrastructure。依赖方向应当反过来。"
     )
+    assert not _imports_layer(names, "application"), f"{_relative(path)} 依赖了 application 层。"
     assert not _imports_layer(names, "api"), f"{_relative(path)} 依赖了 api 层。"
 
 

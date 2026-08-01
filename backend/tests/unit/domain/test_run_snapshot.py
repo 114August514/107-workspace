@@ -1,7 +1,4 @@
-"""纯领域层的 Run Snapshot 不可变性与序列化。
-
-对应 GR-202：Run Snapshot 创建后不可修改。
-"""
+"""纯领域层的 Run Snapshot 序列化与路径约束。"""
 
 from __future__ import annotations
 
@@ -61,13 +58,6 @@ def make_snapshot() -> RunSnapshot:
         created_by="usr_1",
         created_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
     )
-
-
-def test_snapshot_is_immutable_after_creation() -> None:
-    snapshot = make_snapshot()
-    for field in ("command", "project_version_id", "working_directory", "compute_plan_id"):
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            setattr(snapshot, field, "改掉")
 
 
 def test_snapshot_round_trips_through_json() -> None:

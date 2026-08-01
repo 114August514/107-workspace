@@ -25,12 +25,17 @@ def test_initial_setup_creates_storage_and_database_directories(tmp_path: Path) 
 
 
 def test_directory_setup_is_idempotent(tmp_path: Path) -> None:
+    storage_root = tmp_path / "var" / "storage"
+    database_root = tmp_path / "var"
     settings = Settings(
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'var' / 'test.db'}",
-        storage_root=tmp_path / "var" / "storage",
+        storage_root=storage_root,
     )
     settings.ensure_local_directories()
     settings.ensure_local_directories()
+
+    assert storage_root.is_dir()
+    assert database_root.is_dir()
 
 
 def test_non_sqlite_url_does_not_resolve_file_path(tmp_path: Path) -> None:
@@ -51,3 +56,4 @@ def test_in_memory_database_has_no_file_path(tmp_path: Path) -> None:
     )
     assert settings.sqlite_file is None
     settings.ensure_local_directories()
+    assert (tmp_path / "storage").is_dir()

@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-01-pre-publish-test-review.md`](2026-08-01-pre-publish-test-review.md)：
+  修正发布前复核发现的假断言、依赖方向解析漏洞和无断言测试。
 - [`2026-08-01-test-baseline-reset.md`](2026-08-01-test-baseline-reset.md)：
   删除绑定旧实现的测试，并建立重构期测试边界、收集范围和覆盖率报告口径。
 - [`2026-08-01-active-guidance-alignment.md`](2026-08-01-active-guidance-alignment.md)：
