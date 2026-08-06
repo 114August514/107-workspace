@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..enums import LogStream
+from ..enums import InputSourceType, LogStream
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +53,28 @@ class ArtifactEntry:
     size: int
 
 
+@dataclass(frozen=True, slots=True)
+class RunInput:
+    """一次 Run 的一个输入绑定，按来源类型决定如何物化。
+
+    设计稿 §3.1.3 把 InputBinding 定义为对 Content Version 的统一引用，
+    storage 端也用同一种结构表达——artifact 和 shared_resource_version
+    只是 Content Version 的两种来源，物化方式不同，但都暴露在同一
+    ``access_path`` 下、都只读（GR-404）。
+
+    ``files`` 仅对 ``shared_resource_version`` 有意义：把版本的
+    ``(path, content_hash)`` 列表物化到 ``access_path`` 下，复用 Project
+    Version 已在用的 blob 池。``artifact`` 路径则按 ``artifact_id`` 找到
+    已经收集好的目录直接复制。
+    """
+
+    source_type: InputSourceType
+    source_id: str
+    access_path: str
+    files: tuple[tuple[str, str], ...] = ()
+    """``(relative_path, content_hash)``，仅 shared_resource_version 使用。"""
+
+
 class StoragePort(Protocol):
     # -- 内容寻址存储 ---------------------------------------------------
 
@@ -73,12 +95,13 @@ class StoragePort(Protocol):
         run_id: str,
         *,
         files: list[tuple[str, str]],
-        inputs: list[tuple[str, str]],
+        inputs: list[RunInput],
     ) -> RunPaths:
         """准备 Run 工作目录。
 
         ``files``  是 ``(相对路径, 内容摘要)``，来自 Project Version。
-        ``inputs`` 是 ``(访问路径, Artifact ID)``，内容以只读方式放置。
+        ``inputs`` 是 :class:`RunInput` 列表，按来源类型物化到 ``access_path``，
+        内容只读（GR-404）。
         """
         ...
 

@@ -156,6 +156,9 @@ class ActivityAction(StrEnum):
     RUN_SUBMITTED = "run_submitted"
     RUN_CANCELLED = "run_cancelled"
     RUN_FINISHED = "run_finished"
+    SHARED_RESOURCE_CREATED = "shared_resource_created"
+    SHARED_RESOURCE_UPDATED = "shared_resource_updated"
+    SHARED_RESOURCE_VERSION_PUBLISHED = "shared_resource_version_published"
 
 
 class TargetType(StrEnum):
@@ -170,6 +173,8 @@ class TargetType(StrEnum):
     PROJECT = "project"
     PROJECT_VERSION = "project_version"
     RUN = "run"
+    SHARED_RESOURCE = "shared_resource"
+    SHARED_RESOURCE_VERSION = "shared_resource_version"
 
 
 class NotificationType(StrEnum):

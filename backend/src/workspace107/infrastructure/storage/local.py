@@ -26,9 +26,9 @@ import os
 import shutil
 from pathlib import Path
 
-from ...domain.enums import LogStream
+from ...domain.enums import InputSourceType, LogStream
 from ...domain.errors import ObjectNotFound
-from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunPaths
+from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunInput, RunPaths
 
 READONLY_DIR = 0o555
 READONLY_FILE = 0o444
@@ -75,7 +75,7 @@ class LocalStorage:
         run_id: str,
         *,
         files: list[tuple[str, str]],
-        inputs: list[tuple[str, str]],
+        inputs: list[RunInput],
     ) -> RunPaths:
         paths = self.run_paths(run_id)
         await asyncio.to_thread(self._prepare_sync, paths, files, inputs)
@@ -85,7 +85,7 @@ class LocalStorage:
         self,
         paths: RunPaths,
         files: list[tuple[str, str]],
-        inputs: list[tuple[str, str]],
+        inputs: list[RunInput],
     ) -> None:
         if paths.root.exists():
             _force_rmtree(paths.root)
@@ -97,14 +97,24 @@ class LocalStorage:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(self._blob_path(content_hash), target)
 
-        for access_path, artifact_id in inputs:
+        for entry in inputs:
             # 访问路径是运行环境中的绝对路径；本机执行时挂到 Run 的 inputs 根下。
-            target = paths.inputs / access_path.lstrip("/")
-            source = self._artifacts / artifact_id
-            if not source.exists():
-                raise FileNotFoundError(f"输入 Artifact {artifact_id} 的内容不存在")
+            target = paths.inputs / entry.access_path.lstrip("/")
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source, target)
+            if entry.source_type is InputSourceType.ARTIFACT:
+                source = self._artifacts / entry.source_id
+                if not source.exists():
+                    raise FileNotFoundError(f"输入 Artifact {entry.source_id} 的内容不存在")
+                shutil.copytree(source, target)
+            elif entry.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
+                # Shared Resource Version 没有专门的存储目录——内容存在 blob 池里，
+                # 这里按版本的 (path, content_hash) 列表从 blob 物化到 access_path 下。
+                for relative_path, content_hash in entry.files:
+                    file_target = target / relative_path
+                    file_target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(self._blob_path(content_hash), file_target)
+            else:  # pragma: no cover - 枚举封闭，未来加新来源类型时这里会显式失败
+                raise FileNotFoundError(f"未知输入来源类型 {entry.source_type!r}")
 
         # 输入默认只读：Run 不得原地修改输入对象（GR-404）。
         if inputs:

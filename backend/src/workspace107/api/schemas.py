@@ -254,6 +254,58 @@ class ComputePlanOut(Model):
     max_time_limit_minutes: int
 
 
+# -- Shared Resource --------------------------------------------------------
+
+
+class SharedResourceOut(Model):
+    id: str
+    name: str
+    description: str
+    owner_workspace_id: str | None
+    is_platform_owned: bool
+    created_at: datetime
+
+
+class SharedResourceVersionFileOut(Model):
+    path: str
+    size: int
+    content_hash: str
+
+
+class SharedResourceVersionOut(Model):
+    id: str
+    shared_resource_id: str
+    sequence: int
+    label: str
+    description: str
+    file_count: int
+    total_size: int
+    created_by: str
+    created_at: datetime
+
+
+class SharedResourceVersionDetailOut(SharedResourceVersionOut):
+    files: list[SharedResourceVersionFileOut]
+
+
+class SharedResourceDetailOut(SharedResourceOut):
+    versions: list[SharedResourceVersionOut]
+
+
+class SharedResourceCreateIn(Model):
+    name: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="", max_length=4096)
+
+
+class SharedResourceUpdateIn(Model):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=4096)
+
+
+class SharedResourceVersionCreateIn(Model):
+    description: str = Field(default="", max_length=4096)
+
+
 # -- 运行方案 ---------------------------------------------------------------
 
 

@@ -27,6 +27,8 @@ from ..models import (
     Run,
     RunConfiguration,
     RunEvent,
+    SharedResource,
+    SharedResourceVersion,
     User,
     Workspace,
     WorkspaceVariable,
@@ -223,6 +225,33 @@ class ForkRelationRepository(Protocol):
     async def get_for_project(self, project_id: str) -> ForkRelation | None: ...
 
 
+class SharedResourceRepository(Protocol):
+    """Shared Resource 与版本的仓储。
+
+    可见性按设计稿 §2.6 / §3.2.1 分两层：
+    ``owner_workspace_id IS NULL`` 是 Platform 资源，全平台可见；
+    否则归 Workspace，对其成员可见。跨 Workspace Asset Grant 在 M4 单独 Issue，
+    这里不提供按 grant 过滤的查询。
+
+    版本不可变（GR-201）：只有 ``add`` 和读取方法，没有 ``update``。
+    """
+
+    async def add(self, resource: SharedResource) -> None: ...
+    async def get(self, resource_id: str) -> SharedResource | None: ...
+    async def update(self, resource: SharedResource) -> None: ...
+    async def list_platform(self) -> list[SharedResource]:
+        """Platform 持有的资源（``owner_workspace_id IS NULL``）。"""
+        ...
+
+    async def list_for_workspace(self, workspace_id: str) -> list[SharedResource]: ...
+
+    async def add_version(self, version: SharedResourceVersion) -> None: ...
+    async def get_version(self, version_id: str) -> SharedResourceVersion | None: ...
+    async def list_versions(self, resource_id: str) -> list[SharedResourceVersion]: ...
+    async def latest_version(self, resource_id: str) -> SharedResourceVersion | None: ...
+    async def next_version_sequence(self, resource_id: str) -> int: ...
+
+
 class Repositories(Protocol):
     """一次工作单元内可用的全部仓储。"""
 
@@ -245,6 +274,7 @@ class Repositories(Protocol):
     activities: ActivityRepository
     notifications: NotificationRepository
     fork_relations: ForkRelationRepository
+    shared_resources: SharedResourceRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

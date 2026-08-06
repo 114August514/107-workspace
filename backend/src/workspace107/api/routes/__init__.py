@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from ..schemas import ErrorOut
-from . import catalog, health, home, notifications, projects, runs, workspaces
+from . import catalog, health, home, notifications, projects, runs, shared_resources, workspaces
 
 # 错误响应也是契约的一部分。不声明的话 OpenAPI 里就没有它，
 # 前端只能靠猜错误体长什么样——那就又回到「瞎猜接口」了。
@@ -26,5 +26,6 @@ api_router.include_router(projects.router)
 api_router.include_router(runs.router)
 api_router.include_router(catalog.router)
 api_router.include_router(notifications.router)
+api_router.include_router(shared_resources.router)
 
 __all__ = ["api_router"]
