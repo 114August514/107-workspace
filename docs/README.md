@@ -5,6 +5,7 @@
 | 问题 | 文档 |
 | :--- | :--- |
 | 产品能力、术语、规则和 Roadmap | [`product/design.md`](product/design.md) |
+| 面向新手的开发入门与完整 Run 链路 | [`development/beginner-guide/`](development/beginner-guide/README.md) |
 | 延后但尚未进入正式设计的事项 | [`product/deferred.md`](product/deferred.md) |
 | Git、Issue、分支、提交和 PR | [`contributing/git-workflow.md`](contributing/git-workflow.md) |
 | AI 协作和统一验证入口 | [`../AGENTS.md`](../AGENTS.md) |

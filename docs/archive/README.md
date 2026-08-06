@@ -22,6 +22,8 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
 
 ## 完成记录
 
+- [`2026-08-02-beginner-development-guide.md`](2026-08-02-beginner-development-guide.md)：
+  编写面向基本编程基础读者的分章节开发指南，以 Run 链路串联项目涉及的开发知识。
 - [`2026-08-01-windows-process-lifecycle.md`](2026-08-01-windows-process-lifecycle.md)：
   统一 Linux 与 Windows 的长期后端进程启动方式，确保 smoke 清理前实际服务已经退出。
 - [`2026-08-01-ci-runtime-provisioning.md`](2026-08-01-ci-runtime-provisioning.md)：
