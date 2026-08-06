@@ -377,3 +377,58 @@ class ForkRelationRow(Base):
     source_version_label: Mapped[str] = mapped_column(String(32))
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SharedResourceRow(Base):
+    """共享资源（设计稿 §3.1.3）。
+
+    ``owner_workspace_id`` 为 NULL 表示 Platform 持有的公共资源，
+    全平台可见；否则归属某个 Workspace，对其成员可见。当前 Core 子集
+    不实现跨 Workspace Asset Grant（M4 单独 Issue），所以可见性只分两层。
+    """
+
+    __tablename__ = "shared_resources"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    description: Mapped[str] = mapped_column(Text, default="")
+    owner_workspace_id: Mapped[str | None] = mapped_column(ID, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SharedResourceVersionRow(Base):
+    """Shared Resource 的不可变版本（GR-201）。
+
+    内容按 ``(path, size, content_hash)`` 三元组列表固化在
+    ``shared_resource_version_files`` 表里。文件正文存在存储层的
+    blob store（按内容寻址），与 Project Version 共用同一个 blob 池——
+    因此本表不需要存储路径列，也不需要单独的存储目录。
+    """
+
+    __tablename__ = "shared_resource_versions"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    shared_resource_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("shared_resources.id"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(ID)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("shared_resource_id", "sequence", name="uq_shared_resource_version_seq"),
+    )
+
+
+class SharedResourceVersionFileRow(Base):
+    """Shared Resource Version 的文件条目。不可变。"""
+
+    __tablename__ = "shared_resource_version_files"
+
+    version_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("shared_resource_versions.id"), primary_key=True
+    )
+    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    size: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64))

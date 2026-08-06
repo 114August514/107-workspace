@@ -55,6 +55,14 @@ class Capability(StrEnum):
     """提交和重跑。两者都消耗算力，所以是同一个能力。"""
     RUN_CANCEL = "run.cancel"
 
+    # -- Shared Resource --------------------------------------------------
+    SHARED_RESOURCE_VIEW = "shared_resource.view"
+    """看 Workspace 内持有的 Shared Resource 及其版本。Platform 资源全平台可见，不靠这条。"""
+    SHARED_RESOURCE_MANAGE = "shared_resource.manage"
+    """在 Workspace 中创建 Shared Resource、修改名称与说明。"""
+    SHARED_RESOURCE_VERSION_CREATE = "shared_resource.version.create"
+    """为 Shared Resource 上传文件形成新的不可变版本。"""
+
 
 _VIEW_ONLY: frozenset[Capability] = frozenset(
     {
@@ -64,6 +72,7 @@ _VIEW_ONLY: frozenset[Capability] = frozenset(
         Capability.ENTITLEMENT_VIEW,
         Capability.PROJECT_VIEW,
         Capability.RUN_VIEW,
+        Capability.SHARED_RESOURCE_VIEW,
     }
 )
 
@@ -75,6 +84,8 @@ _CONTRIBUTE: frozenset[Capability] = _VIEW_ONLY | {
     Capability.RUN_CONFIGURATION_MANAGE,
     Capability.RUN_SUBMIT,
     Capability.RUN_CANCEL,
+    Capability.SHARED_RESOURCE_MANAGE,
+    Capability.SHARED_RESOURCE_VERSION_CREATE,
 }
 
 # 管空间需要的能力：改设置、管人、管配置。
@@ -110,6 +121,9 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.RUN_VIEW: "查看 Run",
     Capability.RUN_SUBMIT: "提交 Run",
     Capability.RUN_CANCEL: "取消 Run",
+    Capability.SHARED_RESOURCE_VIEW: "查看 Shared Resource",
+    Capability.SHARED_RESOURCE_MANAGE: "管理 Shared Resource",
+    Capability.SHARED_RESOURCE_VERSION_CREATE: "上传 Shared Resource 版本",
 }
 
 

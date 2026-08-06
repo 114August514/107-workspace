@@ -495,3 +495,75 @@ class ForkRelation:
     """来源版本的展示名，形如 ``v3``。"""
     created_by: str
     created_at: datetime
+
+
+# --------------------------------------------------------------------------
+# Shared Resource
+# --------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class SharedResource:
+    """独立于 Project 存在、可版本化、可被多个 Project 引用的内容资源。
+
+    典型用途：数据集、预训练权重、语料库、预处理脚本。
+
+    ``owner_workspace_id`` 为 ``None`` 表示 Platform 持有的公共资源，
+    全平台可见；否则归属某个 Workspace，对该 Workspace 成员可见。
+
+    本对象可变（名称、说明可改），但其中的版本一旦发布即不可变（GR-201）。
+    """
+
+    id: str
+    name: str
+    description: str = ""
+    owner_workspace_id: str | None = None
+    """``None`` 表示 Platform 持有。"""
+    created_at: datetime | None = None
+
+    @property
+    def is_platform_owned(self) -> bool:
+        return self.owner_workspace_id is None
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceFile:
+    """Shared Resource Version 中的一个文件条目。不可变。"""
+
+    path: str
+    size: int
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceVersion:
+    """Shared Resource 已发布的不可变内容版本（GR-201）。
+
+    版本内容按 ``(path, size, content_hash)`` 三元组列表固化，
+    实际文件内容存在存储层的 blob store 中，按内容寻址——
+    因此 Shared Resource Version 不需要单独的存储目录，复用 Project
+    Version 已经在用的 blob 池。
+
+    发布后内容不得原地修改；要改内容只能发布新版本（设计稿 §3.3 GR-201）。
+    """
+
+    id: str
+    shared_resource_id: str
+    sequence: int
+    """在该 Shared Resource 内自增，用于展示为 v1、v2……"""
+    description: str
+    files: tuple[SharedResourceFile, ...]
+    created_by: str
+    created_at: datetime
+
+    @property
+    def label(self) -> str:
+        return f"v{self.sequence}"
+
+    @property
+    def total_size(self) -> int:
+        return sum(f.size for f in self.files)
+
+    @property
+    def file_count(self) -> int:
+        return len(self.files)

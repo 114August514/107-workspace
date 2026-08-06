@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.enums import WorkspaceRole
 from ..domain.errors import ObjectNotFound, PermissionDenied
-from ..domain.models import Project, Run, Workspace
+from ..domain.models import Project, Run, SharedResource, SharedResourceVersion, Workspace
 from ..domain.ports.repositories import Repositories
 
 
@@ -78,6 +78,36 @@ class RunAccess:
     def require(self, capability: Capability) -> None:
         if not self.can(capability):
             raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceAccess:
+    """当前用户对某个 Shared Resource 的访问上下文。
+
+    Platform 持有的资源（``owner_workspace_id is None``）对全平台可见，
+    ``role`` 在没有归属 Workspace 时为 ``None``——访问层不在这里强制能力，
+    只让上层判断「能不能看见」。写入能力只有 Workspace 持有的资源才有意义，
+    调用方按需 ``require``。
+    """
+
+    resource: SharedResource
+    workspace: Workspace | None
+    role: WorkspaceRole | None
+
+    @property
+    def capabilities(self) -> frozenset[Capability]:
+        if self.role is None:
+            return frozenset()
+        return capabilities_of(self.role)
+
+    def can(self, capability: Capability) -> bool:
+        return capability in self.capabilities
+
+    def require(self, capability: Capability) -> None:
+        if not self.can(capability):
+            raise PermissionDenied(
+                f"当前角色（{self.role.value if self.role else '匿名'}）无权{describe(capability)}"
+            )
 
 
 class AccessGuard:
@@ -145,6 +175,56 @@ class AccessGuard:
         if needs is not None:
             access.require(needs)
         return access
+
+    async def shared_resource(
+        self, user_id: str, resource_id: str, *, needs: Capability | None = None
+    ) -> SharedResourceAccess:
+        """解析 Shared Resource 访问上下文。
+
+        Platform 持有的资源对全平台可见，``role`` 为 ``None``——
+        上层只能做读操作，不能调用 ``require`` 任何写能力。
+
+        Workspace 持有的资源走 Workspace 成员校验：成员看不见就视为不存在，
+        和现有 Project 路径一致。
+        """
+        resource = await self._repos.shared_resources.get(resource_id)
+        if resource is None:
+            raise ObjectNotFound("Shared Resource", resource_id)
+
+        if resource.is_platform_owned:
+            access = SharedResourceAccess(resource=resource, workspace=None, role=None)
+            if needs is not None:
+                # Platform 资源当前 Core 子集只允许读，没有任何写能力可以 require。
+                access.require(needs)
+            return access
+
+        try:
+            workspace_access = await self.workspace(user_id, resource.owner_workspace_id or "")
+        except ObjectNotFound as exc:
+            raise ObjectNotFound("Shared Resource", resource_id) from exc
+
+        access = SharedResourceAccess(
+            resource=resource,
+            workspace=workspace_access.workspace,
+            role=workspace_access.role,
+        )
+        if needs is not None:
+            access.require(needs)
+        return access
+
+    async def shared_resource_version(
+        self, user_id: str, version_id: str, *, needs: Capability | None = None
+    ) -> tuple[SharedResourceVersion, SharedResourceAccess]:
+        """解析 Shared Resource Version 访问上下文。
+
+        版本归属其 Shared Resource，可见性跟着资源走；找不到版本或无权访问
+        归属资源时统一抛 ``ObjectNotFound``。
+        """
+        version = await self._repos.shared_resources.get_version(version_id)
+        if version is None:
+            raise ObjectNotFound("Shared Resource Version", version_id)
+        access = await self.shared_resource(user_id, version.shared_resource_id, needs=needs)
+        return version, access
 
     async def _resolve_role(self, user_id: str, workspace: Workspace) -> WorkspaceRole | None:
         if workspace.is_personal:

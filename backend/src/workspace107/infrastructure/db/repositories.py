@@ -46,6 +46,9 @@ from ...domain.models import (
     Run,
     RunConfiguration,
     RunEvent,
+    SharedResource,
+    SharedResourceFile,
+    SharedResourceVersion,
     User,
     Workspace,
     WorkspaceVariable,
@@ -78,6 +81,10 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("idempotency_keys_pkey", "idempotency_keys.key"),
         "相同的提交请求正在处理中，请稍后查看 Run 列表，不要重复提交",
+    ),
+    (
+        ("uq_shared_resource_version_seq", "shared_resource_versions.sequence"),
+        "有其他人同时发布了这个 Shared Resource 的版本，请刷新后重试",
     ),
 )
 
@@ -1168,6 +1175,139 @@ def _to_fork_relation(row: t.ForkRelationRow) -> ForkRelation:
     )
 
 
+class SharedResourceRepositoryImpl:
+    """Shared Resource 与版本的仓储实现。
+
+    可见性按设计稿 §2.6 分两层：``owner_workspace_id IS NULL`` 为 Platform 资源，
+    全平台可见；否则按 Workspace 归属过滤。跨 Workspace Asset Grant 在 M4 实现。
+    版本仓储只有 ``add_version`` 和读取方法——版本不可变（GR-201）。
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, resource: SharedResource) -> None:
+        self._session.add(
+            t.SharedResourceRow(
+                id=resource.id,
+                name=resource.name,
+                description=resource.description,
+                owner_workspace_id=resource.owner_workspace_id,
+                created_at=resource.created_at or datetime.now(UTC),
+            )
+        )
+        await _flush(self._session)
+
+    async def get(self, resource_id: str) -> SharedResource | None:
+        row = await self._session.get(t.SharedResourceRow, resource_id)
+        return _to_shared_resource(row) if row else None
+
+    async def update(self, resource: SharedResource) -> None:
+        row = await self._session.get(t.SharedResourceRow, resource.id)
+        if row is None:
+            return
+        row.name = resource.name
+        row.description = resource.description
+        await _flush(self._session)
+
+    async def list_platform(self) -> list[SharedResource]:
+        stmt = (
+            select(t.SharedResourceRow)
+            .where(t.SharedResourceRow.owner_workspace_id.is_(None))
+            .order_by(t.SharedResourceRow.name)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_shared_resource(row) for row in rows]
+
+    async def list_for_workspace(self, workspace_id: str) -> list[SharedResource]:
+        stmt = (
+            select(t.SharedResourceRow)
+            .where(t.SharedResourceRow.owner_workspace_id == workspace_id)
+            .order_by(t.SharedResourceRow.name)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_shared_resource(row) for row in rows]
+
+    async def add_version(self, version: SharedResourceVersion) -> None:
+        self._session.add(
+            t.SharedResourceVersionRow(
+                id=version.id,
+                shared_resource_id=version.shared_resource_id,
+                sequence=version.sequence,
+                description=version.description,
+                created_by=version.created_by,
+                created_at=version.created_at,
+            )
+        )
+        # 先把版本行落库，再插文件行——和 ProjectVersionRepositoryImpl 同样原因：
+        # 这两张表只有外键，没有 ORM relationship，SQLAlchemy 不知道先后依赖，
+        # SQLite 默认不校验外键时本地测试看不出来，到 PostgreSQL 上会 ForeignKeyViolation。
+        await _flush(self._session)
+
+        for entry in version.files:
+            self._session.add(
+                t.SharedResourceVersionFileRow(
+                    version_id=version.id,
+                    path=entry.path,
+                    size=entry.size,
+                    content_hash=entry.content_hash,
+                )
+            )
+        await _flush(self._session)
+
+    async def get_version(self, version_id: str) -> SharedResourceVersion | None:
+        row = await self._session.get(t.SharedResourceVersionRow, version_id)
+        if row is None:
+            return None
+        return await self._hydrate_version(row)
+
+    async def list_versions(self, resource_id: str) -> list[SharedResourceVersion]:
+        stmt = (
+            select(t.SharedResourceVersionRow)
+            .where(t.SharedResourceVersionRow.shared_resource_id == resource_id)
+            .order_by(t.SharedResourceVersionRow.sequence.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [await self._hydrate_version(row) for row in rows]
+
+    async def latest_version(self, resource_id: str) -> SharedResourceVersion | None:
+        stmt = (
+            select(t.SharedResourceVersionRow)
+            .where(t.SharedResourceVersionRow.shared_resource_id == resource_id)
+            .order_by(t.SharedResourceVersionRow.sequence.desc())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalars().first()
+        return await self._hydrate_version(row) if row else None
+
+    async def next_version_sequence(self, resource_id: str) -> int:
+        stmt = select(func.max(t.SharedResourceVersionRow.sequence)).where(
+            t.SharedResourceVersionRow.shared_resource_id == resource_id
+        )
+        current = (await self._session.execute(stmt)).scalar_one_or_none()
+        return int(current or 0) + 1
+
+    async def _hydrate_version(self, row: t.SharedResourceVersionRow) -> SharedResourceVersion:
+        stmt = (
+            select(t.SharedResourceVersionFileRow)
+            .where(t.SharedResourceVersionFileRow.version_id == row.id)
+            .order_by(t.SharedResourceVersionFileRow.path)
+        )
+        files = (await self._session.execute(stmt)).scalars().all()
+        return SharedResourceVersion(
+            id=row.id,
+            shared_resource_id=row.shared_resource_id,
+            sequence=row.sequence,
+            description=row.description,
+            files=tuple(
+                SharedResourceFile(path=f.path, size=f.size, content_hash=f.content_hash)
+                for f in files
+            ),
+            created_by=row.created_by,
+            created_at=_required(row.created_at),
+        )
+
+
 class SqlRepositories:
     """一次工作单元内的全部仓储。"""
 
@@ -1192,6 +1332,7 @@ class SqlRepositories:
         self.activities = ActivityRepositoryImpl(session)
         self.notifications = NotificationRepositoryImpl(session)
         self.fork_relations = ForkRelationRepositoryImpl(session)
+        self.shared_resources = SharedResourceRepositoryImpl(session)
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -1400,4 +1541,14 @@ def _to_artifact(row: t.ArtifactRow) -> Artifact:
         description=row.description,
         created_at=_aware(row.created_at),
         cleaned_at=_aware(row.cleaned_at),
+    )
+
+
+def _to_shared_resource(row: t.SharedResourceRow) -> SharedResource:
+    return SharedResource(
+        id=row.id,
+        name=row.name,
+        description=row.description,
+        owner_workspace_id=row.owner_workspace_id,
+        created_at=_aware(row.created_at),
     )
