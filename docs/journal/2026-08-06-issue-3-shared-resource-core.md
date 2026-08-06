@@ -121,10 +121,39 @@
 
 ## 验收
 
-- `make check backend` 全绿：lint、format、103 项测试全部通过。
+- `make check backend` 全绿：lint、format、127 项测试全部通过（含 24 项 Shared
+  Resource 新增测试）。
 - `make build backend` 通过：`workspace107-0.1.0.tar.gz` 与 wheel 构建成功。
 - `make contract check` 通过：OpenAPI 与前端 `schema.d.ts` 与后端一致。
 - 已提交到 `feat/3-shared-resource-core` 分支，未触碰 main。
+
+### 测试覆盖
+
+补充测试后实际跑出了两个真实 bug，已修复：
+
+1. **`run_configuration_service._build_fields` 硬编码只接受 artifact**：
+   原代码对 `source_type != ARTIFACT` 一律抛 ``ValidationFailed("当前迁移实现
+   只支持把 Artifact 作为 Run 输入")``。改为接受 artifact 与
+   shared_resource_version 两种已知类型，未知类型显式报错；存在性/可见性校验
+   仍在 run_service.preflight 里做。
+2. **`publish_version` 路由用 Pydantic 模型接 multipart form**：
+   ``payload: SharedResourceVersionCreateIn`` 在 multipart 请求下被 FastAPI
+   当 JSON body 解析，导致带 files 的请求一律 422。改成 ``description: str =
+   Form(default="")`` 后正常；删除不再使用的 schema。
+
+新增测试分布：
+
+- ``tests/conftest.py`` 与 ``tests/helpers.py``：从 archive 移植，提供
+  settings/context/services/client 夹具和 wait_for_run / create_project_with_version
+  / use_default_environment 辅助函数。helpers.py 去掉过时的 GR-015 引用以免
+  触发架构测试 ``test_active_code_gr_references_exist_in_current_design``。
+- ``tests/integration/resource/test_shared_resource_service.py``：19 项服务层
+  测试，覆盖 create / update / publish_version / read_version_file 的边界校验、
+  权限拒绝、路径规范化、Platform 资源保护、跨 Workspace 隔离、活动记录、blob 去重。
+- ``tests/integration/resource/test_shared_resource_input_binding.py``：5 项闭环
+  测试，走完 创建资源 → 上传版本 → InputBinding 引用 → 提交 Run → Run 读取
+  输入 → 输入只读（GR-404）全流程，覆盖多文件/子目录物化和跨 Workspace 拒绝。
+- ``tests/`` 各级补齐 ``__init__.py`` 让 ``from tests.helpers import ...`` 可用。
 
 未完成项（按设计稿非目标，留作后续 Issue）：
 
@@ -133,9 +162,6 @@
 - 资源搜索、预览、归档、使用追踪（V1）
 - 公共发布审核（V2）
 - Template、Profile（Optional Enhancement）
-- 测试用例补充：本次按用户指示「先开发，测试后面再说」，未新增针对 Shared
-  Resource 的单元 / 集成测试。103 项既有测试全绿说明未引入回归，但闭环本身
-  （创建 → 上传 → 引用 → Run 读取）尚需后续测试覆盖。
 
 ## 对 AGENTS.md 规则的两处例外
 
