@@ -302,10 +302,6 @@ class SharedResourceUpdateIn(Model):
     description: str | None = Field(default=None, max_length=4096)
 
 
-class SharedResourceVersionCreateIn(Model):
-    description: str = Field(default="", max_length=4096)
-
-
 # -- 运行方案 ---------------------------------------------------------------
 
 
