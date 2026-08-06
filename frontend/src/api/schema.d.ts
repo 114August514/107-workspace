@@ -1333,9 +1333,13 @@ export interface components {
         ArtifactStatus: "available" | "cleaned";
         /** Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post */
         Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
             /** Files */
             files: string[];
-            payload: components["schemas"]["SharedResourceVersionCreateIn"];
         };
         /** Body_upload_files_api_v1_projects__project_id__files_upload_post */
         Body_upload_files_api_v1_projects__project_id__files_upload_post: {
@@ -2217,14 +2221,6 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string | null;
-        };
-        /** SharedResourceVersionCreateIn */
-        SharedResourceVersionCreateIn: {
-            /**
-             * Description
-             * @default
-             */
-            description: string;
         };
         /** SharedResourceVersionDetailOut */
         SharedResourceVersionDetailOut: {

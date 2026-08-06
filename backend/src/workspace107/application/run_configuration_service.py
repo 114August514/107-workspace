@@ -161,8 +161,11 @@ class RunConfigurationService:
         seen_paths: set[str] = set()
         for raw in data.input_bindings or []:
             source_type = InputSourceType(raw.get("source_type", InputSourceType.ARTIFACT.value))
-            if source_type is not InputSourceType.ARTIFACT:
-                raise ValidationFailed("当前迁移实现只支持把 Artifact 作为 Run 输入")
+            if source_type not in (
+                InputSourceType.ARTIFACT,
+                InputSourceType.SHARED_RESOURCE_VERSION,
+            ):
+                raise ValidationFailed(f"未知的输入来源类型 {source_type!r}")
             binding = InputBinding(
                 source_type=source_type,
                 source_id=raw["source_id"],

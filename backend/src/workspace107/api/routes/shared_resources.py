@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, Query, UploadFile, status
 from fastapi.responses import PlainTextResponse
 
 from ...application.shared_resource_service import SharedResourceUpload
@@ -126,8 +126,8 @@ async def publish_shared_resource_version(
     resource_id: str,
     user: CurrentUser,
     services: ServicesDep,
-    payload: s.SharedResourceVersionCreateIn,
     files: list[UploadFile] = File(...),
+    description: str = Form(default=""),
     prefix: str = Query(default=""),
 ) -> s.SharedResourceVersionOut:
     """需要 Shared Resource 版本创建权限；上传文件形成新的不可变版本。
@@ -143,7 +143,7 @@ async def publish_shared_resource_version(
     version = await services.shared_resources.publish_version(
         user.id,
         resource_id,
-        description=payload.description,
+        description=description,
         uploads=uploads,
     )
     return p.shared_resource_version_out(version)

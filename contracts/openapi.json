@@ -209,6 +209,11 @@
       },
       "Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post": {
         "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
           "files": {
             "items": {
               "contentMediaType": "application/octet-stream",
@@ -216,13 +221,9 @@
             },
             "title": "Files",
             "type": "array"
-          },
-          "payload": {
-            "$ref": "#/components/schemas/SharedResourceVersionCreateIn"
           }
         },
         "required": [
-          "payload",
           "files"
         ],
         "title": "Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post",
@@ -2525,18 +2526,6 @@
           }
         },
         "title": "SharedResourceUpdateIn",
-        "type": "object"
-      },
-      "SharedResourceVersionCreateIn": {
-        "properties": {
-          "description": {
-            "default": "",
-            "maxLength": 4096,
-            "title": "Description",
-            "type": "string"
-          }
-        },
-        "title": "SharedResourceVersionCreateIn",
         "type": "object"
       },
       "SharedResourceVersionDetailOut": {
