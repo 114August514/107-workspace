@@ -149,8 +149,9 @@ async def test_shared_resource_version_可以作为_run_输入(client: httpx.Asy
     stderr = next((c for c in logs if c["stream"] == "stderr"), None)
 
     assert detail["run"]["status"] == "succeeded", (
-        f"Run failed: {detail['run']['failure_reason']} "
-        f"stderr={stderr['content']!r}" if stderr else ""
+        f"Run failed: {detail['run']['failure_reason']} stderr={stderr['content']!r}"
+        if stderr
+        else ""
     )
 
     stdout = next(c for c in logs if c["stream"] == "stdout")
@@ -180,8 +181,9 @@ async def test_shared_resource_输入以只读方式提供(client: httpx.AsyncCl
     stderr = next((c for c in logs if c["stream"] == "stderr"), None)
 
     assert detail["run"]["status"] == "succeeded", (
-        f"Run failed: {detail['run']['failure_reason']} "
-        f"stderr={stderr['content']!r}" if stderr else ""
+        f"Run failed: {detail['run']['failure_reason']} stderr={stderr['content']!r}"
+        if stderr
+        else ""
     )
 
     stdout = next(c for c in logs if c["stream"] == "stdout")
