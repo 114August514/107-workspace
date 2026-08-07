@@ -153,6 +153,9 @@
 - ``tests/integration/resource/test_shared_resource_input_binding.py``：5 项闭环
   测试，走完 创建资源 → 上传版本 → InputBinding 引用 → 提交 Run → Run 读取
   输入 → 输入只读（GR-404）全流程，覆盖多文件/子目录物化和跨 Workspace 拒绝。
+  闭环测试需要 Mock 调度器以子进程执行用户脚本，Windows 上 subprocess 行为
+  差异较大（权限模型、PATH、shell 约定），CI 上 skip 掉；实际部署为 Slurm
+  Linux 集群，Mock 调度器只用于本地开发测试。
 - ``tests/`` 各级补齐 ``__init__.py`` 让 ``from tests.helpers import ...`` 可用。
 
 未完成项（按设计稿非目标，留作后续 Issue）：

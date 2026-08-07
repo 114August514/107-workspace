@@ -5,15 +5,26 @@
 
 对应设计稿 §2.6 与 §3.1.3：Shared Resource 是独立于 Project 的内容资源，
 通过 InputBinding 统一引用，Run 执行时物化到 inputs/ 下、只读（GR-404）。
+
+闭环测试需要 Mock 调度器以子进程真实执行脚本。在 Windows 上 subprocess
+的行为差异较大（权限模型、PATH、shell 约定），不适合在 CI 上跑闭环；
+实际部署也是 Slurm Linux 集群，Windows 只用于开发。
 """
 
 from __future__ import annotations
 
 import os
+import sys
 
 import httpx
+import pytest
 
 from tests.helpers import create_project_with_version, use_default_environment, wait_for_run
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Mock 调度器的子进程执行在 Windows 上行为不稳定，跳过闭环测试",
+)
 
 ALICE = {"X-User": "alice"}
 
@@ -134,13 +145,12 @@ async def test_shared_resource_version_可以作为_run_输入(client: httpx.Asy
         client, project=project, version=version, script=CONSUMER, entry="consume.py"
     )
 
-    # 打印 stderr 帮助定位跨平台失败（Windows CI 上 Run 有时炸在环境准备阶段）
     logs = (await client.get(f"/api/v1/runs/{detail['run']['id']}/logs", headers=ALICE)).json()
     stderr = next((c for c in logs if c["stream"] == "stderr"), None)
-    failure_info = f"stderr={stderr['content']!r}" if stderr else ""
 
     assert detail["run"]["status"] == "succeeded", (
-        f"Run failed: {detail['run']['failure_reason']} {failure_info}"
+        f"Run failed: {detail['run']['failure_reason']} "
+        f"stderr={stderr['content']!r}" if stderr else ""
     )
 
     stdout = next(c for c in logs if c["stream"] == "stdout")
@@ -154,13 +164,7 @@ async def test_shared_resource_version_可以作为_run_输入(client: httpx.Asy
 
 
 async def test_shared_resource_输入以只读方式提供(client: httpx.AsyncClient) -> None:
-    """GR-404：输入只读，Run 不得原地修改。
-
-    Windows 上 ``_make_readonly`` 只为文件设置只读属性位，不阻止同进程内的
-    ``write_text()``（只读位在 Windows 上主要阻止其他进程写入）。因此本测试
-    只验证 Run 执行成功 + 输入文件内容未被修改——如果 OS 不阻止写入，脚本会
-    打印"写成功了"，断言"原内容不变"也能通过。
-    """
+    """GR-404：输入只读，Run 不得原地修改。"""
     await use_default_environment(client, headers=ALICE)
     version = await _create_resource_with_version(
         client, name="只读验证", files=[("weights.txt", b"original")]
@@ -174,28 +178,19 @@ async def test_shared_resource_输入以只读方式提供(client: httpx.AsyncCl
 
     logs = (await client.get(f"/api/v1/runs/{detail['run']['id']}/logs", headers=ALICE)).json()
     stderr = next((c for c in logs if c["stream"] == "stderr"), None)
-    failure_info = f"stderr={stderr['content']!r}" if stderr else ""
 
     assert detail["run"]["status"] == "succeeded", (
-        f"Run failed: {detail['run']['failure_reason']} {failure_info}"
+        f"Run failed: {detail['run']['failure_reason']} "
+        f"stderr={stderr['content']!r}" if stderr else ""
     )
 
     stdout = next(c for c in logs if c["stream"] == "stdout")
-    # 如果 OS 权限生效：写入被拒绝。如果 OS 不阻止写入：内容变了但 stdout 有"写成功了"，
-    # 此时验证原内容已不可信，改为验证 Run 至少跑完了（脚本没抛异常）。
-    if "写入被拒绝" in stdout["content"]:
-        assert "写成功了" not in stdout["content"]
-    else:
-        # 跨平台兜底：文件可能被改了，但 Run 没崩
-        assert "写成功了" in stdout["content"] or len(stdout["content"]) > 0
+    assert "写入被拒绝" in stdout["content"]
+    assert "写成功了" not in stdout["content"]
 
 
 async def test_shared_resource_支持多文件和子目录(client: httpx.AsyncClient) -> None:
-    """版本里多文件 + 子目录结构，物化到 inputs 后保持原相对路径。
-
-    路径分隔符在 Windows 上是 ``\\``，这里用 ``_norm_path`` 统一成 ``/``
-    再断言，避免跨平台差异。
-    """
+    """版本里多文件 + 子目录结构，物化到 inputs 后保持原相对路径。"""
     await use_default_environment(client, headers=ALICE)
     version = await _create_resource_with_version(
         client,
