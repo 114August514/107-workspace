@@ -221,10 +221,23 @@ Platform 资源对所有登录用户可见，但只能由平台维护。如果�
 `AccessGuard.require()` 在 `role=None` 时任何 `require(cap)` 都会失败，自然禁止
 所有写操作，无需新增角色和对应的授权逻辑。
 
+## 前端留空
+
+前端对新增的 `shared_resource` / `shared_resource_version` target type 暂返回
+`null`（不生成跳转链接），对应文件：
+
+- ``frontend/src/components/activity/actions.ts``：`targetPath()` 中 `shared_resource`
+  和 `shared_resource_version` 返回 `null`。前端当前没有 Shared Resource 详情页和
+  版本详情页，需要单独开 Issue 补齐页面后再改这里。
+- ``frontend/src/components/notification/notificationTypes.ts``：`notificationPath()`
+  同理返回 `null`。
+- Activity action 文案已补齐：`shared_resource_created` → 「创建了 Shared Resource」、
+  `shared_resource_updated` → 「修改了 Shared Resource」、
+  `shared_resource_version_published` → 「发布了版本」。
+
 ## 后续工作
 
-- 补充针对 Shared Resource 的单元测试与集成测试，覆盖创建、上传、跨 Workspace
-  隔离、版本不可变性、Input Binding 闭环等场景。
+- 补充 Shared Resource 详情页和版本详情页（对应上面前端留空）。
 - 在 smoke test 中加入 Shared Resource 闭环。
 - 考虑按设计稿「顺手整理」原则拆分 `domain/models.py` 与
   `infrastructure/db/repositories.py`（本次未做，避免 PR 范围过大）。
