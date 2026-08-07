@@ -49,6 +49,10 @@ export function notificationPath(notification: Notification): string | null {
       return `/runs/${notification.target_id}`
     case 'project_version':
       return notification.workspace_id ? `/workspaces/${notification.workspace_id}` : null
+    case 'shared_resource':
+      return null
+    case 'shared_resource_version':
+      return null
     case 'member':
       return null
   }

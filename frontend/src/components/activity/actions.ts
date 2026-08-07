@@ -26,6 +26,9 @@ const ACTION_TEXT: Record<ActivityAction, string> = {
   run_submitted: '提交了 Run',
   run_cancelled: '取消了 Run',
   run_finished: '的 Run 结束了',
+  shared_resource_created: '创建了 Shared Resource',
+  shared_resource_updated: '修改了 Shared Resource',
+  shared_resource_version_published: '发布了版本',
 }
 
 export function describeAction(action: ActivityAction): string {
@@ -48,6 +51,10 @@ export function targetPath(activity: Activity): string | null {
     case 'project_version':
       // 版本没有独立页面，跳到它所属的 Project
       return activity.project_id ? `/projects/${activity.project_id}` : null
+    case 'shared_resource':
+      return null
+    case 'shared_resource_version':
+      return null
     case 'member':
       return null
   }
