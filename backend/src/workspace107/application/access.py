@@ -84,10 +84,10 @@ class RunAccess:
 class SharedResourceAccess:
     """当前用户对某个 Shared Resource 的访问上下文。
 
-    Platform 持有的资源（``owner_workspace_id is None``）对全平台可见，
-    ``role`` 在没有归属 Workspace 时为 ``None``——访问层不在这里强制能力，
-    只让上层判断「能不能看见」。写入能力只有 Workspace 持有的资源才有意义，
-    调用方按需 ``require``。
+    Platform 资源（``owner_workspace_id is None``）对全平台可见，
+    ``role=None``——只允许读，所有写能力 ``require`` 均失败。
+    Platform 资源通过 §2.6 D V2 公共发布申请 → 平台管理员审核流程产生，
+    本 Core 子集仅预留数据结构与读路径。
     """
 
     resource: SharedResource
