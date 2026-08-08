@@ -79,7 +79,7 @@
   - `publish_version` 校验同版本内路径唯一、单文件不超过 `max_file_bytes`，
     按 `next_version_sequence` 取序号，逐个 `write_blob` 后一次性 `add_version`。
   - Platform 资源的 `update` / `publish_version` 直接 `raise PermissionDenied`，
-    保持「平台维护」语义。
+    Platform 公共资源通过 §2.6 D V2 公共发布审核流程产生，本 Core 子集仅预留数据结构与读路径。
 - `application/run_service.py`：`_check_inputs` 与 `_revalidate_snapshot` 各增加
   `SHARED_RESOURCE_VERSION` 分支，调用新提取的 `_check_shared_resource_version_input`
   做存在性 + 可见性校验（Platform 资源全可见，Workspace 资源要求

@@ -23,7 +23,7 @@ Artifact 一条路——而 Artifact 是 Run 的输出，不是一手数据集�
 - 用户可以在 Workspace 中创建 Shared Resource、上传文件形成版本
 - 用户可在 Run Configuration 的 Input Binding 中引用 SharedResourceVersion
 - Run 执行时平台将引用的 Shared Resource 文件挂载到 inputs 目录（只读）
-- 用户可浏览 Platform 持有和本 Workspace 持有的 Shared Resource
+- 用户可浏览本 Workspace 持有的 Shared Resource（Platform 公共资源读路径已预留，数据由 V2 公共发布流程注入）
 
 ## 范围
 
@@ -84,10 +84,14 @@ Artifact 一条路——而 Artifact 是 Run 的输出，不是一手数据集�
 ## 验收条件
 
 - [ ] `make check` 全绿
-- [ ] 创建 Platform Shared Resource → 上传文件 → 发布版本 → 在 Input Binding 中引用 → 提交 Run → Run 成功执行并读取到输入数据
-- [ ] 本 Workspace 成员能看到 Workspace 级资源，其他 Workspace 成员不能
+- [ ] 创建 Workspace Shared Resource → 上传文件 → 发布版本 → 在 Input Binding 中引用 → 提交 Run → Run 成功执行并读取到输入数据
+- [ ] 本 Workspace 成员能看到本 Workspace 的 Shared Resource，其他 Workspace 成员不能
 - [ ] SharedResourceVersion 创建后内容不可修改
 - [ ] 已有 Run Snapshot 不因 SharedResourceVersion 变化而受影响
+
+> Platform 公共资源（§2.6 D V2）通过公共发布申请 → 平台管理员审核流程产生，
+> 不在本 Core 子集范围。本 Issue 只实现 Workspace 资源写路径；
+> Platform 资源的模型/表/字段已在数据层预留给 V2 使用。
 
 ## 非目标
 

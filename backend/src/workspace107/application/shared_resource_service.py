@@ -4,11 +4,13 @@ Shared Resource 是独立于 Project 存在的内容资源（设计稿 §2.6 / �
 数据集、预训练权重、语料库等。资源对象可变（名称、说明），
 版本一旦发布即不可变（GR-201）。
 
-可见性分两层（Core 子集）：
+可见性分两层：
 
-* Platform 持有（``owner_workspace_id is None``）——全平台可见，任意登录用户可读。
-* Workspace 持有——成员可见；写入需要 ``SHARED_RESOURCE_MANAGE`` /
+* Workspace 持有——成员可见可写；写入需要 ``SHARED_RESOURCE_MANAGE`` /
   ``SHARED_RESOURCE_VERSION_CREATE`` 能力。
+* Platform 持有（``owner_workspace_id is None``）——数据结构已预留（§2.6 D V2），
+  Platform 资源通过公共发布申请 → 平台管理员审核流程产生，本 Core 子集不实现该流程，
+  当前 API 仅提供读路径（``GET /catalog/shared-resources``），不接受写操作。
 
 跨 Workspace Asset Grant 在 M4 单独 Issue，本服务不实现。
 
@@ -160,7 +162,9 @@ class SharedResourceService:
         resource = access.resource
         # Platform 资源当前 Core 子集不接受 API 改写——平台维护走运维通道。
         if resource.is_platform_owned:
-            raise PermissionDenied("Platform 持有的资源由平台维护，当前不支持通过 API 修改")
+            raise PermissionDenied(
+                "Platform 公共资源通过 §2.6 D V2 公共发布审核流程产生，本 Core 子集仅预留读路径"
+            )
         if name is not None:
             name = name.strip()
             if not name:
@@ -203,7 +207,9 @@ class SharedResourceService:
         )
         resource = access.resource
         if resource.is_platform_owned:
-            raise PermissionDenied("Platform 持有的资源由平台维护，当前不支持通过 API 上传版本")
+            raise PermissionDenied(
+                "Platform 公共资源通过 §2.6 D V2 公共发布审核流程产生，本 Core 子集仅预留读路径"
+            )
         if not uploads:
             raise ValidationFailed("版本必须至少包含一个文件")
         if len(description) > MAX_VERSION_DESCRIPTION_LEN:

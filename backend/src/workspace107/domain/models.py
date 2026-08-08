@@ -508,8 +508,10 @@ class SharedResource:
 
     典型用途：数据集、预训练权重、语料库、预处理脚本。
 
-    ``owner_workspace_id`` 为 ``None`` 表示 Platform 持有的公共资源，
-    全平台可见；否则归属某个 Workspace，对该 Workspace 成员可见。
+    ``owner_workspace_id`` 为 ``None`` 表示 Platform 公共资源（§2.6 D V2），
+    全平台可见；Platform 资源通过公共发布申请 → 平台管理员审核流程产生，
+    不在本 Core 子集范围，当前仅预留数据结构。
+    否则归属某个 Workspace，对该 Workspace 成员可见。
 
     本对象可变（名称、说明可改），但其中的版本一旦发布即不可变（GR-201）。
     """
