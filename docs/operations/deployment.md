@@ -5,6 +5,9 @@
 可执行清单及目录边界见 [`deploy/README.md`](../../deploy/README.md)。以下命令均在仓库
 根目录运行。
 
+本部署拓扑和 M1 Worker 只支持 Linux / WSL2 的 POSIX 语义；原生 Windows 不属于部署
+目标。权威平台矩阵见 [ADR-0004](../decisions/0004-platform-support-matrix.md)。
+
 ## 本机演示
 
 ```bash
@@ -73,8 +76,8 @@ API 容器启动时会执行 Alembic 升级和幂等的平台目录 seed，然�
 归 Worker，不归 API。任何能提交 Run 的用户都能执行该 Worker 身份允许的命令，因此它
 只能用于本地开发、自动化测试和受信任演示，不能对不受信任用户开放。
 
-Windows 下 Mock 使用系统命令解释器，POSIX 下使用 Bash。命令本身是否跨平台仍由
-Project 负责；平台不会自动翻译 shell 语法。
+`MockScheduler` adapter 保留 Windows 系统命令解释器分支并由 contributor check 覆盖；
+POSIX 下使用 Bash。完整 Worker 组合仍只支持 Linux / WSL2，平台不会翻译 Project 命令。
 
 ## 接入真实集群
 

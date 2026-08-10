@@ -29,6 +29,10 @@ from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
 COMMIT_OID = "1" * 40
 TREE_OID = "2" * 40
 
+pytestmark = pytest.mark.skipif(
+    os.name != "posix", reason="Run workspace requires POSIX UID/GID and filesystem semantics"
+)
+
 
 class FakeExporter:
     async def export(

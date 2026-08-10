@@ -27,36 +27,34 @@ Artifact。
 
 ## 快速开始
 
+平台能力边界以 [ADR-0004](docs/decisions/0004-platform-support-matrix.md) 为准。完整开发运行
+目标是 Linux；WSL2 按 Linux 语义使用，仓库、storage 与 PostgreSQL 数据必须放在 Linux
+filesystem，Ubuntu CI 结果不等于 WSL2 实机证据。
+
 需要 Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 24 LTS 和 pnpm 11。
-GNU Make 是方便的薄入口，不是 Windows 的前置条件。
 
 ```bash
-# POSIX
+# Linux / WSL2
 ./scripts/platform/posix/bootstrap.sh
 make migrate
 make dev
 ```
 
+原生 Windows 保留无 Make 的 contributor setup/check，以及前端、API、Git 和
+MockScheduler NT 分支；不运行 M1 POSIX Worker、Shared FS、smoke 或部署：
+
 ```powershell
-# Windows PowerShell
 .\scripts\platform\windows\bootstrap.ps1
-uv run --no-project python scripts/workspace.py migrate
-uv run --no-project python scripts/workspace.py dev
+uv run --no-project python scripts/workspace.py check
 ```
 
 后端接口文档默认位于 <http://127.0.0.1:8000/docs>，前端默认位于
 <http://127.0.0.1:5173>。
 
-提交前运行统一检查：
+Linux / WSL2 提交前运行统一检查：
 
 ```bash
 make check
-```
-
-没有 Make 时运行同一实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py check
 ```
 
 任务入口、可选目标和平台边界见 [`scripts/README.md`](scripts/README.md)。

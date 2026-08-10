@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
+import workspace107.config as config_module
 from workspace107.config import Settings
 from workspace107.domain.compute import ResolvedSchedulerConfiguration
 from workspace107.domain.errors import (
@@ -94,7 +96,10 @@ def _scheduler(
     )
 
 
-def test_worker_slurm_settings_fail_fast_without_human_verified_contract() -> None:
+def test_worker_slurm_settings_fail_fast_without_human_verified_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config_module, "os", SimpleNamespace(name="posix", getegid=lambda: 10001))
     settings = Settings(
         scheduler="slurm",
         slurm_api_base_url="https://slurm.invalid",
@@ -109,7 +114,10 @@ def test_worker_slurm_settings_fail_fast_without_human_verified_contract() -> No
     assert "SLURM_TARGET_CLUSTER_ID" in str(captured.value)
 
 
-def test_slurm_settings_accept_only_explicit_verified_candidate_contract() -> None:
+def test_slurm_settings_accept_only_explicit_verified_candidate_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(config_module, "os", SimpleNamespace(name="posix", getegid=lambda: 10001))
     settings = Settings(
         scheduler="slurm",
         database_url="postgresql+asyncpg://fixture@db/workspace107",

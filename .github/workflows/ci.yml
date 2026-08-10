@@ -70,7 +70,7 @@ jobs:
           uv run --no-project python scripts/workspace.py migrate
 
   windows-check:
-    name: windows-canonical-check-and-smoke
+    name: windows-contributor-check
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -95,10 +95,8 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Exercise the Make-free Windows entry point
         run: uv run --no-project python scripts/workspace.py setup
-      - name: Run the full check, including scheduler and storage Windows tests
+      - name: Run the Windows contributor canonical check
         run: uv run --no-project python scripts/workspace.py check
-      - name: Exercise an actual mock Run over HTTP
-        run: uv run --no-project python scripts/workspace.py smoke
 
   docker-build:
     name: compose-build-and-smoke

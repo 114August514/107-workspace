@@ -20,6 +20,9 @@
 
 ## 统一入口
 
+部署拓扑只支持 Linux / WSL2；原生 Windows 不承担 M1 Worker、Shared FS、smoke 或部署。
+权威平台矩阵见 [ADR-0004](../docs/decisions/0004-platform-support-matrix.md)。
+
 在仓库根目录运行：
 
 ```bash
@@ -27,15 +30,6 @@ make compose-config
 make compose-build
 make compose-up
 make compose-down
-```
-
-Windows 没有 Make 时运行同一份 Python 实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py compose config
-uv run --no-project python scripts/workspace.py compose build
-uv run --no-project python scripts/workspace.py compose up
-uv run --no-project python scripts/workspace.py compose down
 ```
 
 统一入口会显式选择本目录的 Compose 文件，并保持相对路径以仓库根目录为基准。

@@ -54,6 +54,10 @@ api/deps.py       请求级仓储与用例服务
 
 API 不启动后台同步任务；Worker 持有一条 PostgreSQL session advisory lock 串行推进 Run。
 
+完整 Worker 运行需要 Linux / WSL2、PostgreSQL 和 POSIX Shared FS 语义；原生 Windows
+只保留 contributor API/Git 检查，不构造 Worker。权威矩阵见
+[`ADR-0004`](../docs/decisions/0004-platform-support-matrix.md)。
+
 ## 安装与运行
 
 ```bash
@@ -61,7 +65,7 @@ uv sync --all-extras
 uv run alembic upgrade head
 uv run python -m workspace107.tools.seed
 uv run uvicorn workspace107.main:create_app --factory --reload
-uv run python -m workspace107.worker               # 需要 PostgreSQL
+uv run python -m workspace107.worker               # Linux / WSL2；需要 PostgreSQL
 ```
 
 接口文档：<http://127.0.0.1:8000/docs>

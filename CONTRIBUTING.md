@@ -13,20 +13,24 @@
 
 ## 本地工作流
 
+完整开发运行目标是 Linux / WSL2：
+
 ```bash
 make setup
 make check
 ```
 
-Windows 不要求安装 Make：
+原生 Windows 保留无 Make 的 contributor setup/check，但不支持 M1 POSIX Worker、
+Shared FS、smoke 或部署：
 
 ```powershell
 uv run --no-project python scripts/workspace.py setup
 uv run --no-project python scripts/workspace.py check
 ```
 
-修改 API DTO 或路由后运行 `make contract`，并提交
-`contracts/openapi.json` 与 `frontend/src/api/schema.d.ts` 的对应变化。
+权威平台矩阵见 [ADR-0004](docs/decisions/0004-platform-support-matrix.md)。修改 API DTO
+或路由后运行 `make contract`，并提交 `contracts/openapi.json` 与
+`frontend/src/api/schema.d.ts` 的对应变化。
 
 提交前检查 `git status` 和暂存区 diff，只提交与当前 Issue 相关的文件。不要提交
 `.env`、密钥、数据库、用户文件、Run 输出、虚拟环境、依赖目录或构建产物。

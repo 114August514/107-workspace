@@ -75,6 +75,8 @@ class Settings(BaseSettings):
 
     def ensure_worker_configuration(self) -> None:
         """Fail before Worker acquires its lock or constructs scheduler adapters."""
+        if os.name != "posix":
+            raise ValueError("Independent Worker requires a POSIX host; use Linux or WSL2")
         if self.scheduler == "mock":
             if self.env not in {"local", "test", "export"}:
                 raise ValueError("Mock scheduler is only allowed in local/test environments")
@@ -118,6 +120,8 @@ class Settings(BaseSettings):
 
     @property
     def resolved_shared_gid(self) -> int:
+        if os.name != "posix":
+            raise ValueError("Independent Worker shared GID requires a POSIX host")
         if self.shared_gid is not None:
             return self.shared_gid
         if self.scheduler == "mock" and self.env in {"local", "test", "export"}:
