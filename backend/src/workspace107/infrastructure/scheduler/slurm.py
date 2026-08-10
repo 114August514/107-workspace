@@ -63,6 +63,7 @@ class SlurmRestApiContract:
     configuration instead of being inferred from an unverified version number.
     """
 
+    target_cluster_id: str
     api_version: str
     schema_profile: str
     submit_path: str
@@ -75,6 +76,8 @@ class SlurmRestApiContract:
     correlation_max_bytes: int
 
     def __post_init__(self) -> None:
+        if not self.target_cluster_id.strip():
+            raise ValueError("target_cluster_id must be an explicit human-verified identity")
         if self.schema_profile != _SUPPORTED_SCHEMA_PROFILE:
             raise ValueError(
                 "unsupported Slurm schema profile; target version requires a reviewed "
@@ -164,6 +167,11 @@ class SlurmRestScheduler:
         )
 
     async def submit(self, submission: SchedulerSubmission) -> str:
+        config = submission.configuration
+        if config.cluster != self._contract.target_cluster_id:
+            raise SchedulerSubmissionRejected(
+                "submission cluster does not match the configured target cluster identity"
+            )
         try:
             self._validate_correlation(submission.correlation)
         except ValueError:
@@ -176,7 +184,6 @@ class SlurmRestScheduler:
                 "environment or wait for the human-approved Apptainer implementation"
             )
 
-        config = submission.configuration
         if config.nodes != 1:
             raise SchedulerSubmissionRejected(
                 "M1 Slurm adapter requires nodes=1 because compute resources are total values"

@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     slurm_api_base_url: str = ""
     slurm_api_user: str = ""
     slurm_jwt: str = Field(default="", repr=False)
+    slurm_target_cluster_id: str = ""
     slurm_api_version: str = ""
     slurm_api_schema_profile: str = ""
     slurm_submit_path: str = ""
@@ -74,6 +75,7 @@ class Settings(BaseSettings):
             "SLURM_API_BASE_URL": self.slurm_api_base_url,
             "SLURM_API_USER": self.slurm_api_user,
             "SLURM_JWT": self.slurm_jwt,
+            "SLURM_TARGET_CLUSTER_ID": self.slurm_target_cluster_id,
             "SLURM_API_VERSION": self.slurm_api_version,
             "SLURM_API_SCHEMA_PROFILE": self.slurm_api_schema_profile,
             "SLURM_SUBMIT_PATH": self.slurm_submit_path,

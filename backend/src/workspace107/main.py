@@ -38,6 +38,7 @@ def build_scheduler(settings: Settings) -> SchedulerPort:
             user=settings.slurm_api_user,
             jwt=settings.slurm_jwt,
             contract=SlurmRestApiContract(
+                target_cluster_id=settings.slurm_target_cluster_id,
                 api_version=settings.slurm_api_version,
                 schema_profile=settings.slurm_api_schema_profile,
                 submit_path=settings.slurm_submit_path,

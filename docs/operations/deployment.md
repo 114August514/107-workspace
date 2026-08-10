@@ -51,6 +51,7 @@ API 容器启动时会执行 Alembic 升级和幂等的平台目录 seed，然�
 | `WORKSPACE107_SCHEDULER` | `mock` 或 `slurm` |
 | `WORKSPACE107_STORAGE_MOUNT` | API、Worker 与计算节点需要共同看到的存储来源 |
 | `WORKSPACE107_SLURM_API_BASE_URL/USER/JWT` | 目标地址、身份与运行时注入的认证 Secret；不得提交或记录 JWT |
+| `WORKSPACE107_SLURM_TARGET_CLUSTER_ID` | 与 slurmrestd endpoint 人工绑定的单一 cluster identity；Snapshot 必须精确匹配 |
 | `WORKSPACE107_SLURM_API_VERSION/SCHEMA_PROFILE` | 人工核验的版本与本地已实现 schema profile；不匹配即停止 |
 | `WORKSPACE107_SLURM_*_PATH*` | 人工核验的 submit/job/list/cancel 路径契约；无默认猜测 |
 | `WORKSPACE107_SLURM_CORRELATION_*` | 完整 correlation 的字段、精确查询参数、容量和查询完整性确认 |
@@ -112,9 +113,11 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 先在脱敏记录中逐项写下“已确认/未确认”；任何一项未确认就停止，保持
 `WORKSPACE107_SCHEDULER=mock`：
 
-1. slurmrestd 与 Slurm 的真实版本、可用 API version、submit/job/list/cancel path 及响应
-   schema。只有目标版本与已审 profile 一致时才能配置；不同版本必须先增加并评审 profile，
-   不能把 `v0.0.40` 当作 107 事实。
+1. slurmrestd endpoint 对应的单一目标 cluster identity、真实 Slurm 版本、可用 API version、
+   submit/job/list/cancel path 及响应 schema。把脱敏后的 identity 记录为
+   `WORKSPACE107_SLURM_TARGET_CLUSTER_ID`；Snapshot 的 `scheduler.cluster` 必须精确匹配，
+   mismatch 会在 HTTP 前拒绝。只有目标版本与已审 profile 一致时才能配置；不同版本必须先
+   增加并评审 profile，不能把 `v0.0.40` 当作 107 事实。
 2. 认证 header 和 JWT 生命周期。JWT 只由 Secret 管理设施注入进程内存，不进入命令行、
    `.env`、日志、异常、数据库、evidence bundle 或 sbatch 正文。
 3. Slurm `comment` 是否能无截断保存完整 correlation、最大字节数、精确查询参数与查询权限；
@@ -131,9 +134,10 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 7. C Worker 已具备 correlation attempt/reconcile 语义；HTTP API 不再同步 submit。缺少该前置
    时不要用旧 API 同步路径验证 D。
 
-配置模板故意不给 endpoint、version、path、user、JWT、Account、Partition 或 QoS 默认值。
-填入目标事实后先启动配置解析；任一必填值、查询完整性确认、容量或 runtime 不满足时，
-应用必须在发出 HTTP 请求前失败。
+配置模板故意不给 endpoint、target cluster identity、version、path、user、JWT、Account、
+Partition 或 QoS 默认值。endpoint 与 identity 必须由同一份人工核验事实绑定；本 adapter
+不做 cluster 路由。填入目标事实后先启动配置解析；任一必填值、cluster mismatch、查询
+完整性确认、容量或 runtime 不满足时，应用必须在发出 HTTP 请求前失败。
 
 #### 2. 最小真实 Run（需要新的执行授权）
 

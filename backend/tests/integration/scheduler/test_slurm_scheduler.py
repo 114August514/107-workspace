@@ -32,6 +32,7 @@ CORRELATION = "run_01JEXACTFULLCORRELATION000000000001"
 
 def _contract(*, complete: bool = True) -> SlurmRestApiContract:
     return SlurmRestApiContract(
+        target_cluster_id="fixture-cluster",
         api_version="v0.0.40",
         schema_profile="slurm-v0.0.40",
         submit_path="/fixture/v0.0.40/job/submit",
@@ -45,7 +46,9 @@ def _contract(*, complete: bool = True) -> SlurmRestApiContract:
     )
 
 
-def _submission(root: Path, *, image: str = "", nodes: int = 1) -> SchedulerSubmission:
+def _submission(
+    root: Path, *, image: str = "", nodes: int = 1, cluster: str = "fixture-cluster"
+) -> SchedulerSubmission:
     work = root / "work"
     logs = root / "logs"
     work.mkdir()
@@ -61,7 +64,7 @@ def _submission(root: Path, *, image: str = "", nodes: int = 1) -> SchedulerSubm
         stdout_path=logs / "stdout.log",
         stderr_path=logs / "stderr.log",
         configuration=ResolvedSchedulerConfiguration(
-            cluster="fixture-cluster",
+            cluster=cluster,
             account="fixture-account",
             partition="fixture-partition",
             qos="fixture-qos",
@@ -93,13 +96,15 @@ def _scheduler(
 
 
 def test_slurm_settings_fail_fast_without_human_verified_contract() -> None:
-    with pytest.raises(ValidationError, match="SLURM_API_VERSION"):
+    with pytest.raises(ValidationError, match="SLURM_API_VERSION") as captured:
         Settings(
             scheduler="slurm",
             slurm_api_base_url="https://slurm.invalid",
             slurm_api_user="fixture-user",
             slurm_jwt=JWT,
         )
+
+    assert "SLURM_TARGET_CLUSTER_ID" in str(captured.value)
 
 
 def test_slurm_settings_accept_only_explicit_verified_candidate_contract() -> None:
@@ -108,6 +113,7 @@ def test_slurm_settings_accept_only_explicit_verified_candidate_contract() -> No
         slurm_api_base_url="https://slurm.invalid",
         slurm_api_user="fixture-user",
         slurm_jwt=JWT,
+        slurm_target_cluster_id="fixture-cluster",
         slurm_api_version="v0.0.40",
         slurm_api_schema_profile="slurm-v0.0.40",
         slurm_submit_path="/fixture/v0.0.40/job/submit",
@@ -130,6 +136,7 @@ def test_api_contract_rejects_unversioned_or_remote_paths() -> None:
     with pytest.raises(ValueError, match="API version"):
         SlurmRestApiContract(
             api_version="v0.0.40",
+            target_cluster_id="fixture-cluster",
             schema_profile="slurm-v0.0.40",
             submit_path="/fixture/job/submit",
             job_path_template="https://other.invalid/v0.0.40/job/{job_id}",
@@ -152,6 +159,9 @@ def test_api_contract_rejects_unversioned_or_remote_paths() -> None:
             _contract(),
             jobs_path="//other.invalid/fixture/v0.0.40/jobs",
         )
+
+    with pytest.raises(ValueError, match="target_cluster_id"):
+        replace(_contract(), target_cluster_id="")
 
 
 @pytest.mark.asyncio
@@ -244,6 +254,17 @@ async def test_submit_success_without_job_id_is_ambiguous_protocol_error(tmp_pat
     scheduler = _scheduler(httpx.MockTransport(lambda _request: httpx.Response(200, json={})))
     with pytest.raises(SchedulerSubmissionUncertain, match="job_id"):
         await scheduler.submit(_submission(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_target_cluster_mismatch_before_http(tmp_path: Path) -> None:
+    def unexpected_http(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("cluster mismatch must fail before HTTP")
+
+    scheduler = _scheduler(httpx.MockTransport(unexpected_http))
+
+    with pytest.raises(SchedulerSubmissionRejected, match="target cluster"):
+        await scheduler.submit(_submission(tmp_path, cluster="different-cluster"))
 
 
 @pytest.mark.asyncio
