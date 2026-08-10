@@ -30,6 +30,11 @@ doctor                 检查本地工程基线
 
 `target` 可以是 `all`、`backend`、`frontend`；`check` 还支持 `contract`。
 
+`smoke` 默认启动并清理隔离的本地栈。已有 Compose 栈使用
+`smoke --base-url http://127.0.0.1:8107/api/v1`；该模式为每次调用生成唯一 dev user，
+复用同一条 Project → Git Version → Run → Worker → Log → Artifact 断言链路，但不接管
+外部栈的启动、停止或数据清理。
+
 任务实现按职责分层：
 
 ```text

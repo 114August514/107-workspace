@@ -147,6 +147,21 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         demo.assert_called_once_with(smoke=True)
 
+    def test_smoke_external_base_url_is_dispatched(self) -> None:
+        with mock.patch.object(project, "external_smoke") as external_smoke:
+            result = workspace.main(["smoke", "--base-url", "http://127.0.0.1:8107/api/v1"])
+
+        self.assertEqual(result, 0)
+        external_smoke.assert_called_once_with("http://127.0.0.1:8107/api/v1")
+
+    def test_external_smoke_rejects_non_http_base_url(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            result = workspace.main(["smoke", "--base-url", "file:///tmp/api/v1"])
+
+        self.assertEqual(result, 1)
+        self.assertIn("HTTP(S) API URL", stderr.getvalue())
+
     def test_coverage_reports_without_a_global_gate(self) -> None:
         with (
             mock.patch.object(project, "ensure_backend_dependencies"),

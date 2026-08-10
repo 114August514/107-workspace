@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 from .common import (
     BACKEND_ROOT,
@@ -334,6 +335,41 @@ def _temporary_smoke_database(admin_url: str) -> Iterator[str]:
         )
 
 
+def _validated_api_base_url(value: str) -> str:
+    candidate = value.strip().rstrip("/")
+    try:
+        parsed = urlsplit(candidate)
+        valid_port = parsed.port is None or parsed.port > 0
+    except ValueError:
+        valid_port = False
+        parsed = urlsplit("")
+    valid = (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname is not None
+        and valid_port
+        and parsed.username is None
+        and parsed.password is None
+        and not parsed.query
+        and not parsed.fragment
+        and parsed.path.rstrip("/").endswith("/api/v1")
+    )
+    if not valid:
+        raise TaskError("External smoke requires an HTTP(S) API URL ending in /api/v1")
+    return candidate
+
+
+def external_smoke(base_url: str) -> None:
+    """Exercise a running API/Worker stack without owning its lifecycle or data."""
+    heading("External stack core run smoke")
+    normalized_url = _validated_api_base_url(base_url)
+    user = f"smoke-{uuid.uuid4().hex}"
+    evidence = {
+        "user": user,
+        **_exercise_core_run(ApiClient(normalized_url, user=user), verbose=False),
+    }
+    print("ok  external HTTP core run completed: " + json.dumps(evidence, sort_keys=True))
+
+
 def demo(*, smoke: bool = False) -> None:
     heading("Isolated core run smoke" if smoke else "Core run demo")
     ensure_backend_dependencies(quiet=True)
@@ -410,7 +446,7 @@ def demo(*, smoke: bool = False) -> None:
         print("\nDemo complete: Project -> Version -> Run Snapshot -> logs -> Artifact.")
 
 
-def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
+def _exercise_core_run(client: ApiClient, *, verbose: bool) -> dict[str, Any]:
     def say(label: str) -> None:
         if verbose:
             print(f"\n{label}")
@@ -522,6 +558,14 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         print(log_text.rstrip())
         print(f"Artifact metrics.json: {metrics}")
         print(f"Run Snapshot: {detail['snapshot']}")
+    return {
+        "run_id": run_id,
+        "status": status,
+        "artifact_id": artifact_id,
+        "artifact_path": metric_file["path"],
+        "artifact_size": metric_file["size"],
+        "artifact": metrics,
+    }
 
 
 def _journal_fields(path: Path) -> tuple[str, dict[str, str]]:
