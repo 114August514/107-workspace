@@ -119,6 +119,7 @@ class ProjectService:
             created_at=now,
             updated_at=now,
         )
+        await self._repos.projects.lock_writer(project.id)
         await self._content.initialize_project(project.id, project.repository_identity)
         await self._repos.projects.add(project)
         await self._activity.record(
@@ -210,6 +211,7 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(project_id)
         normalized = normalize_path(path)
         if len(content) > self._max_file_bytes:
             limit_mb = self._max_file_bytes // (1024 * 1024)
@@ -232,6 +234,7 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(project_id)
         removed = await self._content.delete_working_path(
             project_id, access.project.repository_identity, normalize_path(path)
         )
@@ -244,6 +247,7 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(project_id)
         src = normalize_path(source)
         dst = normalize_path(destination)
         if src == dst:
@@ -290,6 +294,7 @@ class ProjectService:
         changes = await self._content.working_changes(
             project_id,
             access.project.repository_identity,
+            latest.id if latest is not None else None,
             latest.commit_oid if latest is not None else None,
         )
         return [WorkingTreeChange(path=path, change=change) for path, change in changes]
@@ -298,7 +303,10 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(project_id)
         latest = await self._repos.project_versions.latest(project_id)
+        if latest is not None and latest.repository_identity != access.project.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
         created_at = self._clock.now()
         resolved_message = message.strip() or "保存版本"
         version_id = ids.new_id(ids.PROJECT_VERSION)
@@ -306,6 +314,7 @@ class ProjectService:
             project_id,
             access.project.repository_identity,
             version_id=version_id,
+            parent_version_id=latest.id if latest is not None else None,
             parent_commit_oid=latest.commit_oid if latest is not None else None,
             message=resolved_message,
             created_by=user_id,
@@ -314,6 +323,7 @@ class ProjectService:
         version = ProjectVersion(
             id=version_id,
             project_id=project_id,
+            repository_identity=access.project.repository_identity,
             sequence=await self._repos.project_versions.next_sequence(project_id),
             message=resolved_message,
             commit_oid=manifest.commit_oid,
@@ -346,10 +356,17 @@ class ProjectService:
         project = await self._repos.projects.get(base.project_id)
         if project is None:
             raise ObjectNotFound("Project", base.project_id)
+        if (
+            base.repository_identity != target.repository_identity
+            or project.repository_identity != base.repository_identity
+        ):
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
         changes = await self._content.diff_commits(
             base.project_id,
-            project.repository_identity,
+            base.repository_identity,
+            base.id,
             base.commit_oid,
+            target.id,
             target.commit_oid,
         )
         return [VersionDiffEntry(path=path, change=change) for path, change in changes]
@@ -359,9 +376,13 @@ class ProjectService:
         access = await self._guard.project(
             user_id, version.project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(version.project_id)
+        if access.project.repository_identity != version.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
         restored = await self._content.restore_working(
             version.project_id,
             access.project.repository_identity,
+            version.id,
             version.commit_oid,
             self._clock.now(),
         )
@@ -382,9 +403,12 @@ class ProjectService:
         project = await self._repos.projects.get(version.project_id)
         if project is None:
             raise ObjectNotFound("Project Version", version_id)
+        if project.repository_identity != version.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
         return await self._content.read_commit_file(
             version.project_id,
-            project.repository_identity,
+            version.repository_identity,
+            version.id,
             version.commit_oid,
             normalize_path(path),
         )
@@ -449,10 +473,12 @@ class ProjectService:
             updated_at=now,
         )
         fork_message = f"Fork 自 {source_access.project.name} 的 {source_version.label}"
+        await self._repos.projects.lock_writer(project.id)
         version_id = ids.new_id(ids.PROJECT_VERSION)
         manifest = await self._content.fork_commit(
             source_version.project_id,
-            source_access.project.repository_identity,
+            source_version.repository_identity,
+            source_version.id,
             source_version.commit_oid,
             project.id,
             project.repository_identity,
@@ -466,6 +492,7 @@ class ProjectService:
             ProjectVersion(
                 id=version_id,
                 project_id=project.id,
+                repository_identity=project.repository_identity,
                 sequence=1,
                 message=fork_message,
                 commit_oid=manifest.commit_oid,
@@ -536,8 +563,13 @@ class ProjectService:
         project = await self._repos.projects.get(version.project_id)
         if project is None:
             raise ProjectContentMissing(f"Project {version.project_id} 不存在")
+        if project.repository_identity != version.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
         manifest = await self._content.manifest(
-            version.project_id, project.repository_identity, version.commit_oid
+            version.project_id,
+            version.repository_identity,
+            version.id,
+            version.commit_oid,
         )
         if manifest.file_count != version.file_count or manifest.total_size != version.total_size:
             raise ProjectContentIdentityMismatch(

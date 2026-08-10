@@ -64,6 +64,7 @@ def upgrade() -> None:
         )
 
     with op.batch_alter_table("project_versions", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("repository_identity", sa.String(length=64), nullable=False))
         batch_op.add_column(sa.Column("commit_oid", sa.String(length=64), nullable=False))
         batch_op.add_column(sa.Column("file_count", sa.Integer(), nullable=False))
         batch_op.add_column(sa.Column("total_size", sa.Integer(), nullable=False))
@@ -80,6 +81,7 @@ def downgrade() -> None:
         batch_op.drop_constraint("ck_version_commit_oid_length", type_="check")
         batch_op.drop_column("total_size")
         batch_op.drop_column("file_count")
+        batch_op.drop_column("repository_identity")
         batch_op.drop_column("commit_oid")
 
     with op.batch_alter_table("projects", schema=None) as batch_op:

@@ -128,6 +128,7 @@ class ProjectVersionRow(Base):
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), index=True)
+    repository_identity: Mapped[str] = mapped_column(String(64))
     sequence: Mapped[int] = mapped_column(Integer)
     message: Mapped[str] = mapped_column(Text)
     commit_oid: Mapped[str] = mapped_column(String(64))

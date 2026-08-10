@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import hashlib
 import os
 import re
@@ -11,8 +10,6 @@ import shutil
 import stat
 import subprocess
 import tempfile
-from collections.abc import Callable, Iterator
-from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -30,7 +27,7 @@ from ..domain.models import ProjectFile, ProjectVersionFile
 from ..domain.ports.project_content import CommitManifest
 
 _PROJECT_ID = re.compile(r"[A-Za-z0-9_-]+")
-_FULL_COMMIT_OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+_FULL_OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 _IDENTITY_DOMAIN = "projects.workspace107.invalid"
 _REPOSITORY_IDENTITY_FILE = "workspace107-project-identity"
 _VERSION_REF_PREFIX = "refs/workspace107/versions"
@@ -44,7 +41,7 @@ class _TreeEntry:
     mode: str
     object_oid: str
     size: int
-    content_hash: str
+    content_hash: str = ""
 
 
 class _GitFailure(ProjectContentMissing):
@@ -52,44 +49,25 @@ class _GitFailure(ProjectContentMissing):
 
 
 class GitProjectContent:
-    """Project 内容的唯一事实来源：working tree 与完整 Git commit OID。"""
+    """Git 是内容事实；正式 Version 由 immutable ref 与完整 commit OID 共同标识。"""
 
     def __init__(self, root: Path) -> None:
         self._root = root
-        self._lock_root = root / ".locks"
         self._root.mkdir(parents=True, exist_ok=True)
-        self._lock_root.mkdir(parents=True, exist_ok=True)
 
     async def initialize_project(self, project_id: str, repository_identity: str) -> None:
-        await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
-            self._initialize_sync,
-            project_id,
-            repository_identity,
-        )
+        await asyncio.to_thread(self._initialize_sync, project_id, repository_identity)
 
     async def list_working_files(
         self, project_id: str, repository_identity: str
     ) -> list[ProjectFile]:
-        return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
-            self._list_working_sync,
-            project_id,
-            repository_identity,
-        )
+        return await asyncio.to_thread(self._list_working_sync, project_id, repository_identity)
 
     async def read_working_file(
         self, project_id: str, repository_identity: str, path: str
     ) -> bytes:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
-            self._read_working_sync,
-            project_id,
-            repository_identity,
-            path,
+            self._read_working_sync, project_id, repository_identity, path
         )
 
     async def write_working_file(
@@ -101,8 +79,6 @@ class GitProjectContent:
         updated_at: datetime,
     ) -> ProjectFile:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._write_working_sync,
             project_id,
             repository_identity,
@@ -115,12 +91,7 @@ class GitProjectContent:
         self, project_id: str, repository_identity: str, path: str
     ) -> int:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
-            self._delete_working_sync,
-            project_id,
-            repository_identity,
-            path,
+            self._delete_working_sync, project_id, repository_identity, path
         )
 
     async def move_working_path(
@@ -132,8 +103,6 @@ class GitProjectContent:
         updated_at: datetime,
     ) -> list[ProjectFile]:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._move_working_sync,
             project_id,
             repository_identity,
@@ -146,14 +115,14 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        baseline_version_id: str | None,
         baseline_commit_oid: str | None,
     ) -> list[tuple[str, ChangeKind]]:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._working_changes_sync,
             project_id,
             repository_identity,
+            baseline_version_id,
             baseline_commit_oid,
         )
 
@@ -163,18 +132,18 @@ class GitProjectContent:
         repository_identity: str,
         *,
         version_id: str,
+        parent_version_id: str | None,
         parent_commit_oid: str | None,
         message: str,
         created_by: str,
         created_at: datetime,
     ) -> CommitManifest:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._commit_working_sync,
             project_id,
             repository_identity,
             version_id,
+            parent_version_id,
             parent_commit_oid,
             message,
             created_by,
@@ -182,26 +151,33 @@ class GitProjectContent:
         )
 
     async def manifest(
-        self, project_id: str, repository_identity: str, commit_oid: str
+        self,
+        project_id: str,
+        repository_identity: str,
+        version_id: str,
+        commit_oid: str,
     ) -> CommitManifest:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._manifest_sync,
             project_id,
             repository_identity,
+            version_id,
             commit_oid,
         )
 
     async def read_commit_file(
-        self, project_id: str, repository_identity: str, commit_oid: str, path: str
+        self,
+        project_id: str,
+        repository_identity: str,
+        version_id: str,
+        commit_oid: str,
+        path: str,
     ) -> bytes:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._read_commit_file_sync,
             project_id,
             repository_identity,
+            version_id,
             commit_oid,
             path,
         )
@@ -210,16 +186,18 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        base_version_id: str,
         base_commit_oid: str,
+        target_version_id: str,
         target_commit_oid: str,
     ) -> list[tuple[str, ChangeKind]]:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._diff_commits_sync,
             project_id,
             repository_identity,
+            base_version_id,
             base_commit_oid,
+            target_version_id,
             target_commit_oid,
         )
 
@@ -227,15 +205,15 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        version_id: str,
         commit_oid: str,
         updated_at: datetime,
     ) -> list[ProjectFile]:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._restore_working_sync,
             project_id,
             repository_identity,
+            version_id,
             commit_oid,
             updated_at,
         )
@@ -244,6 +222,7 @@ class GitProjectContent:
         self,
         source_project_id: str,
         source_repository_identity: str,
+        source_version_id: str,
         source_commit_oid: str,
         target_project_id: str,
         target_repository_identity: str,
@@ -254,11 +233,10 @@ class GitProjectContent:
         created_at: datetime,
     ) -> CommitManifest:
         return await asyncio.to_thread(
-            self._locked_call,
-            (source_project_id, target_project_id),
             self._fork_commit_sync,
             source_project_id,
             source_repository_identity,
+            source_version_id,
             source_commit_oid,
             target_project_id,
             target_repository_identity,
@@ -272,77 +250,70 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        version_id: str,
         commit_oid: str,
         destination: Path,
     ) -> CommitManifest:
         return await asyncio.to_thread(
-            self._locked_call,
-            (project_id,),
             self._export_sync,
             project_id,
             repository_identity,
+            version_id,
             commit_oid,
             destination,
         )
 
-    def _locked_call(
-        self, project_ids: tuple[str, ...], function: Callable[..., object], *args: object
-    ) -> object:
-        with self._project_locks(*project_ids):
-            return function(*args)
-
-    @contextmanager
-    def _project_locks(self, *project_ids: str) -> Iterator[None]:
-        with ExitStack() as stack:
-            for project_id in sorted(set(project_ids)):
-                self._repository_path(project_id)
-                handle = stack.enter_context((self._lock_root / f"{project_id}.lock").open("a+b"))
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-                stack.callback(fcntl.flock, handle.fileno(), fcntl.LOCK_UN)
-            yield
-
     def _initialize_sync(self, project_id: str, repository_identity: str) -> None:
-        repository = self._repository_path(project_id)
-        if repository.exists():
-            if repository.is_symlink() or not repository.is_dir():
-                raise ProjectContentIdentityMismatch(
-                    f"Project {project_id} repository identity mismatch"
-                )
-            git_directory = repository / ".git"
-            if git_directory.is_symlink():
-                raise ProjectContentIdentityMismatch(
-                    f"Project {project_id} repository metadata is a symlink"
-                )
-            if git_directory.is_dir():
-                self._verify_repository_identity(repository, project_id, repository_identity)
-                return
-            if any(repository.iterdir()):
-                raise ConflictError(f"Project {project_id} 的内容目录已存在且不是 Git repository")
-        else:
-            repository.mkdir(parents=True)
-        self._git(repository, "init", "--initial-branch=main")
-        identity_file = repository / ".git" / _REPOSITORY_IDENTITY_FILE
-        identity_file.write_text(repository_identity + "\n", encoding="utf-8")
-        identity_file.chmod(0o600)
+        project_root = self._project_root(project_id)
+        if project_root.exists():
+            self._require_repository(project_id, repository_identity)
+            return
+        project_root.mkdir()
+        work_tree = self._work_tree(project_root)
+        git_directory = self._git_directory(project_root)
+        work_tree.mkdir()
+        try:
+            self._run_git(
+                "init",
+                "--initial-branch=main",
+                f"--separate-git-dir={git_directory}",
+                str(work_tree),
+            )
+            (work_tree / ".git").unlink()
+            identity_file = git_directory / _REPOSITORY_IDENTITY_FILE
+            identity_file.write_text(repository_identity + "\n", encoding="utf-8")
+            identity_file.chmod(0o600)
+        except Exception:
+            shutil.rmtree(project_root, ignore_errors=True)
+            raise
 
-    def _repository_path(self, project_id: str) -> Path:
+    def _project_root(self, project_id: str) -> Path:
         if not _PROJECT_ID.fullmatch(project_id):
             raise ValidationFailed("Project identity 不合法")
         return self._root / project_id
 
-    def _require_repository(self, project_id: str, repository_identity: str) -> Path:
-        self._recover_restore(project_id)
-        repository = self._repository_path(project_id)
-        git_directory = repository / ".git"
-        if repository.is_symlink() or git_directory.is_symlink() or not git_directory.is_dir():
-            raise ProjectContentMissing(f"Project {project_id} 的 Git repository 不存在")
-        self._verify_repository_identity(repository, project_id, repository_identity)
-        return repository
+    @staticmethod
+    def _git_directory(project_root: Path) -> Path:
+        return project_root / "repository.git"
 
-    def _verify_repository_identity(
-        self, repository: Path, project_id: str, repository_identity: str
-    ) -> None:
-        identity_file = repository / ".git" / _REPOSITORY_IDENTITY_FILE
+    @staticmethod
+    def _work_tree(project_root: Path) -> Path:
+        return project_root / "work"
+
+    def _require_repository(self, project_id: str, repository_identity: str) -> Path:
+        project_root = self._project_root(project_id)
+        self._recover_restore(project_root, project_id)
+        git_directory = self._git_directory(project_root)
+        work_tree = self._work_tree(project_root)
+        if (
+            project_root.is_symlink()
+            or git_directory.is_symlink()
+            or work_tree.is_symlink()
+            or not git_directory.is_dir()
+            or not work_tree.is_dir()
+        ):
+            raise ProjectContentMissing(f"Project {project_id} 的 Git repository 不存在")
+        identity_file = git_directory / _REPOSITORY_IDENTITY_FILE
         if (
             identity_file.is_symlink()
             or not identity_file.is_file()
@@ -351,33 +322,46 @@ class GitProjectContent:
             raise ProjectContentIdentityMismatch(
                 f"Project {project_id} repository identity mismatch"
             )
+        return project_root
 
-    def _assert_commit(self, project_id: str, repository_identity: str, commit_oid: str) -> Path:
-        if not _FULL_COMMIT_OID.fullmatch(commit_oid):
+    def _assert_version_ref(
+        self,
+        project_id: str,
+        repository_identity: str,
+        version_id: str,
+        commit_oid: str,
+    ) -> Path:
+        if not _PROJECT_ID.fullmatch(version_id):
+            raise ValidationFailed("Project Version identity 不合法")
+        if not _FULL_OID.fullmatch(commit_oid):
             raise ValidationFailed(
                 "Project Version 必须使用完整 commit OID，不接受 branch/HEAD/latest"
             )
-        repository = self._require_repository(project_id, repository_identity)
+        project_root = self._require_repository(project_id, repository_identity)
+        if self._try_ref(project_root, self._version_ref(version_id)) != commit_oid:
+            raise ProjectContentIdentityMismatch(
+                f"Project Version {version_id} immutable ref identity mismatch"
+            )
         try:
-            self._git(repository, "cat-file", "-e", f"{commit_oid}^{{commit}}")
+            self._git(project_root, "cat-file", "-e", f"{commit_oid}^{{commit}}")
         except _GitFailure as exc:
-            raise ProjectContentMissing(
-                f"Project {project_id} 的 Git object {commit_oid} 不存在"
-            ) from exc
-        return repository
+            raise ProjectContentMissing(f"Git commit {commit_oid} 不存在") from exc
+        return project_root
 
-    def _identity_email(self, project_id: str) -> str:
-        return f"{project_id}@{_IDENTITY_DOMAIN}"
+    @staticmethod
+    def _version_ref(version_id: str) -> str:
+        return f"{_VERSION_REF_PREFIX}/{version_id}"
 
     def _list_working_sync(self, project_id: str, repository_identity: str) -> list[ProjectFile]:
-        repository = self._require_repository(project_id, repository_identity)
+        project_root = self._require_repository(project_id, repository_identity)
+        work_tree = self._work_tree(project_root)
         result: list[ProjectFile] = []
-        for path in self._working_paths(repository):
+        for path in self._working_paths(work_tree):
             data = path.read_bytes()
             result.append(
                 ProjectFile(
                     project_id=project_id,
-                    path=path.relative_to(repository).as_posix(),
+                    path=path.relative_to(work_tree).as_posix(),
                     size=len(data),
                     content_hash=hashlib.sha256(data).hexdigest(),
                     updated_at=datetime.fromtimestamp(path.stat().st_mtime, tz=UTC),
@@ -385,22 +369,20 @@ class GitProjectContent:
             )
         return result
 
-    def _working_paths(self, repository: Path) -> list[Path]:
+    def _working_paths(self, work_tree: Path) -> list[Path]:
         paths: list[Path] = []
-        for dirpath, dirnames, filenames in os.walk(repository, followlinks=False):
+        for dirpath, dirnames, filenames in os.walk(work_tree, followlinks=False):
             current = Path(dirpath)
-            if current == repository:
-                dirnames[:] = [name for name in dirnames if name != ".git"]
             for name in list(dirnames):
                 candidate = current / name
                 if candidate.is_symlink():
-                    relative = candidate.relative_to(repository)
+                    relative = candidate.relative_to(work_tree)
                     raise ValidationFailed(
                         f"Project Working State 包含不支持的符号链接：{relative}"
                     )
             for name in filenames:
                 candidate = current / name
-                relative = candidate.relative_to(repository).as_posix()
+                relative = candidate.relative_to(work_tree).as_posix()
                 self._safe_relative(relative)
                 mode = candidate.lstat().st_mode
                 if stat.S_ISLNK(mode):
@@ -412,11 +394,11 @@ class GitProjectContent:
                         f"Project Working State 包含不支持的文件类型：{relative}"
                     )
                 paths.append(candidate)
-        return sorted(paths, key=lambda item: item.relative_to(repository).as_posix())
+        return sorted(paths, key=lambda item: item.relative_to(work_tree).as_posix())
 
     def _read_working_sync(self, project_id: str, repository_identity: str, path: str) -> bytes:
-        repository = self._require_repository(project_id, repository_identity)
-        target = self._safe_target(repository, path)
+        project_root = self._require_repository(project_id, repository_identity)
+        target = self._safe_target(self._work_tree(project_root), path)
         if not target.is_file() or target.is_symlink():
             raise ObjectNotFound("文件", path)
         return target.read_bytes()
@@ -429,9 +411,10 @@ class GitProjectContent:
         content: bytes,
         updated_at: datetime,
     ) -> ProjectFile:
-        repository = self._require_repository(project_id, repository_identity)
+        project_root = self._require_repository(project_id, repository_identity)
+        work_tree = self._work_tree(project_root)
         relative = self._safe_relative(path)
-        target = self._safe_target(repository, relative, allow_missing=True)
+        target = self._safe_target(work_tree, relative, allow_missing=True)
         target.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=".workspace107-", suffix=".tmp", dir=target.parent
@@ -454,8 +437,8 @@ class GitProjectContent:
         )
 
     def _delete_working_sync(self, project_id: str, repository_identity: str, path: str) -> int:
-        repository = self._require_repository(project_id, repository_identity)
-        target = self._safe_target(repository, path)
+        project_root = self._require_repository(project_id, repository_identity)
+        target = self._safe_target(self._work_tree(project_root), path)
         if not target.exists() or target.is_symlink():
             raise ObjectNotFound("文件或目录", path)
         if target.is_file():
@@ -473,9 +456,10 @@ class GitProjectContent:
         destination: str,
         updated_at: datetime,
     ) -> list[ProjectFile]:
-        repository = self._require_repository(project_id, repository_identity)
-        source_path = self._safe_target(repository, source)
-        destination_path = self._safe_target(repository, destination, allow_missing=True)
+        project_root = self._require_repository(project_id, repository_identity)
+        work_tree = self._work_tree(project_root)
+        source_path = self._safe_target(work_tree, source)
+        destination_path = self._safe_target(work_tree, destination, allow_missing=True)
         if not source_path.exists() or source_path.is_symlink():
             raise ObjectNotFound("文件或目录", source)
         if destination_path.exists():
@@ -484,7 +468,7 @@ class GitProjectContent:
         source_path.rename(destination_path)
         timestamp = updated_at.timestamp()
         candidates = (
-            [destination_path] if destination_path.is_file() else self._working_paths(repository)
+            [destination_path] if destination_path.is_file() else self._working_paths(work_tree)
         )
         moved: list[ProjectFile] = []
         for candidate in candidates:
@@ -495,7 +479,7 @@ class GitProjectContent:
             moved.append(
                 ProjectFile(
                     project_id=project_id,
-                    path=candidate.relative_to(repository).as_posix(),
+                    path=candidate.relative_to(work_tree).as_posix(),
                     size=len(data),
                     content_hash=hashlib.sha256(data).hexdigest(),
                     updated_at=updated_at,
@@ -507,18 +491,24 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        baseline_version_id: str | None,
         baseline_commit_oid: str | None,
     ) -> list[tuple[str, ChangeKind]]:
         current = {
             entry.path: entry.content_hash
             for entry in self._list_working_sync(project_id, repository_identity)
         }
+        if (baseline_version_id is None) != (baseline_commit_oid is None):
+            raise ProjectContentIdentityMismatch("Project Version baseline identity 不完整")
         baseline: dict[str, str] = {}
-        if baseline_commit_oid is not None:
+        if baseline_version_id is not None and baseline_commit_oid is not None:
             baseline = {
                 entry.path: entry.content_hash
                 for entry in self._manifest_sync(
-                    project_id, repository_identity, baseline_commit_oid
+                    project_id,
+                    repository_identity,
+                    baseline_version_id,
+                    baseline_commit_oid,
                 ).files
             }
         return self._diff(baseline, current)
@@ -528,29 +518,35 @@ class GitProjectContent:
         project_id: str,
         repository_identity: str,
         version_id: str,
+        parent_version_id: str | None,
         parent_commit_oid: str | None,
         message: str,
         created_by: str,
         created_at: datetime,
     ) -> CommitManifest:
-        repository = self._require_repository(project_id, repository_identity)
+        project_root = self._require_repository(project_id, repository_identity)
         if not _PROJECT_ID.fullmatch(version_id):
             raise ValidationFailed("Project Version identity 不合法")
-        if not self._working_paths(repository):
+        if not self._working_paths(self._work_tree(project_root)):
             raise ValidationFailed("Project 中没有文件，无法保存版本")
-        if parent_commit_oid is not None:
-            self._assert_commit(project_id, repository_identity, parent_commit_oid)
-
-        self._git(repository, "add", "-A", "-f", "--", ".")
-        tree_oid = self._git_text(repository, "write-tree").strip()
+        if (parent_version_id is None) != (parent_commit_oid is None):
+            raise ProjectContentIdentityMismatch("Project Version parent identity 不完整")
+        if parent_version_id is not None and parent_commit_oid is not None:
+            self._assert_version_ref(
+                project_id,
+                repository_identity,
+                parent_version_id,
+                parent_commit_oid,
+            )
+        self._git(project_root, "add", "-A", "-f", "--", ".")
+        tree_oid = self._git_text(project_root, "write-tree").strip()
         if parent_commit_oid is not None:
             parent_tree = self._git_text(
-                repository, "show", "--no-patch", "--format=%T", parent_commit_oid
+                project_root, "show", "--no-patch", "--format=%T", parent_commit_oid
             ).strip()
             if tree_oid == parent_tree:
                 raise ConflictError("当前内容与最近一个版本相同，没有需要保存的变更")
-
-        identity_email = self._identity_email(project_id)
+        identity_email = f"{project_id}@{_IDENTITY_DOMAIN}"
         git_env = {
             "GIT_AUTHOR_NAME": self._identity_name(created_by),
             "GIT_AUTHOR_EMAIL": identity_email,
@@ -563,36 +559,41 @@ class GitProjectContent:
         if parent_commit_oid is not None:
             arguments.extend(["-p", parent_commit_oid])
         commit_oid = self._git_text(
-            repository,
+            project_root,
             *arguments,
             input_data=(message.strip() or "保存版本").encode("utf-8") + b"\n",
             extra_env=git_env,
         ).strip()
-        version_ref = f"{_VERSION_REF_PREFIX}/{version_id}"
-        zero_oid = "0" * len(commit_oid)
-        self._git(repository, "update-ref", version_ref, commit_oid, zero_oid)
-        current_main = self._try_ref(repository, "refs/heads/main")
-        expected_main = current_main or zero_oid
         self._git(
-            repository,
+            project_root,
             "update-ref",
-            "refs/heads/main",
+            self._version_ref(version_id),
             commit_oid,
-            expected_main,
+            "0" * len(commit_oid),
         )
-        return self._manifest_sync(project_id, repository_identity, commit_oid)
+        return self._manifest_for_commit(project_root, commit_oid)
 
-    def _identity_name(self, created_by: str) -> str:
+    @staticmethod
+    def _identity_name(created_by: str) -> str:
         return created_by.replace("\n", " ").replace("\r", " ") or "Workspace user"
 
     def _manifest_sync(
-        self, project_id: str, repository_identity: str, commit_oid: str
+        self,
+        project_id: str,
+        repository_identity: str,
+        version_id: str,
+        commit_oid: str,
     ) -> CommitManifest:
-        repository = self._assert_commit(project_id, repository_identity, commit_oid)
+        project_root = self._assert_version_ref(
+            project_id, repository_identity, version_id, commit_oid
+        )
+        return self._manifest_for_commit(project_root, commit_oid)
+
+    def _manifest_for_commit(self, project_root: Path, commit_oid: str) -> CommitManifest:
         tree_oid = self._git_text(
-            repository, "show", "--no-patch", "--format=%T", commit_oid
+            project_root, "show", "--no-patch", "--format=%T", commit_oid
         ).strip()
-        entries = self._tree_entries(repository, commit_oid)
+        entries = self._tree_entries(project_root, commit_oid, hash_blobs=True)
         return CommitManifest(
             commit_oid=commit_oid,
             tree_oid=tree_oid,
@@ -601,77 +602,98 @@ class GitProjectContent:
             ),
         )
 
-    def _tree_entries(self, repository: Path, commit_oid: str) -> list[_TreeEntry]:
+    def _tree_entries(
+        self, project_root: Path, revision: str, *, hash_blobs: bool
+    ) -> list[_TreeEntry]:
         try:
-            payload = self._git(repository, "ls-tree", "-r", "-z", "-l", "--full-tree", commit_oid)
+            payload = self._git(project_root, "ls-tree", "-r", "-z", "-l", "--full-tree", revision)
         except _GitFailure as exc:
-            raise ProjectContentMissing(f"Git commit {commit_oid} 的 tree 不存在") from exc
-        entries: list[_TreeEntry] = []
-        for raw_entry in payload.split(b"\0"):
-            if not raw_entry:
-                continue
-            metadata, raw_path = raw_entry.split(b"\t", 1)
-            mode, object_type, raw_oid, raw_size = metadata.split()
-            try:
-                path = raw_path.decode("utf-8")
-            except UnicodeDecodeError as exc:
-                raise ValidationFailed("Project Version 包含非 UTF-8 路径") from exc
-            relative = self._safe_relative(path)
-            decoded_mode = mode.decode("ascii")
-            if decoded_mode == "120000":
-                raise ValidationFailed(f"Project Version 包含不支持的符号链接：{relative}")
-            if object_type != b"blob" or decoded_mode not in {"100644", "100755"}:
-                raise ValidationFailed(f"Project Version 包含不支持的 Git tree entry：{relative}")
-            object_oid = raw_oid.decode("ascii")
-            if raw_size == b"BAD":
-                raise ProjectContentMissing(f"Git object {object_oid} 不存在")
-            size = int(raw_size)
-            content_hash, actual_size = self._hash_blob(repository, object_oid)
+            raise ProjectContentMissing(f"Git revision {revision} 的 tree 不存在") from exc
+        entries = [
+            self._parse_tree_entry(project_root, raw, hash_blob=hash_blobs)
+            for raw in payload.split(b"\0")
+            if raw
+        ]
+        return sorted(entries, key=lambda entry: entry.path)
+
+    def _parse_tree_entry(
+        self, project_root: Path, raw_entry: bytes, *, hash_blob: bool
+    ) -> _TreeEntry:
+        metadata, raw_path = raw_entry.split(b"\t", 1)
+        mode, object_type, raw_oid, raw_size = metadata.split()
+        try:
+            path = raw_path.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValidationFailed("Project Version 包含非 UTF-8 路径") from exc
+        relative = self._safe_relative(path)
+        decoded_mode = mode.decode("ascii")
+        if decoded_mode == "120000":
+            raise ValidationFailed(f"Project Version 包含不支持的符号链接：{relative}")
+        if object_type != b"blob" or decoded_mode not in {"100644", "100755"}:
+            raise ValidationFailed(f"Project Version 包含不支持的 Git tree entry：{relative}")
+        object_oid = raw_oid.decode("ascii")
+        if raw_size == b"BAD":
+            raise ProjectContentMissing(f"Git object {object_oid} 不存在")
+        size = int(raw_size)
+        content_hash = ""
+        if hash_blob:
+            content_hash, actual_size = self._hash_blob(project_root, object_oid)
             if actual_size != size:
                 raise ProjectContentMissing(f"Git object {object_oid} 的大小与 tree 不一致")
-            entries.append(
-                _TreeEntry(
-                    path=relative,
-                    mode=decoded_mode,
-                    object_oid=object_oid,
-                    size=size,
-                    content_hash=content_hash,
-                )
-            )
-        return sorted(entries, key=lambda entry: entry.path)
+        return _TreeEntry(relative, decoded_mode, object_oid, size, content_hash)
 
     def _read_commit_file_sync(
         self,
         project_id: str,
         repository_identity: str,
+        version_id: str,
         commit_oid: str,
         path: str,
     ) -> bytes:
-        repository = self._assert_commit(project_id, repository_identity, commit_oid)
-        relative = self._safe_relative(path)
-        entry = next(
-            (item for item in self._tree_entries(repository, commit_oid) if item.path == relative),
-            None,
+        project_root = self._assert_version_ref(
+            project_id, repository_identity, version_id, commit_oid
         )
-        if entry is None:
+        relative = self._safe_relative(path)
+        payload = self._git(
+            project_root,
+            "ls-tree",
+            "-z",
+            "-l",
+            "--full-tree",
+            commit_oid,
+            "--",
+            f":(literal){relative}",
+        )
+        raw_entries = [entry for entry in payload.split(b"\0") if entry]
+        if len(raw_entries) != 1:
             raise ObjectNotFound("文件", relative)
-        return self._read_blob(repository, entry.object_oid)
+        entry = self._parse_tree_entry(project_root, raw_entries[0], hash_blob=False)
+        if entry.path != relative:
+            raise ObjectNotFound("文件", relative)
+        data = self._read_blob(project_root, entry.object_oid)
+        if len(data) != entry.size:
+            raise ProjectContentMissing(f"Git object {entry.object_oid} 大小不一致")
+        return data
 
     def _diff_commits_sync(
         self,
         project_id: str,
         repository_identity: str,
+        base_version_id: str,
         base_commit_oid: str,
+        target_version_id: str,
         target_commit_oid: str,
     ) -> list[tuple[str, ChangeKind]]:
         base = {
             entry.path: entry.content_hash
-            for entry in self._manifest_sync(project_id, repository_identity, base_commit_oid).files
+            for entry in self._manifest_sync(
+                project_id, repository_identity, base_version_id, base_commit_oid
+            ).files
         }
         target = {
             entry.path: entry.content_hash
             for entry in self._manifest_sync(
-                project_id, repository_identity, target_commit_oid
+                project_id, repository_identity, target_version_id, target_commit_oid
             ).files
         }
         return self._diff(base, target)
@@ -680,77 +702,100 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        version_id: str,
         commit_oid: str,
         updated_at: datetime,
     ) -> list[ProjectFile]:
-        repository = self._require_repository(project_id, repository_identity)
-        manifest = self._manifest_sync(project_id, repository_identity, commit_oid)
-        entries = self._tree_entries(repository, commit_oid)
-        staging, backup, state = self._restore_paths(project_id)
-        state.write_text("exporting\n", encoding="ascii")
+        project_root = self._assert_version_ref(
+            project_id, repository_identity, version_id, commit_oid
+        )
+        work_tree = self._work_tree(project_root)
+        staging, backup, state = self._restore_paths(project_root)
+        if staging.exists() or backup.exists() or state.exists():
+            raise ProjectContentIdentityMismatch(
+                f"Project {project_id} restore ownership state is not clean"
+            )
         staging.mkdir()
         try:
-            self._materialize(repository, entries, manifest, staging)
+            self._export_tree(project_root, commit_oid, staging)
+            self._write_restore_state(state, "prepared")
+            work_tree.replace(backup)
+            self._write_restore_state(state, "backup")
+            staging.replace(work_tree)
+            self._write_restore_state(state, "swapped")
+            shutil.rmtree(backup)
+            state.unlink()
         except Exception:
-            shutil.rmtree(staging, ignore_errors=True)
-            state.unlink(missing_ok=True)
+            self._recover_restore(project_root, project_id)
             raise
-        state.write_text("prepared\n", encoding="ascii")
-        repository.replace(backup)
-        state.write_text("backup\n", encoding="ascii")
-        (backup / ".git").replace(staging / ".git")
-        state.write_text("git_moved\n", encoding="ascii")
-        staging.replace(repository)
-        state.write_text("swapped\n", encoding="ascii")
-        shutil.rmtree(backup)
-        state.unlink()
         timestamp = updated_at.timestamp()
-        for path in self._working_paths(repository):
+        for path in self._working_paths(work_tree):
             os.utime(path, (timestamp, timestamp))
         return self._list_working_sync(project_id, repository_identity)
 
-    def _restore_paths(self, project_id: str) -> tuple[Path, Path, Path]:
+    @staticmethod
+    def _restore_paths(project_root: Path) -> tuple[Path, Path, Path]:
         return (
-            self._root / f".restore-{project_id}-staging",
-            self._root / f".restore-{project_id}-backup",
-            self._lock_root / f"{project_id}.restore",
+            project_root / "restore-staging",
+            project_root / "restore-backup",
+            project_root / "restore.state",
         )
 
-    def _recover_restore(self, project_id: str) -> None:
-        repository = self._repository_path(project_id)
-        staging, backup, state = self._restore_paths(project_id)
+    def _recover_restore(self, project_root: Path, project_id: str) -> None:
+        staging, backup, state = self._restore_paths(project_root)
+        work_tree = self._work_tree(project_root)
+        for owned in (staging, backup, state):
+            if owned.is_symlink():
+                raise ProjectContentIdentityMismatch(
+                    f"Project {project_id} restore ownership path is a symlink"
+                )
         if not state.exists():
+            if backup.exists():
+                raise ProjectContentIdentityMismatch(
+                    f"Project {project_id} restore backup has no state"
+                )
+            if staging.exists():
+                shutil.rmtree(staging)
             return
-        if state.is_symlink() or not state.is_file():
+        if not state.is_file():
             raise ProjectContentIdentityMismatch(f"Project {project_id} restore state is invalid")
         phase = state.read_text(encoding="ascii").strip()
-        if phase in {"exporting", "prepared"} and repository.exists():
+        if phase == "prepared" and work_tree.is_dir():
             shutil.rmtree(staging, ignore_errors=True)
             state.unlink()
             return
         if phase in {"prepared", "backup"}:
-            if backup.is_dir() and (backup / ".git").is_dir() and staging.is_dir():
-                (backup / ".git").replace(staging / ".git")
-            phase = "git_moved"
-            state.write_text(phase + "\n", encoding="ascii")
-        if phase == "git_moved":
-            if not repository.exists() and staging.is_dir() and (staging / ".git").is_dir():
-                staging.replace(repository)
-            phase = "swapped"
-            state.write_text(phase + "\n", encoding="ascii")
-        if phase == "swapped" and repository.is_dir():
+            if not work_tree.exists() and staging.is_dir() and backup.is_dir():
+                staging.replace(work_tree)
+            if work_tree.is_dir() and backup.is_dir():
+                phase = "swapped"
+        if phase == "swapped" and work_tree.is_dir():
             shutil.rmtree(backup, ignore_errors=True)
             shutil.rmtree(staging, ignore_errors=True)
-            state.unlink()
+            state.unlink(missing_ok=True)
             return
         raise ProjectContentIdentityMismatch(
             f"Project {project_id} restore state cannot be recovered"
         )
 
+    @staticmethod
+    def _write_restore_state(state: Path, phase: str) -> None:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix="restore-state-", suffix=".tmp", dir=state.parent
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+                handle.write(phase + "\n")
+            os.replace(temporary, state)
+        finally:
+            temporary.unlink(missing_ok=True)
+
     def _fork_commit_sync(
         self,
         source_project_id: str,
         source_repository_identity: str,
+        source_version_id: str,
         source_commit_oid: str,
         target_project_id: str,
         target_repository_identity: str,
@@ -759,28 +804,23 @@ class GitProjectContent:
         created_by: str,
         created_at: datetime,
     ) -> CommitManifest:
-        self._initialize_sync(target_project_id, target_repository_identity)
-        target_repository = self._require_repository(target_project_id, target_repository_identity)
-        if any(item.name != ".git" for item in target_repository.iterdir()):
-            raise ConflictError(f"目标 Project {target_project_id} Working State 不是空的")
-        temporary = Path(
-            tempfile.mkdtemp(prefix="workspace107-fork-", dir=target_repository.parent)
+        source_root = self._assert_version_ref(
+            source_project_id,
+            source_repository_identity,
+            source_version_id,
+            source_commit_oid,
         )
-        try:
-            self._export_sync(
-                source_project_id,
-                source_repository_identity,
-                source_commit_oid,
-                temporary,
-            )
-            for item in temporary.iterdir():
-                item.replace(target_repository / item.name)
-        finally:
-            shutil.rmtree(temporary, ignore_errors=True)
+        self._initialize_sync(target_project_id, target_repository_identity)
+        target_root = self._require_repository(target_project_id, target_repository_identity)
+        target_work = self._work_tree(target_root)
+        if any(target_work.iterdir()):
+            raise ConflictError(f"目标 Project {target_project_id} Working State 不是空的")
+        self._export_tree(source_root, source_commit_oid, target_work)
         return self._commit_working_sync(
             target_project_id,
             target_repository_identity,
             version_id,
+            None,
             None,
             message,
             created_by,
@@ -791,36 +831,39 @@ class GitProjectContent:
         self,
         project_id: str,
         repository_identity: str,
+        version_id: str,
         commit_oid: str,
         destination: Path,
     ) -> CommitManifest:
         if destination.is_symlink() or not destination.is_dir() or any(destination.iterdir()):
             raise ValidationFailed("Project Version 只能导出到调用方指定的现有空目录")
-        repository = self._assert_commit(project_id, repository_identity, commit_oid)
-        manifest = self._manifest_sync(project_id, repository_identity, commit_oid)
-        entries = self._tree_entries(repository, commit_oid)
-        return self._materialize(repository, entries, manifest, destination)
+        project_root = self._assert_version_ref(
+            project_id, repository_identity, version_id, commit_oid
+        )
+        return self._export_tree(project_root, commit_oid, destination)
 
-    def _materialize(
-        self,
-        repository: Path,
-        entries: list[_TreeEntry],
-        manifest: CommitManifest,
-        destination: Path,
+    def _export_tree(
+        self, project_root: Path, commit_oid: str, destination: Path
     ) -> CommitManifest:
+        tree_oid = self._git_text(
+            project_root, "show", "--no-patch", "--format=%T", commit_oid
+        ).strip()
+        entries = self._tree_entries(project_root, commit_oid, hash_blobs=False)
         temporary = Path(
             tempfile.mkdtemp(prefix=f".{destination.name}-workspace107-", dir=destination.parent)
         )
+        files: list[ProjectVersionFile] = []
         try:
             for entry in entries:
                 target = temporary.joinpath(*PurePosixPath(entry.path).parts)
                 target.parent.mkdir(parents=True, exist_ok=True)
-                actual_hash, actual_size = self._write_blob(repository, entry.object_oid, target)
-                if actual_size != entry.size or actual_hash != entry.content_hash:
+                content_hash, actual_size = self._write_blob(project_root, entry.object_oid, target)
+                if actual_size != entry.size:
                     raise ProjectContentMissing(
-                        f"Git object {entry.object_oid} 与 Project Version manifest 不一致"
+                        f"Git object {entry.object_oid} 的大小与 tree 不一致"
                     )
                 target.chmod(0o755 if entry.mode == "100755" else 0o644)
+                files.append(ProjectVersionFile(entry.path, actual_size, content_hash))
             destination.rmdir()
             try:
                 os.replace(temporary, destination)
@@ -830,55 +873,64 @@ class GitProjectContent:
         finally:
             if temporary.exists():
                 shutil.rmtree(temporary, ignore_errors=True)
-        return manifest
+        return CommitManifest(commit_oid=commit_oid, tree_oid=tree_oid, files=tuple(files))
 
-    def _read_blob(self, repository: Path, object_oid: str) -> bytes:
+    def _read_blob(self, project_root: Path, object_oid: str) -> bytes:
         try:
-            return self._git(repository, "cat-file", "blob", object_oid)
+            return self._git(project_root, "cat-file", "blob", object_oid)
         except _GitFailure as exc:
             raise ProjectContentMissing(f"Git object {object_oid} 不存在") from exc
 
-    def _hash_blob(self, repository: Path, object_oid: str) -> tuple[str, int]:
-        with tempfile.TemporaryFile() as temporary:
-            self._stream_blob(repository, object_oid, temporary)
-            temporary.seek(0)
-            return self._hash_stream(temporary)
+    def _hash_blob(self, project_root: Path, object_oid: str) -> tuple[str, int]:
+        return self._stream_hash_blob(project_root, object_oid, None)
 
-    def _write_blob(self, repository: Path, object_oid: str, target: Path) -> tuple[str, int]:
-        with target.open("w+b") as handle:
-            self._stream_blob(repository, object_oid, handle)
-            handle.seek(0)
-            return self._hash_stream(handle)
+    def _write_blob(self, project_root: Path, object_oid: str, target: Path) -> tuple[str, int]:
+        with target.open("wb") as sink:
+            return self._stream_hash_blob(project_root, object_oid, sink)
 
-    def _stream_blob(self, repository: Path, object_oid: str, sink: BinaryIO) -> None:
+    def _stream_hash_blob(
+        self, project_root: Path, object_oid: str, sink: BinaryIO | None
+    ) -> tuple[str, int]:
+        digest = hashlib.sha256()
+        size = 0
         try:
-            result = subprocess.run(
-                ["git", "-C", str(repository), "cat-file", "blob", object_oid],
+            process = subprocess.Popen(
+                [
+                    "git",
+                    f"--git-dir={self._git_directory(project_root)}",
+                    f"--work-tree={self._work_tree(project_root)}",
+                    "cat-file",
+                    "blob",
+                    object_oid,
+                ],
                 stdin=subprocess.DEVNULL,
-                stdout=sink,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                check=False,
                 env=self._git_env(),
-                timeout=_GIT_TIMEOUT_SECONDS,
             )
         except FileNotFoundError as exc:
             raise _GitFailure("Git executable is unavailable") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise _GitFailure("Git command timed out") from exc
-        if result.returncode != 0:
+        assert process.stdout is not None
+        try:
+            while chunk := process.stdout.read(1024 * 1024):
+                if sink is not None:
+                    sink.write(chunk)
+                digest.update(chunk)
+                size += len(chunk)
+            return_code = process.wait(timeout=_GIT_TIMEOUT_SECONDS)
+        except Exception:
+            process.kill()
+            process.wait()
+            raise
+        finally:
+            process.stdout.close()
+        if return_code != 0:
             raise _GitFailure("Git command failed: cat-file")
-
-    def _hash_stream(self, source: BinaryIO) -> tuple[str, int]:
-        digest = hashlib.sha256()
-        size = 0
-        while chunk := source.read(1024 * 1024):
-            digest.update(chunk)
-            size += len(chunk)
         return digest.hexdigest(), size
 
-    def _try_ref(self, repository: Path, reference: str) -> str | None:
+    def _try_ref(self, project_root: Path, reference: str) -> str | None:
         try:
-            return self._git_text(repository, "rev-parse", "--verify", reference).strip()
+            return self._git_text(project_root, "rev-parse", "--verify", reference).strip()
         except _GitFailure:
             return None
 
@@ -895,10 +947,10 @@ class GitProjectContent:
             raise ValidationFailed(f"Project 路径 {path!r} 不是规范相对路径")
         return normalized
 
-    def _safe_target(self, repository: Path, path: str, *, allow_missing: bool = False) -> Path:
+    def _safe_target(self, work_tree: Path, path: str, *, allow_missing: bool = False) -> Path:
         relative = self._safe_relative(path)
-        target = repository.joinpath(*PurePosixPath(relative).parts)
-        current = repository
+        target = work_tree.joinpath(*PurePosixPath(relative).parts)
+        current = work_tree
         for part in PurePosixPath(relative).parts:
             current = current / part
             if current.exists() or current.is_symlink():
@@ -908,7 +960,8 @@ class GitProjectContent:
                 break
         return target
 
-    def _diff(self, left: dict[str, str], right: dict[str, str]) -> list[tuple[str, ChangeKind]]:
+    @staticmethod
+    def _diff(left: dict[str, str], right: dict[str, str]) -> list[tuple[str, ChangeKind]]:
         changes: list[tuple[str, ChangeKind]] = []
         for path in sorted(set(left) | set(right)):
             if path not in left:
@@ -921,37 +974,42 @@ class GitProjectContent:
 
     def _git_text(
         self,
-        repository: Path,
+        project_root: Path,
         *arguments: str,
         input_data: bytes | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> str:
-        return self._git(repository, *arguments, input_data=input_data, extra_env=extra_env).decode(
-            "utf-8"
-        )
-
-    def _git_env(self, extra_env: dict[str, str] | None = None) -> dict[str, str]:
-        environment = {key: os.environ[key] for key in _GIT_ENV_KEYS if key in os.environ}
-        environment.update(
-            {
-                "GIT_CONFIG_NOSYSTEM": "1",
-                "GIT_CONFIG_GLOBAL": os.devnull,
-                "GIT_TERMINAL_PROMPT": "0",
-            }
-        )
-        environment.update(extra_env or {})
-        return environment
+        return self._git(
+            project_root,
+            *arguments,
+            input_data=input_data,
+            extra_env=extra_env,
+        ).decode("utf-8")
 
     def _git(
         self,
-        repository: Path,
+        project_root: Path,
+        *arguments: str,
+        input_data: bytes | None = None,
+        extra_env: dict[str, str] | None = None,
+    ) -> bytes:
+        return self._run_git(
+            f"--git-dir={self._git_directory(project_root)}",
+            f"--work-tree={self._work_tree(project_root)}",
+            *arguments,
+            input_data=input_data,
+            extra_env=extra_env,
+        )
+
+    def _run_git(
+        self,
         *arguments: str,
         input_data: bytes | None = None,
         extra_env: dict[str, str] | None = None,
     ) -> bytes:
         try:
             result = subprocess.run(
-                ["git", "-C", str(repository), *arguments],
+                ["git", *arguments],
                 input=input_data,
                 capture_output=True,
                 check=False,
@@ -963,6 +1021,19 @@ class GitProjectContent:
         except subprocess.TimeoutExpired as exc:
             raise _GitFailure("Git command timed out") from exc
         if result.returncode != 0:
-            command = arguments[0] if arguments else "unknown"
+            command = next((item for item in arguments if not item.startswith("--")), "unknown")
             raise _GitFailure(f"Git command failed: {command}")
         return result.stdout
+
+    @staticmethod
+    def _git_env(extra_env: dict[str, str] | None = None) -> dict[str, str]:
+        environment = {key: os.environ[key] for key in _GIT_ENV_KEYS if key in os.environ}
+        environment.update(
+            {
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_TERMINAL_PROMPT": "0",
+            }
+        )
+        environment.update(extra_env or {})
+        return environment

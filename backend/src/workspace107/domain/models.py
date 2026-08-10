@@ -159,6 +159,7 @@ class ProjectVersion:
 
     id: str
     project_id: str
+    repository_identity: str
     sequence: int
     """在该 Project 内自增，用于展示为 v1、v2……"""
     message: str

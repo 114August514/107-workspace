@@ -40,16 +40,20 @@ class GitProjectVersionExporter:
             project = await session.get(t.ProjectRow, version.project_id)
             if project is None:
                 raise ProjectContentMissing(f"Project {version.project_id} 不存在")
-            if version.commit_oid != expected_commit_oid:
+            if (
+                version.commit_oid != expected_commit_oid
+                or project.repository_identity != version.repository_identity
+            ):
                 raise ProjectContentIdentityMismatch(
-                    f"Project Version {project_version_id} commit identity mismatch"
+                    f"Project Version {project_version_id} identity mismatch"
                 )
             project_id = project.id
-            repository_identity = project.repository_identity
+            repository_identity = version.repository_identity
 
         manifest = await self._content.export_commit(
             project_id,
             repository_identity,
+            project_version_id,
             expected_commit_oid,
             target,
         )

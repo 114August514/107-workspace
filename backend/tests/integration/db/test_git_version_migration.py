@@ -110,7 +110,7 @@ def test_git_version_migration_empty_up_down_up(tmp_path: Path) -> None:
             row[1] for row in connection.execute("PRAGMA table_info(project_versions)")
         }
         assert "repository_identity" in project_columns
-        assert {"commit_oid", "file_count", "total_size"} <= version_columns
+        assert {"repository_identity", "commit_oid", "file_count", "total_size"} <= version_columns
         tables = {
             row[0]
             for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")

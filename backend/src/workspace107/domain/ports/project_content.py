@@ -66,6 +66,7 @@ class ProjectContentPort(Protocol):
         self,
         project_id: str,
         repository_identity: str,
+        baseline_version_id: str | None,
         baseline_commit_oid: str | None,
     ) -> list[tuple[str, ChangeKind]]: ...
 
@@ -74,6 +75,7 @@ class ProjectContentPort(Protocol):
         project_id: str,
         repository_identity: str,
         *,
+        parent_version_id: str | None,
         version_id: str,
         parent_commit_oid: str | None,
         message: str,
@@ -82,18 +84,29 @@ class ProjectContentPort(Protocol):
     ) -> CommitManifest: ...
 
     async def manifest(
-        self, project_id: str, repository_identity: str, commit_oid: str
+        self,
+        project_id: str,
+        repository_identity: str,
+        version_id: str,
+        commit_oid: str,
     ) -> CommitManifest: ...
 
     async def read_commit_file(
-        self, project_id: str, repository_identity: str, commit_oid: str, path: str
+        self,
+        project_id: str,
+        repository_identity: str,
+        version_id: str,
+        commit_oid: str,
+        path: str,
     ) -> bytes: ...
 
     async def diff_commits(
         self,
         project_id: str,
         repository_identity: str,
+        base_version_id: str,
         base_commit_oid: str,
+        target_version_id: str,
         target_commit_oid: str,
     ) -> list[tuple[str, ChangeKind]]: ...
 
@@ -101,6 +114,7 @@ class ProjectContentPort(Protocol):
         self,
         project_id: str,
         repository_identity: str,
+        version_id: str,
         commit_oid: str,
         updated_at: datetime,
     ) -> list[ProjectFile]: ...
@@ -109,6 +123,7 @@ class ProjectContentPort(Protocol):
         self,
         source_project_id: str,
         source_repository_identity: str,
+        source_version_id: str,
         source_commit_oid: str,
         target_project_id: str,
         target_repository_identity: str,

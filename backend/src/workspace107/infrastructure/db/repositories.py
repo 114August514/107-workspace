@@ -336,6 +336,14 @@ class ProjectRepositoryImpl:
         row = await self._session.get(t.ProjectRow, project_id)
         return _to_project(row) if row else None
 
+    async def lock_writer(self, project_id: str) -> None:
+        if self._session.get_bind().dialect.name != "postgresql":
+            return
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:project_id, 107))"),
+            {"project_id": project_id},
+        )
+
     async def update(self, project: Project) -> None:
         row = await self._session.get(t.ProjectRow, project.id)
         if row is None:
@@ -387,6 +395,7 @@ class ProjectVersionRepositoryImpl:
             t.ProjectVersionRow(
                 id=version.id,
                 project_id=version.project_id,
+                repository_identity=version.repository_identity,
                 sequence=version.sequence,
                 message=version.message,
                 commit_oid=version.commit_oid,
@@ -447,6 +456,7 @@ class ProjectVersionRepositoryImpl:
         return ProjectVersion(
             id=row.id,
             project_id=row.project_id,
+            repository_identity=row.repository_identity,
             sequence=row.sequence,
             message=row.message,
             commit_oid=row.commit_oid,
