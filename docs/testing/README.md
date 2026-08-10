@@ -11,7 +11,7 @@
 默认要求获得与风险相称的验证证据，
 但不默认要求每次修改都新增测试文件。
 
-尚未实现的能力记录在 Issue/[`product/deferred.md`](product/deferred.md) 中。
+尚未实现的能力记录在 Issue/[`../product/deferred.md`](../product/deferred.md) 中。
 不要为了表达未来计划提交 skip、xfail 或占位测试。
 
 ## 永久测试与一次性验证
