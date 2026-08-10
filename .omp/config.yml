@@ -1,0 +1,17 @@
+skills:
+  customDirectories:
+    - ~/.local/share/lean-harness/v0.1.0-dogfood/skills
+
+workspace:
+  additionalDirectories:
+    - ~/.local/share/lean-harness/v0.1.0-dogfood
+
+memory:
+  backend: off
+
+autolearn:
+  enabled: false
+
+task:
+  isolation:
+    mode: none
