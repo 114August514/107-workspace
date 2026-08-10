@@ -190,11 +190,17 @@ class SqlExecutionStore(ExecutionStore):
             intent = await _intent_for_update(session, run_id)
             run = await _run_for_update(session, run_id)
             now = await _database_now(session)
+            cancel_uncertain = intent.uncertainty_code == "cancel_uncertain"
             if run.status in _TERMINAL_VALUES:
                 await session.delete(intent)
                 return
             if state.state is SchedulerState.UNKNOWN:
-                await _uncertain(session, intent, now, "job_unknown", state.reason or "任务未知")
+                if cancel_uncertain:
+                    intent.updated_at = now
+                else:
+                    await _uncertain(
+                        session, intent, now, "job_unknown", state.reason or "任务未知"
+                    )
                 return
             if state.state is SchedulerState.COMPLETED and state.exit_code is None:
                 await _uncertain(
@@ -206,8 +212,17 @@ class SqlExecutionStore(ExecutionStore):
                 )
                 return
 
-            intent.uncertainty_code = None
-            intent.uncertainty_detail = ""
+            if (
+                state.state
+                in {
+                    SchedulerState.COMPLETED,
+                    SchedulerState.FAILED,
+                    SchedulerState.CANCELLED,
+                }
+                or not cancel_uncertain
+            ):
+                intent.uncertainty_code = None
+                intent.uncertainty_detail = ""
             intent.updated_at = now
             if state.state is SchedulerState.PENDING:
                 return
