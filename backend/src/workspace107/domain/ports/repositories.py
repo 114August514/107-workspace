@@ -22,7 +22,6 @@ from ..models import (
     Membership,
     Notification,
     Project,
-    ProjectFile,
     ProjectVersion,
     Run,
     RunConfiguration,
@@ -75,22 +74,16 @@ class ProjectRepository(Protocol):
     async def add(self, project: Project) -> None: ...
     async def get(self, project_id: str) -> Project | None: ...
     async def update(self, project: Project) -> None: ...
+    async def lock_writer(self, project_id: str) -> None:
+        """生产 PostgreSQL transaction advisory lock；SQLite 本地模式不加锁。"""
+        ...
+
     async def list_for_workspace(self, workspace_id: str, page: PageRequest) -> Page[Project]: ...
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
         """按最近更新时间列出用户可见的 Project，用于个人首页。"""
         ...
 
     async def name_exists(self, workspace_id: str, name: str) -> bool: ...
-
-
-class ProjectFileRepository(Protocol):
-    async def list_for_project(self, project_id: str) -> list[ProjectFile]: ...
-    async def get(self, project_id: str, path: str) -> ProjectFile | None: ...
-    async def upsert(self, file: ProjectFile) -> None: ...
-    async def delete(self, project_id: str, path: str) -> None: ...
-    async def delete_under(self, project_id: str, prefix: str) -> int:
-        """删除某个目录前缀下的全部文件，返回删除数量。"""
-        ...
 
 
 class ProjectVersionRepository(Protocol):
@@ -231,7 +224,6 @@ class Repositories(Protocol):
     memberships: MembershipRepository
     variables: VariableRepository
     projects: ProjectRepository
-    project_files: ProjectFileRepository
     project_versions: ProjectVersionRepository
     environments: EnvironmentRepository
     compute_plans: ComputePlanRepository

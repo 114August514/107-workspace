@@ -40,9 +40,7 @@ from ...domain.models import (
     Membership,
     Notification,
     Project,
-    ProjectFile,
     ProjectVersion,
-    ProjectVersionFile,
     Run,
     RunConfiguration,
     RunEvent,
@@ -322,6 +320,7 @@ class ProjectRepositoryImpl:
                 id=project.id,
                 workspace_id=project.workspace_id,
                 name=project.name,
+                repository_identity=project.repository_identity,
                 description=project.description,
                 status=project.status.value,
                 environment_version_id=project.environment_version_id,
@@ -336,6 +335,14 @@ class ProjectRepositoryImpl:
     async def get(self, project_id: str) -> Project | None:
         row = await self._session.get(t.ProjectRow, project_id)
         return _to_project(row) if row else None
+
+    async def lock_writer(self, project_id: str) -> None:
+        if self._session.get_bind().dialect.name != "postgresql":
+            return
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:project_id, 107))"),
+            {"project_id": project_id},
+        )
 
     async def update(self, project: Project) -> None:
         row = await self._session.get(t.ProjectRow, project.id)
@@ -377,65 +384,8 @@ class ProjectRepositoryImpl:
         return bool((await self._session.execute(stmt)).scalar_one())
 
 
-class ProjectFileRepositoryImpl:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
-    async def list_for_project(self, project_id: str) -> list[ProjectFile]:
-        stmt = (
-            select(t.ProjectFileRow)
-            .where(t.ProjectFileRow.project_id == project_id)
-            .order_by(t.ProjectFileRow.path)
-        )
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_project_file(row) for row in rows]
-
-    async def get(self, project_id: str, path: str) -> ProjectFile | None:
-        row = await self._session.get(t.ProjectFileRow, (project_id, path))
-        return _to_project_file(row) if row else None
-
-    async def upsert(self, file: ProjectFile) -> None:
-        row = await self._session.get(t.ProjectFileRow, (file.project_id, file.path))
-        if row is None:
-            self._session.add(
-                t.ProjectFileRow(
-                    project_id=file.project_id,
-                    path=file.path,
-                    size=file.size,
-                    content_hash=file.content_hash,
-                    updated_at=file.updated_at or datetime.now(UTC),
-                )
-            )
-        else:
-            row.size = file.size
-            row.content_hash = file.content_hash
-            row.updated_at = file.updated_at or datetime.now(UTC)
-        await _flush(self._session)
-
-    async def delete(self, project_id: str, path: str) -> None:
-        await self._session.execute(
-            delete(t.ProjectFileRow).where(
-                t.ProjectFileRow.project_id == project_id, t.ProjectFileRow.path == path
-            )
-        )
-        await _flush(self._session)
-
-    async def delete_under(self, project_id: str, prefix: str) -> int:
-        result = await self._session.execute(
-            delete(t.ProjectFileRow).where(
-                t.ProjectFileRow.project_id == project_id,
-                # autoescape 不能省：startswith 生成的是 LIKE，
-                # 而 % 和 _ 在路径里是合法字符。删一个叫 "%" 的目录会变成
-                # LIKE '%/%'，把项目里所有子目录的文件一起删掉。
-                t.ProjectFileRow.path.startswith(prefix, autoescape=True),
-            )
-        )
-        await _flush(self._session)
-        return int(result.rowcount or 0)
-
-
 class ProjectVersionRepositoryImpl:
-    """不可变对象仓储：只有 add 和读取。"""
+    """只持久化不可变 Version identity；manifest 来自对应 Git commit tree。"""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -445,35 +395,21 @@ class ProjectVersionRepositoryImpl:
             t.ProjectVersionRow(
                 id=version.id,
                 project_id=version.project_id,
+                repository_identity=version.repository_identity,
                 sequence=version.sequence,
                 message=version.message,
+                commit_oid=version.commit_oid,
+                file_count=version.file_count,
+                total_size=version.total_size,
                 created_by=version.created_by,
                 created_at=version.created_at,
             )
         )
-        # 先把版本行落库，再插文件行。
-        #
-        # 这两张表之间只有外键，没有 ORM relationship，所以 SQLAlchemy 的工作单元
-        # 不知道它们的先后依赖，同一次 flush 里可能先插子行。SQLite 默认不校验外键，
-        # 这个顺序问题在本地测试里看不出来，到 PostgreSQL 上就是 ForeignKeyViolation。
-        await _flush(self._session)
-
-        for entry in version.files:
-            self._session.add(
-                t.ProjectVersionFileRow(
-                    version_id=version.id,
-                    path=entry.path,
-                    size=entry.size,
-                    content_hash=entry.content_hash,
-                )
-            )
         await _flush(self._session)
 
     async def get(self, version_id: str) -> ProjectVersion | None:
         row = await self._session.get(t.ProjectVersionRow, version_id)
-        if row is None:
-            return None
-        return await self._hydrate(row)
+        return self._hydrate(row) if row is not None else None
 
     async def list_for_project(self, project_id: str, page: PageRequest) -> Page[ProjectVersion]:
         stmt = (
@@ -492,7 +428,7 @@ class ProjectVersionRepositoryImpl:
             .all()
         )
         return Page(
-            items=[await self._hydrate(row) for row in rows],
+            items=[self._hydrate(row) for row in rows],
             page=page.page,
             page_size=page.page_size,
             total=int(total),
@@ -506,7 +442,7 @@ class ProjectVersionRepositoryImpl:
             .limit(1)
         )
         row = (await self._session.execute(stmt)).scalars().first()
-        return await self._hydrate(row) if row else None
+        return self._hydrate(row) if row else None
 
     async def next_sequence(self, project_id: str) -> int:
         stmt = select(func.max(t.ProjectVersionRow.sequence)).where(
@@ -515,22 +451,17 @@ class ProjectVersionRepositoryImpl:
         current = (await self._session.execute(stmt)).scalar_one_or_none()
         return int(current or 0) + 1
 
-    async def _hydrate(self, row: t.ProjectVersionRow) -> ProjectVersion:
-        stmt = (
-            select(t.ProjectVersionFileRow)
-            .where(t.ProjectVersionFileRow.version_id == row.id)
-            .order_by(t.ProjectVersionFileRow.path)
-        )
-        files = (await self._session.execute(stmt)).scalars().all()
+    @staticmethod
+    def _hydrate(row: t.ProjectVersionRow) -> ProjectVersion:
         return ProjectVersion(
             id=row.id,
             project_id=row.project_id,
+            repository_identity=row.repository_identity,
             sequence=row.sequence,
             message=row.message,
-            files=tuple(
-                ProjectVersionFile(path=f.path, size=f.size, content_hash=f.content_hash)
-                for f in files
-            ),
+            commit_oid=row.commit_oid,
+            file_count=row.file_count,
+            total_size=row.total_size,
             created_by=row.created_by,
             created_at=_required(row.created_at),
         )
@@ -1178,7 +1109,6 @@ class SqlRepositories:
         self.memberships = MembershipRepositoryImpl(session)
         self.variables = VariableRepositoryImpl(session)
         self.projects = ProjectRepositoryImpl(session)
-        self.project_files = ProjectFileRepositoryImpl(session)
         self.project_versions = ProjectVersionRepositoryImpl(session)
         self.environments = EnvironmentRepositoryImpl(session)
         self.compute_plans = ComputePlanRepositoryImpl(session)
@@ -1257,22 +1187,13 @@ def _to_project(row: t.ProjectRow) -> Project:
         id=row.id,
         workspace_id=row.workspace_id,
         name=row.name,
+        repository_identity=row.repository_identity,
         description=row.description,
         status=ProjectStatus(row.status),
         environment_version_id=row.environment_version_id,
         default_run_configuration_id=row.default_run_configuration_id,
         created_by=row.created_by,
         created_at=_aware(row.created_at),
-        updated_at=_aware(row.updated_at),
-    )
-
-
-def _to_project_file(row: t.ProjectFileRow) -> ProjectFile:
-    return ProjectFile(
-        project_id=row.project_id,
-        path=row.path,
-        size=row.size,
-        content_hash=row.content_hash,
         updated_at=_aware(row.updated_at),
     )
 

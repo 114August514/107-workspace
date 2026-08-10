@@ -5,9 +5,9 @@ Workspace 和 Project、保存 Project Version、配置并提交 Run，以及查
 Artifact。
 
 当前仓库是**可运行的开发基线**，不是 `docs/product/design.md` 路线图中 M1 已完成的声明。
-现有实现覆盖 FastAPI 后端、React 控制台、数据库迁移、本地内容存储、Mock 调度和
-Slurm REST 适配器；真实 Git、Shared FS、独立 Worker、Apptainer、学校认证和真实
-Slurm 环境仍需要按现行 Milestone 验证或实现。
+现有实现覆盖 FastAPI 后端、React 控制台、数据库迁移、真实 Git Project Version、
+本地内容存储、Mock 调度和 Slurm REST 适配器；Shared FS、独立 Worker、Apptainer、
+学校认证和真实 Slurm 环境仍需要按现行 Milestone 验证或实现。
 
 ## 事实来源
 

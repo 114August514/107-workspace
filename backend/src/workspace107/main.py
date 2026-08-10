@@ -24,6 +24,7 @@ from .config import Settings, get_settings
 from .domain.ports.scheduler import SchedulerPort
 from .infrastructure.clock import SystemClock
 from .infrastructure.db.session import create_engine, create_session_factory
+from .infrastructure.project_git import GitProjectContent
 from .infrastructure.scheduler import MockScheduler, SlurmRestScheduler
 from .infrastructure.storage.local import LocalStorage
 from .observability import configure_logging
@@ -49,6 +50,7 @@ def build_context(settings: Settings) -> AppContext:
         engine=engine,
         session_factory=create_session_factory(engine),
         storage=LocalStorage(settings.storage_root),
+        project_content=GitProjectContent(settings.storage_root / "projects"),
         scheduler=build_scheduler(settings),
         clock=SystemClock(),
     )

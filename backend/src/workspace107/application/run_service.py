@@ -365,7 +365,7 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, result.project_version, access.workspace.id)
+        await self._submit(run, snapshot, access.workspace.id)
         await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
         return RunSubmission(run=run, created=True)
 
@@ -451,7 +451,7 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, project_version, access.workspace.id)
+        await self._submit(run, snapshot, access.workspace.id)
         await self._record_run_activity(
             user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
         )
@@ -477,13 +477,10 @@ class RunService:
 
     # -- 内部 -----------------------------------------------------------
 
-    async def _submit(
-        self, run: Run, snapshot: RunSnapshot, version: ProjectVersion, workspace_id: str
-    ) -> None:
+    async def _submit(self, run: Run, snapshot: RunSnapshot, workspace_id: str) -> None:
         try:
             paths = await self._storage.prepare_run_directory(
                 run.id,
-                files=[(f.path, f.content_hash) for f in version.files],
                 inputs=[(b.access_path, b.source_id) for b in snapshot.input_bindings],
             )
             environment = dict(snapshot.env_literals)
@@ -517,7 +514,11 @@ class RunService:
                     environment=environment,
                 )
             )
-        except (SchedulerError, OSError, ValidationFailed) as exc:
+        except (
+            SchedulerError,
+            OSError,
+            ValidationFailed,
+        ) as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
             run.finished_at = self._clock.now()

@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -110,6 +111,7 @@ class ProjectRow(Base):
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     name: Mapped[str] = mapped_column(String(128))
+    repository_identity: Mapped[str] = mapped_column(String(64), unique=True)
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32))
     environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
@@ -121,36 +123,25 @@ class ProjectRow(Base):
     __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_project_name"),)
 
 
-class ProjectFileRow(Base):
-    __tablename__ = "project_files"
-
-    project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), primary_key=True)
-    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
-    size: Mapped[int] = mapped_column(Integer)
-    content_hash: Mapped[str] = mapped_column(String(64))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
 class ProjectVersionRow(Base):
     __tablename__ = "project_versions"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), index=True)
+    repository_identity: Mapped[str] = mapped_column(String(64))
     sequence: Mapped[int] = mapped_column(Integer)
     message: Mapped[str] = mapped_column(Text)
+    commit_oid: Mapped[str] = mapped_column(String(64))
+    file_count: Mapped[int] = mapped_column(Integer)
+    total_size: Mapped[int] = mapped_column(Integer)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (UniqueConstraint("project_id", "sequence", name="uq_version_sequence"),)
-
-
-class ProjectVersionFileRow(Base):
-    __tablename__ = "project_version_files"
-
-    version_id: Mapped[str] = mapped_column(ID, ForeignKey("project_versions.id"), primary_key=True)
-    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
-    size: Mapped[int] = mapped_column(Integer)
-    content_hash: Mapped[str] = mapped_column(String(64))
+    __table_args__ = (
+        CheckConstraint("length(commit_oid) IN (40, 64)", name="ck_version_commit_oid_length"),
+        UniqueConstraint("project_id", "sequence", name="uq_version_sequence"),
+        UniqueConstraint("project_id", "commit_oid", name="uq_version_commit_oid"),
+    )
 
 
 class EnvironmentRow(Base):

@@ -1,20 +1,7 @@
-"""本地文件系统存储。
+"""本地 Run workspace、日志与 Artifact 存储。
 
-目录布局::
-
-    <storage_root>/
-    ├── blobs/<前两位>/<摘要>          按内容寻址的文件内容
-    ├── runs/<run_id>/
-    │   ├── work/                     Project Version 的文件
-    │   ├── inputs/                   只读输入（GR-404）
-    │   └── logs/{stdout,stderr}.log
-    └── artifacts/<artifact_id>/      收集到的运行产物
-
-内容按摘要寻址，因此多个 Project Version 引用同一份内容不会重复占用空间，
-ProjectVersion 的不可变性也天然成立——内容变了摘要就变了。
-
-真实集群部署时会把这里换成共享文件系统或对象存储的实现，
-上层通过 ``StoragePort`` 使用，不需要改动。
+Project 内容位于 ``projects/<project_id>`` 的真实 Git repository，由
+``GitProjectContent`` 拥有；本 Adapter 不保存 Project blob 或 version manifest。
 """
 
 from __future__ import annotations
@@ -37,32 +24,10 @@ READONLY_FILE = 0o444
 class LocalStorage:
     def __init__(self, root: Path) -> None:
         self._root = root
-        self._blobs = root / "blobs"
         self._runs = root / "runs"
         self._artifacts = root / "artifacts"
-        for path in (self._blobs, self._runs, self._artifacts):
+        for path in (self._runs, self._artifacts):
             path.mkdir(parents=True, exist_ok=True)
-
-    # -- 内容寻址存储 ---------------------------------------------------
-
-    def _blob_path(self, content_hash: str) -> Path:
-        return self._blobs / content_hash[:2] / content_hash
-
-    async def write_blob(self, data: bytes) -> str:
-        content_hash = hashlib.sha256(data).hexdigest()
-        target = self._blob_path(content_hash)
-        if not target.exists():
-            await asyncio.to_thread(_write_atomic, target, data)
-        return content_hash
-
-    async def read_blob(self, content_hash: str) -> bytes:
-        target = self._blob_path(content_hash)
-        if not target.exists():
-            raise ObjectNotFound("文件内容", content_hash)
-        return await asyncio.to_thread(target.read_bytes)
-
-    async def blob_exists(self, content_hash: str) -> bool:
-        return await asyncio.to_thread(self._blob_path(content_hash).exists)
 
     # -- Run 工作目录 ---------------------------------------------------
 
@@ -74,29 +39,21 @@ class LocalStorage:
         self,
         run_id: str,
         *,
-        files: list[tuple[str, str]],
         inputs: list[tuple[str, str]],
     ) -> RunPaths:
         paths = self.run_paths(run_id)
-        await asyncio.to_thread(self._prepare_sync, paths, files, inputs)
+        await asyncio.to_thread(self._prepare_sync, paths, inputs)
         return paths
 
     def _prepare_sync(
         self,
         paths: RunPaths,
-        files: list[tuple[str, str]],
         inputs: list[tuple[str, str]],
     ) -> None:
         if paths.root.exists():
             _force_rmtree(paths.root)
         for directory in (paths.work, paths.inputs, paths.logs):
             directory.mkdir(parents=True, exist_ok=True)
-
-        for relative_path, content_hash in files:
-            target = paths.work / relative_path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(self._blob_path(content_hash), target)
-
         for access_path, artifact_id in inputs:
             # 访问路径是运行环境中的绝对路径；本机执行时挂到 Run 的 inputs 根下。
             target = paths.inputs / access_path.lstrip("/")
@@ -184,13 +141,6 @@ class LocalStorage:
 # --------------------------------------------------------------------------
 # 文件系统辅助
 # --------------------------------------------------------------------------
-
-
-def _write_atomic(target: Path, data: bytes) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary = target.with_suffix(".tmp")
-    temporary.write_bytes(data)
-    temporary.replace(target)
 
 
 def _read_tail(path: Path, max_bytes: int) -> tuple[str, bool]:

@@ -56,6 +56,18 @@ class ImmutableObjectError(ConflictError):
     code = "immutable_object"
 
 
+class ProjectContentMissing(ConflictError):
+    """Project Version 指向的 Git repository 或 object 已不存在。"""
+
+    code = "project_content_missing"
+
+
+class ProjectContentIdentityMismatch(ConflictError):
+    """Git commit 存在，但不属于所声明的 Project repository identity。"""
+
+    code = "project_content_identity_mismatch"
+
+
 class PreflightRejected(DomainError):
     """提交前检查未通过，附带全部阻止提交的问题。"""
 
