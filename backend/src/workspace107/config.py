@@ -48,8 +48,9 @@ class Settings(BaseSettings):
 
     auth_mode: AuthMode = "dev"
 
-    # 后台状态同步间隔（秒）。设为 0 表示不启动后台同步，由调用方显式触发。
-    run_sync_interval_seconds: float = 1.0
+    worker_lease_seconds: float = 30.0
+    worker_poll_seconds: float = 1.0
+    worker_idle_seconds: float = 0.5
 
     @property
     def use_json_logs(self) -> bool:
@@ -78,6 +79,11 @@ class Settings(BaseSettings):
         sqlite_file = self.sqlite_file
         if sqlite_file is not None:
             sqlite_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def ensure_worker_database(self) -> None:
+        """PostgreSQL 的 SKIP LOCKED 是 M1 claim/lease 的必要语义。"""
+        if not self.database_url.startswith("postgresql+"):
+            raise ValueError("Independent Worker 必须使用 PostgreSQL 数据库")
 
     def __str__(self) -> str:  # pragma: no cover - 仅用于日志
         return (

@@ -70,3 +70,15 @@ class SchedulerError(DomainError):
     """底层调度系统返回错误。"""
 
     code = "scheduler_error"
+
+
+class SchedulerSubmissionRejected(SchedulerError):
+    """Scheduler 明确确认没有创建任务；只有此错误允许 SUBMIT_FAILED。"""
+
+    code = "scheduler_submission_rejected"
+
+
+class SchedulerSubmissionUncertain(SchedulerError):
+    """请求可能已经创建任务，必须按 correlation reconcile。"""
+
+    code = "scheduler_submission_uncertain"

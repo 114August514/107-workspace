@@ -28,6 +28,7 @@ from ...domain.enums import (
     WorkspaceRole,
 )
 from ...domain.errors import ConflictError
+from ...domain.execution import ExecutionIntent
 from ...domain.models import (
     Activity,
     Artifact,
@@ -795,39 +796,6 @@ class RunRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_run(row) for row in rows]
 
-    async def list_unfinished(self) -> list[Run]:
-        stmt = select(t.RunRow).where(
-            t.RunRow.status.in_([RunStatus.QUEUED.value, RunStatus.RUNNING.value])
-        )
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_run(row) for row in rows]
-
-    async def claim_terminal(self, run: Run) -> bool:
-        """把 Run 从「未结束」推进到终态，成功抢到返回 True。
-
-        条件更新，不是先查后写：两次并发同步会同时读到 queued/running，
-        各自无条件写入的话产物会被收集两遍。谁的 UPDATE 命中了行谁负责收产物，
-        另一个拿到 rowcount=0 直接退出。
-
-        只更新状态相关的几列，其余字段由调用方随后的 update 写——
-        收产物可能还会把状态改成 failed。
-        """
-        result = await self._session.execute(
-            update(t.RunRow)
-            .where(
-                t.RunRow.id == run.id,
-                t.RunRow.status.in_([RunStatus.QUEUED.value, RunStatus.RUNNING.value]),
-            )
-            .values(
-                status=run.status.value,
-                exit_code=run.exit_code,
-                failure_reason=run.failure_reason,
-                started_at=run.started_at,
-                finished_at=run.finished_at,
-            )
-        )
-        return int(result.rowcount or 0) == 1
-
     async def count_unfinished_for_plan(self, workspace_id: str, compute_plan_id: str) -> int:
         """数「这个 Workspace 在这个算力方案上」还有几个未结束的 Run。
 
@@ -846,6 +814,49 @@ class RunRepositoryImpl:
             )
         )
         return int((await self._session.execute(stmt)).scalar_one())
+
+
+class ExecutionIntentRepositoryImpl:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, intent: ExecutionIntent) -> None:
+        self._session.add(
+            t.RunExecutionIntentRow(
+                run_id=intent.run_id,
+                phase=intent.phase.value,
+                correlation=intent.correlation,
+                attempt_no=intent.attempt_no,
+                next_attempt_at=func.now(),
+                cancel_requested_at=intent.cancel_requested_at,
+                lease_owner=intent.lease_owner,
+                lease_token=intent.lease_token,
+                lease_generation=intent.lease_generation,
+                lease_expires_at=intent.lease_expires_at,
+                uncertainty_code=intent.uncertainty_code,
+                uncertainty_detail=intent.uncertainty_detail,
+                observed_scheduler_state=intent.observed_scheduler_state,
+                observed_exit_code=intent.observed_exit_code,
+                observed_started_at=intent.observed_started_at,
+                observed_finished_at=intent.observed_finished_at,
+                observed_reason=intent.observed_reason,
+                created_at=func.now(),
+                updated_at=func.now(),
+                completed_at=intent.completed_at,
+            )
+        )
+        await _flush(self._session)
+
+    async def request_cancel(self, run_id: str, at: datetime) -> bool:
+        result = await self._session.execute(
+            update(t.RunExecutionIntentRow)
+            .where(
+                t.RunExecutionIntentRow.run_id == run_id,
+                t.RunExecutionIntentRow.completed_at.is_(None),
+            )
+            .values(cancel_requested_at=at, next_attempt_at=func.now(), updated_at=func.now())
+        )
+        return int(result.rowcount or 0) == 1
 
 
 class IdempotencyRepositoryImpl:
@@ -1186,6 +1197,7 @@ class SqlRepositories:
         self.run_configurations = RunConfigurationRepositoryImpl(session)
         self.run_snapshots = RunSnapshotRepositoryImpl(session)
         self.runs = RunRepositoryImpl(session)
+        self.execution_intents = ExecutionIntentRepositoryImpl(session)
         self.run_events = RunEventRepositoryImpl(session)
         self.idempotency = IdempotencyRepositoryImpl(session)
         self.artifacts = ArtifactRepositoryImpl(session)

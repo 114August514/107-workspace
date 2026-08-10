@@ -17,8 +17,13 @@ from datetime import UTC, datetime
 from typing import IO
 from uuid import uuid4
 
-from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.errors import SchedulerError, SchedulerSubmissionRejected
+from ...domain.ports.scheduler import (
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
 # 用户作业只继承这些基础变量。
@@ -51,6 +56,7 @@ class MockScheduler:
 
     def __init__(self) -> None:
         self._jobs: dict[str, _MockJob] = {}
+        self._correlations: dict[str, list[str]] = {}
 
     async def submit(self, submission: SchedulerSubmission) -> str:
         work_dir = submission.work_dir
@@ -78,7 +84,7 @@ class MockScheduler:
         except OSError as exc:  # pragma: no cover - 取决于宿主机环境
             stdout.close()
             stderr.close()
-            raise SchedulerError(f"无法启动任务：{exc}") from exc
+            raise SchedulerSubmissionRejected(f"无法启动任务：{exc}") from exc
 
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
@@ -87,7 +93,17 @@ class MockScheduler:
             stderr=stderr,
             started_at=datetime.now(UTC),
         )
+        self._correlations.setdefault(submission.correlation, []).append(job_id)
         return job_id
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        job_ids = self._correlations.get(correlation)
+        if job_ids is None:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="Mock Scheduler 进程内 correlation registry 不含该 Run；可能已重启",
+            )
+        return SchedulerCorrelationResult(complete=True, job_ids=tuple(job_ids))
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         job = self._jobs.get(job_id)

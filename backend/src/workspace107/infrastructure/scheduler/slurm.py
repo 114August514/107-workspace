@@ -19,8 +19,13 @@ from typing import Any
 
 import httpx
 
-from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.errors import SchedulerError, SchedulerSubmissionUncertain
+from ...domain.ports.scheduler import (
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
 API_VERSION = "v0.0.40"
@@ -81,12 +86,21 @@ class SlurmRestScheduler:
         if config.gpus > 0:
             payload["job"]["tres_per_node"] = f"gres/gpu:{config.gpus}"
 
-        data = await self._request("POST", f"/slurm/{API_VERSION}/job/submit", json=payload)
+        try:
+            data = await self._request("POST", f"/slurm/{API_VERSION}/job/submit", json=payload)
+        except SchedulerError as exc:
+            raise SchedulerSubmissionUncertain(str(exc)) from exc
         job_id = data.get("job_id")
         if job_id is None:
-            errors = "；".join(str(e) for e in data.get("errors", [])) or "Slurm 未返回 job_id"
-            raise SchedulerError(f"提交失败：{errors}")
+            raise SchedulerSubmissionUncertain("Slurm submit 响应没有可关联的 job_id")
         return str(job_id)
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        """目标集群 correlation 字段尚未经 human gate 核验，不能伪造权威空结果。"""
+        return SchedulerCorrelationResult(
+            complete=False,
+            reason="Slurm correlation 查询尚未完成目标环境核验",
+        )
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         try:
@@ -128,9 +142,7 @@ class SlurmRestScheduler:
                 response.raise_for_status()
                 return response.json() if response.content else {}
         except httpx.HTTPStatusError as exc:
-            raise SchedulerError(
-                f"Slurm API 返回 {exc.response.status_code}：{exc.response.text[:200]}"
-            ) from exc
+            raise SchedulerError(f"Slurm API 返回 HTTP {exc.response.status_code}") from exc
         except httpx.HTTPError as exc:
             raise SchedulerError(f"无法连接 Slurm API：{exc}") from exc
 

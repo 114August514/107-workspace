@@ -1,7 +1,6 @@
 """依赖注入。
 
-进程级单例（存储、调度器、时钟、数据库引擎）放在 ``AppContext`` 里；
-仓储和用例服务按请求创建，事务边界就是一次请求。
+进程级单例（存储、时钟、数据库引擎）放在 ``AppContext``；仓储和用例按请求创建。
 """
 
 from __future__ import annotations
@@ -20,7 +19,6 @@ from ..application.health_service import HealthService
 from ..application.notifier import NotificationService, Notifier
 from ..application.project_service import ProjectService
 from ..application.run_configuration_service import RunConfigurationService
-from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
 from ..application.workspace_service import WorkspaceService
 from ..config import Settings
@@ -29,7 +27,6 @@ from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.notification import NotificationPublisher
 from ..domain.ports.repositories import Repositories
-from ..domain.ports.scheduler import SchedulerPort
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import StoragePort
 from ..infrastructure.db.notifications import DatabaseNotificationPublisher
@@ -48,7 +45,6 @@ class AppContext:
     engine: AsyncEngine
     session_factory: async_sessionmaker[AsyncSession]
     storage: StoragePort
-    scheduler: SchedulerPort
     clock: Clock
 
 
@@ -70,7 +66,6 @@ class Services:
     runs: RunService
     catalog: CatalogService
     health: HealthService
-    lifecycle: RunLifecycleService
     activities: ActivityService
     notifications: NotificationService
 
@@ -110,16 +105,11 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             guard,
             context.clock,
             context.storage,
-            context.scheduler,
             vault,
             activity,
-            notifier,
         ),
         catalog=CatalogService(repos),
         health=HealthService(repos),
-        lifecycle=RunLifecycleService(
-            repos, context.clock, context.storage, context.scheduler, activity, notifier, session
-        ),
         notifications=NotificationService(repos, context.clock),
         activities=ActivityService(repos, guard),
     )

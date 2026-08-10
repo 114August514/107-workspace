@@ -253,23 +253,28 @@ def demo(*, smoke: bool = False) -> None:
     port = _selected_demo_port(smoke)
     base_url = f"http://127.0.0.1:{port}/api/v1"
 
+    database_url = os.environ.get("WORKSPACE107_DATABASE_URL", "")
+    if not database_url.startswith("postgresql+"):
+        raise TaskError(
+            "Independent Worker smoke requires WORKSPACE107_DATABASE_URL pointing to PostgreSQL"
+        )
+
     with tempfile.TemporaryDirectory(prefix="workspace107-demo-") as directory:
         workdir = Path(directory)
         server_log = workdir / "uvicorn.log"
-        database_path = (workdir / "demo.db").resolve().as_posix()
+        worker_log = workdir / "worker.log"
         environment = merged_environment(
             {
                 "WORKSPACE107_ENV": "local",
-                "WORKSPACE107_DATABASE_URL": f"sqlite+aiosqlite:///{database_path}",
+                "WORKSPACE107_DATABASE_URL": database_url,
                 "WORKSPACE107_STORAGE_ROOT": str(workdir / "storage"),
                 "WORKSPACE107_SCHEDULER": "mock",
-                "WORKSPACE107_RUN_SYNC_INTERVAL_SECONDS": "0",
             }
         )
         backend_uv("run", "alembic", "upgrade", "head", env=environment, quiet=smoke)
         backend_uv("run", "python", "-m", "workspace107.tools.seed", env=environment, quiet=smoke)
 
-        command = [
+        server_command = [
             _backend_python_executable(),
             "-m",
             "uvicorn",
@@ -282,20 +287,32 @@ def demo(*, smoke: bool = False) -> None:
             "--log-level",
             "warning",
         ]
-        with server_log.open("w", encoding="utf-8") as log_file:
-            process = subprocess.Popen(
-                command,
+        worker_command = [_backend_python_executable(), "-m", "workspace107.worker"]
+        with (
+            server_log.open("w", encoding="utf-8") as server_output,
+            worker_log.open("w", encoding="utf-8") as worker_output,
+        ):
+            server_process = subprocess.Popen(
+                server_command,
                 cwd=BACKEND_ROOT,
                 env=environment,
-                stdout=log_file,
+                stdout=server_output,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            worker_process = subprocess.Popen(
+                worker_command,
+                cwd=BACKEND_ROOT,
+                env=environment,
+                stdout=worker_output,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
             try:
-                _wait_until_ready(f"{base_url}/health", process, server_log)
+                _wait_until_ready(f"{base_url}/health", server_process, server_log)
                 _exercise_core_run(ApiClient(base_url), verbose=not smoke)
             finally:
-                _stop_processes([process])
+                _stop_processes([worker_process, server_process])
 
     if smoke:
         print("ok  isolated HTTP core run completed")
@@ -383,7 +400,6 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     status = "queued"
     detail: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        client.request("POST", "/runs/sync")
         detail = client.request("GET", f"/runs/{run_id}")
         status = detail["run"]["status"]
         if verbose:

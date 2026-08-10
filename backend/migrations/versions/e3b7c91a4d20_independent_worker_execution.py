@@ -12,6 +12,11 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from workspace107.infrastructure.db.migration_guards import (
+    guard_worker_downgrade,
+    guard_worker_upgrade,
+)
+
 revision: str = "e3b7c91a4d20"
 down_revision: str | None = "b48640074b91"
 branch_labels: str | Sequence[str] | None = None
@@ -25,6 +30,7 @@ _OUTCOMES = (
 
 
 def upgrade() -> None:
+    guard_worker_upgrade(op.get_bind())
     with op.batch_alter_table("runs", schema=None) as batch_op:
         batch_op.create_check_constraint(
             "ck_runs_status",
@@ -121,6 +127,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    guard_worker_downgrade(op.get_bind())
     with op.batch_alter_table("artifacts", schema=None) as batch_op:
         batch_op.drop_constraint("uq_artifact_run_source_path", type_="unique")
 

@@ -1,17 +1,9 @@
-"""Run 创建、提交与查询用例。
-
-创建 Run 的顺序（设计稿 §3.1.6 规则 6）::
-
-    校验与解析 -> 固定 Run Snapshot -> 准备工作目录 -> 提交调度任务
-    -> 关联 Scheduler Job -> 更新执行状态
-
-创建或重新执行 Run 时都要按当前权限和资源资格重新校验引用；
-历史上曾经成功使用，不代表当前仍然可以使用（设计稿 §3.4.3）。
-"""
+"""Run 查询，以及在请求事务内固定 Snapshot、QUEUED Run 与执行意图。"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from ..domain import ids
 from ..domain.capabilities import Capability
@@ -29,13 +21,8 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
-from ..domain.errors import (
-    ConflictError,
-    ObjectNotFound,
-    PreflightRejected,
-    SchedulerError,
-    ValidationFailed,
-)
+from ..domain.errors import ConflictError, ObjectNotFound, PreflightRejected
+from ..domain.execution import ExecutionIntent, ExecutionPhase
 from ..domain.models import (
     Artifact,
     EnvironmentVersion,
@@ -49,14 +36,12 @@ from ..domain.models import (
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
-from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import ArtifactEntry, StoragePort
 from ..domain.run_snapshot import RunSnapshot, build_snapshot
 from ..domain.secrets import ResolvedEnv, redact, resolve_env
 from .access import AccessGuard
 from .activity import ActivityRecorder
-from .notifier import Notifier
 
 MAX_LOG_BYTES = 256 * 1024
 
@@ -118,19 +103,15 @@ class RunService:
         guard: AccessGuard,
         clock: Clock,
         storage: StoragePort,
-        scheduler: SchedulerPort,
         secrets: SecretVault,
         activity: ActivityRecorder,
-        notifier: Notifier,
     ) -> None:
         self._repos = repos
         self._guard = guard
         self._clock = clock
         self._storage = storage
-        self._scheduler = scheduler
         self._secrets = secrets
         self._activity = activity
-        self._notifier = notifier
 
     # -- 查询 -----------------------------------------------------------
 
@@ -288,11 +269,9 @@ class RunService:
         *,
         idempotency_key: str | None = None,
     ) -> RunSubmission:
-        """创建 Run 并提交给调度系统。
+        """在当前请求事务中创建 immutable Snapshot、QUEUED Run 与执行意图。
 
-        提交失败不会回滚 Run——失败本身也是需要被记录和排查的历史事实。
-
-        带幂等键时，同一个键的重复请求返回上一次的结果，不会再跑一次。
+        Git/FS/Scheduler 副作用全部由独立 Worker 在事务提交后执行。
         """
         access = await self._guard.project(user_id, project_id, needs=Capability.RUN_SUBMIT)
 
@@ -362,10 +341,11 @@ class RunService:
             created_at=now,
         )
         await self._repos.runs.add(run)
+        await self._repos.execution_intents.add(_new_execution_intent(run.id, now))
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, result.project_version, access.workspace.id)
+        # 请求返回前不准备目录、不解析 Secret、不调用 Scheduler。
         await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
         return RunSubmission(run=run, created=True)
 
@@ -448,10 +428,11 @@ class RunService:
             created_at=now,
         )
         await self._repos.runs.add(run)
+        await self._repos.execution_intents.add(_new_execution_intent(run.id, now))
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, project_version, access.workspace.id)
+        # 重跑同样只创建持久执行意图，外部副作用交给 Worker。
         await self._record_run_activity(
             user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
         )
@@ -463,86 +444,13 @@ class RunService:
         if run.is_terminal:
             raise ConflictError(f"Run 已处于终态 {run.status}，无法取消")
 
+        now = self._clock.now()
+        if not await self._repos.execution_intents.request_cancel(run.id, now):
+            raise ConflictError("Run 的执行意图已完成，无法取消")
         await self._record_event(run.id, RunEventType.CANCEL_REQUESTED, "用户请求取消")
-        if run.scheduler_job_id:
-            await self._scheduler.cancel(run.scheduler_job_id)
-        else:
-            # 还没提交成功就取消，直接落到终态。
-            run.status = RunStatus.CANCELLED
-            run.finished_at = self._clock.now()
-            await self._repos.runs.update(run)
-            await self._record_event(run.id, RunEventType.CANCELLED, "任务尚未提交，已直接取消")
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_CANCELLED)
         return run
 
     # -- 内部 -----------------------------------------------------------
-
-    async def _submit(
-        self, run: Run, snapshot: RunSnapshot, version: ProjectVersion, workspace_id: str
-    ) -> None:
-        try:
-            paths = await self._storage.prepare_run_directory(
-                run.id,
-                files=[(f.path, f.content_hash) for f in version.files],
-                inputs=[(b.access_path, b.source_id) for b in snapshot.input_bindings],
-            )
-            environment = dict(snapshot.env_literals)
-            # 输入内容在执行环境中的根目录。Input Binding 的 access_path 是
-            # 相对于它的绝对路径，例如 /inputs/train -> $WORKSPACE107_INPUTS_DIR/inputs/train。
-            environment.setdefault("WORKSPACE107_INPUTS_DIR", str(paths.inputs))
-            if snapshot.env_secret_refs:
-                # Secret 值只在这条路径上出现，用完随进程环境交给调度器，不落库。
-                values = await self._secrets.resolve(
-                    workspace_id, sorted(set(snapshot.env_secret_refs.values()))
-                )
-                for env_name, secret_name in snapshot.env_secret_refs.items():
-                    if secret_name in values:
-                        environment[env_name] = values[secret_name]
-
-            work_dir = paths.work
-            if snapshot.working_directory not in {"", "."}:
-                work_dir = paths.work / snapshot.working_directory
-
-            job_id = await self._scheduler.submit(
-                SchedulerSubmission(
-                    run_id=run.id,
-                    job_name=run.name,
-                    work_dir=work_dir,
-                    command=snapshot.command,
-                    setup_command=snapshot.environment_setup_command,
-                    environment_image=snapshot.environment_image,
-                    stdout_path=paths.stdout,
-                    stderr_path=paths.stderr,
-                    configuration=snapshot.scheduler,
-                    environment=environment,
-                )
-            )
-        except (SchedulerError, OSError, ValidationFailed) as exc:
-            run.status = RunStatus.SUBMIT_FAILED
-            run.failure_reason = str(exc)
-            run.finished_at = self._clock.now()
-            await self._repos.runs.update(run)
-            await self._record_event(run.id, RunEventType.SUBMIT_FAILED, str(exc))
-            # 提交失败是「交上去就没下文了」，用户不主动刷新根本不知道。
-            # 收件人是 Run 的创建人——即使就是当前操作者也要发。
-            await self._notifier.run_submit_failed(
-                recipient_id=run.created_by,
-                run_id=run.id,
-                run_name=run.name,
-                workspace_id=workspace_id,
-                reason=str(exc),
-            )
-            return
-
-        run.scheduler_job_id = job_id
-        run.submitted_at = self._clock.now()
-        await self._repos.runs.update(run)
-        await self._record_event(
-            run.id,
-            RunEventType.SUBMITTED,
-            f"已提交到 {snapshot.scheduler.cluster}/{snapshot.scheduler.partition}，"
-            f"调度任务 {job_id}",
-        )
 
     async def _record_run_activity(
         self, user_id: str, run: Run, action: ActivityAction, detail: str = ""
@@ -751,6 +659,18 @@ class RunService:
                 problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
 
         return problems
+
+
+def _new_execution_intent(run_id: str, now: datetime) -> ExecutionIntent:
+    return ExecutionIntent(
+        run_id=run_id,
+        phase=ExecutionPhase.READY,
+        correlation=f"workspace107:{run_id}",
+        attempt_no=0,
+        next_attempt_at=now,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _as_resolved_env(literals: dict[str, str], secret_refs: dict[str, str]) -> ResolvedEnv:

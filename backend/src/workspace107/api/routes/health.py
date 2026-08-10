@@ -21,7 +21,7 @@ async def health(context: ContextDep) -> s.HealthOut:
     return s.HealthOut(
         status="ok",
         version=__version__,
-        scheduler=context.scheduler.name,
+        scheduler=context.settings.scheduler,
         env=context.settings.env,
         request_id=current_request_id(),
     )
