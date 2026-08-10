@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
+import shutil
 import signal
 import stat
 import sys
@@ -101,23 +102,82 @@ async def test_install_is_idempotent_for_same_digest_and_private_from_compute(
 
 
 @pytest.mark.asyncio
-async def test_different_digest_or_source_identity_never_overwrites(
+async def test_installed_marker_returns_first_evidence_without_reopening_source(
     tmp_path: Path,
 ) -> None:
     root, service = await prepared_manager(tmp_path)
     output = write_outputs(service)
-    await service.collect_artifact(identity(), artifact_id="art_stable", source_path="outputs")
+    first = await service.collect_artifact(
+        identity(), artifact_id="art_stable", source_path="outputs"
+    )
     (output / "a.txt").write_text("changed")
 
-    with pytest.raises(RunWorkspaceConflict, match="different content"):
-        await service.collect_artifact(identity(), artifact_id="art_stable", source_path="outputs")
+    changed_retry = await service.collect_artifact(
+        identity(), artifact_id="art_stable", source_path="outputs"
+    )
+    shutil.rmtree(output)
+    deleted_retry = await service.collect_artifact(
+        identity(), artifact_id="art_stable", source_path="outputs"
+    )
     with pytest.raises(RunWorkspaceConflict, match="Artifact identity differs"):
         await service.collect_artifact(
             identity(), artifact_id="art_stable", source_path="outputs/a.txt"
         )
 
+    assert changed_retry == deleted_retry == first
     installed = root / "artifact-store" / "art_stable" / "content" / "a.txt"
     assert installed.read_text() == "alpha"
+
+
+@pytest.mark.asyncio
+async def test_real_process_exit_before_artifact_marker_cleans_owned_half_init(
+    tmp_path: Path,
+) -> None:
+    root, service = await prepared_manager(tmp_path)
+    write_outputs(service)
+    script = f"""
+import asyncio, os, signal
+from pathlib import Path
+from workspace107.domain.ports.run_workspace import RunWorkspaceIdentity
+from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
+class UnusedExporter:
+    async def export(self, **kwargs): raise AssertionError('prepared')
+service = PosixRunWorkspace(Path({str(root)!r}), UnusedExporter(), shared_gid=os.getegid())
+def kill_before_marker(*args, **kwargs): os.kill(os.getpid(), signal.SIGKILL)
+service._write_json_marker = kill_before_marker
+asyncio.run(service.collect_artifact(
+    RunWorkspaceIdentity('run_artifact','snap_artifact','prjv_artifact',{"1" * 40!r}),
+    artifact_id='art_half', source_path='outputs'))
+"""
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
+    assert await process.wait() == -signal.SIGKILL
+    staging = root / "artifact-store" / ".staging" / "art_half"
+    assert stat.S_IMODE(staging.stat().st_mode) == 0o700
+    assert not (staging / ".artifact-identity.json").exists()
+
+    recovered = await service.collect_artifact(
+        identity(), artifact_id="art_half", source_path="outputs"
+    )
+
+    assert recovered.file_count == 2
+    assert not staging.exists()
+
+
+@pytest.mark.asyncio
+async def test_wrong_identity_artifact_staging_is_not_deleted(tmp_path: Path) -> None:
+    root, service = await prepared_manager(tmp_path)
+    write_outputs(service)
+    staging = root / "artifact-store" / ".staging" / "art_wrong"
+    staging.mkdir(mode=0o700)
+    staging.chmod(0o700)
+    marker = service._artifact_marker(identity(), "art_wrong", "outputs", state="copying")
+    marker["snapshot_id"] = "snap_other"
+    service._write_json_marker(staging / ".artifact-identity.json", marker, mode=0o600)
+
+    with pytest.raises(RunWorkspaceConflict, match="prepared identity"):
+        await service.collect_artifact(identity(), artifact_id="art_wrong", source_path="outputs")
+
+    assert staging.exists()
 
 
 @pytest.mark.asyncio

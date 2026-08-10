@@ -95,11 +95,13 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 2. M1 只部署一个 active Worker，且部署、重启和滚动操作不得产生新旧 Worker overlap；
    B 不提供 per-Run/Artifact lock、claim 或多 writer takeover。
 3. Worker 与计算任务使用不同 UID；两者属于配置的 `shared_gid`。Run root 为 `0750`，
-   `work/`、`logs/` 为 `0770`，stdout/stderr 为 `0660`，空 inputs 目录只读；Worker 私有
-   `artifact-store/` 和 staging 控制目录为 `0700`/`0600`，计算 UID 不得 traverse。
+   `work/`、`logs/` 和执行期 Artifact 目录为 setgid `02770`，stdout/stderr 为 `0660`，
+   空 inputs 目录为只读 setgid `02550`；Worker 私有 `artifact-store/` 和 staging 控制目录
+   为 `0700`/`0600`，计算 UID 不得 traverse。D 生成的 job wrapper 必须在执行用户命令前
+   设置 `umask 0007`，保证新文件/目录不意外移除 shared GID 所需的 group 权限。
    同 UID 或计算 UID 不属于 `shared_gid` 时，部署验收必须失败。
-4. 真实 service UID、compute UID、`shared_gid`、mount mapping 与同目录 atomic rename
-   必须在目标 Shared FS 逐项 human gate；本地 stat 测试不能替代真实双 UID 验证。
+4. 真实 service UID、compute UID、`shared_gid`、mount mapping 与同文件系统 atomic rename
+   必须在目标 Shared FS 逐项 human gate；本地 stat/同 UID 子进程测试不能替代真实双 UID 验证。
 5. M1 只承诺应用进程退出或重启后的 exporting/copying/finalizing 恢复，不承诺节点掉电、
    多 writer、滚动双活或任意 Shared FS power-loss durability。
 

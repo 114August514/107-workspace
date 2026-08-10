@@ -33,8 +33,8 @@ from ...domain.ports.version_control import (
 )
 
 _RUN_ROOT_MODE = 0o750
-_SHARED_DIRECTORY_MODE = 0o770
-_INPUT_DIRECTORY_MODE = 0o550
+_SHARED_DIRECTORY_MODE = 0o2770
+_INPUT_DIRECTORY_MODE = 0o2550
 _SHARED_FILE_MODE = 0o660
 _PRIVATE_DIRECTORY_MODE = 0o700
 _PRIVATE_FILE_MODE = 0o600
@@ -83,9 +83,16 @@ class PosixRunWorkspace:
         self._root = canonical
         self._exporter = exporter
         self._runs = canonical / "runs"
+        self._run_staging = canonical / ".run-staging"
         self._artifact_store = canonical / "artifact-store"
         self._artifact_staging = self._artifact_store / ".staging"
         self._ensure_directory(self._runs, mode=_RUN_ROOT_MODE, gid=shared_gid, label="runs")
+        self._ensure_directory(
+            self._run_staging,
+            mode=_PRIVATE_DIRECTORY_MODE,
+            gid=self._owner_gid,
+            label="Run staging",
+        )
         self._ensure_directory(
             self._artifact_store,
             mode=_PRIVATE_DIRECTORY_MODE,
@@ -127,7 +134,7 @@ class PosixRunWorkspace:
             return workspace
 
         self._cleanup_run_temporaries(identity)
-        temporary = self._runs / f".{identity.run_id}.{uuid.uuid4().hex}.tmp"
+        temporary = self._run_staging / f".{identity.run_id}.{uuid.uuid4().hex}.tmp"
         temporary.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
         temporary.chmod(_PRIVATE_DIRECTORY_MODE)
         try:
@@ -186,28 +193,17 @@ class PosixRunWorkspace:
         if recovered is not None:
             return recovered
 
-        if self._path_exists(installed):
-            installed_evidence = self._validate_installed(
-                installed, identity, artifact_id, source_path
-            )
-            source = self._open_artifact_source(workspace.work, source_path)
-            try:
-                source_evidence = self._evidence_from_source(source)
-            finally:
-                os.close(source.descriptor)
-            if source_evidence != installed_evidence:
-                raise RunWorkspaceConflict(
-                    "Artifact ID is already installed with different content"
-                )
-            return installed_evidence
-
         if self._path_exists(staging):
-            marker = self._read_artifact_marker(staging)
-            self._require_artifact_identity(marker, identity, artifact_id, source_path)
-            if marker.get("state") != "copying":
-                raise RunWorkspaceConflict("Artifact staging has an invalid state")
             self._validate_private_tree_root(staging, label="Artifact copying staging")
-            shutil.rmtree(staging)
+            marker_path = staging / _ARTIFACT_MARKER_NAME
+            if not self._path_exists(marker_path):
+                shutil.rmtree(staging)
+            else:
+                marker = self._read_artifact_marker(staging)
+                self._require_artifact_identity(marker, identity, artifact_id, source_path)
+                if marker.get("state") != "copying":
+                    raise RunWorkspaceConflict("Artifact staging has an invalid state")
+                shutil.rmtree(staging)
 
         source = self._open_artifact_source(workspace.work, source_path)
         try:
@@ -264,7 +260,7 @@ class PosixRunWorkspace:
             marker = self._read_artifact_marker(installed)
             self._require_artifact_identity(marker, identity, artifact_id, source_path)
             if marker.get("state") == "installed":
-                return None
+                return self._require_durable_artifact_evidence(installed, marker)
             if marker.get("state") != "finalizing":
                 raise RunWorkspaceConflict("Installed Artifact has an invalid state")
             evidence = self._require_durable_artifact_evidence(installed, marker)
@@ -287,6 +283,8 @@ class PosixRunWorkspace:
 
         if not os.path.lexists(staging):
             return None
+        if not os.path.lexists(staging / _ARTIFACT_MARKER_NAME):
+            return None
         marker = self._read_artifact_marker(staging)
         self._require_artifact_identity(marker, identity, artifact_id, source_path)
         if marker.get("state") != "finalizing":
@@ -306,19 +304,6 @@ class PosixRunWorkspace:
         )
         return evidence
 
-    def _validate_installed(
-        self,
-        installed: Path,
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-    ) -> RunArtifactEvidence:
-        marker = self._read_artifact_marker(installed)
-        self._require_artifact_identity(marker, identity, artifact_id, source_path)
-        if marker.get("state") != "installed":
-            raise RunWorkspaceConflict("Installed Artifact has an invalid state")
-        return self._require_durable_artifact_evidence(installed, marker)
-
     def _require_durable_artifact_evidence(
         self, root: Path, marker: dict[str, Any]
     ) -> RunArtifactEvidence:
@@ -331,18 +316,31 @@ class PosixRunWorkspace:
 
     def _cleanup_run_temporaries(self, identity: RunWorkspaceIdentity) -> None:
         pattern = re.compile(rf"\A\.{re.escape(identity.run_id)}\.[0-9a-f]{{32}}\.tmp\Z")
-        for candidate in self._runs.iterdir():
+        for candidate in self._run_staging.iterdir():
             if not pattern.fullmatch(candidate.name):
                 continue
             info = candidate.lstat()
-            if (
-                not stat.S_ISDIR(info.st_mode)
-                or info.st_uid != self._owner_uid
-                or info.st_gid not in {self._owner_gid, self._shared_gid}
-                or stat.S_IMODE(info.st_mode) not in {_PRIVATE_DIRECTORY_MODE, _RUN_ROOT_MODE}
-            ):
+            private_half_init = (
+                stat.S_ISDIR(info.st_mode)
+                and info.st_uid == self._owner_uid
+                and info.st_gid == self._owner_gid
+                and stat.S_IMODE(info.st_mode) == _PRIVATE_DIRECTORY_MODE
+            )
+            ready_to_install = (
+                stat.S_ISDIR(info.st_mode)
+                and info.st_uid == self._owner_uid
+                and info.st_gid == self._shared_gid
+                and stat.S_IMODE(info.st_mode) == _RUN_ROOT_MODE
+            )
+            if not (private_half_init or ready_to_install):
                 raise RunWorkspaceConflict("Run staging ownership or mode drifted")
-            marker = self._read_json(candidate / _MARKER_NAME, label="Run staging marker")
+            marker_path = candidate / _MARKER_NAME
+            if not self._path_exists(marker_path):
+                if not private_half_init:
+                    raise RunWorkspaceConflict("Run staging marker is missing")
+                shutil.rmtree(candidate)
+                continue
+            marker = self._read_json(marker_path, label="Run staging marker")
             self._require_same_identity(marker, identity)
             if marker.get("state") not in {"exporting", "prepared"}:
                 raise RunWorkspaceConflict("Run staging has an invalid state")
@@ -499,21 +497,6 @@ class PosixRunWorkspace:
             )
             return
         self._copy_open_file(source.descriptor, content / source.name)
-
-    def _evidence_from_source(self, source: _OpenSource) -> RunArtifactEvidence:
-        entries: list[ProjectVersionExportFile] = []
-
-        def add(path: Path, descriptor: int) -> None:
-            size, digest = self._hash_descriptor(descriptor)
-            entries.append(
-                ProjectVersionExportFile(path=path.as_posix(), size=size, content_hash=digest)
-            )
-
-        if source.is_directory:
-            self._walk_source(source.descriptor, add)
-        else:
-            add(Path(source.name), source.descriptor)
-        return self._artifact_evidence(tuple(entries))
 
     def _walk_source(self, descriptor: int, visit: Any, prefix: Path = Path()) -> None:
         nofollow = os.O_NOFOLLOW
@@ -802,8 +785,8 @@ class PosixRunWorkspace:
 
     def _create_directory(self, path: Path, mode: int, gid: int) -> None:
         path.mkdir(mode=mode)
-        path.chmod(mode)
         os.chown(path, -1, gid)
+        path.chmod(mode)
 
     def _create_file(self, path: Path, mode: int, gid: int) -> None:
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)

@@ -111,10 +111,11 @@ async def test_prepare_installs_complete_workspace_with_shared_permissions(
     }
     expected = {
         workspace.root: 0o750,
-        workspace.work: 0o770,
-        workspace.inputs: 0o550,
-        workspace.logs: 0o770,
-        workspace.artifact_staging: 0o770,
+        root / ".run-staging": 0o700,
+        workspace.work: 0o2770,
+        workspace.inputs: 0o2550,
+        workspace.logs: 0o2770,
+        workspace.artifact_staging: 0o2770,
         workspace.stdout: 0o660,
         workspace.stderr: 0o660,
         workspace.work / "main.py": 0o660,
@@ -170,7 +171,7 @@ async def test_interrupted_export_temp_is_owned_then_removed_and_reexported(
     root = storage_root(tmp_path)
     with pytest.raises(RuntimeError, match="injected export failure"):
         await manager(root, FakeExporter(fail=True)).prepare(identity(), inputs=())
-    temporary = next((root / "runs").glob(".run_test.*.tmp"))
+    temporary = next((root / ".run-staging").glob(".run_test.*.tmp"))
     marker_data = json.loads((temporary / ".workspace-identity.json").read_text())
     assert marker_data["state"] == "exporting"
     assert not (root / "runs" / "run_test").exists()
@@ -180,7 +181,7 @@ async def test_interrupted_export_temp_is_owned_then_removed_and_reexported(
 
     assert exporter.calls == 1
     assert workspace.work.is_dir()
-    assert not list((root / "runs").glob(".run_test.*.tmp"))
+    assert not list((root / ".run-staging").glob(".run_test.*.tmp"))
 
 
 @pytest.mark.asyncio
@@ -201,12 +202,81 @@ asyncio.run(PosixRunWorkspace(
 """
     process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
     assert await process.wait() == -signal.SIGKILL
-    assert list((root / "runs").glob(".run_test.*.tmp"))
+    assert list((root / ".run-staging").glob(".run_test.*.tmp"))
 
     workspace = await manager(root).prepare(identity(), inputs=())
 
     assert (workspace.work / "main.py").is_file()
-    assert not list((root / "runs").glob(".run_test.*.tmp"))
+    assert not list((root / ".run-staging").glob(".run_test.*.tmp"))
+
+
+@pytest.mark.asyncio
+async def test_real_process_exit_before_run_marker_cleans_owned_half_init(
+    tmp_path: Path,
+) -> None:
+    root = storage_root(tmp_path)
+    script = f"""
+import asyncio, os, signal
+from pathlib import Path
+from workspace107.domain.ports.run_workspace import RunWorkspaceIdentity
+from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
+class UnusedExporter:
+    async def export(self, **kwargs): raise AssertionError('marker is first')
+service = PosixRunWorkspace(
+    Path({str(root)!r}), UnusedExporter(), shared_gid=os.getegid()
+)
+def kill_before_marker(*args, **kwargs): os.kill(os.getpid(), signal.SIGKILL)
+service._write_json_marker = kill_before_marker
+asyncio.run(service.prepare(
+    RunWorkspaceIdentity('run_test','snap_test','prjv_test',{"1" * 40!r}), inputs=()))
+"""
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
+    assert await process.wait() == -signal.SIGKILL
+    temporary = next((root / ".run-staging").glob(".run_test.*.tmp"))
+    assert not (temporary / ".workspace-identity.json").exists()
+    assert stat.S_IMODE(temporary.stat().st_mode) == 0o700
+
+    workspace = await manager(root).prepare(identity(), inputs=())
+
+    assert workspace.work.is_dir()
+    assert not temporary.exists()
+
+
+@pytest.mark.asyncio
+async def test_setgid_execution_directories_inherit_shared_group_and_umask(
+    tmp_path: Path,
+) -> None:
+    root = storage_root(tmp_path)
+    workspace = await manager(root).prepare(identity(), inputs=())
+    script = """
+import os, pathlib, sys
+os.umask(0o007)
+work, logs, artifacts = map(pathlib.Path, sys.argv[1:])
+(work / 'generated').mkdir()
+(work / 'generated' / 'result.txt').write_text('result')
+(logs / 'worker.log').write_text('log')
+(artifacts / 'candidate.txt').write_text('artifact')
+"""
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        script,
+        os.fspath(workspace.work),
+        os.fspath(workspace.logs),
+        os.fspath(workspace.artifact_staging),
+    )
+    assert await process.wait() == 0
+
+    expected = {
+        workspace.work / "generated": 0o2770,
+        workspace.work / "generated" / "result.txt": 0o660,
+        workspace.logs / "worker.log": 0o660,
+        workspace.artifact_staging / "candidate.txt": 0o660,
+    }
+    for path, mode in expected.items():
+        info = path.stat()
+        assert info.st_gid == os.getegid()
+        assert stat.S_IMODE(info.st_mode) == mode
 
 
 @pytest.mark.asyncio
@@ -215,7 +285,7 @@ async def test_wrong_identity_temp_is_not_deleted(tmp_path: Path) -> None:
     failing = manager(root, FakeExporter(fail=True))
     with pytest.raises(RuntimeError):
         await failing.prepare(identity(snapshot_id="snap_other"), inputs=())
-    temporary = next((root / "runs").glob(".run_test.*.tmp"))
+    temporary = next((root / ".run-staging").glob(".run_test.*.tmp"))
 
     with pytest.raises(RunWorkspaceConflict, match="prepared identity"):
         await manager(root).prepare(identity(), inputs=())
