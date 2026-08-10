@@ -436,10 +436,6 @@ class ArtifactEntryOut(Model):
     size: int
 
 
-class SyncOut(Model):
-    changed: int
-
-
 # -- 首页 -------------------------------------------------------------------
 
 

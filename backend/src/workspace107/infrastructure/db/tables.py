@@ -11,7 +11,9 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -239,6 +241,27 @@ class RunRow(Base):
     __tablename__ = "runs"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','succeeded','failed','cancelled','submit_failed')",
+            name="ck_runs_status",
+        ),
+        CheckConstraint(
+            "((scheduler_job_id IS NULL AND submitted_at IS NULL) OR "
+            "(scheduler_job_id IS NOT NULL AND submitted_at IS NOT NULL))",
+            name="ck_runs_scheduler_link",
+        ),
+        CheckConstraint(
+            "status <> 'running' OR scheduler_job_id IS NOT NULL",
+            name="ck_runs_running_has_job",
+        ),
+        CheckConstraint(
+            "((status IN ('queued','running') AND finished_at IS NULL) OR "
+            "(status IN ('succeeded','failed','cancelled','submit_failed') "
+            "AND finished_at IS NOT NULL))",
+            name="ck_runs_finished_at",
+        ),
+    )
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), index=True)
     workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     snapshot_id: Mapped[str] = mapped_column(ID, ForeignKey("run_snapshots.id"))
@@ -259,6 +282,92 @@ class RunRow(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunExecutionIntentRow(Base):
+    __tablename__ = "run_execution_intents"
+    __table_args__ = (
+        CheckConstraint(
+            "phase IN ('ready','submitting','monitoring','finalizing','uncertain','complete')",
+            name="ck_execution_intent_phase",
+        ),
+        CheckConstraint("attempt_no >= 0", name="ck_execution_intent_attempt_no"),
+        CheckConstraint("lease_generation >= 0", name="ck_execution_intent_lease_generation"),
+        CheckConstraint(
+            "((lease_owner IS NULL AND lease_token IS NULL AND lease_expires_at IS NULL) OR "
+            "(lease_owner IS NOT NULL AND lease_token IS NOT NULL "
+            "AND lease_expires_at IS NOT NULL))",
+            name="ck_execution_intent_lease_tuple",
+        ),
+        CheckConstraint(
+            "((phase = 'complete' AND completed_at IS NOT NULL) OR "
+            "(phase <> 'complete' AND completed_at IS NULL))",
+            name="ck_execution_intent_completed",
+        ),
+        Index(
+            "ix_execution_intents_claimable",
+            "next_attempt_at",
+            "lease_expires_at",
+            "created_at",
+            sqlite_where=text("completed_at IS NULL"),
+            postgresql_where=text("completed_at IS NULL"),
+        ),
+    )
+
+    run_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("runs.id", ondelete="RESTRICT"), primary_key=True
+    )
+    phase: Mapped[str] = mapped_column(String(24))
+    correlation: Mapped[str] = mapped_column(String(128), unique=True)
+    attempt_no: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    lease_generation: Mapped[int] = mapped_column(BigInteger, default=0)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    uncertainty_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    uncertainty_detail: Mapped[str] = mapped_column(Text, default="")
+    observed_scheduler_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    observed_exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    observed_finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    observed_reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunSubmissionAttemptRow(Base):
+    __tablename__ = "run_submission_attempts"
+    __table_args__ = (
+        CheckConstraint("attempt_no > 0", name="ck_submission_attempt_no"),
+        CheckConstraint(
+            "outcome IN ('armed','accepted','rejected','uncertain','reconciled_zero',"
+            "'reconciled_one','reconciled_multiple')",
+            name="ck_submission_attempt_outcome",
+        ),
+        Index("ix_submission_attempts_correlation", "correlation", "attempt_no"),
+    )
+
+    run_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("run_execution_intents.run_id", ondelete="RESTRICT"), primary_key=True
+    )
+    attempt_no: Mapped[int] = mapped_column(Integer, primary_key=True)
+    correlation: Mapped[str] = mapped_column(String(128))
+    outcome: Mapped[str] = mapped_column(String(24))
+    scheduler_job_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    detail: Mapped[str] = mapped_column(Text, default="")
 
 
 class IdempotencyKeyRow(Base):
@@ -303,6 +412,10 @@ class ArtifactRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     cleaned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "source_path", name="uq_artifact_run_source_path"),
+    )
 
 
 class ActivityRow(Base):
