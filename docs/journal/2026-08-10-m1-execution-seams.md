@@ -4,10 +4,12 @@
 - 认领：integration/m1-executable-skeleton
 - 上下文：A/B/C/D 集成、本地验收、GitHub Issue 与真实 107 human gate
 - 开始：2026-08-10
-- 最近更新：2026-08-10
+- 最近更新：2026-08-11
 - 分支：`integration/m1-executable-skeleton`
 - Worktree：`/home/august/Projects/ustc_107/107-workspace-m1-integration`
 - Code candidate：`72cf12b526e2eedea8891bc2c6c767923cdb4c4f`
+- Journal refresh base HEAD：`79ec0b69ce438e74f3220692f71cfa71ff6ac6a4`
+- MCP config：root 与 integration worktree 的 `.omp/mcp.json` 均已允许 `issue_write`，并包含 `create_pull_request`
 
 ## 当前状态
 
@@ -38,11 +40,11 @@ A Git Version、B Shared FS、C Worker、D Slurm 已集成到同一 vertical sli
 
 这些证据只证明本地候选及其 Mock/PostgreSQL/Compose 行为，不证明真实 Shared FS、slurmrestd 或 Slurm 已验收。
 
-## Blocker 1：重载 terminal 后创建 GitHub Issue
+## Blocker 1：当前延续会话未加载 GitHub MCP tools
 
-当前 terminal 尚未重载更新后的 `mcp.json`，因此本会话不能使用用户要求的新 GitHub MCP `issue_write`。
+root 与 integration worktree 的 `.omp/mcp.json` 均已允许 `issue_write`，并包含 `create_pull_request`；但当前延续 OMP 会话的实际 tool inventory 只有 `functions` 与 `multi_tool_use`。全部 GitHub tools 均不可用并返回 `Unknown tool`，因此配置文件事实不等于本会话已获得 GitHub capability。
 
-恢复后必须先 inspect `issue_write` 的实际 schema，再通过该 MCP 创建 Issue。禁止以 `gh`、直接 REST 或其他 GitHub 写入口替代。Issue 创建完成后，才按项目 Git 流程关联现有 branch/commit，并进行获准的 push 与 PR；当前没有执行这些动作。
+必须完全退出当前 OMP process，再从 integration worktree 启动一个全新的 OMP session；只 reload shell、重载 terminal 或继续旧会话均不满足恢复条件。新会话必须同时确认实际 inventory 包含 `issue_write`、`create_pull_request`，且 native Git 可运行，才能继续。禁止以 `gh`、直接 REST 或其他 GitHub 写入口替代官方 GitHub MCP。
 
 ## Blocker 2：真实 107 Shared FS/Slurm human gate
 
@@ -58,21 +60,26 @@ A Git Version、B Shared FS、C Worker、D Slurm 已集成到同一 vertical sli
 
 ## 仓外副作用
 
-- 未 push。
 - 未创建或修改 GitHub Issue/PR。
+- 未执行 branch rename。
+- 未 push。
 - 未访问 107、Shared FS、slurmrestd 或 Slurm。
 - 未删除 Docker volume。
-- 本次 handoff 只更新现有 journal 并创建本地普通 commit。
+- 本次 handoff 只更新现有 journal 并创建本地普通 commit；不记录本机 Secret。
 
 ## 恢复后的下一步顺序
 
-1. 重载 terminal，使更新后的 `mcp.json` 生效，并回到上述 branch/worktree。
-2. 确认 journal checkpoint commit、code candidate 和 worktree clean。
-3. Inspect 新 GitHub MCP `issue_write` schema；不得猜参数。
-4. 使用 `issue_write` 创建 M1 Issue，引用本 journal、ADR-0003、code candidate、证据和两个 blocker。
-5. Issue 创建成功后，按项目 Git 流程关联 branch/commit；获得相应授权后再 push、创建 PR，不使用 `gh` 或 REST 替代 GitHub MCP。
-6. 向用户收集并确认真实 107 human gate 参数与执行授权。
-7. 在新授权窗口执行 Shared FS/Slurm 验收并保存脱敏 evidence；只有 fresh evidence 满足验收后，才重新判断 M1 状态。
+1. 完全退出当前 OMP process；不得以 reload shell、重载 terminal 或继续旧会话代替。
+2. 从 `/home/august/Projects/ustc_107/107-workspace-m1-integration` 启动一个全新的 OMP session，并回到 `integration/m1-executable-skeleton`。
+3. 确认实际 tool inventory 同时包含 `issue_write` 与 `create_pull_request`，且 native Git 可运行；任一条件不满足就保持 BLOCKED/HANDOFF。
+4. 用 native Git 只读确认 journal checkpoint、code candidate、branch/HEAD 和 worktree clean。
+5. Inspect `issue_write` 的实际 schema 后使用它创建 M1 Issue，引用本 journal、ADR-0003、code candidate、本地证据和两个 blocker；不得猜参数。
+6. Issue 创建成功后关联现有工作；仅在项目流程确有需要且 native Git 安全条件满足时，将 branch rename 为 Issue 关联名称。
+7. 把 Issue 关联和必要的 branch 事实写回本 journal，创建普通 journal commit。
+8. 获得相应授权后记录 intended commit ID，再 push 对应 branch。
+9. 确认 push 后使用 `create_pull_request` 创建 PR；不得使用 `gh` 或 REST 替代 GitHub MCP。
+10. 向用户收集并确认真实 107 human gate 参数与执行授权。
+11. 在新授权窗口执行 Shared FS/Slurm 验收并保存脱敏 evidence；只有 fresh evidence 满足验收后，才重新判断 M1 状态。
 
 ## 回退方式
 
