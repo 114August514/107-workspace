@@ -1,4 +1,4 @@
-"""Run 终态输出到不可变 Artifact 目录的行为契约。"""
+"""Single-writer immutable Artifact installation behavior."""
 
 from __future__ import annotations
 
@@ -7,9 +7,8 @@ import hashlib
 import json
 import os
 import signal
+import stat
 import sys
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -49,10 +48,6 @@ class FakeExporter:
         )
 
 
-class SimulatedCrash(BaseException):
-    pass
-
-
 def identity() -> RunWorkspaceIdentity:
     return RunWorkspaceIdentity("run_artifact", "snap_artifact", "prjv_artifact", COMMIT_OID)
 
@@ -60,244 +55,219 @@ def identity() -> RunWorkspaceIdentity:
 async def prepared_manager(tmp_path: Path) -> tuple[Path, PosixRunWorkspace]:
     root = tmp_path / "shared"
     root.mkdir(mode=0o750)
-    manager = PosixRunWorkspace(root, FakeExporter())
-    await manager.prepare(identity(), inputs=())
-    return root, manager
+    root.chmod(0o750)
+    service = PosixRunWorkspace(root, FakeExporter(), shared_gid=os.getegid())
+    await service.prepare(identity(), inputs=())
+    return root, service
 
 
-def write_outputs(manager: PosixRunWorkspace) -> None:
-    output = manager.paths_for(identity().run_id).work / "outputs"
+def write_outputs(service: PosixRunWorkspace) -> Path:
+    output = service.paths_for(identity().run_id).work / "outputs"
     (output / "nested").mkdir(parents=True)
-    (output / "a.txt").write_text("alpha", encoding="utf-8")
-    (output / "nested" / "b.txt").write_text("beta", encoding="utf-8")
+    (output / "a.txt").write_text("alpha")
+    (output / "nested" / "b.txt").write_text("beta")
+    return output
 
 
 @pytest.mark.asyncio
-async def test_collect_artifact_installs_once_and_same_digest_is_idempotent(tmp_path: Path) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
+async def test_install_is_idempotent_for_same_digest_and_private_from_compute(
+    tmp_path: Path,
+) -> None:
+    root, service = await prepared_manager(tmp_path)
+    write_outputs(service)
 
-    first = await manager.collect_artifact(
+    first = await service.collect_artifact(
         identity(), artifact_id="art_stable", source_path="outputs"
     )
-    second = await manager.collect_artifact(
+    second = await service.collect_artifact(
         identity(), artifact_id="art_stable", source_path="outputs"
     )
 
-    assert (
-        first
-        == second
-        == RunArtifactEvidence(
-            size=9,
-            file_count=2,
-            content_hash=first.content_hash,
-        )
-    )
-    assert len(first.content_hash) == 64
+    assert first == second
+    assert first.size == 9
+    assert first.file_count == 2
     installed = root / "artifact-store" / "art_stable"
     assert (installed / "content" / "a.txt").read_text() == "alpha"
     assert (installed / "content" / "nested" / "b.txt").read_text() == "beta"
-    assert json.loads((installed / ".artifact-identity.json").read_text())["state"] == ("prepared")
+    assert json.loads((installed / ".artifact-identity.json").read_text())["state"] == ("installed")
+    assert stat.S_IMODE((root / "artifact-store").stat().st_mode) == 0o700
+    assert stat.S_IMODE(installed.stat().st_mode) == 0o700
+    assert stat.S_IMODE((installed / "content" / "a.txt").stat().st_mode) == 0o600
+    assert stat.S_IMODE((installed / ".artifact-identity.json").stat().st_mode) == 0o400
+    assert {entry.name for entry in (root / "artifact-store").iterdir()} == {
+        ".staging",
+        "art_stable",
+    }
 
 
 @pytest.mark.asyncio
-async def test_existing_artifact_different_digest_conflicts_without_overwrite(
+async def test_different_digest_or_source_identity_never_overwrites(
     tmp_path: Path,
 ) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    await manager.collect_artifact(identity(), artifact_id="art_stable", source_path="outputs")
-    source = manager.paths_for(identity().run_id).work / "outputs" / "a.txt"
-    source.write_text("changed", encoding="utf-8")
+    root, service = await prepared_manager(tmp_path)
+    output = write_outputs(service)
+    await service.collect_artifact(identity(), artifact_id="art_stable", source_path="outputs")
+    (output / "a.txt").write_text("changed")
 
     with pytest.raises(RunWorkspaceConflict, match="different content"):
-        await manager.collect_artifact(identity(), artifact_id="art_stable", source_path="outputs")
-
-    assert (root / "artifact-store" / "art_stable" / "content" / "a.txt").read_text() == ("alpha")
-
-
-def test_real_threads_same_artifact_do_not_delete_or_overwrite_each_other(tmp_path: Path) -> None:
-    root = tmp_path / "shared"
-    root.mkdir(mode=0o750)
-    manager = PosixRunWorkspace(root, FakeExporter())
-    asyncio.run(manager.prepare(identity(), inputs=()))
-    write_outputs(manager)
-
-    def collect() -> RunArtifactEvidence:
-        return asyncio.run(
-            manager.collect_artifact(
-                identity(), artifact_id="art_concurrent", source_path="outputs"
-            )
+        await service.collect_artifact(identity(), artifact_id="art_stable", source_path="outputs")
+    with pytest.raises(RunWorkspaceConflict, match="Artifact identity differs"):
+        await service.collect_artifact(
+            identity(), artifact_id="art_stable", source_path="outputs/a.txt"
         )
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(lambda _: collect(), range(2)))
-
-    assert results[0] == results[1]
-    assert (root / "artifact-store" / "art_concurrent" / "content" / "a.txt").read_text() == (
-        "alpha"
-    )
+    installed = root / "artifact-store" / "art_stable" / "content" / "a.txt"
+    assert installed.read_text() == "alpha"
 
 
 @pytest.mark.asyncio
-async def test_artifact_rename_before_install_crash_recovers_owned_staging(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+async def test_real_process_exit_during_copying_discards_partial_and_retries(
+    tmp_path: Path,
 ) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    rename = Path.rename
+    root, service = await prepared_manager(tmp_path)
+    write_outputs(service)
+    script = f"""
+import asyncio, os, signal
+from pathlib import Path
+from workspace107.domain.ports.run_workspace import RunWorkspaceIdentity
+from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
+class UnusedExporter:
+    async def export(self, **kwargs): raise AssertionError('prepared')
+service = PosixRunWorkspace(Path({str(root)!r}), UnusedExporter(), shared_gid=os.getegid())
+def kill_copy(source, content):
+    (content / 'partial.txt').write_text('partial')
+    os.kill(os.getpid(), signal.SIGKILL)
+service._copy_source = kill_copy
+asyncio.run(service.collect_artifact(
+    RunWorkspaceIdentity('run_artifact','snap_artifact','prjv_artifact',{"1" * 40!r}),
+    artifact_id='art_copy', source_path='outputs'))
+"""
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
+    assert await process.wait() == -signal.SIGKILL
+    staging = root / "artifact-store" / ".staging" / "art_copy"
+    assert json.loads((staging / ".artifact-identity.json").read_text())["state"] == ("copying")
 
-    def crash_before_install(source: Path, target: Path) -> Path:
-        if source.parent.name == ".staging" and source.name == "art_crash":
-            raise SimulatedCrash("before artifact rename")
-        return rename(source, target)
-
-    monkeypatch.setattr(Path, "rename", crash_before_install)
-    with pytest.raises(SimulatedCrash, match="before artifact rename"):
-        await manager.collect_artifact(identity(), artifact_id="art_crash", source_path="outputs")
-    monkeypatch.undo()
-
-    recovered = await PosixRunWorkspace(root, FakeExporter()).collect_artifact(
-        identity(), artifact_id="art_crash", source_path="outputs"
+    recovered = await service.collect_artifact(
+        identity(), artifact_id="art_copy", source_path="outputs"
     )
 
     assert recovered.file_count == 2
-    assert not (root / "artifact-store" / ".staging" / "art_crash").exists()
+    assert not staging.exists()
+    assert not (root / "artifact-store" / "art_copy" / "content" / "partial.txt").exists()
 
 
 @pytest.mark.asyncio
-async def test_artifact_rename_after_install_crash_recovers_without_rebuild(
+async def test_real_process_exit_at_finalizing_recovers_first_evidence_without_source(
+    tmp_path: Path,
+) -> None:
+    root, service = await prepared_manager(tmp_path)
+    output = write_outputs(service)
+    script = f"""
+import asyncio, os, signal
+from pathlib import Path
+from workspace107.domain.ports.run_workspace import RunWorkspaceIdentity
+from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
+class UnusedExporter:
+    async def export(self, **kwargs): raise AssertionError('prepared')
+service = PosixRunWorkspace(Path({str(root)!r}), UnusedExporter(), shared_gid=os.getegid())
+rename = Path.rename
+def kill_finalizing(source, target):
+    if source.parent.name == '.staging' and source.name == 'art_final':
+        os.kill(os.getpid(), signal.SIGKILL)
+    return rename(source, target)
+Path.rename = kill_finalizing
+asyncio.run(service.collect_artifact(
+    RunWorkspaceIdentity('run_artifact','snap_artifact','prjv_artifact',{"1" * 40!r}),
+    artifact_id='art_final', source_path='outputs'))
+"""
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
+    assert await process.wait() == -signal.SIGKILL
+    staging = root / "artifact-store" / ".staging" / "art_final"
+    marker = json.loads((staging / ".artifact-identity.json").read_text())
+    assert marker["state"] == "finalizing"
+    original = marker["evidence"]
+    shutil_target = output
+    for child in sorted(shutil_target.rglob("*"), reverse=True):
+        child.unlink() if child.is_file() else child.rmdir()
+    shutil_target.rmdir()
+
+    recovered = await service.collect_artifact(
+        identity(), artifact_id="art_final", source_path="outputs"
+    )
+
+    assert recovered == RunArtifactEvidence(**original)
+    assert (root / "artifact-store" / "art_final" / "content" / "a.txt").read_text() == ("alpha")
+
+
+@pytest.mark.asyncio
+async def test_exit_after_install_rename_recovers_without_source(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    write_marker = manager._write_artifact_marker
+    root, service = await prepared_manager(tmp_path)
+    output = write_outputs(service)
+    write_marker = service._write_json_marker
 
-    def crash_before_prepared(path: Path, marker: dict[str, object]) -> None:
-        if marker.get("state") == "prepared":
-            raise SimulatedCrash("after artifact rename")
-        write_marker(path, marker)
+    def stop_before_installed(path: Path, marker: dict[str, object], *, mode: int) -> None:
+        if marker.get("state") == "installed":
+            raise RuntimeError("stop after install rename")
+        write_marker(path, marker, mode=mode)
 
-    monkeypatch.setattr(manager, "_write_artifact_marker", crash_before_prepared)
-    with pytest.raises(SimulatedCrash, match="after artifact rename"):
-        await manager.collect_artifact(identity(), artifact_id="art_crash", source_path="outputs")
-    installed = root / "artifact-store" / "art_crash"
-    assert installed.is_dir()
+    monkeypatch.setattr(service, "_write_json_marker", stop_before_installed)
+    with pytest.raises(RuntimeError, match="after install rename"):
+        await service.collect_artifact(identity(), artifact_id="art_renamed", source_path="outputs")
+    monkeypatch.undo()
+    installed = root / "artifact-store" / "art_renamed"
     assert json.loads((installed / ".artifact-identity.json").read_text())["state"] == (
         "finalizing"
     )
-    monkeypatch.undo()
+    for child in sorted(output.rglob("*"), reverse=True):
+        child.unlink() if child.is_file() else child.rmdir()
+    output.rmdir()
 
-    recovered = await PosixRunWorkspace(root, FakeExporter()).collect_artifact(
-        identity(), artifact_id="art_crash", source_path="outputs"
+    recovered = await service.collect_artifact(
+        identity(), artifact_id="art_renamed", source_path="outputs"
     )
 
     assert recovered.file_count == 2
-    assert json.loads((installed / ".artifact-identity.json").read_text())["state"] == ("prepared")
+    assert json.loads((installed / ".artifact-identity.json").read_text())["state"] == ("installed")
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("source_path", ["/absolute", "../escape", "nested/../../escape"])
+@pytest.mark.parametrize("source_path", ["/absolute", "../escape", "nested/../../escape", "."])
 async def test_artifact_source_path_must_be_safe(tmp_path: Path, source_path: str) -> None:
-    _, manager = await prepared_manager(tmp_path)
-
+    _, service = await prepared_manager(tmp_path)
     with pytest.raises(UnsafeRunWorkspacePath):
-        await manager.collect_artifact(
+        await service.collect_artifact(
             identity(), artifact_id="art_invalid", source_path=source_path
         )
 
 
 @pytest.mark.asyncio
-async def test_artifact_source_rejects_symlinks_and_special_files(tmp_path: Path) -> None:
-    _, manager = await prepared_manager(tmp_path)
-    work = manager.paths_for(identity().run_id).work
-    outside = tmp_path / "outside.txt"
+async def test_source_rejects_symlink_fifo_and_nested_symlink(tmp_path: Path) -> None:
+    _, service = await prepared_manager(tmp_path)
+    work = service.paths_for(identity().run_id).work
+    outside = tmp_path / "outside"
     outside.write_text("outside")
     (work / "link").symlink_to(outside)
-
-    with pytest.raises(UnsafeRunWorkspacePath, match=r"[Ss]ymbolic link"):
-        await manager.collect_artifact(identity(), artifact_id="art_link", source_path="link")
-    (work / "link").unlink()
-
+    with pytest.raises(UnsafeRunWorkspacePath, match="symbolic link"):
+        await service.collect_artifact(identity(), artifact_id="art_link", source_path="link")
     fifo = work / "fifo"
     os.mkfifo(fifo)
     with pytest.raises(UnsafeRunWorkspacePath, match="regular file or directory"):
-        await manager.collect_artifact(identity(), artifact_id="art_fifo", source_path="fifo")
+        await service.collect_artifact(identity(), artifact_id="art_fifo", source_path="fifo")
+    tree = work / "tree"
+    tree.mkdir()
+    (tree / "link").symlink_to(outside)
+    with pytest.raises(UnsafeRunWorkspacePath, match="symbolic link"):
+        await service.collect_artifact(identity(), artifact_id="art_nested", source_path="tree")
 
 
 @pytest.mark.asyncio
-async def test_cancelled_lock_waiter_releases_fd_for_next_collector(
+async def test_descriptor_traversal_uses_opened_ancestor_after_symlink_swap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    entered = threading.Event()
-    release = threading.Event()
-    copy_source = manager._copy_artifact_source
-
-    def hold_copy(source: object, content: Path) -> None:
-        entered.set()
-        release.wait(timeout=5)
-        copy_source(source, content)
-
-    monkeypatch.setattr(manager, "_copy_artifact_source", hold_copy)
-    holder = asyncio.create_task(
-        manager.collect_artifact(identity(), artifact_id="art_cancel", source_path="outputs")
-    )
-    await asyncio.to_thread(entered.wait, 5)
-    waiter = asyncio.create_task(
-        manager.collect_artifact(identity(), artifact_id="art_cancel", source_path="outputs")
-    )
-    await asyncio.sleep(0.03)
-    waiter.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await waiter
-    release.set()
-    await holder
-
-    third = await manager.collect_artifact(
-        identity(), artifact_id="art_cancel", source_path="outputs"
-    )
-    assert third.file_count == 2
-
-
-@pytest.mark.asyncio
-async def test_finalizing_staging_installs_first_content_when_source_changes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    rename = Path.rename
-
-    def crash_before_install(source: Path, target: Path) -> Path:
-        if source.parent.name == ".staging" and source.name == "art_first":
-            raise SimulatedCrash("before first install")
-        return rename(source, target)
-
-    monkeypatch.setattr(Path, "rename", crash_before_install)
-    with pytest.raises(SimulatedCrash):
-        await manager.collect_artifact(identity(), artifact_id="art_first", source_path="outputs")
-    monkeypatch.undo()
-    source = manager.paths_for(identity().run_id).work / "outputs" / "a.txt"
-    source.write_text("second", encoding="utf-8")
-
-    first = await PosixRunWorkspace(root, FakeExporter()).collect_artifact(
-        identity(), artifact_id="art_first", source_path="outputs"
-    )
-
-    installed = root / "artifact-store" / "art_first" / "content" / "a.txt"
-    assert first.size == 9
-    assert installed.read_text() == "alpha"
-    with pytest.raises(RunWorkspaceConflict, match="different content"):
-        await manager.collect_artifact(identity(), artifact_id="art_first", source_path="outputs")
-
-
-@pytest.mark.asyncio
-async def test_descriptor_traversal_survives_ancestor_symlink_swap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _, manager = await prepared_manager(tmp_path)
-    work = manager.paths_for(identity().run_id).work
+    _, service = await prepared_manager(tmp_path)
+    work = service.paths_for(identity().run_id).work
     ancestor = work / "ancestor"
     ancestor.mkdir()
     (ancestor / "result.txt").write_text("trusted")
@@ -323,25 +293,24 @@ async def test_descriptor_traversal_survives_ancestor_symlink_swap(
         return descriptor
 
     monkeypatch.setattr(os, "open", swapping_open)
-    await manager.collect_artifact(
+    await service.collect_artifact(
         identity(), artifact_id="art_ancestor", source_path="ancestor/result.txt"
     )
-
-    installed = manager._artifact_store / "art_ancestor" / "content" / "result.txt"
+    installed = service._artifact_store / "art_ancestor" / "content" / "result.txt"
     assert swapped
     assert installed.read_text() == "trusted"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("replacement", ["symlink", "fifo"])
-async def test_descriptor_copy_survives_final_file_swap(
+async def test_descriptor_copy_uses_opened_file_after_final_swap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replacement: str
 ) -> None:
-    _, manager = await prepared_manager(tmp_path)
-    work = manager.paths_for(identity().run_id).work
+    _, service = await prepared_manager(tmp_path)
+    work = service.paths_for(identity().run_id).work
     source = work / "result.txt"
     source.write_text("trusted")
-    outside = tmp_path / "outside.txt"
+    outside = tmp_path / "outside"
     outside.write_text("outside")
     original_open = os.open
     swapped = False
@@ -356,90 +325,15 @@ async def test_descriptor_copy_survives_final_file_swap(
         nonlocal swapped
         descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
         if path == "result.txt" and dir_fd is not None and not swapped:
-            source.rename(work / "held-result.txt")
-            if replacement == "symlink":
-                source.symlink_to(outside)
-            else:
-                os.mkfifo(source)
+            source.rename(work / "held-result")
+            source.symlink_to(outside) if replacement == "symlink" else os.mkfifo(source)
             swapped = True
         return descriptor
 
     monkeypatch.setattr(os, "open", swapping_open)
-    await manager.collect_artifact(
+    await service.collect_artifact(
         identity(), artifact_id=f"art_{replacement}", source_path="result.txt"
     )
-
-    installed = manager._artifact_store / f"art_{replacement}" / "content" / "result.txt"
+    installed = service._artifact_store / f"art_{replacement}" / "content" / "result.txt"
     assert swapped
     assert installed.read_text() == "trusted"
-
-
-@pytest.mark.asyncio
-async def test_independent_process_flock_blocks_then_releases(tmp_path: Path) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    lock_path = root / "artifact-store" / ".locks" / "art_process.lock"
-    script = """
-import fcntl, os, pathlib, sys
-path = pathlib.Path(sys.argv[1])
-fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
-fcntl.flock(fd, fcntl.LOCK_EX)
-print('locked', flush=True)
-sys.stdin.readline()
-fcntl.flock(fd, fcntl.LOCK_UN)
-os.close(fd)
-"""
-    process = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-c",
-        script,
-        os.fspath(lock_path),
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-    )
-    assert process.stdout is not None
-    assert await process.stdout.readline() == b"locked\n"
-    pending = asyncio.create_task(
-        manager.collect_artifact(identity(), artifact_id="art_process", source_path="outputs")
-    )
-    await asyncio.sleep(0.03)
-    assert not pending.done()
-    assert process.stdin is not None
-    process.stdin.write(b"release\n")
-    await process.stdin.drain()
-    await process.wait()
-    assert (await pending).file_count == 2
-
-
-@pytest.mark.asyncio
-async def test_sigkill_copying_process_leaves_owned_staging_for_recovery(
-    tmp_path: Path,
-) -> None:
-    root, manager = await prepared_manager(tmp_path)
-    write_outputs(manager)
-    script = f"""
-import asyncio, os, signal
-from pathlib import Path
-from workspace107.domain.ports.run_workspace import RunWorkspaceIdentity
-from workspace107.domain.ports.version_control import ProjectVersionExportEvidence
-from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
-class UnusedExporter:
-    async def export(self, **kwargs):
-        raise AssertionError('workspace already prepared')
-manager = PosixRunWorkspace(Path({str(root)!r}), UnusedExporter())
-def kill_copy(source, content):
-    (content / 'partial.txt').write_text('partial')
-    os.kill(os.getpid(), signal.SIGKILL)
-manager._copy_artifact_source = kill_copy
-asyncio.run(manager.collect_artifact(
-    RunWorkspaceIdentity('run_artifact','snap_artifact','prjv_artifact',{"1" * 40!r}),
-    artifact_id='art_sigkill', source_path='outputs'))
-"""
-    process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
-    assert await process.wait() == -signal.SIGKILL
-
-    recovered = await manager.collect_artifact(
-        identity(), artifact_id="art_sigkill", source_path="outputs"
-    )
-    assert recovered.file_count == 2
-    assert not (root / "artifact-store" / ".staging" / "art_sigkill").exists()

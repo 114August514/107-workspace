@@ -77,8 +77,9 @@ class RunWorkspacePort(Protocol):
     ) -> RunArtifactEvidence:
         """从 prepared Run work 目录原子安装不可变 Artifact。
 
-        部署前提：Worker 与计算任务使用不同 UID；计算 UID 只能访问 Run 执行目录，
-        不能访问 Worker 私有的 artifact-store、claim、lock 或 staging 控制目录。
-        同 UID 拓扑不满足本端口的不可变性边界。
+        部署前提：C 保证只有一个 active Worker，且不会重叠调用本端口；本端口不提供
+        多 writer 协调。Worker 与计算任务使用不同 UID，并共同属于实现构造时配置的
+        ``shared_gid``。计算 UID 只能访问 Run 执行目录，不能 traverse Worker 私有的
+        Artifact store 或 staging 控制目录。
         """
         ...

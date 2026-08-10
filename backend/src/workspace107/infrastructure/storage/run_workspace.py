@@ -1,16 +1,12 @@
-"""POSIX 文件系统上的可恢复 Run workspace。
+"""Single-writer POSIX Run workspace and immutable Artifact installation.
 
-该组件只拥有 Run 目录选择、prepared identity、路径安全和最小目录布局。
-Project Version 内容由注入的 ``ProjectVersionExporter`` 导出；调度、Run 状态和
-Input Binding 均不属于这里。
-本实现明确以 M1 Linux/POSIX 的 ``openat``/``O_NOFOLLOW``/``flock`` 语义为边界，
-不提供削弱这些保证的非 POSIX fallback。
+M1 has exactly one active Worker. This component therefore uses owned staging plus
+same-filesystem rename without filesystem writer coordination or a general
+power-loss durability protocol.
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import errno
 import hashlib
 import json
@@ -19,7 +15,6 @@ import re
 import shutil
 import stat
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
@@ -37,83 +32,75 @@ from ...domain.ports.version_control import (
     ProjectVersionExportFile,
 )
 
-_DIRECTORY_MODE = 0o750
-_CONTROL_DIRECTORY_MODE = 0o700
-_LOG_MODE = 0o640
-_ARTIFACT_DIRECTORY_MODE = 0o700
-_ARTIFACT_FILE_MODE = 0o600
-_ARTIFACT_MARKER_MODE = 0o400
-_MARKER_MODE = 0o440
-_LOCK_MODE = 0o600
+_RUN_ROOT_MODE = 0o750
+_SHARED_DIRECTORY_MODE = 0o770
+_INPUT_DIRECTORY_MODE = 0o550
+_SHARED_FILE_MODE = 0o660
+_PRIVATE_DIRECTORY_MODE = 0o700
+_PRIVATE_FILE_MODE = 0o600
+_PRIVATE_MARKER_MODE = 0o400
 _MARKER_NAME = ".workspace-identity.json"
-_STAGING_NAME = ".work-staging"
-_MARKER_SCHEMA_VERSION = 1
-_CLAIM_SCHEMA_VERSION = 1
+_ARTIFACT_MARKER_NAME = ".artifact-identity.json"
+_SCHEMA_VERSION = 1
 _HASH_CHUNK_BYTES = 1024 * 1024
 _OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
-_MARKER_TEMP_NAME = re.compile(rf"\A\.{re.escape(_MARKER_NAME)}\.[0-9a-f]{{32}}\.tmp\Z")
-_ARTIFACT_MARKER_NAME = ".artifact-identity.json"
-_ARTIFACT_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
-class _OpenArtifactSource:
+class _OpenSource:
     descriptor: int
     is_directory: bool
     name: str
 
 
-_StateAction = Literal["prepared", "export", "finalize"]
-
-
 class PosixRunWorkspace:
-    """在 Worker 与计算节点共同挂载的绝对 POSIX 根上准备 Run。"""
+    """Prepare workspaces for one active service Worker on one POSIX Shared FS."""
 
-    def __init__(self, root: Path, exporter: ProjectVersionExporter) -> None:
+    def __init__(
+        self,
+        root: Path,
+        exporter: ProjectVersionExporter,
+        *,
+        shared_gid: int,
+    ) -> None:
         if os.name != "posix":
-            raise UnsafeRunWorkspacePath("Run workspace requires a POSIX filesystem")
+            raise UnsafeRunWorkspacePath("Run workspace requires POSIX")
         if not root.is_absolute():
             raise UnsafeRunWorkspacePath("Run workspace root must be absolute")
         if root.is_symlink():
             raise UnsafeRunWorkspacePath("Run workspace root cannot be a symbolic link")
         try:
-            canonical_root = root.resolve(strict=True)
+            canonical = root.resolve(strict=True)
         except (FileNotFoundError, RuntimeError) as exc:
-            raise UnsafeRunWorkspacePath(
-                "Run workspace root must be an existing directory"
-            ) from exc
+            raise UnsafeRunWorkspacePath("Run workspace root must exist") from exc
+        if shared_gid < 0:
+            raise UnsafeRunWorkspacePath("shared_gid must be a non-negative POSIX GID")
 
         self._owner_uid = os.geteuid()
         self._owner_gid = os.getegid()
-        self._validate_storage_root(canonical_root)
-        self._root = canonical_root
+        self._shared_gid = shared_gid
+        self._validate_storage_root(canonical)
+        self._root = canonical
         self._exporter = exporter
-
-        self._runs = canonical_root / "runs"
-        self._locks = self._runs / ".locks"
-        self._claims = self._runs / ".claims"
-        self._artifact_store = canonical_root / "artifact-store"
-        self._artifact_locks = self._artifact_store / ".locks"
-        self._artifact_claims = self._artifact_store / ".claims"
+        self._runs = canonical / "runs"
+        self._artifact_store = canonical / "artifact-store"
         self._artifact_staging = self._artifact_store / ".staging"
-        self._ensure_owned_directory(self._runs, _DIRECTORY_MODE, label="runs")
-        self._ensure_owned_directory(self._locks, _CONTROL_DIRECTORY_MODE, label="locks")
-        self._ensure_owned_directory(self._claims, _CONTROL_DIRECTORY_MODE, label="claims")
-        self._ensure_owned_directory(
-            self._artifact_store, _ARTIFACT_DIRECTORY_MODE, label="artifact store"
+        self._ensure_directory(self._runs, mode=_RUN_ROOT_MODE, gid=shared_gid, label="runs")
+        self._ensure_directory(
+            self._artifact_store,
+            mode=_PRIVATE_DIRECTORY_MODE,
+            gid=self._owner_gid,
+            label="artifact store",
         )
-        self._ensure_owned_directory(
-            self._artifact_locks, _CONTROL_DIRECTORY_MODE, label="artifact locks"
-        )
-        self._ensure_owned_directory(
-            self._artifact_claims, _CONTROL_DIRECTORY_MODE, label="artifact claims"
-        )
-        self._ensure_owned_directory(
-            self._artifact_staging, _CONTROL_DIRECTORY_MODE, label="artifact staging"
+        self._ensure_directory(
+            self._artifact_staging,
+            mode=_PRIVATE_DIRECTORY_MODE,
+            gid=self._owner_gid,
+            label="artifact staging",
         )
 
     def paths_for(self, run_id: str) -> RunWorkspace:
-        self._validate_identifier("run_id", run_id)
+        self._validate_segment("run_id", run_id)
         root = self._runs / run_id
         return RunWorkspace(
             root=root,
@@ -130,25 +117,48 @@ class PosixRunWorkspace:
         *,
         inputs: tuple[()] = (),
     ) -> RunWorkspace:
-        """准备新 workspace，或恢复完全相同 identity 的中断状态。"""
-        if inputs:
-            raise ValueError("M1 Run workspace only accepts explicit empty inputs")
+        """Atomically install a complete workspace, or return the same prepared one."""
+        if inputs != ():
+            raise RunWorkspaceConflict("M1 Run workspace accepts only explicit empty inputs")
         self._validate_identity(identity)
         workspace = self.paths_for(identity.run_id)
-        lock_descriptor = await self._acquire_run_lock(identity.run_id)
+        if self._path_exists(workspace.root):
+            self._validate_prepared_workspace(workspace, identity)
+            return workspace
+
+        self._cleanup_run_temporaries(identity)
+        temporary = self._runs / f".{identity.run_id}.{uuid.uuid4().hex}.tmp"
+        temporary.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+        temporary.chmod(_PRIVATE_DIRECTORY_MODE)
         try:
-            action, evidence = await asyncio.to_thread(
-                self._inspect_or_initialize, workspace, identity
+            temp_workspace = self._workspace_at(temporary)
+            self._write_json_marker(
+                temp_workspace.identity_marker,
+                self._run_marker(identity, state="exporting"),
+                mode=_PRIVATE_FILE_MODE,
             )
-            if action == "prepared":
-                return workspace
-            if action == "finalize":
-                assert evidence is not None
-                await asyncio.to_thread(self._finish_finalizing, workspace, identity, evidence)
-                return workspace
-            return await self._export_and_prepare(workspace, identity)
-        finally:
-            self._release_run_lock(lock_descriptor)
+            self._create_shared_layout(temp_workspace)
+            evidence = await self._exporter.export(
+                project_version_id=identity.project_version_id,
+                expected_commit_oid=identity.commit_oid,
+                target=temp_workspace.work,
+            )
+            self._validate_export(temp_workspace.work, identity, evidence)
+            self._normalize_work_permissions(temp_workspace.work)
+            self._write_json_marker(
+                temp_workspace.identity_marker,
+                self._run_marker(identity, state="prepared", evidence=evidence),
+                mode=_PRIVATE_MARKER_MODE,
+            )
+            os.chown(temporary, -1, self._shared_gid)
+            temporary.chmod(_RUN_ROOT_MODE)
+            temporary.rename(workspace.root)
+        except BaseException:
+            # The owned temp intentionally remains evidence of an interrupted operation.
+            raise
+
+        self._validate_prepared_workspace(workspace, identity)
+        return workspace
 
     async def collect_artifact(
         self,
@@ -157,655 +167,742 @@ class PosixRunWorkspace:
         artifact_id: str,
         source_path: str,
     ) -> RunArtifactEvidence:
-        """从 prepared work 目录原子安装或恢复一个不可变 Artifact。"""
+        """Install one immutable Artifact under the single-active-Worker contract."""
         self._validate_identity(identity)
-        self._validate_identifier("artifact_id", artifact_id)
-        self._validate_relative_path("artifact source_path", source_path)
-        if source_path == ".":
-            raise UnsafeRunWorkspacePath("artifact source_path cannot be the work root")
+        self._validate_segment("artifact_id", artifact_id)
+        self._validate_relative_path("artifact source", source_path, allow_dot=False)
+        workspace = self.paths_for(identity.run_id)
+        self._validate_prepared_workspace(workspace, identity)
+        installed = self._artifact_store / artifact_id
+        staging = self._artifact_staging / artifact_id
 
-        run_lock = await self._acquire_run_lock(identity.run_id)
-        try:
-            artifact_lock = await self._acquire_artifact_lock(artifact_id)
+        recovered = self._recover_finalizing(
+            staging=staging,
+            installed=installed,
+            identity=identity,
+            artifact_id=artifact_id,
+            source_path=source_path,
+        )
+        if recovered is not None:
+            return recovered
+
+        if self._path_exists(installed):
+            installed_evidence = self._validate_installed(
+                installed, identity, artifact_id, source_path
+            )
+            source = self._open_artifact_source(workspace.work, source_path)
             try:
-                return await asyncio.to_thread(
-                    self._collect_artifact_sync,
+                source_evidence = self._evidence_from_source(source)
+            finally:
+                os.close(source.descriptor)
+            if source_evidence != installed_evidence:
+                raise RunWorkspaceConflict(
+                    "Artifact ID is already installed with different content"
+                )
+            return installed_evidence
+
+        if self._path_exists(staging):
+            marker = self._read_artifact_marker(staging)
+            self._require_artifact_identity(marker, identity, artifact_id, source_path)
+            if marker.get("state") != "copying":
+                raise RunWorkspaceConflict("Artifact staging has an invalid state")
+            self._validate_private_tree_root(staging, label="Artifact copying staging")
+            shutil.rmtree(staging)
+
+        source = self._open_artifact_source(workspace.work, source_path)
+        try:
+            staging.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+            staging.chmod(_PRIVATE_DIRECTORY_MODE)
+            self._write_json_marker(
+                staging / _ARTIFACT_MARKER_NAME,
+                self._artifact_marker(identity, artifact_id, source_path, state="copying"),
+                mode=_PRIVATE_FILE_MODE,
+            )
+            content = staging / "content"
+            content.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+            content.chmod(_PRIVATE_DIRECTORY_MODE)
+            self._copy_source(source, content)
+            evidence = self._evidence_from_directory(content)
+            self._write_json_marker(
+                staging / _ARTIFACT_MARKER_NAME,
+                self._artifact_marker(
                     identity,
                     artifact_id,
                     source_path,
-                )
-            finally:
-                self._release_run_lock(artifact_lock)
-        finally:
-            self._release_run_lock(run_lock)
-
-    def _inspect_or_initialize(
-        self, workspace: RunWorkspace, identity: RunWorkspaceIdentity
-    ) -> tuple[_StateAction, ProjectVersionExportEvidence | None]:
-        root_exists = os.path.lexists(workspace.root)
-        claim_path = self._claim_path(identity.run_id)
-        claim_exists = os.path.lexists(claim_path)
-
-        if root_exists and workspace.root.is_symlink():
-            raise UnsafeRunWorkspacePath("Run workspace root is a symbolic link")
-        if root_exists and not claim_exists:
-            raise RunWorkspaceConflict("Existing Run directory has no ownership claim")
-        if claim_exists:
-            self._require_same_identity(self._read_claim(claim_path), identity)
-        else:
-            self._install_claim(claim_path, identity)
-
-        if not root_exists:
-            workspace.root.mkdir(mode=_DIRECTORY_MODE)
-            workspace.root.chmod(_DIRECTORY_MODE)
-            self._fsync_directory(self._runs)
-            self._complete_initial_layout(workspace)
-            self._write_marker(workspace.identity_marker, self._marker(identity, state="preparing"))
-            return "export", None
-
-        self._validate_workspace_root(workspace.root)
-        self._remove_marker_temporaries(workspace.root)
-        if not os.path.lexists(workspace.identity_marker):
-            self._complete_initial_layout(workspace)
-            self._write_marker(workspace.identity_marker, self._marker(identity, state="preparing"))
-            return "export", None
-
-        marker = self._read_marker(workspace.identity_marker)
-        self._require_same_identity(marker, identity)
-        state = marker.get("state")
-        if state == "prepared":
-            self._validate_prepared_layout(workspace)
-            return "prepared", None
-        if state == "preparing":
-            self._validate_preparing_layout(workspace)
-            return "export", None
-        if state == "exporting":
-            self._validate_staging_marker(marker)
-            self._validate_exporting_layout(workspace)
-            self._remove_recorded_staging(workspace)
-            self._write_marker(workspace.identity_marker, self._marker(identity, state="preparing"))
-            return "export", None
-        if state == "finalizing":
-            self._validate_staging_marker(marker)
-            evidence = self._evidence_from_marker(marker)
-            self._validate_finalizing_layout(workspace)
-            return "finalize", evidence
-        raise RunWorkspaceConflict(f"Run {identity.run_id} has unknown workspace marker state")
-
-    def _complete_initial_layout(self, workspace: RunWorkspace) -> None:
-        allowed = {"inputs", "logs", "artifacts", _MARKER_NAME}
-        self._reject_unknown_entries(workspace.root, allowed)
-        for directory, label in (
-            (workspace.inputs, "inputs"),
-            (workspace.logs, "logs"),
-            (workspace.artifact_staging, "artifact staging"),
-        ):
-            self._ensure_owned_directory(directory, _DIRECTORY_MODE, label=label)
-        for log, label in ((workspace.stdout, "stdout"), (workspace.stderr, "stderr")):
-            self._ensure_owned_file(log, _LOG_MODE, label=label)
-        self._fsync_directory(workspace.root)
-
-    async def _export_and_prepare(
-        self, workspace: RunWorkspace, identity: RunWorkspaceIdentity
-    ) -> RunWorkspace:
-        exporting = self._marker(identity, state="exporting")
-        exporting["staging"] = _STAGING_NAME
-        await asyncio.to_thread(self._write_marker, workspace.identity_marker, exporting)
-        staging = workspace.root / _STAGING_NAME
-        await asyncio.to_thread(self._create_staging, staging, workspace.root)
-        try:
-            evidence = await self._exporter.export(
-                project_version_id=identity.project_version_id,
-                expected_commit_oid=identity.commit_oid,
-                target=staging,
+                    state="finalizing",
+                    evidence=evidence,
+                ),
+                mode=_PRIVATE_MARKER_MODE,
             )
-            await asyncio.to_thread(self._prepare_finalizing, staging, identity, evidence)
-            finalizing = self._marker(identity, state="finalizing", evidence=evidence)
-            finalizing["staging"] = _STAGING_NAME
-            await asyncio.to_thread(self._write_marker, workspace.identity_marker, finalizing)
-            await asyncio.to_thread(self._finish_finalizing, workspace, identity, evidence)
-            return workspace
-        except Exception:
-            await asyncio.to_thread(self._recover_failed_export, workspace, identity)
-            raise
-
-    def _prepare_finalizing(
-        self,
-        staging: Path,
-        identity: RunWorkspaceIdentity,
-        evidence: ProjectVersionExportEvidence,
-    ) -> None:
-        self._validate_evidence(staging, identity, evidence)
-        self._fsync_tree(staging)
-
-    def _finish_finalizing(
-        self,
-        workspace: RunWorkspace,
-        identity: RunWorkspaceIdentity,
-        evidence: ProjectVersionExportEvidence,
-    ) -> None:
-        staging = workspace.root / _STAGING_NAME
-        staging_exists = os.path.lexists(staging)
-        work_exists = os.path.lexists(workspace.work)
-        if staging_exists and work_exists:
-            raise RunWorkspaceConflict("Finalizing Run has both staging and work directories")
-        if staging_exists:
-            self._validate_owned_path(
-                staging, expected_mode=_DIRECTORY_MODE, kind="directory", label="work staging"
-            )
-            self._validate_evidence(staging, identity, evidence)
-            staging.rename(workspace.work)
-            self._fsync_directory(workspace.root)
-        elif work_exists:
-            self._validate_owned_path(
-                workspace.work,
-                expected_mode=_DIRECTORY_MODE,
-                kind="directory",
-                label="work",
-            )
-            self._validate_evidence(workspace.work, identity, evidence)
-        else:
-            raise RunWorkspaceConflict("Finalizing Run has neither staging nor work directory")
-
-        self._write_marker(
-            workspace.identity_marker,
-            self._marker(identity, state="prepared", evidence=evidence),
-        )
-        self._validate_prepared_layout(workspace)
-
-    def _recover_failed_export(
-        self, workspace: RunWorkspace, identity: RunWorkspaceIdentity
-    ) -> None:
-        marker = self._read_marker(workspace.identity_marker)
-        self._require_same_identity(marker, identity)
-        if marker.get("state") not in {"exporting", "finalizing"}:
-            return
-        self._validate_staging_marker(marker)
-        staging = workspace.root / _STAGING_NAME
-        if os.path.lexists(staging):
-            self._remove_recorded_staging(workspace)
-        if not os.path.lexists(workspace.work):
-            self._write_marker(workspace.identity_marker, self._marker(identity, state="preparing"))
-
-    def _create_staging(self, staging: Path, workspace_root: Path) -> None:
-        if os.path.lexists(staging):
-            raise RunWorkspaceConflict("Recorded work staging already exists")
-        staging.mkdir(mode=_DIRECTORY_MODE)
-        staging.chmod(_DIRECTORY_MODE)
-        self._fsync_directory(workspace_root)
-
-    def _remove_recorded_staging(self, workspace: RunWorkspace) -> None:
-        staging = workspace.root / _STAGING_NAME
-        self._validate_owned_path(
-            staging, expected_mode=_DIRECTORY_MODE, kind="directory", label="work staging"
-        )
-        shutil.rmtree(staging)
-        self._fsync_directory(workspace.root)
-
-    def _validate_preparing_layout(self, workspace: RunWorkspace) -> None:
-        self._validate_common_layout(workspace)
-        self._reject_unknown_entries(workspace.root, {"inputs", "logs", "artifacts", _MARKER_NAME})
-
-    def _validate_exporting_layout(self, workspace: RunWorkspace) -> None:
-        self._validate_common_layout(workspace)
-        self._reject_unknown_entries(
-            workspace.root,
-            {"inputs", "logs", "artifacts", _MARKER_NAME, _STAGING_NAME},
-        )
-        staging = workspace.root / _STAGING_NAME
-        if os.path.lexists(staging):
-            self._validate_owned_path(
-                staging, expected_mode=_DIRECTORY_MODE, kind="directory", label="work staging"
-            )
-
-    def _validate_finalizing_layout(self, workspace: RunWorkspace) -> None:
-        self._validate_common_layout(workspace)
-        self._reject_unknown_entries(
-            workspace.root,
-            {"inputs", "logs", "artifacts", "work", _MARKER_NAME, _STAGING_NAME},
-        )
-        staging = workspace.root / _STAGING_NAME
-        if os.path.lexists(staging):
-            self._validate_owned_path(
-                staging, expected_mode=_DIRECTORY_MODE, kind="directory", label="work staging"
-            )
-        if os.path.lexists(workspace.work):
-            self._validate_owned_path(
-                workspace.work,
-                expected_mode=_DIRECTORY_MODE,
-                kind="directory",
-                label="work",
-            )
-
-    def _validate_prepared_layout(self, workspace: RunWorkspace) -> None:
-        self._validate_common_layout(workspace)
-        self._reject_unknown_entries(
-            workspace.root, {"inputs", "logs", "artifacts", "work", _MARKER_NAME}
-        )
-        self._validate_owned_path(
-            workspace.work,
-            expected_mode=_DIRECTORY_MODE,
-            kind="directory",
-            label="work",
-        )
-        for root in (workspace.work, workspace.inputs, workspace.artifact_staging):
-            self._validate_symlink_escapes(root)
-
-    def _validate_common_layout(self, workspace: RunWorkspace) -> None:
-        self._validate_workspace_root(workspace.root)
-        for path, label in (
-            (workspace.inputs, "inputs"),
-            (workspace.logs, "logs"),
-            (workspace.artifact_staging, "artifact staging"),
-        ):
-            self._validate_owned_path(
-                path, expected_mode=_DIRECTORY_MODE, kind="directory", label=label
-            )
-        for path, label in ((workspace.stdout, "stdout"), (workspace.stderr, "stderr")):
-            self._validate_owned_path(path, expected_mode=_LOG_MODE, kind="file", label=label)
-        self._validate_owned_path(
-            workspace.identity_marker,
-            expected_mode=_MARKER_MODE,
-            kind="file",
-            label="identity marker",
-        )
-
-    def _validate_evidence(
-        self,
-        root: Path,
-        identity: RunWorkspaceIdentity,
-        evidence: ProjectVersionExportEvidence,
-    ) -> None:
-        if evidence.commit_oid != identity.commit_oid:
-            raise RunWorkspaceConflict(
-                "Project Version exporter returned a commit different from prepared identity"
-            )
-        if not _OID.fullmatch(evidence.tree_oid):
-            raise RunWorkspaceConflict("Project Version exporter returned an invalid tree OID")
-        paths = [entry.path for entry in evidence.manifest]
-        if paths != sorted(paths) or len(paths) != len(set(paths)):
-            raise RunWorkspaceConflict(
-                "Project Version export manifest must be unique and path-sorted"
-            )
-        for entry in evidence.manifest:
-            self._validate_manifest_entry(entry)
-        self._reject_export_symlinks(root)
-        actual = tuple(self._manifest_from_directory(root))
-        if actual != evidence.manifest:
-            raise RunWorkspaceConflict(
-                "Project Version export evidence does not match exported bytes"
-            )
-
-    def _manifest_from_directory(self, root: Path) -> list[ProjectVersionExportFile]:
-        manifest: list[ProjectVersionExportFile] = []
-        for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
-            mode = path.lstat().st_mode
-            if mode & stat.S_IWOTH:
-                raise UnsafeRunWorkspacePath(
-                    f"Exported path is world-writable: {path.relative_to(root).as_posix()}"
-                )
-            if not path.is_file():
-                continue
-            size, content_hash = self._hash_file(path)
-            manifest.append(
-                ProjectVersionExportFile(
-                    path=path.relative_to(root).as_posix(),
-                    size=size,
-                    content_hash=content_hash,
-                )
-            )
-        return manifest
-
-    @staticmethod
-    def _hash_file(path: Path) -> tuple[int, str]:
-        digest = hashlib.sha256()
-        size = 0
-        with path.open("rb") as handle:
-            while chunk := handle.read(_HASH_CHUNK_BYTES):
-                size += len(chunk)
-                digest.update(chunk)
-        return size, digest.hexdigest()
-
-    @staticmethod
-    def _reject_export_symlinks(root: Path) -> None:
-        for path in root.rglob("*"):
-            if path.is_symlink():
-                raise UnsafeRunWorkspacePath(
-                    f"M1 Project Version exports cannot contain symbolic links: {path}"
-                )
-
-    @staticmethod
-    def _validate_symlink_escapes(root: Path) -> None:
-        for path in root.rglob("*"):
-            if not path.is_symlink():
-                continue
-            try:
-                resolved = path.resolve(strict=True)
-            except (FileNotFoundError, RuntimeError) as exc:
-                raise UnsafeRunWorkspacePath(
-                    f"Unsafe symbolic link in Run workspace: {path}"
-                ) from exc
-            if not resolved.is_relative_to(root):
-                raise UnsafeRunWorkspacePath(f"Symbolic link escapes Run workspace: {path}")
-
-    def _collect_artifact_sync(
-        self,
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-    ) -> RunArtifactEvidence:
-        workspace = self.paths_for(identity.run_id)
-        self._require_prepared_workspace(workspace, identity)
-        source = self._artifact_source(workspace.work, source_path)
-        try:
-            return self._collect_open_artifact_sync(source, identity, artifact_id, source_path)
         finally:
             os.close(source.descriptor)
 
-    def _collect_open_artifact_sync(
-        self,
-        source: _OpenArtifactSource,
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-    ) -> RunArtifactEvidence:
-        claim_path = self._artifact_claims / f"{artifact_id}.json"
-        staging = self._artifact_staging / artifact_id
-        installed = self._artifact_store / artifact_id
-        claim_exists = os.path.lexists(claim_path)
-
-        if (os.path.lexists(staging) or os.path.lexists(installed)) and not claim_exists:
-            raise RunWorkspaceConflict("Existing Artifact content has no ownership claim")
-        if claim_exists:
-            self._require_artifact_identity(
-                self._read_artifact_claim(claim_path), identity, artifact_id, source_path
-            )
-        else:
-            self._install_artifact_claim(claim_path, identity, artifact_id, source_path)
-
-        if os.path.lexists(installed):
-            if os.path.lexists(staging):
-                raise RunWorkspaceConflict("Artifact has both installed and staging directories")
-            return self._recover_installed_artifact(
-                installed, source, identity, artifact_id, source_path
-            )
-        if os.path.lexists(staging):
-            self._validate_owned_path(
-                staging,
-                expected_mode=_ARTIFACT_DIRECTORY_MODE,
-                kind="directory",
-                label="artifact staging",
-            )
-            marker = self._read_artifact_marker(staging / _ARTIFACT_MARKER_NAME)
-            self._require_artifact_identity(marker, identity, artifact_id, source_path)
-            if marker.get("state") == "finalizing":
-                return self._install_finalizing_staging(
-                    staging, installed, marker, identity, artifact_id, source_path
-                )
-            if marker.get("state") != "copying":
-                raise RunWorkspaceConflict("Artifact staging has an invalid state")
-            shutil.rmtree(staging)
-            self._fsync_directory(self._artifact_staging)
-
-        copying = self._artifact_marker(identity, artifact_id, source_path, state="copying")
-        content = self._create_artifact_staging(staging, copying)
-        self._copy_artifact_source(source, content)
-        evidence = self._artifact_evidence(self._content_manifest(content))
-        self._fsync_tree(staging)
-        finalizing = self._artifact_marker(
-            identity,
-            artifact_id,
-            source_path,
-            state="finalizing",
-            evidence=evidence,
-        )
-        self._write_artifact_marker(staging / _ARTIFACT_MARKER_NAME, finalizing)
-        return self._install_finalizing_staging(
-            staging, installed, finalizing, identity, artifact_id, source_path
-        )
-
-    def _install_finalizing_staging(
-        self,
-        staging: Path,
-        installed: Path,
-        marker: dict[str, Any],
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-    ) -> RunArtifactEvidence:
-        evidence = self._artifact_evidence_from_marker(marker)
-        actual = self._artifact_evidence(self._content_manifest(staging / "content"))
-        if actual != evidence:
-            raise RunWorkspaceConflict("Finalizing Artifact bytes differ from evidence")
         staging.rename(installed)
-        self._fsync_directory(self._artifact_store)
-        self._write_artifact_marker(
+        self._write_json_marker(
             installed / _ARTIFACT_MARKER_NAME,
             self._artifact_marker(
                 identity,
                 artifact_id,
                 source_path,
-                state="prepared",
+                state="installed",
                 evidence=evidence,
             ),
+            mode=_PRIVATE_MARKER_MODE,
         )
         return evidence
 
-    def _create_artifact_staging(self, staging: Path, marker: dict[str, Any]) -> Path:
-        temporary = self._artifact_staging / (f".{staging.name}.{uuid.uuid4().hex}.staging.tmp")
-        temporary.mkdir(mode=_ARTIFACT_DIRECTORY_MODE)
-        temporary.chmod(_ARTIFACT_DIRECTORY_MODE)
-        self._write_artifact_marker(temporary / _ARTIFACT_MARKER_NAME, marker)
-        content = temporary / "content"
-        content.mkdir(mode=_ARTIFACT_DIRECTORY_MODE)
-        content.chmod(_ARTIFACT_DIRECTORY_MODE)
-        self._fsync_directory(temporary)
-        temporary.rename(staging)
-        self._fsync_directory(self._artifact_staging)
-        return staging / "content"
+    def _recover_finalizing(
+        self,
+        *,
+        staging: Path,
+        installed: Path,
+        identity: RunWorkspaceIdentity,
+        artifact_id: str,
+        source_path: str,
+    ) -> RunArtifactEvidence | None:
+        if os.path.lexists(installed):
+            marker = self._read_artifact_marker(installed)
+            self._require_artifact_identity(marker, identity, artifact_id, source_path)
+            if marker.get("state") == "installed":
+                return None
+            if marker.get("state") != "finalizing":
+                raise RunWorkspaceConflict("Installed Artifact has an invalid state")
+            evidence = self._require_durable_artifact_evidence(installed, marker)
+            if os.path.lexists(staging):
+                raise RunWorkspaceConflict(
+                    "Finalizing Artifact has both installed and staging directories"
+                )
+            self._write_json_marker(
+                installed / _ARTIFACT_MARKER_NAME,
+                self._artifact_marker(
+                    identity,
+                    artifact_id,
+                    source_path,
+                    state="installed",
+                    evidence=evidence,
+                ),
+                mode=_PRIVATE_MARKER_MODE,
+            )
+            return evidence
 
-    def _require_prepared_workspace(
+        if not os.path.lexists(staging):
+            return None
+        marker = self._read_artifact_marker(staging)
+        self._require_artifact_identity(marker, identity, artifact_id, source_path)
+        if marker.get("state") != "finalizing":
+            return None
+        evidence = self._require_durable_artifact_evidence(staging, marker)
+        staging.rename(installed)
+        self._write_json_marker(
+            installed / _ARTIFACT_MARKER_NAME,
+            self._artifact_marker(
+                identity,
+                artifact_id,
+                source_path,
+                state="installed",
+                evidence=evidence,
+            ),
+            mode=_PRIVATE_MARKER_MODE,
+        )
+        return evidence
+
+    def _validate_installed(
+        self,
+        installed: Path,
+        identity: RunWorkspaceIdentity,
+        artifact_id: str,
+        source_path: str,
+    ) -> RunArtifactEvidence:
+        marker = self._read_artifact_marker(installed)
+        self._require_artifact_identity(marker, identity, artifact_id, source_path)
+        if marker.get("state") != "installed":
+            raise RunWorkspaceConflict("Installed Artifact has an invalid state")
+        return self._require_durable_artifact_evidence(installed, marker)
+
+    def _require_durable_artifact_evidence(
+        self, root: Path, marker: dict[str, Any]
+    ) -> RunArtifactEvidence:
+        self._validate_private_tree_root(root, label="Artifact")
+        evidence = self._artifact_evidence_from_marker(marker)
+        actual = self._evidence_from_directory(root / "content")
+        if actual != evidence:
+            raise RunWorkspaceConflict("Artifact content differs from durable evidence")
+        return evidence
+
+    def _cleanup_run_temporaries(self, identity: RunWorkspaceIdentity) -> None:
+        pattern = re.compile(rf"\A\.{re.escape(identity.run_id)}\.[0-9a-f]{{32}}\.tmp\Z")
+        for candidate in self._runs.iterdir():
+            if not pattern.fullmatch(candidate.name):
+                continue
+            info = candidate.lstat()
+            if (
+                not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != self._owner_uid
+                or info.st_gid not in {self._owner_gid, self._shared_gid}
+                or stat.S_IMODE(info.st_mode) not in {_PRIVATE_DIRECTORY_MODE, _RUN_ROOT_MODE}
+            ):
+                raise RunWorkspaceConflict("Run staging ownership or mode drifted")
+            marker = self._read_json(candidate / _MARKER_NAME, label="Run staging marker")
+            self._require_same_identity(marker, identity)
+            if marker.get("state") not in {"exporting", "prepared"}:
+                raise RunWorkspaceConflict("Run staging has an invalid state")
+            shutil.rmtree(candidate)
+
+    def _create_shared_layout(self, workspace: RunWorkspace) -> None:
+        self._create_directory(workspace.work, _SHARED_DIRECTORY_MODE, self._shared_gid)
+        self._create_directory(workspace.inputs, _INPUT_DIRECTORY_MODE, self._shared_gid)
+        self._create_directory(workspace.logs, _SHARED_DIRECTORY_MODE, self._shared_gid)
+        self._create_directory(workspace.artifact_staging, _SHARED_DIRECTORY_MODE, self._shared_gid)
+        self._create_file(workspace.stdout, _SHARED_FILE_MODE, self._shared_gid)
+        self._create_file(workspace.stderr, _SHARED_FILE_MODE, self._shared_gid)
+
+    def _validate_prepared_workspace(
         self, workspace: RunWorkspace, identity: RunWorkspaceIdentity
     ) -> None:
-        claim = self._read_claim(self._claim_path(identity.run_id))
-        self._require_same_identity(claim, identity)
-        marker = self._read_marker(workspace.identity_marker)
+        if workspace.root.is_symlink():
+            raise UnsafeRunWorkspacePath("Run workspace root is a symbolic link")
+        self._validate_path(
+            workspace.root,
+            kind="directory",
+            mode=_RUN_ROOT_MODE,
+            uid=self._owner_uid,
+            gid=self._shared_gid,
+            label="workspace root",
+        )
+        marker = self._read_json(workspace.identity_marker, label="Run identity marker")
         self._require_same_identity(marker, identity)
         if marker.get("state") != "prepared":
-            raise RunWorkspaceConflict("Artifact source Run workspace is not prepared")
-        self._validate_prepared_layout(workspace)
+            raise RunWorkspaceConflict("Run workspace is not prepared")
+        self._export_evidence_from_marker(marker)
+        expected = {
+            "work",
+            "inputs",
+            "logs",
+            "artifacts",
+            _MARKER_NAME,
+        }
+        if {entry.name for entry in workspace.root.iterdir()} != expected:
+            raise RunWorkspaceConflict("Run workspace root layout drifted")
+        for path, mode, label in (
+            (workspace.work, _SHARED_DIRECTORY_MODE, "work"),
+            (workspace.inputs, _INPUT_DIRECTORY_MODE, "inputs"),
+            (workspace.logs, _SHARED_DIRECTORY_MODE, "logs"),
+            (workspace.artifact_staging, _SHARED_DIRECTORY_MODE, "artifact staging"),
+        ):
+            self._validate_path(
+                path,
+                kind="directory",
+                mode=mode,
+                uid=self._owner_uid,
+                gid=self._shared_gid,
+                label=label,
+            )
+        for path, label in ((workspace.stdout, "stdout"), (workspace.stderr, "stderr")):
+            self._validate_path(
+                path,
+                kind="file",
+                mode=_SHARED_FILE_MODE,
+                uid=self._owner_uid,
+                gid=self._shared_gid,
+                label=label,
+            )
+        self._validate_path(
+            workspace.identity_marker,
+            kind="file",
+            mode=_PRIVATE_MARKER_MODE,
+            uid=self._owner_uid,
+            gid=None,
+            label="identity marker",
+        )
 
-    def _artifact_source(self, work: Path, source_path: str) -> _OpenArtifactSource:
-        nofollow = getattr(os, "O_NOFOLLOW", 0)
-        work_descriptor = os.open(work, os.O_RDONLY | os.O_DIRECTORY | nofollow)
-        current = work_descriptor
+    def _validate_export(
+        self,
+        work: Path,
+        identity: RunWorkspaceIdentity,
+        evidence: ProjectVersionExportEvidence,
+    ) -> None:
+        if evidence.commit_oid != identity.commit_oid or not _OID.fullmatch(evidence.commit_oid):
+            raise RunWorkspaceConflict("Exporter returned a different commit identity")
+        if not _OID.fullmatch(evidence.tree_oid):
+            raise RunWorkspaceConflict("Exporter returned an invalid tree identity")
+        actual = self._manifest_from_directory(work)
+        expected = tuple(sorted(evidence.manifest, key=lambda entry: entry.path))
+        if actual != expected:
+            raise RunWorkspaceConflict("Exported content differs from exporter evidence")
+
+    def _manifest_from_directory(self, root: Path) -> tuple[ProjectVersionExportFile, ...]:
+        entries: list[ProjectVersionExportFile] = []
+        for path in sorted(root.rglob("*")):
+            relative = path.relative_to(root)
+            info = path.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                raise UnsafeRunWorkspacePath("Exported work cannot contain symbolic links")
+            if stat.S_ISDIR(info.st_mode):
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                raise UnsafeRunWorkspacePath("Exported work contains a special file")
+            size, digest = self._hash_file(path)
+            entries.append(
+                ProjectVersionExportFile(path=relative.as_posix(), size=size, content_hash=digest)
+            )
+        return tuple(entries)
+
+    def _normalize_work_permissions(self, root: Path) -> None:
+        for path in [root, *sorted(root.rglob("*"))]:
+            info = path.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                mode = _SHARED_DIRECTORY_MODE
+            elif stat.S_ISREG(info.st_mode):
+                mode = 0o770 if stat.S_IMODE(info.st_mode) & 0o111 else _SHARED_FILE_MODE
+            else:
+                raise UnsafeRunWorkspacePath("Exported work contains an unsafe file type")
+            os.chown(path, -1, self._shared_gid)
+            path.chmod(mode)
+
+    def _open_artifact_source(self, work: Path, source_path: str) -> _OpenSource:
         parts = PurePosixPath(source_path).parts
+        directory_flag = os.O_DIRECTORY
+        nofollow = os.O_NOFOLLOW
+        current = os.open(work, os.O_RDONLY | directory_flag | nofollow)
         try:
             for index, part in enumerate(parts):
                 flags = os.O_RDONLY | os.O_NONBLOCK | nofollow
                 if index < len(parts) - 1:
-                    flags |= os.O_DIRECTORY
-                try:
-                    following = os.open(part, flags, dir_fd=current)
-                except OSError as exc:
-                    if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
-                        raise UnsafeRunWorkspacePath(
-                            "Artifact source path has a symlink or non-directory ancestor"
-                        ) from exc
-                    if exc.errno == errno.ENOENT:
-                        raise RunWorkspaceConflict("Artifact source path does not exist") from exc
-                    raise
+                    flags |= directory_flag
+                following = os.open(part, flags, dir_fd=current)
                 os.close(current)
                 current = following
-                info = os.fstat(current)
-                if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
-                    raise UnsafeRunWorkspacePath("Artifact source ancestor is not a directory")
             info = os.fstat(current)
-            if stat.S_ISREG(info.st_mode):
-                return _OpenArtifactSource(current, False, parts[-1])
             if stat.S_ISDIR(info.st_mode):
-                return _OpenArtifactSource(current, True, parts[-1])
+                return _OpenSource(current, True, parts[-1])
+            if stat.S_ISREG(info.st_mode):
+                return _OpenSource(current, False, parts[-1])
             raise UnsafeRunWorkspacePath("Artifact source must be a regular file or directory")
+        except OSError as exc:
+            os.close(current)
+            if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+                raise UnsafeRunWorkspacePath(
+                    "Artifact source contains a symbolic link or non-directory ancestor"
+                ) from exc
+            if exc.errno == errno.ENOENT:
+                raise RunWorkspaceConflict("Artifact source path does not exist") from exc
+            raise
         except BaseException:
             os.close(current)
             raise
 
-    def _copy_artifact_source(self, source: _OpenArtifactSource, content: Path) -> None:
-        def copy(relative_path: Path, descriptor: int) -> None:
-            target = content / relative_path
-            target.parent.mkdir(mode=_ARTIFACT_DIRECTORY_MODE, parents=True, exist_ok=True)
-            for parent in (target.parent, *target.parents):
-                if parent == content.parent:
-                    break
-                if parent.is_relative_to(content):
-                    parent.chmod(_ARTIFACT_DIRECTORY_MODE)
-            self._copy_regular_file(descriptor, target)
-
-        self._walk_source(source, copy)
-
-    def _walk_source(
-        self,
-        source: _OpenArtifactSource,
-        visitor: Callable[[Path, int], None],
-    ) -> None:
-        if not source.is_directory:
-            visitor(Path(source.name), source.descriptor)
+    def _copy_source(self, source: _OpenSource, content: Path) -> None:
+        if source.is_directory:
+            self._walk_source(
+                source.descriptor,
+                lambda path, descriptor: self._copy_open_file(descriptor, content / path),
+            )
             return
-        self._walk_source_directory(source.descriptor, Path(), visitor)
+        self._copy_open_file(source.descriptor, content / source.name)
 
-    def _walk_source_directory(
-        self,
-        directory_descriptor: int,
-        prefix: Path,
-        visitor: Callable[[Path, int], None],
-    ) -> None:
-        nofollow = getattr(os, "O_NOFOLLOW", 0)
-        for name in sorted(os.listdir(directory_descriptor)):
+    def _evidence_from_source(self, source: _OpenSource) -> RunArtifactEvidence:
+        entries: list[ProjectVersionExportFile] = []
+
+        def add(path: Path, descriptor: int) -> None:
+            size, digest = self._hash_descriptor(descriptor)
+            entries.append(
+                ProjectVersionExportFile(path=path.as_posix(), size=size, content_hash=digest)
+            )
+
+        if source.is_directory:
+            self._walk_source(source.descriptor, add)
+        else:
+            add(Path(source.name), source.descriptor)
+        return self._artifact_evidence(tuple(entries))
+
+    def _walk_source(self, descriptor: int, visit: Any, prefix: Path = Path()) -> None:
+        nofollow = os.O_NOFOLLOW
+        for name in sorted(os.listdir(descriptor)):
+            relative = prefix / name
             try:
-                descriptor = os.open(
+                child = os.open(
                     name,
                     os.O_RDONLY | os.O_NONBLOCK | nofollow,
-                    dir_fd=directory_descriptor,
+                    dir_fd=descriptor,
                 )
             except OSError as exc:
-                if exc.errno == errno.ELOOP:
+                if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
                     raise UnsafeRunWorkspacePath(
                         "Artifact source contains a symbolic link"
                     ) from exc
                 raise
             try:
-                info = os.fstat(descriptor)
-                relative_path = prefix / name
-                if stat.S_ISDIR(info.st_mode):
-                    self._walk_source_directory(descriptor, relative_path, visitor)
-                elif stat.S_ISREG(info.st_mode):
-                    visitor(relative_path, descriptor)
+                info = os.fstat(child)
+                if stat.S_ISREG(info.st_mode):
+                    visit(relative, child)
+                elif stat.S_ISDIR(info.st_mode):
+                    self._walk_source(child, visit, relative)
                 else:
-                    raise UnsafeRunWorkspacePath(
-                        "Artifact source must contain only regular files and directories"
-                    )
+                    raise UnsafeRunWorkspacePath("Artifact source contains a special file")
             finally:
-                os.close(descriptor)
+                os.close(child)
 
-    @staticmethod
-    def _copy_regular_file(source_descriptor: int, target: Path) -> None:
-        os.lseek(source_descriptor, 0, os.SEEK_SET)
+    def _copy_open_file(self, descriptor: int, target: Path) -> None:
+        target.parent.mkdir(mode=_PRIVATE_DIRECTORY_MODE, parents=True, exist_ok=True)
+        for parent in target.parents:
+            if parent == self._artifact_staging:
+                break
+            if parent.exists():
+                parent.chmod(_PRIVATE_DIRECTORY_MODE)
+        os.lseek(descriptor, 0, os.SEEK_SET)
         target_descriptor = os.open(
-            target,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-            _ARTIFACT_FILE_MODE,
+            target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _PRIVATE_FILE_MODE
         )
         try:
-            os.fchmod(target_descriptor, _ARTIFACT_FILE_MODE)
-            while chunk := os.read(source_descriptor, _HASH_CHUNK_BYTES):
+            os.fchmod(target_descriptor, _PRIVATE_FILE_MODE)
+            while chunk := os.read(descriptor, _HASH_CHUNK_BYTES):
                 view = memoryview(chunk)
                 while view:
                     written = os.write(target_descriptor, view)
                     view = view[written:]
-            os.fsync(target_descriptor)
         finally:
             os.close(target_descriptor)
 
-    def _content_manifest(self, content: Path) -> tuple[ProjectVersionExportFile, ...]:
-        self._reject_export_symlinks(content)
-        return tuple(self._manifest_from_directory(content))
+    def _evidence_from_directory(self, content: Path) -> RunArtifactEvidence:
+        self._validate_path(
+            content,
+            kind="directory",
+            mode=_PRIVATE_DIRECTORY_MODE,
+            uid=self._owner_uid,
+            gid=self._owner_gid,
+            label="Artifact content",
+        )
+        entries = self._manifest_from_directory(content)
+        for path in content.rglob("*"):
+            info = path.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                expected_mode = _PRIVATE_DIRECTORY_MODE
+            elif stat.S_ISREG(info.st_mode):
+                expected_mode = _PRIVATE_FILE_MODE
+            else:
+                raise RunWorkspaceConflict("Artifact contains an unsafe file type")
+            if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
+                raise UnsafeRunWorkspacePath("Artifact content ownership drifted")
+            if stat.S_IMODE(info.st_mode) != expected_mode:
+                raise UnsafeRunWorkspacePath("Artifact content mode drifted")
+        return self._artifact_evidence(entries)
 
     @staticmethod
-    def _artifact_evidence(
-        manifest: tuple[ProjectVersionExportFile, ...],
-    ) -> RunArtifactEvidence:
-        digest = hashlib.sha256()
-        size = 0
-        for entry in manifest:
-            path_bytes = entry.path.encode("utf-8")
-            digest.update(len(path_bytes).to_bytes(8, "big"))
-            digest.update(path_bytes)
-            digest.update(entry.size.to_bytes(8, "big"))
-            digest.update(bytes.fromhex(entry.content_hash))
-            size += entry.size
+    def _artifact_evidence(entries: tuple[ProjectVersionExportFile, ...]) -> RunArtifactEvidence:
+        ordered = tuple(sorted(entries, key=lambda entry: entry.path))
+        payload = [
+            {
+                "path": entry.path,
+                "size": entry.size,
+                "content_hash": entry.content_hash,
+            }
+            for entry in ordered
+        ]
+        digest = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         return RunArtifactEvidence(
-            size=size,
-            file_count=len(manifest),
-            content_hash=digest.hexdigest(),
+            size=sum(entry.size for entry in ordered),
+            file_count=len(ordered),
+            content_hash=digest,
         )
 
-    def _recover_installed_artifact(
+    def _run_marker(
         self,
-        installed: Path,
-        source: _OpenArtifactSource,
+        identity: RunWorkspaceIdentity,
+        *,
+        state: Literal["exporting", "prepared"],
+        evidence: ProjectVersionExportEvidence | None = None,
+    ) -> dict[str, Any]:
+        marker: dict[str, Any] = {
+            "schema_version": _SCHEMA_VERSION,
+            "state": state,
+            **self._identity_fields(identity),
+        }
+        if evidence is not None:
+            marker["tree_oid"] = evidence.tree_oid
+            marker["manifest"] = [
+                {
+                    "path": entry.path,
+                    "size": entry.size,
+                    "content_hash": entry.content_hash,
+                }
+                for entry in sorted(evidence.manifest, key=lambda item: item.path)
+            ]
+        return marker
+
+    def _artifact_marker(
+        self,
         identity: RunWorkspaceIdentity,
         artifact_id: str,
         source_path: str,
-    ) -> RunArtifactEvidence:
-        self._validate_owned_path(
-            installed,
-            expected_mode=_ARTIFACT_DIRECTORY_MODE,
-            kind="directory",
-            label="installed artifact",
-        )
-        marker_path = installed / _ARTIFACT_MARKER_NAME
-        marker = self._read_artifact_marker(marker_path)
-        self._require_artifact_identity(marker, identity, artifact_id, source_path)
-        state = marker.get("state")
-        if state not in {"finalizing", "prepared"}:
-            raise RunWorkspaceConflict("Installed Artifact has an invalid state")
-        installed_evidence = self._artifact_evidence_from_marker(marker)
-        actual_evidence = self._artifact_evidence(self._content_manifest(installed / "content"))
-        if actual_evidence != installed_evidence:
-            raise RunWorkspaceConflict("Installed Artifact bytes differ from its evidence")
-        if state == "finalizing":
-            self._write_artifact_marker(
-                marker_path,
-                self._artifact_marker(
-                    identity,
-                    artifact_id,
-                    source_path,
-                    state="prepared",
-                    evidence=installed_evidence,
-                ),
-            )
-            return installed_evidence
-        source_evidence = self._artifact_evidence_from_source(source)
-        if source_evidence != installed_evidence:
-            raise RunWorkspaceConflict("Artifact ID is already installed with different content")
-        return installed_evidence
+        *,
+        state: Literal["copying", "finalizing", "installed"],
+        evidence: RunArtifactEvidence | None = None,
+    ) -> dict[str, Any]:
+        marker: dict[str, Any] = {
+            "schema_version": _SCHEMA_VERSION,
+            "state": state,
+            **self._identity_fields(identity),
+            "artifact_id": artifact_id,
+            "source_path": source_path,
+        }
+        if evidence is not None:
+            marker["evidence"] = {
+                "size": evidence.size,
+                "file_count": evidence.file_count,
+                "content_hash": evidence.content_hash,
+            }
+        return marker
 
-    def _artifact_evidence_from_source(self, source: _OpenArtifactSource) -> RunArtifactEvidence:
-        entries: list[ProjectVersionExportFile] = []
+    @staticmethod
+    def _identity_fields(identity: RunWorkspaceIdentity) -> dict[str, str]:
+        return {
+            "run_id": identity.run_id,
+            "snapshot_id": identity.snapshot_id,
+            "project_version_id": identity.project_version_id,
+            "commit_oid": identity.commit_oid,
+        }
 
-        def hash_entry(relative_path: Path, descriptor: int) -> None:
-            size, content_hash = self._hash_descriptor(descriptor)
-            entries.append(
+    def _require_same_identity(
+        self, marker: dict[str, Any], identity: RunWorkspaceIdentity
+    ) -> None:
+        if any(marker.get(key) != value for key, value in self._identity_fields(identity).items()):
+            raise RunWorkspaceConflict("Run workspace prepared identity differs")
+
+    def _require_artifact_identity(
+        self,
+        marker: dict[str, Any],
+        identity: RunWorkspaceIdentity,
+        artifact_id: str,
+        source_path: str,
+    ) -> None:
+        self._require_same_identity(marker, identity)
+        if marker.get("artifact_id") != artifact_id or marker.get("source_path") != source_path:
+            raise RunWorkspaceConflict("Artifact identity differs")
+
+    def _export_evidence_from_marker(self, marker: dict[str, Any]) -> ProjectVersionExportEvidence:
+        try:
+            manifest = tuple(
                 ProjectVersionExportFile(
-                    path=relative_path.as_posix(),
-                    size=size,
-                    content_hash=content_hash,
+                    path=entry["path"],
+                    size=entry["size"],
+                    content_hash=entry["content_hash"],
                 )
+                for entry in marker["manifest"]
             )
+            evidence = ProjectVersionExportEvidence(
+                commit_oid=marker["commit_oid"],
+                tree_oid=marker["tree_oid"],
+                manifest=manifest,
+            )
+        except (KeyError, TypeError) as exc:
+            raise RunWorkspaceConflict("Run marker evidence is invalid") from exc
+        if not _OID.fullmatch(evidence.commit_oid) or not _OID.fullmatch(evidence.tree_oid):
+            raise RunWorkspaceConflict("Run marker evidence is invalid")
+        return evidence
 
-        self._walk_source(source, hash_entry)
-        entries.sort(key=lambda entry: entry.path)
-        return self._artifact_evidence(tuple(entries))
+    @staticmethod
+    def _artifact_evidence_from_marker(marker: dict[str, Any]) -> RunArtifactEvidence:
+        try:
+            raw = marker["evidence"]
+            evidence = RunArtifactEvidence(
+                size=raw["size"],
+                file_count=raw["file_count"],
+                content_hash=raw["content_hash"],
+            )
+        except (KeyError, TypeError) as exc:
+            raise RunWorkspaceConflict("Artifact marker evidence is invalid") from exc
+        if (
+            not isinstance(evidence.size, int)
+            or evidence.size < 0
+            or not isinstance(evidence.file_count, int)
+            or evidence.file_count < 0
+            or not isinstance(evidence.content_hash, str)
+            or not re.fullmatch(r"[0-9a-f]{64}", evidence.content_hash)
+        ):
+            raise RunWorkspaceConflict("Artifact marker evidence is invalid")
+        return evidence
+
+    def _read_artifact_marker(self, root: Path) -> dict[str, Any]:
+        self._validate_private_tree_root(root, label="Artifact")
+        return self._read_json(root / _ARTIFACT_MARKER_NAME, label="Artifact identity marker")
+
+    def _validate_private_tree_root(self, path: Path, *, label: str) -> None:
+        self._validate_path(
+            path,
+            kind="directory",
+            mode=_PRIVATE_DIRECTORY_MODE,
+            uid=self._owner_uid,
+            gid=self._owner_gid,
+            label=label,
+        )
+
+    def _write_json_marker(self, path: Path, marker: dict[str, Any], *, mode: int) -> None:
+        for temporary in path.parent.glob(f".{path.name}.*.tmp"):
+            if re.fullmatch(rf"\.{re.escape(path.name)}\.[0-9a-f]{{32}}\.tmp", temporary.name):
+                info = temporary.lstat()
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or stat.S_ISLNK(info.st_mode)
+                    or info.st_uid != self._owner_uid
+                    or info.st_gid != self._owner_gid
+                    or stat.S_IMODE(info.st_mode) not in {_PRIVATE_FILE_MODE, _PRIVATE_MARKER_MODE}
+                ):
+                    raise UnsafeRunWorkspacePath("marker temporary ownership drifted")
+                temporary.unlink()
+        temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, _PRIVATE_FILE_MODE)
+        try:
+            payload = json.dumps(marker, sort_keys=True, separators=(",", ":")).encode()
+            view = memoryview(payload)
+            while view:
+                written = os.write(descriptor, view)
+                view = view[written:]
+            os.fchmod(descriptor, mode)
+        finally:
+            os.close(descriptor)
+        os.replace(temporary, path)
+
+    def _read_json(self, path: Path, *, label: str) -> dict[str, Any]:
+        try:
+            info = path.lstat()
+        except FileNotFoundError as exc:
+            raise RunWorkspaceConflict(f"{label} is missing") from exc
+        if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+            raise UnsafeRunWorkspacePath(f"{label} is not a regular file")
+        if info.st_uid != self._owner_uid:
+            raise UnsafeRunWorkspacePath(f"{label} ownership drifted")
+        if stat.S_IMODE(info.st_mode) not in {
+            _PRIVATE_FILE_MODE,
+            _PRIVATE_MARKER_MODE,
+        }:
+            raise UnsafeRunWorkspacePath(f"{label} mode drifted")
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RunWorkspaceConflict(f"{label} is invalid") from exc
+        if not isinstance(value, dict) or value.get("schema_version") != _SCHEMA_VERSION:
+            raise RunWorkspaceConflict(f"{label} schema is invalid")
+        return value
+
+    def _ensure_directory(self, path: Path, *, mode: int, gid: int, label: str) -> None:
+        if not os.path.lexists(path):
+            path.mkdir(mode=mode)
+            path.chmod(mode)
+            os.chown(path, -1, gid)
+        self._validate_path(
+            path,
+            kind="directory",
+            mode=mode,
+            uid=self._owner_uid,
+            gid=gid,
+            label=label,
+        )
+
+    def _create_directory(self, path: Path, mode: int, gid: int) -> None:
+        path.mkdir(mode=mode)
+        path.chmod(mode)
+        os.chown(path, -1, gid)
+
+    def _create_file(self, path: Path, mode: int, gid: int) -> None:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+        try:
+            os.fchmod(descriptor, mode)
+            os.fchown(descriptor, -1, gid)
+        finally:
+            os.close(descriptor)
+
+    def _validate_path(
+        self,
+        path: Path,
+        *,
+        kind: Literal["file", "directory"],
+        mode: int,
+        uid: int,
+        gid: int | None,
+        label: str,
+    ) -> None:
+        try:
+            info = path.lstat()
+        except FileNotFoundError as exc:
+            raise RunWorkspaceConflict(f"{label} is missing") from exc
+        expected = stat.S_ISREG if kind == "file" else stat.S_ISDIR
+        if stat.S_ISLNK(info.st_mode):
+            raise UnsafeRunWorkspacePath(f"{label} is a symbolic link")
+        if not expected(info.st_mode):
+            raise RunWorkspaceConflict(f"{label} is not a {kind}")
+        if info.st_uid != uid or (gid is not None and info.st_gid != gid):
+            raise UnsafeRunWorkspacePath(f"{label} ownership drifted")
+        actual_mode = stat.S_IMODE(info.st_mode)
+        if actual_mode != mode:
+            raise UnsafeRunWorkspacePath(f"{label} mode drifted: {actual_mode:#o} != {mode:#o}")
+
+    def _validate_storage_root(self, root: Path) -> None:
+        info = root.stat()
+        if not stat.S_ISDIR(info.st_mode):
+            raise UnsafeRunWorkspacePath("Run workspace root must be a directory")
+        if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
+            raise UnsafeRunWorkspacePath(
+                "Run workspace root ownership differs from service identity"
+            )
+        if stat.S_IMODE(info.st_mode) & stat.S_IWOTH:
+            raise UnsafeRunWorkspacePath("Run workspace root cannot be world-writable")
+
+    @staticmethod
+    def _workspace_at(root: Path) -> RunWorkspace:
+        return RunWorkspace(
+            root=root,
+            work=root / "work",
+            inputs=root / "inputs",
+            logs=root / "logs",
+            artifact_staging=root / "artifacts",
+            identity_marker=root / _MARKER_NAME,
+        )
+
+    @staticmethod
+    def _path_exists(path: Path) -> bool:
+        return os.path.lexists(path)
+
+    @staticmethod
+    def _validate_segment(label: str, value: str) -> None:
+        if (
+            not value
+            or value in {".", ".."}
+            or "/" in value
+            or "\\" in value
+            or PurePosixPath(value).is_absolute()
+        ):
+            raise UnsafeRunWorkspacePath(f"{label} must be one POSIX path segment")
+
+    @classmethod
+    def _validate_identity(cls, identity: RunWorkspaceIdentity) -> None:
+        cls._validate_segment("run_id", identity.run_id)
+        cls._validate_segment("snapshot_id", identity.snapshot_id)
+        cls._validate_segment("project_version_id", identity.project_version_id)
+        if not _OID.fullmatch(identity.commit_oid):
+            raise UnsafeRunWorkspacePath("commit_oid must be a full lowercase Git object ID")
+
+    @staticmethod
+    def _validate_relative_path(label: str, value: str, *, allow_dot: bool) -> None:
+        path = PurePosixPath(value)
+        if (
+            not value
+            or not path.parts
+            or path.is_absolute()
+            or "\\" in value
+            or any(part == ".." for part in path.parts)
+            or (not allow_dot and path.parts == (".",))
+        ):
+            raise UnsafeRunWorkspacePath(f"{label} must be a safe relative POSIX path")
+
+    @staticmethod
+    def _hash_file(path: Path) -> tuple[int, str]:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            return PosixRunWorkspace._hash_descriptor(descriptor)
+        finally:
+            os.close(descriptor)
 
     @staticmethod
     def _hash_descriptor(descriptor: int) -> tuple[int, str]:
@@ -816,495 +913,3 @@ class PosixRunWorkspace:
             digest.update(chunk)
             size += len(chunk)
         return size, digest.hexdigest()
-
-    async def _acquire_artifact_lock(self, artifact_id: str) -> int:
-        return await self._acquire_lock(
-            self._artifact_locks / f"{artifact_id}.lock", "Artifact install lock"
-        )
-
-    def _install_artifact_claim(
-        self,
-        path: Path,
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-    ) -> None:
-        temporary = self._artifact_claims / f".{artifact_id}.{uuid.uuid4().hex}.claim.tmp"
-        self._write_new_json_file(
-            temporary,
-            self._artifact_marker(identity, artifact_id, source_path, state="claimed"),
-            _ARTIFACT_MARKER_MODE,
-        )
-        try:
-            temporary.rename(path)
-            self._fsync_directory(self._artifact_claims)
-        finally:
-            if os.path.lexists(temporary):
-                temporary.unlink()
-
-    def _read_artifact_claim(self, path: Path) -> dict[str, Any]:
-        self._validate_owned_path(
-            path,
-            expected_mode=_ARTIFACT_MARKER_MODE,
-            kind="file",
-            label="Artifact ownership claim",
-        )
-        return self._read_artifact_json(path)
-
-    def _write_artifact_marker(self, path: Path, marker: dict[str, Any]) -> None:
-        temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
-        self._write_new_json_file(temporary, marker, _ARTIFACT_MARKER_MODE)
-        try:
-            temporary.replace(path)
-            self._fsync_directory(path.parent)
-        finally:
-            if os.path.lexists(temporary):
-                temporary.unlink()
-
-    def _read_artifact_marker(self, path: Path) -> dict[str, Any]:
-        self._validate_owned_path(
-            path,
-            expected_mode=_ARTIFACT_MARKER_MODE,
-            kind="file",
-            label="Artifact identity marker",
-        )
-        return self._read_artifact_json(path)
-
-    def _read_artifact_json(self, path: Path) -> dict[str, Any]:
-        marker = self._read_json(path, label="Artifact marker")
-        if marker.get("schema_version") != _ARTIFACT_SCHEMA_VERSION:
-            raise RunWorkspaceConflict("Artifact marker has an unsupported schema")
-        return marker
-
-    @staticmethod
-    def _artifact_marker(
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-        *,
-        state: str,
-        evidence: RunArtifactEvidence | None = None,
-    ) -> dict[str, Any]:
-        marker: dict[str, Any] = {
-            "schema_version": _ARTIFACT_SCHEMA_VERSION,
-            "state": state,
-            "run_id": identity.run_id,
-            "snapshot_id": identity.snapshot_id,
-            "project_version_id": identity.project_version_id,
-            "commit_oid": identity.commit_oid,
-            "artifact_id": artifact_id,
-            "source_path": source_path,
-        }
-        if evidence is not None:
-            marker.update(
-                size=evidence.size,
-                file_count=evidence.file_count,
-                content_hash=evidence.content_hash,
-            )
-        return marker
-
-    @staticmethod
-    def _artifact_evidence_from_marker(marker: dict[str, Any]) -> RunArtifactEvidence:
-        size = marker.get("size")
-        file_count = marker.get("file_count")
-        content_hash = marker.get("content_hash")
-        if (
-            not isinstance(size, int)
-            or isinstance(size, bool)
-            or size < 0
-            or not isinstance(file_count, int)
-            or isinstance(file_count, bool)
-            or file_count < 0
-            or not isinstance(content_hash, str)
-            or not re.fullmatch(r"[0-9a-f]{64}", content_hash)
-        ):
-            raise RunWorkspaceConflict("Artifact marker has invalid content evidence")
-        return RunArtifactEvidence(size=size, file_count=file_count, content_hash=content_hash)
-
-    @staticmethod
-    def _require_artifact_identity(
-        marker: dict[str, Any],
-        identity: RunWorkspaceIdentity,
-        artifact_id: str,
-        source_path: str,
-    ) -> None:
-        expected = {
-            "run_id": identity.run_id,
-            "snapshot_id": identity.snapshot_id,
-            "project_version_id": identity.project_version_id,
-            "commit_oid": identity.commit_oid,
-            "artifact_id": artifact_id,
-            "source_path": source_path,
-        }
-        if {key: marker.get(key) for key in expected} != expected:
-            raise RunWorkspaceConflict("Artifact ownership identity differs")
-
-    async def _acquire_run_lock(self, run_id: str) -> int:
-        return await self._acquire_lock(self._locks / f"{run_id}.lock", "Run workspace lock")
-
-    async def _acquire_lock(self, path: Path, label: str) -> int:
-        import fcntl
-
-        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(path, flags, _LOCK_MODE)
-        try:
-            while True:
-                try:
-                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    await asyncio.sleep(0.01)
-            self._validate_descriptor(descriptor, expected_mode=_LOCK_MODE, label=label)
-            return descriptor
-        except BaseException:
-            self._release_run_lock(descriptor)
-            raise
-
-    @staticmethod
-    def _release_run_lock(descriptor: int) -> None:
-        import fcntl
-
-        try:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
-        finally:
-            os.close(descriptor)
-
-    def _install_claim(self, path: Path, identity: RunWorkspaceIdentity) -> None:
-        marker = {
-            "schema_version": _CLAIM_SCHEMA_VERSION,
-            "run_id": identity.run_id,
-            "snapshot_id": identity.snapshot_id,
-            "project_version_id": identity.project_version_id,
-            "commit_oid": identity.commit_oid,
-        }
-        temporary = self._claims / f".{identity.run_id}.{uuid.uuid4().hex}.claim.tmp"
-        self._write_new_json_file(temporary, marker, _MARKER_MODE)
-        try:
-            if os.path.lexists(path):
-                self._require_same_identity(self._read_claim(path), identity)
-                return
-            temporary.rename(path)
-            self._fsync_directory(self._claims)
-        finally:
-            if os.path.lexists(temporary):
-                temporary.unlink()
-
-    def _read_claim(self, path: Path) -> dict[str, Any]:
-        self._validate_owned_path(
-            path, expected_mode=_MARKER_MODE, kind="file", label="Run ownership claim"
-        )
-        marker = self._read_json(path, label="Run ownership claim")
-        if marker.get("schema_version") != _CLAIM_SCHEMA_VERSION:
-            raise RunWorkspaceConflict("Run ownership claim has an unsupported schema")
-        return marker
-
-    def _claim_path(self, run_id: str) -> Path:
-        return self._claims / f"{run_id}.json"
-
-    def _read_marker(self, path: Path) -> dict[str, Any]:
-        self._validate_owned_path(
-            path, expected_mode=_MARKER_MODE, kind="file", label="identity marker"
-        )
-        marker = self._read_json(path, label="Run identity marker")
-        if marker.get("schema_version") != _MARKER_SCHEMA_VERSION:
-            raise RunWorkspaceConflict("Run identity marker has an unsupported schema")
-        return marker
-
-    def _write_marker(self, path: Path, marker: dict[str, Any]) -> None:
-        temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
-        self._write_new_json_file(temporary, marker, _MARKER_MODE)
-        try:
-            temporary.replace(path)
-            self._fsync_directory(path.parent)
-        finally:
-            if os.path.lexists(temporary):
-                temporary.unlink()
-
-    @staticmethod
-    def _write_new_json_file(path: Path, marker: dict[str, Any], mode: int) -> None:
-        data = (json.dumps(marker, ensure_ascii=False, sort_keys=True) + "\n").encode()
-        descriptor = os.open(
-            path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-            0o600,
-        )
-        try:
-            os.fchmod(descriptor, mode)
-            with os.fdopen(descriptor, "wb") as handle:
-                handle.write(data)
-                handle.flush()
-                os.fsync(handle.fileno())
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(descriptor)
-            raise
-
-    @staticmethod
-    def _read_json(path: Path, *, label: str) -> dict[str, Any]:
-        try:
-            marker = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise RunWorkspaceConflict(f"{label} is invalid") from exc
-        if not isinstance(marker, dict):
-            raise RunWorkspaceConflict(f"{label} must be a JSON object")
-        return marker
-
-    def _remove_marker_temporaries(self, root: Path) -> None:
-        removed = False
-        for path in root.iterdir():
-            if not _MARKER_TEMP_NAME.fullmatch(path.name):
-                continue
-            info = path.lstat()
-            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-                raise UnsafeRunWorkspacePath(
-                    "Run workspace identity marker temporary is not a regular file"
-                )
-            if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
-                raise UnsafeRunWorkspacePath(
-                    "Run workspace identity marker temporary ownership drifted"
-                )
-            mode = stat.S_IMODE(info.st_mode)
-            if mode not in {0o600, _MARKER_MODE}:
-                raise UnsafeRunWorkspacePath(
-                    f"Run workspace identity marker temporary mode drifted: {mode:#o}"
-                )
-            path.unlink()
-            removed = True
-        if removed:
-            self._fsync_directory(root)
-
-    def _ensure_owned_directory(self, path: Path, mode: int, *, label: str) -> None:
-        if os.path.lexists(path):
-            self._validate_owned_path(path, expected_mode=mode, kind="directory", label=label)
-            return
-        path.mkdir(mode=mode)
-        path.chmod(mode)
-        self._fsync_directory(path.parent)
-        self._validate_owned_path(path, expected_mode=mode, kind="directory", label=label)
-
-    def _ensure_owned_file(self, path: Path, mode: int, *, label: str) -> None:
-        if not os.path.lexists(path):
-            descriptor = os.open(
-                path,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-                mode,
-            )
-            try:
-                os.fchmod(descriptor, mode)
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
-            self._fsync_directory(path.parent)
-        self._validate_owned_path(path, expected_mode=mode, kind="file", label=label)
-
-    def _validate_storage_root(self, path: Path) -> None:
-        info = path.stat()
-        if not stat.S_ISDIR(info.st_mode):
-            raise UnsafeRunWorkspacePath("Run workspace root must be a directory")
-        if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
-            raise UnsafeRunWorkspacePath(
-                "Run workspace root ownership differs from process identity"
-            )
-        if stat.S_IMODE(info.st_mode) & stat.S_IWOTH:
-            raise UnsafeRunWorkspacePath("Run workspace root cannot be world-writable")
-        if not os.access(path, os.R_OK | os.W_OK | os.X_OK):
-            raise UnsafeRunWorkspacePath(
-                "Run workspace root must be readable, writable, and searchable"
-            )
-
-    def _validate_workspace_root(self, path: Path) -> None:
-        resolved = self._resolve_inside(path, self._runs, label="Run workspace")
-        if resolved != path:
-            raise UnsafeRunWorkspacePath("Run workspace path is not canonical")
-        self._validate_owned_path(
-            path, expected_mode=_DIRECTORY_MODE, kind="directory", label="workspace root"
-        )
-
-    def _validate_owned_path(
-        self,
-        path: Path,
-        *,
-        expected_mode: int,
-        kind: Literal["file", "directory"],
-        label: str,
-    ) -> None:
-        try:
-            info = path.lstat()
-        except FileNotFoundError as exc:
-            raise RunWorkspaceConflict(f"Run workspace {label} is missing") from exc
-        if stat.S_ISLNK(info.st_mode):
-            raise UnsafeRunWorkspacePath(f"Run workspace {label} is a symbolic link")
-        expected_kind = stat.S_ISREG if kind == "file" else stat.S_ISDIR
-        if not expected_kind(info.st_mode):
-            raise RunWorkspaceConflict(f"Run workspace {label} is not a {kind}")
-        if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
-            raise UnsafeRunWorkspacePath(f"Run workspace {label} ownership drifted")
-        actual_mode = stat.S_IMODE(info.st_mode)
-        if actual_mode != expected_mode:
-            raise UnsafeRunWorkspacePath(
-                f"Run workspace {label} mode drifted: {actual_mode:#o} != {expected_mode:#o}"
-            )
-
-    def _validate_descriptor(self, descriptor: int, *, expected_mode: int, label: str) -> None:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode):
-            raise UnsafeRunWorkspacePath(f"{label} is not a regular file")
-        if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
-            raise UnsafeRunWorkspacePath(f"{label} ownership drifted")
-        if stat.S_IMODE(info.st_mode) != expected_mode:
-            raise UnsafeRunWorkspacePath(f"{label} mode drifted")
-
-    @staticmethod
-    def _reject_unknown_entries(root: Path, allowed: set[str]) -> None:
-        unknown = sorted(path.name for path in root.iterdir() if path.name not in allowed)
-        if unknown:
-            raise RunWorkspaceConflict(
-                f"Run workspace has unowned root entries: {', '.join(unknown)}"
-            )
-
-    @staticmethod
-    def _validate_staging_marker(marker: dict[str, Any]) -> None:
-        if marker.get("staging") != _STAGING_NAME:
-            raise RunWorkspaceConflict("Run marker does not own the expected staging directory")
-
-    @staticmethod
-    def _validate_manifest_entry(entry: ProjectVersionExportFile) -> None:
-        PosixRunWorkspace._validate_relative_path("manifest path", entry.path)
-        if entry.size < 0:
-            raise RunWorkspaceConflict("Project Version export manifest has a negative file size")
-        if not re.fullmatch(r"[0-9a-f]{64}", entry.content_hash):
-            raise RunWorkspaceConflict(
-                "Project Version export manifest has an invalid content hash"
-            )
-
-    @staticmethod
-    def _validate_identity(identity: RunWorkspaceIdentity) -> None:
-        PosixRunWorkspace._validate_identifier("run_id", identity.run_id)
-        PosixRunWorkspace._validate_identifier("snapshot_id", identity.snapshot_id)
-        PosixRunWorkspace._validate_identifier("project_version_id", identity.project_version_id)
-        if not _OID.fullmatch(identity.commit_oid):
-            raise UnsafeRunWorkspacePath("commit_oid must be a full lowercase Git object ID")
-
-    @staticmethod
-    def _validate_identifier(label: str, value: str) -> None:
-        if (
-            not value
-            or value.startswith(".")
-            or "\\" in value
-            or PurePosixPath(value).is_absolute()
-            or len(PurePosixPath(value).parts) != 1
-            or value in {".", ".."}
-        ):
-            raise UnsafeRunWorkspacePath(f"{label} must be one relative POSIX path segment")
-
-    @staticmethod
-    def _validate_relative_path(label: str, value: str) -> None:
-        path = PurePosixPath(value)
-        if not value or "\\" in value or path.is_absolute() or ".." in path.parts:
-            raise UnsafeRunWorkspacePath(f"{label} must be a safe relative POSIX path")
-
-    @staticmethod
-    def _marker(
-        identity: RunWorkspaceIdentity,
-        *,
-        state: str,
-        evidence: ProjectVersionExportEvidence | None = None,
-    ) -> dict[str, Any]:
-        marker: dict[str, Any] = {
-            "schema_version": _MARKER_SCHEMA_VERSION,
-            "state": state,
-            "run_id": identity.run_id,
-            "snapshot_id": identity.snapshot_id,
-            "project_version_id": identity.project_version_id,
-            "commit_oid": identity.commit_oid,
-        }
-        if evidence is not None:
-            marker["tree_oid"] = evidence.tree_oid
-            marker["manifest"] = [
-                {
-                    "path": entry.path,
-                    "size": entry.size,
-                    "content_hash": entry.content_hash,
-                }
-                for entry in evidence.manifest
-            ]
-        return marker
-
-    @staticmethod
-    def _evidence_from_marker(marker: dict[str, Any]) -> ProjectVersionExportEvidence:
-        tree_oid = marker.get("tree_oid")
-        raw_manifest = marker.get("manifest")
-        if not isinstance(tree_oid, str) or not isinstance(raw_manifest, list):
-            raise RunWorkspaceConflict("Finalizing marker has no export evidence")
-        entries: list[ProjectVersionExportFile] = []
-        for raw in raw_manifest:
-            if not isinstance(raw, dict):
-                raise RunWorkspaceConflict("Finalizing marker manifest is invalid")
-            path = raw.get("path")
-            size = raw.get("size")
-            content_hash = raw.get("content_hash")
-            if (
-                not isinstance(path, str)
-                or not isinstance(size, int)
-                or isinstance(size, bool)
-                or not isinstance(content_hash, str)
-            ):
-                raise RunWorkspaceConflict("Finalizing marker manifest entry is invalid")
-            entries.append(
-                ProjectVersionExportFile(path=path, size=size, content_hash=content_hash)
-            )
-        commit_oid = marker.get("commit_oid")
-        if not isinstance(commit_oid, str):
-            raise RunWorkspaceConflict("Finalizing marker commit OID is invalid")
-        return ProjectVersionExportEvidence(
-            commit_oid=commit_oid,
-            tree_oid=tree_oid,
-            manifest=tuple(entries),
-        )
-
-    @staticmethod
-    def _require_same_identity(marker: dict[str, Any], identity: RunWorkspaceIdentity) -> None:
-        expected = {
-            "run_id": identity.run_id,
-            "snapshot_id": identity.snapshot_id,
-            "project_version_id": identity.project_version_id,
-            "commit_oid": identity.commit_oid,
-        }
-        actual = {name: marker.get(name) for name in expected}
-        if actual != expected:
-            raise RunWorkspaceConflict(
-                f"Run {identity.run_id} workspace prepared identity differs from requested identity"
-            )
-
-    @staticmethod
-    def _resolve_inside(path: Path, root: Path, *, label: str) -> Path:
-        try:
-            resolved = path.resolve(strict=True)
-        except (FileNotFoundError, RuntimeError) as exc:
-            raise UnsafeRunWorkspacePath(f"{label} cannot be resolved safely") from exc
-        if not resolved.is_relative_to(root):
-            raise UnsafeRunWorkspacePath(f"{label} escapes configured storage root")
-        return resolved
-
-    @staticmethod
-    def _fsync_tree(root: Path) -> None:
-        directories = [root]
-        for path in root.rglob("*"):
-            if path.is_file() and not path.is_symlink():
-                descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-                try:
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
-            elif path.is_dir() and not path.is_symlink():
-                directories.append(path)
-        for directory in reversed(directories):
-            PosixRunWorkspace._fsync_directory(directory)
-
-    @staticmethod
-    def _fsync_directory(path: Path) -> None:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
