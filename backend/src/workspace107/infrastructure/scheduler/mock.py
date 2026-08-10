@@ -42,6 +42,7 @@ def build_job_environment(submission: SchedulerSubmission) -> dict[str, str]:
 @dataclass
 class _MockJob:
     process: asyncio.subprocess.Process
+    correlation: str
     stdout: IO[bytes]
     stderr: IO[bytes]
     started_at: datetime
@@ -88,6 +89,7 @@ class MockScheduler:
 
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
+            correlation=submission.correlation,
             process=process,
             stdout=stdout,
             stderr=stderr,

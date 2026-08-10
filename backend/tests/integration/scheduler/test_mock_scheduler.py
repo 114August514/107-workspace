@@ -60,10 +60,14 @@ async def test_windows_uses_system_command_interpreter(monkeypatch, tmp_path: Pa
 
     scheduler = mock_module.MockScheduler()
     job_id = await scheduler.submit(submission)
+    correlation = await scheduler.find_by_correlation(submission.correlation)
     await scheduler.poll(job_id)
 
     assert captured["command"] == submission.command
     assert "executable" not in captured
+    assert correlation.complete is True
+    assert correlation.job_ids == (job_id,)
+    assert correlation.reason == ""
 
 
 @pytest.mark.asyncio

@@ -8,14 +8,15 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SchedulerKind = Literal["mock", "slurm"]
 AuthMode = Literal["dev", "ustc"]
 LogFormat = Literal["auto", "json", "text"]
+SlurmRuntimeMode = Literal["native", "apptainer"]
 
 
 class Settings(BaseSettings):
@@ -45,11 +46,64 @@ class Settings(BaseSettings):
     slurm_api_base_url: str = ""
     slurm_api_user: str = ""
     slurm_jwt: str = Field(default="", repr=False)
+    slurm_target_cluster_id: str = ""
+    slurm_api_version: str = ""
+    slurm_api_schema_profile: str = ""
+    slurm_submit_path: str = ""
+    slurm_job_path_template: str = ""
+    slurm_jobs_path: str = ""
+    slurm_cancel_path_template: str = ""
+    slurm_correlation_field: str = ""
+    slurm_correlation_query_parameter: str = ""
+    slurm_correlation_query_complete: bool = False
+    slurm_correlation_max_bytes: int = 0
+    slurm_runtime_mode: SlurmRuntimeMode = "native"
+    slurm_timeout_seconds: float = 20.0
 
     auth_mode: AuthMode = "dev"
 
     worker_poll_seconds: float = 1.0
     worker_idle_seconds: float = 0.5
+
+    @model_validator(mode="after")
+    def validate_slurm_contract(self) -> Self:
+        """选择 Slurm 时必须显式提供并确认完整的外部 API 契约。"""
+        if self.scheduler != "slurm":
+            return self
+
+        required = {
+            "SLURM_API_BASE_URL": self.slurm_api_base_url,
+            "SLURM_API_USER": self.slurm_api_user,
+            "SLURM_JWT": self.slurm_jwt,
+            "SLURM_TARGET_CLUSTER_ID": self.slurm_target_cluster_id,
+            "SLURM_API_VERSION": self.slurm_api_version,
+            "SLURM_API_SCHEMA_PROFILE": self.slurm_api_schema_profile,
+            "SLURM_SUBMIT_PATH": self.slurm_submit_path,
+            "SLURM_JOB_PATH_TEMPLATE": self.slurm_job_path_template,
+            "SLURM_JOBS_PATH": self.slurm_jobs_path,
+            "SLURM_CANCEL_PATH_TEMPLATE": self.slurm_cancel_path_template,
+            "SLURM_CORRELATION_FIELD": self.slurm_correlation_field,
+            "SLURM_CORRELATION_QUERY_PARAMETER": self.slurm_correlation_query_parameter,
+        }
+        missing = [name for name, value in required.items() if not value.strip()]
+        if missing:
+            names = ", ".join(f"WORKSPACE107_{name}" for name in missing)
+            raise ValueError(f"Slurm scheduler requires explicit configuration: {names}")
+        if not self.slurm_correlation_query_complete:
+            raise ValueError(
+                "WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE must be true only after the "
+                "target cluster confirms permission and pagination completeness"
+            )
+        if self.slurm_correlation_max_bytes < 1:
+            raise ValueError("WORKSPACE107_SLURM_CORRELATION_MAX_BYTES must be positive")
+        if self.slurm_timeout_seconds <= 0:
+            raise ValueError("WORKSPACE107_SLURM_TIMEOUT_SECONDS must be positive")
+        if self.slurm_runtime_mode != "native":
+            raise ValueError(
+                "Apptainer runtime is not implemented or target-validated; use native only "
+                "after the human runtime gate"
+            )
+        return self
 
     @property
     def use_json_logs(self) -> bool:
