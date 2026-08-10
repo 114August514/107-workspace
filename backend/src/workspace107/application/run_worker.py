@@ -118,12 +118,18 @@ class RunWorker:
         environment.setdefault("WORKSPACE107_INPUTS_DIR", str(paths.inputs))
         secret_values: dict[str, str] = {}
         if snapshot.env_secret_refs:
-            secret_values = await self._store.resolve_secrets(
-                run.workspace_id, sorted(set(snapshot.env_secret_refs.values()))
-            )
+            requested_secrets = sorted(set(snapshot.env_secret_refs.values()))
+            secret_values = await self._store.resolve_secrets(run.workspace_id, requested_secrets)
+            missing_secrets = [name for name in requested_secrets if name not in secret_values]
+            if missing_secrets:
+                secret_values.clear()
+                environment.clear()
+                await self._store.record_submit_failed(
+                    run.id, f"缺少 Workspace Secret：{', '.join(missing_secrets)}"
+                )
+                return
             for name, secret_name in snapshot.env_secret_refs.items():
-                if secret_name in secret_values:
-                    environment[name] = secret_values[secret_name]
+                environment[name] = secret_values[secret_name]
 
         work_dir = paths.work
         if snapshot.working_directory not in {"", "."}:
@@ -199,8 +205,8 @@ def stable_artifact_id(run_id: str, source_path: str) -> str:
 
 
 def _safe_detail(exc: BaseException, *, secret_values: Iterable[str] = ()) -> str:
-    detail = " ".join(str(exc).split())[:500]
-    return redact(detail, list(secret_values))
+    redacted = redact(str(exc), list(secret_values))
+    return " ".join(redacted.split())[:500]
 
 
 def _log(pending: PendingExecution, *, outcome: str) -> dict[str, object]:

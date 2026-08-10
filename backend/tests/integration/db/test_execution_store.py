@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select, text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfiguration
@@ -329,6 +329,46 @@ async def test_minimal_intent_arm_poll_artifact_finalize_and_delete() -> None:
 
 
 @pytest.mark.asyncio
+async def test_completed_without_exit_code_stays_uncertain_and_keeps_intent() -> None:
+    engine = create_async_engine(DATABASE_URL)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(t.Base.metadata.drop_all)
+            await connection.run_sync(t.Base.metadata.create_all)
+        factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        await _seed(factory, with_intent=True)
+        store = SqlExecutionStore(factory)
+        assert await store.arm("run_claim") == 1
+        assert await store.attach_job("run_claim", "job-1", reconciled=False)
+
+        await store.record_poll(
+            "run_claim", SchedulerJobState(state=SchedulerState.COMPLETED, exit_code=None)
+        )
+        async with factory() as session:
+            intent = await session.get(t.RunExecutionIntentRow, "run_claim")
+            run = await session.get(t.RunRow, "run_claim")
+        assert intent is not None
+        assert intent.uncertainty_code == "terminal_exit_code_missing"
+        assert intent.observed_scheduler_state is None
+        assert run.status == "queued"
+
+        # 即使坏数据绕过 record_poll 写入，finalize 也不能把 None 当作成功退出码。
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(t.RunExecutionIntentRow)
+                .where(t.RunExecutionIntentRow.run_id == "run_claim")
+                .values(observed_scheduler_state="completed")
+            )
+        with pytest.raises(RuntimeError, match="缺少 exit_code"):
+            await store.finalize("run_claim", ())
+        async with factory() as session:
+            assert await session.get(t.RunExecutionIntentRow, "run_claim") is not None
+            assert (await session.get(t.RunRow, "run_claim")).status == "queued"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_cancel_request_writes_activity_only_when_worker_finishes() -> None:
     engine = create_async_engine(DATABASE_URL)
     try:
@@ -338,7 +378,13 @@ async def test_cancel_request_writes_activity_only_when_worker_finishes() -> Non
         factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
         await _seed(factory, with_intent=True)
         async with factory() as session, session.begin():
-            assert await SqlRepositories(session).execution_intents.request_cancel("run_claim", NOW)
+            database_now = (await session.execute(select(func.now()))).scalar_one()
+            assert await SqlRepositories(session).execution_intents.request_cancel("run_claim")
+            intent_after_request = await session.get(t.RunExecutionIntentRow, "run_claim")
+            await session.refresh(intent_after_request)
+            assert intent_after_request.cancel_requested_at == database_now
+            assert intent_after_request.next_action_at == database_now
+            assert intent_after_request.updated_at == database_now
         async with factory() as session:
             before = (
                 (

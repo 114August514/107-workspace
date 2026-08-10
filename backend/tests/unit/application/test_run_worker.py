@@ -380,8 +380,36 @@ async def test_submit_error_classification_is_explicit(
 
 
 @pytest.mark.asyncio
-async def test_submit_failure_redacts_resolved_secret_before_persisting(tmp_path: Path) -> None:
-    secret = "super-secret-value"
+async def test_missing_resolved_secret_fails_before_arm_and_lists_only_names(
+    tmp_path: Path,
+) -> None:
+    pending = _pending(attempt_no=0)
+    pending = replace(
+        pending,
+        snapshot=replace(
+            pending.snapshot,
+            env_secret_refs={"TOKEN": "MISSING_TOKEN", "OTHER": "PRESENT_TOKEN"},
+        ),
+    )
+    store = _Store(pending)
+
+    async def resolve_secrets(*args) -> dict[str, str]:
+        return {"PRESENT_TOKEN": "resolved-value-must-not-leak"}
+
+    store.resolve_secrets = resolve_secrets
+    scheduler = _Scheduler(SchedulerCorrelationResult(complete=False))
+    await _run(tmp_path, pending, scheduler.correlation, scheduler=scheduler, store=store)
+
+    failure = next(call for call in store.calls if call[0] == "submit_failed")
+    assert "MISSING_TOKEN" in str(failure)
+    assert "resolved-value-must-not-leak" not in str(failure)
+    assert not any(call[0] == "arm" for call in store.calls)
+    assert scheduler.submissions == 0
+
+
+@pytest.mark.asyncio
+async def test_submit_failure_redacts_secret_before_normalize_and_truncate(tmp_path: Path) -> None:
+    secret = "S3CR3T-boundary-value-never-persist"
     pending = _pending(attempt_no=0)
     pending = replace(
         pending,
@@ -395,10 +423,12 @@ async def test_submit_failure_redacts_resolved_secret_before_persisting(tmp_path
     store.resolve_secrets = resolve_secrets
     scheduler = _Scheduler(
         SchedulerCorrelationResult(complete=False),
-        submit_error=SchedulerSubmissionUncertain(f"scheduler echoed {secret}"),
+        submit_error=SchedulerSubmissionUncertain(f"{'x' * 495}{secret}"),
     )
     await _run(tmp_path, pending, scheduler.correlation, scheduler=scheduler, store=store)
 
     uncertain = next(call for call in store.calls if call[0] == "uncertain")
-    assert secret not in str(uncertain)
-    assert "***" in str(uncertain)
+    persisted = str(uncertain)
+    assert secret not in persisted
+    assert all(secret[index : index + 5] not in persisted for index in range(len(secret) - 4))
+    assert "***" in persisted

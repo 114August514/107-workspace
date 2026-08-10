@@ -196,6 +196,15 @@ class SqlExecutionStore(ExecutionStore):
             if state.state is SchedulerState.UNKNOWN:
                 await _uncertain(session, intent, now, "job_unknown", state.reason or "任务未知")
                 return
+            if state.state is SchedulerState.COMPLETED and state.exit_code is None:
+                await _uncertain(
+                    session,
+                    intent,
+                    now,
+                    "terminal_exit_code_missing",
+                    "Scheduler 报告 COMPLETED 但缺少 exit_code",
+                )
+                return
 
             intent.uncertainty_code = None
             intent.uncertainty_detail = ""
@@ -378,9 +387,13 @@ def _terminal_status(intent: t.RunExecutionIntentRow) -> RunStatus:
     state = intent.observed_scheduler_state
     if state == SchedulerState.CANCELLED.value:
         return RunStatus.CANCELLED
-    if state == SchedulerState.COMPLETED.value and (intent.observed_exit_code or 0) == 0:
-        return RunStatus.SUCCEEDED
-    return RunStatus.FAILED
+    if state == SchedulerState.COMPLETED.value:
+        if intent.observed_exit_code is None:
+            raise RuntimeError("Scheduler COMPLETED 终态缺少 exit_code")
+        return RunStatus.SUCCEEDED if intent.observed_exit_code == 0 else RunStatus.FAILED
+    if state == SchedulerState.FAILED.value:
+        return RunStatus.FAILED
+    raise RuntimeError(f"无法从 Scheduler 状态 {state!r} 推导 Run 终态")
 
 
 async def _add_event(

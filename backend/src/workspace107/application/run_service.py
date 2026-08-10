@@ -444,8 +444,7 @@ class RunService:
         if run.is_terminal:
             raise ConflictError(f"Run 已处于终态 {run.status}，无法取消")
 
-        now = self._clock.now()
-        if not await self._repos.execution_intents.request_cancel(run.id, now):
+        if not await self._repos.execution_intents.request_cancel(run.id):
             raise ConflictError("Run 的执行意图已完成，无法取消")
         await self._record_event(run.id, RunEventType.CANCEL_REQUESTED, "用户请求取消")
         return run

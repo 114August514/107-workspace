@@ -162,7 +162,7 @@ class RunRepository(Protocol):
 
 class ExecutionIntentRepository(Protocol):
     async def add(self, intent: ExecutionIntent) -> None: ...
-    async def request_cancel(self, run_id: str, at: datetime) -> bool:
+    async def request_cancel(self, run_id: str) -> bool:
         """持久化取消请求；不存在或已完成时返回 False。"""
         ...
 

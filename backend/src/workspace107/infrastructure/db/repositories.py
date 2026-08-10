@@ -841,11 +841,15 @@ class ExecutionIntentRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def request_cancel(self, run_id: str, at: datetime) -> bool:
+    async def request_cancel(self, run_id: str) -> bool:
         result = await self._session.execute(
             update(t.RunExecutionIntentRow)
             .where(t.RunExecutionIntentRow.run_id == run_id)
-            .values(cancel_requested_at=at, next_action_at=func.now(), updated_at=func.now())
+            .values(
+                cancel_requested_at=func.now(),
+                next_action_at=func.now(),
+                updated_at=func.now(),
+            )
         )
         return int(result.rowcount or 0) == 1
 
