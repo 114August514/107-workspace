@@ -3,12 +3,15 @@
 该组件只拥有 Run 目录选择、prepared identity、路径安全和最小目录布局。
 Project Version 内容由注入的 ``ProjectVersionExporter`` 导出；调度、Run 状态和
 Input Binding 均不属于这里。
+本实现明确以 M1 Linux/POSIX 的 ``openat``/``O_NOFOLLOW``/``flock`` 语义为边界，
+不提供削弱这些保证的非 POSIX fallback。
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -16,6 +19,8 @@ import re
 import shutil
 import stat
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
@@ -35,6 +40,9 @@ from ...domain.ports.version_control import (
 _DIRECTORY_MODE = 0o750
 _CONTROL_DIRECTORY_MODE = 0o700
 _LOG_MODE = 0o640
+_ARTIFACT_DIRECTORY_MODE = 0o700
+_ARTIFACT_FILE_MODE = 0o600
+_ARTIFACT_MARKER_MODE = 0o400
 _MARKER_MODE = 0o440
 _LOCK_MODE = 0o600
 _MARKER_NAME = ".workspace-identity.json"
@@ -46,6 +54,15 @@ _OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
 _MARKER_TEMP_NAME = re.compile(rf"\A\.{re.escape(_MARKER_NAME)}\.[0-9a-f]{{32}}\.tmp\Z")
 _ARTIFACT_MARKER_NAME = ".artifact-identity.json"
 _ARTIFACT_SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True, slots=True)
+class _OpenArtifactSource:
+    descriptor: int
+    is_directory: bool
+    name: str
+
+
 _StateAction = Literal["prepared", "export", "finalize"]
 
 
@@ -82,7 +99,9 @@ class PosixRunWorkspace:
         self._ensure_owned_directory(self._runs, _DIRECTORY_MODE, label="runs")
         self._ensure_owned_directory(self._locks, _CONTROL_DIRECTORY_MODE, label="locks")
         self._ensure_owned_directory(self._claims, _CONTROL_DIRECTORY_MODE, label="claims")
-        self._ensure_owned_directory(self._artifact_store, _DIRECTORY_MODE, label="artifact store")
+        self._ensure_owned_directory(
+            self._artifact_store, _ARTIFACT_DIRECTORY_MODE, label="artifact store"
+        )
         self._ensure_owned_directory(
             self._artifact_locks, _CONTROL_DIRECTORY_MODE, label="artifact locks"
         )
@@ -116,7 +135,7 @@ class PosixRunWorkspace:
             raise ValueError("M1 Run workspace only accepts explicit empty inputs")
         self._validate_identity(identity)
         workspace = self.paths_for(identity.run_id)
-        lock_descriptor = await asyncio.to_thread(self._acquire_run_lock, identity.run_id)
+        lock_descriptor = await self._acquire_run_lock(identity.run_id)
         try:
             action, evidence = await asyncio.to_thread(
                 self._inspect_or_initialize, workspace, identity
@@ -129,7 +148,7 @@ class PosixRunWorkspace:
                 return workspace
             return await self._export_and_prepare(workspace, identity)
         finally:
-            await asyncio.to_thread(self._release_run_lock, lock_descriptor)
+            self._release_run_lock(lock_descriptor)
 
     async def collect_artifact(
         self,
@@ -145,9 +164,9 @@ class PosixRunWorkspace:
         if source_path == ".":
             raise UnsafeRunWorkspacePath("artifact source_path cannot be the work root")
 
-        run_lock = await asyncio.to_thread(self._acquire_run_lock, identity.run_id)
+        run_lock = await self._acquire_run_lock(identity.run_id)
         try:
-            artifact_lock = await asyncio.to_thread(self._acquire_artifact_lock, artifact_id)
+            artifact_lock = await self._acquire_artifact_lock(artifact_id)
             try:
                 return await asyncio.to_thread(
                     self._collect_artifact_sync,
@@ -156,9 +175,9 @@ class PosixRunWorkspace:
                     source_path,
                 )
             finally:
-                await asyncio.to_thread(self._release_run_lock, artifact_lock)
+                self._release_run_lock(artifact_lock)
         finally:
-            await asyncio.to_thread(self._release_run_lock, run_lock)
+            self._release_run_lock(run_lock)
 
     def _inspect_or_initialize(
         self, workspace: RunWorkspace, identity: RunWorkspaceIdentity
@@ -478,6 +497,18 @@ class PosixRunWorkspace:
         workspace = self.paths_for(identity.run_id)
         self._require_prepared_workspace(workspace, identity)
         source = self._artifact_source(workspace.work, source_path)
+        try:
+            return self._collect_open_artifact_sync(source, identity, artifact_id, source_path)
+        finally:
+            os.close(source.descriptor)
+
+    def _collect_open_artifact_sync(
+        self,
+        source: _OpenArtifactSource,
+        identity: RunWorkspaceIdentity,
+        artifact_id: str,
+        source_path: str,
+    ) -> RunArtifactEvidence:
         claim_path = self._artifact_claims / f"{artifact_id}.json"
         staging = self._artifact_staging / artifact_id
         installed = self._artifact_store / artifact_id
@@ -501,12 +532,18 @@ class PosixRunWorkspace:
         if os.path.lexists(staging):
             self._validate_owned_path(
                 staging,
-                expected_mode=_DIRECTORY_MODE,
+                expected_mode=_ARTIFACT_DIRECTORY_MODE,
                 kind="directory",
                 label="artifact staging",
             )
             marker = self._read_artifact_marker(staging / _ARTIFACT_MARKER_NAME)
             self._require_artifact_identity(marker, identity, artifact_id, source_path)
+            if marker.get("state") == "finalizing":
+                return self._install_finalizing_staging(
+                    staging, installed, marker, identity, artifact_id, source_path
+                )
+            if marker.get("state") != "copying":
+                raise RunWorkspaceConflict("Artifact staging has an invalid state")
             shutil.rmtree(staging)
             self._fsync_directory(self._artifact_staging)
 
@@ -515,16 +552,31 @@ class PosixRunWorkspace:
         self._copy_artifact_source(source, content)
         evidence = self._artifact_evidence(self._content_manifest(content))
         self._fsync_tree(staging)
-        self._write_artifact_marker(
-            staging / _ARTIFACT_MARKER_NAME,
-            self._artifact_marker(
-                identity,
-                artifact_id,
-                source_path,
-                state="finalizing",
-                evidence=evidence,
-            ),
+        finalizing = self._artifact_marker(
+            identity,
+            artifact_id,
+            source_path,
+            state="finalizing",
+            evidence=evidence,
         )
+        self._write_artifact_marker(staging / _ARTIFACT_MARKER_NAME, finalizing)
+        return self._install_finalizing_staging(
+            staging, installed, finalizing, identity, artifact_id, source_path
+        )
+
+    def _install_finalizing_staging(
+        self,
+        staging: Path,
+        installed: Path,
+        marker: dict[str, Any],
+        identity: RunWorkspaceIdentity,
+        artifact_id: str,
+        source_path: str,
+    ) -> RunArtifactEvidence:
+        evidence = self._artifact_evidence_from_marker(marker)
+        actual = self._artifact_evidence(self._content_manifest(staging / "content"))
+        if actual != evidence:
+            raise RunWorkspaceConflict("Finalizing Artifact bytes differ from evidence")
         staging.rename(installed)
         self._fsync_directory(self._artifact_store)
         self._write_artifact_marker(
@@ -541,12 +593,12 @@ class PosixRunWorkspace:
 
     def _create_artifact_staging(self, staging: Path, marker: dict[str, Any]) -> Path:
         temporary = self._artifact_staging / (f".{staging.name}.{uuid.uuid4().hex}.staging.tmp")
-        temporary.mkdir(mode=_DIRECTORY_MODE)
-        temporary.chmod(_DIRECTORY_MODE)
+        temporary.mkdir(mode=_ARTIFACT_DIRECTORY_MODE)
+        temporary.chmod(_ARTIFACT_DIRECTORY_MODE)
         self._write_artifact_marker(temporary / _ARTIFACT_MARKER_NAME, marker)
         content = temporary / "content"
-        content.mkdir(mode=_DIRECTORY_MODE)
-        content.chmod(_DIRECTORY_MODE)
+        content.mkdir(mode=_ARTIFACT_DIRECTORY_MODE)
+        content.chmod(_ARTIFACT_DIRECTORY_MODE)
         self._fsync_directory(temporary)
         temporary.rename(staging)
         self._fsync_directory(self._artifact_staging)
@@ -563,65 +615,108 @@ class PosixRunWorkspace:
             raise RunWorkspaceConflict("Artifact source Run workspace is not prepared")
         self._validate_prepared_layout(workspace)
 
-    def _artifact_source(self, work: Path, source_path: str) -> Path:
-        current = work
-        for part in PurePosixPath(source_path).parts:
-            current = current / part
-            try:
-                info = current.lstat()
-            except FileNotFoundError as exc:
-                raise RunWorkspaceConflict("Artifact source path does not exist") from exc
-            if stat.S_ISLNK(info.st_mode):
-                raise UnsafeRunWorkspacePath("Artifact source path contains a symbolic link")
-        resolved = current.resolve(strict=True)
-        if not resolved.is_relative_to(work):
-            raise UnsafeRunWorkspacePath("Artifact source path escapes Run work directory")
-        info = current.lstat()
-        if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+    def _artifact_source(self, work: Path, source_path: str) -> _OpenArtifactSource:
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        work_descriptor = os.open(work, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+        current = work_descriptor
+        parts = PurePosixPath(source_path).parts
+        try:
+            for index, part in enumerate(parts):
+                flags = os.O_RDONLY | os.O_NONBLOCK | nofollow
+                if index < len(parts) - 1:
+                    flags |= os.O_DIRECTORY
+                try:
+                    following = os.open(part, flags, dir_fd=current)
+                except OSError as exc:
+                    if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+                        raise UnsafeRunWorkspacePath(
+                            "Artifact source path has a symlink or non-directory ancestor"
+                        ) from exc
+                    if exc.errno == errno.ENOENT:
+                        raise RunWorkspaceConflict("Artifact source path does not exist") from exc
+                    raise
+                os.close(current)
+                current = following
+                info = os.fstat(current)
+                if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+                    raise UnsafeRunWorkspacePath("Artifact source ancestor is not a directory")
+            info = os.fstat(current)
+            if stat.S_ISREG(info.st_mode):
+                return _OpenArtifactSource(current, False, parts[-1])
+            if stat.S_ISDIR(info.st_mode):
+                return _OpenArtifactSource(current, True, parts[-1])
             raise UnsafeRunWorkspacePath("Artifact source must be a regular file or directory")
-        return current
+        except BaseException:
+            os.close(current)
+            raise
 
-    def _copy_artifact_source(self, source: Path, content: Path) -> None:
-        for relative_path, source_file in self._source_files(source):
+    def _copy_artifact_source(self, source: _OpenArtifactSource, content: Path) -> None:
+        def copy(relative_path: Path, descriptor: int) -> None:
             target = content / relative_path
-            target.parent.mkdir(mode=_DIRECTORY_MODE, parents=True, exist_ok=True)
+            target.parent.mkdir(mode=_ARTIFACT_DIRECTORY_MODE, parents=True, exist_ok=True)
             for parent in (target.parent, *target.parents):
                 if parent == content.parent:
                     break
                 if parent.is_relative_to(content):
-                    parent.chmod(_DIRECTORY_MODE)
-            self._copy_regular_file(source_file, target)
+                    parent.chmod(_ARTIFACT_DIRECTORY_MODE)
+            self._copy_regular_file(descriptor, target)
 
-    def _source_files(self, source: Path) -> list[tuple[Path, Path]]:
-        info = source.lstat()
-        if stat.S_ISREG(info.st_mode):
-            return [(Path(source.name), source)]
-        if not stat.S_ISDIR(info.st_mode):
-            raise UnsafeRunWorkspacePath("Artifact source must be a regular file or directory")
-        files: list[tuple[Path, Path]] = []
-        for path in sorted(source.rglob("*"), key=lambda item: item.relative_to(source).as_posix()):
-            mode = path.lstat().st_mode
-            if stat.S_ISLNK(mode):
-                raise UnsafeRunWorkspacePath("Artifact source contains a symbolic link")
-            if stat.S_ISDIR(mode):
-                continue
-            if not stat.S_ISREG(mode):
-                raise UnsafeRunWorkspacePath(
-                    "Artifact source must contain only regular files and directories"
+        self._walk_source(source, copy)
+
+    def _walk_source(
+        self,
+        source: _OpenArtifactSource,
+        visitor: Callable[[Path, int], None],
+    ) -> None:
+        if not source.is_directory:
+            visitor(Path(source.name), source.descriptor)
+            return
+        self._walk_source_directory(source.descriptor, Path(), visitor)
+
+    def _walk_source_directory(
+        self,
+        directory_descriptor: int,
+        prefix: Path,
+        visitor: Callable[[Path, int], None],
+    ) -> None:
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        for name in sorted(os.listdir(directory_descriptor)):
+            try:
+                descriptor = os.open(
+                    name,
+                    os.O_RDONLY | os.O_NONBLOCK | nofollow,
+                    dir_fd=directory_descriptor,
                 )
-            files.append((path.relative_to(source), path))
-        return files
+            except OSError as exc:
+                if exc.errno == errno.ELOOP:
+                    raise UnsafeRunWorkspacePath(
+                        "Artifact source contains a symbolic link"
+                    ) from exc
+                raise
+            try:
+                info = os.fstat(descriptor)
+                relative_path = prefix / name
+                if stat.S_ISDIR(info.st_mode):
+                    self._walk_source_directory(descriptor, relative_path, visitor)
+                elif stat.S_ISREG(info.st_mode):
+                    visitor(relative_path, descriptor)
+                else:
+                    raise UnsafeRunWorkspacePath(
+                        "Artifact source must contain only regular files and directories"
+                    )
+            finally:
+                os.close(descriptor)
 
     @staticmethod
-    def _copy_regular_file(source: Path, target: Path) -> None:
-        source_descriptor = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    def _copy_regular_file(source_descriptor: int, target: Path) -> None:
+        os.lseek(source_descriptor, 0, os.SEEK_SET)
         target_descriptor = os.open(
             target,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
-            _LOG_MODE,
+            _ARTIFACT_FILE_MODE,
         )
         try:
-            os.fchmod(target_descriptor, _LOG_MODE)
+            os.fchmod(target_descriptor, _ARTIFACT_FILE_MODE)
             while chunk := os.read(source_descriptor, _HASH_CHUNK_BYTES):
                 view = memoryview(chunk)
                 while view:
@@ -629,7 +724,6 @@ class PosixRunWorkspace:
                     view = view[written:]
             os.fsync(target_descriptor)
         finally:
-            os.close(source_descriptor)
             os.close(target_descriptor)
 
     def _content_manifest(self, content: Path) -> tuple[ProjectVersionExportFile, ...]:
@@ -658,14 +752,14 @@ class PosixRunWorkspace:
     def _recover_installed_artifact(
         self,
         installed: Path,
-        source: Path,
+        source: _OpenArtifactSource,
         identity: RunWorkspaceIdentity,
         artifact_id: str,
         source_path: str,
     ) -> RunArtifactEvidence:
         self._validate_owned_path(
             installed,
-            expected_mode=_DIRECTORY_MODE,
+            expected_mode=_ARTIFACT_DIRECTORY_MODE,
             kind="directory",
             label="installed artifact",
         )
@@ -690,15 +784,17 @@ class PosixRunWorkspace:
                     evidence=installed_evidence,
                 ),
             )
+            return installed_evidence
         source_evidence = self._artifact_evidence_from_source(source)
         if source_evidence != installed_evidence:
             raise RunWorkspaceConflict("Artifact ID is already installed with different content")
         return installed_evidence
 
-    def _artifact_evidence_from_source(self, source: Path) -> RunArtifactEvidence:
+    def _artifact_evidence_from_source(self, source: _OpenArtifactSource) -> RunArtifactEvidence:
         entries: list[ProjectVersionExportFile] = []
-        for relative_path, source_file in self._source_files(source):
-            size, content_hash = self._hash_file(source_file)
+
+        def hash_entry(relative_path: Path, descriptor: int) -> None:
+            size, content_hash = self._hash_descriptor(descriptor)
             entries.append(
                 ProjectVersionExportFile(
                     path=relative_path.as_posix(),
@@ -706,10 +802,23 @@ class PosixRunWorkspace:
                     content_hash=content_hash,
                 )
             )
+
+        self._walk_source(source, hash_entry)
+        entries.sort(key=lambda entry: entry.path)
         return self._artifact_evidence(tuple(entries))
 
-    def _acquire_artifact_lock(self, artifact_id: str) -> int:
-        return self._acquire_lock(
+    @staticmethod
+    def _hash_descriptor(descriptor: int) -> tuple[int, str]:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        digest = hashlib.sha256()
+        size = 0
+        while chunk := os.read(descriptor, _HASH_CHUNK_BYTES):
+            digest.update(chunk)
+            size += len(chunk)
+        return size, digest.hexdigest()
+
+    async def _acquire_artifact_lock(self, artifact_id: str) -> int:
+        return await self._acquire_lock(
             self._artifact_locks / f"{artifact_id}.lock", "Artifact install lock"
         )
 
@@ -724,7 +833,7 @@ class PosixRunWorkspace:
         self._write_new_json_file(
             temporary,
             self._artifact_marker(identity, artifact_id, source_path, state="claimed"),
-            _MARKER_MODE,
+            _ARTIFACT_MARKER_MODE,
         )
         try:
             temporary.rename(path)
@@ -736,19 +845,26 @@ class PosixRunWorkspace:
     def _read_artifact_claim(self, path: Path) -> dict[str, Any]:
         self._validate_owned_path(
             path,
-            expected_mode=_MARKER_MODE,
+            expected_mode=_ARTIFACT_MARKER_MODE,
             kind="file",
             label="Artifact ownership claim",
         )
         return self._read_artifact_json(path)
 
     def _write_artifact_marker(self, path: Path, marker: dict[str, Any]) -> None:
-        self._write_marker(path, marker)
+        temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+        self._write_new_json_file(temporary, marker, _ARTIFACT_MARKER_MODE)
+        try:
+            temporary.replace(path)
+            self._fsync_directory(path.parent)
+        finally:
+            if os.path.lexists(temporary):
+                temporary.unlink()
 
     def _read_artifact_marker(self, path: Path) -> dict[str, Any]:
         self._validate_owned_path(
             path,
-            expected_mode=_MARKER_MODE,
+            expected_mode=_ARTIFACT_MARKER_MODE,
             kind="file",
             label="Artifact identity marker",
         )
@@ -823,20 +939,25 @@ class PosixRunWorkspace:
         if {key: marker.get(key) for key in expected} != expected:
             raise RunWorkspaceConflict("Artifact ownership identity differs")
 
-    def _acquire_run_lock(self, run_id: str) -> int:
-        return self._acquire_lock(self._locks / f"{run_id}.lock", "Run workspace lock")
+    async def _acquire_run_lock(self, run_id: str) -> int:
+        return await self._acquire_lock(self._locks / f"{run_id}.lock", "Run workspace lock")
 
-    def _acquire_lock(self, path: Path, label: str) -> int:
+    async def _acquire_lock(self, path: Path, label: str) -> int:
         import fcntl
 
         flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
         descriptor = os.open(path, flags, _LOCK_MODE)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    await asyncio.sleep(0.01)
             self._validate_descriptor(descriptor, expected_mode=_LOCK_MODE, label=label)
             return descriptor
         except BaseException:
-            os.close(descriptor)
+            self._release_run_lock(descriptor)
             raise
 
     @staticmethod

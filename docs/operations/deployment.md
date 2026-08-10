@@ -73,11 +73,11 @@ Project 负责；平台不会自动翻译 shell 语法。
 
 ### 共享存储
 
-API 负责准备 Run 目录并读取日志和 Artifact，计算节点负责实际执行。两侧必须看到
-同一绝对路径：
+Worker 负责准备 Run 目录、读取日志并安装 Artifact，计算节点负责实际执行。API、Worker
+与计算节点必须对 Run 执行目录看到同一绝对路径：
 
 ```text
-api writes Run directory
+worker writes Run directory
         |
         v
 shared filesystem
@@ -91,10 +91,16 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 `/var/lib/workspace107/storage`。Run 提交给 Slurm 时使用的是这个应用可见路径，因此真实
 接入时应把同一共享文件系统也挂载到各计算节点的 `/var/lib/workspace107/storage`，并验证：
 
-1. API 容器和计算节点都能以 `/var/lib/workspace107/storage` 访问同一份内容。
-2. API 容器 UID/GID `10001:10001` 与共享目录权限匹配。
-3. 只读 Input Binding 在目标文件系统和运行身份下确实不可修改。
-4. 日志与 Artifact 的并发写入、清理和失败恢复行为符合平台要求。
+1. API、Worker 和计算节点都能以 `/var/lib/workspace107/storage` 访问同一份 Run 内容。
+2. Worker 与计算任务必须使用不同 UID；计算 UID 只获得 Run `work/`、`logs/` 等执行路径
+   所需的最小访问权，不能访问 Worker 私有的 `artifact-store/`、claim、lock 或 staging
+   控制目录。当前 Artifact store 与控制目录按 `0700` 创建；Worker 与计算任务使用同一
+   UID 时，本部署验收必须失败，代码不能在同 UID 下声称 Artifact 不可变。
+3. Worker/计算 UID、共享 GID、ACL 和 mount mapping 必须在真实环境逐项核验。
+4. 只读 Input Binding 在目标文件系统和运行身份下确实不可修改。
+5. 日志与 Artifact 的并发写入、清理和失败恢复行为符合平台要求。
+6. 目标 Shared FS 实测支持本地候选依赖的同目录原子 rename 与跨进程 flock 语义；本地
+   `fsync` 通过不代表远端 Shared FS 已满足 durability，仍需 human gate。
 
 只修改 `WORKSPACE107_STORAGE_MOUNT` 不会改变容器内应用路径；如果计算节点不能提供上述
 固定路径，必须先调整部署映射和应用配置并完成端到端验证。
