@@ -108,6 +108,13 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 目标 107 使用该版本、路径或字段。Agent 不登录 SCOW、不调用 SSH、不挂载共享存储、
 不获取 JWT，也不提交或查询真实作业。以下步骤只能由获授权的人在新的受控窗口执行。
 
+> **Human gate BLOCKER（历史输入冲突）**：2026-06 培训 PDF 只能作为待核对的历史输入；
+> 它描述共享路径为 `/public` 与 `/home`、Slurm 25.11、REST 路径为
+> `/slurm/v0.0.41/*`，并使用 `Authorization: Bearer`。这些描述与当前仅供本地 fixture
+> 验证的 v0.0.40 profile、`X-SLURM-*` 认证 header 及现有 mount 假设明显冲突，不能直接
+> 写入默认配置或据此扩展 adapter。必须先调查成熟项目或官方 v0.0.41 契约，再由实际环境
+> 确认版本、path、认证和 mount mapping；在此之前不得启用 Slurm profile 或执行真实验收。
+
 #### 1. 提交前记录并再次确认
 
 先在脱敏记录中逐项写下“已确认/未确认”；任何一项未确认就停止，保持
@@ -161,8 +168,9 @@ evidence bundle 只保存版本、配置项名称、脱敏值、请求 correlati
 请求前的本地校验失败是明确 Rejected。poll 404 或未映射 state 是 `UNKNOWN`，上述情况都
 不能伪造成成功或确定的零匹配。
 
-在上述 human gate 产生 fresh evidence 前，真实 slurmrestd/Slurm、三方 mount、Native 环境和
-端到端 M1 证据均为 **INSUFFICIENT**。本地 fixture 通过只证明 adapter 候选的协议行为。
+在成熟项目或官方 v0.0.41 调查与实际环境确认完成、且上述 human gate 产生 fresh evidence
+前，真实 slurmrestd/Slurm、认证、三方 mount、Native 环境和端到端 M1 证据均为
+**INSUFFICIENT**。本地 v0.0.40 fixture 通过只证明 adapter 候选的协议行为。
 
 ## 探针和排障
 
