@@ -37,6 +37,15 @@ class RunWorkspace:
         return self.logs / "stderr.log"
 
 
+@dataclass(frozen=True, slots=True)
+class RunArtifactEvidence:
+    """一次不可变 Artifact 安装后的聚合内容证据。"""
+
+    size: int
+    file_count: int
+    content_hash: str
+
+
 class RunWorkspaceError(RuntimeError):
     """Run workspace 无法安全准备或恢复。"""
 
@@ -57,4 +66,14 @@ class RunWorkspacePort(Protocol):
         inputs: tuple[()] = (),
     ) -> RunWorkspace:
         """创建或恢复相同 identity 的 workspace；M1 只接受显式空 inputs。"""
+        ...
+
+    async def collect_artifact(
+        self,
+        identity: RunWorkspaceIdentity,
+        *,
+        artifact_id: str,
+        source_path: str,
+    ) -> RunArtifactEvidence:
+        """从 prepared Run work 目录原子安装不可变 Artifact。"""
         ...
