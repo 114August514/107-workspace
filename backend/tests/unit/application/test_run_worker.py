@@ -11,7 +11,11 @@ import pytest
 from workspace107.application.run_worker import RunWorker
 from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfiguration
 from workspace107.domain.enums import RunStatus
-from workspace107.domain.errors import SchedulerSubmissionRejected, SchedulerSubmissionUncertain
+from workspace107.domain.errors import (
+    SchedulerError,
+    SchedulerSubmissionRejected,
+    SchedulerSubmissionUncertain,
+)
 from workspace107.domain.execution import ExecutionIntent, PendingExecution
 from workspace107.domain.models import ArtifactCollectionRule, ProjectVersion, Run
 from workspace107.domain.ports.run_workspace import RunArtifactEvidence, RunWorkspace
@@ -147,11 +151,15 @@ class _Scheduler:
         *,
         submit_error: BaseException | None = None,
         poll_state: SchedulerJobState | None = None,
+        cancel_error: BaseException | None = None,
     ) -> None:
         self.correlation = correlation
         self.submit_error = submit_error
+        self.cancel_error = cancel_error
         self.poll_state = poll_state or SchedulerJobState(SchedulerState.PENDING)
         self.submissions = 0
+        self.polls = 0
+        self.cancellations = 0
 
     async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
         return self.correlation
@@ -163,10 +171,13 @@ class _Scheduler:
         return "job-new"
 
     async def poll(self, job_id: str) -> SchedulerJobState:
+        self.polls += 1
         return self.poll_state
 
     async def cancel(self, job_id: str) -> None:
-        return None
+        self.cancellations += 1
+        if self.cancel_error is not None:
+            raise self.cancel_error
 
 
 def _pending(
@@ -369,6 +380,82 @@ async def test_cancel_before_first_attempt_never_submits(tmp_path: Path) -> None
     )
     assert scheduler.submissions == 0
     assert ("cancel", "run_1") in store.calls
+
+
+@pytest.mark.asyncio
+async def test_cancel_error_still_polls_terminal_then_collects_and_finalizes(
+    tmp_path: Path,
+) -> None:
+    pending = _pending(cancel=True, job_id="job-1", artifact=True)
+    store = _Store(pending)
+    storage = _Storage(tmp_path)
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        cancel_error=SchedulerError("cancel rejected"),
+        poll_state=SchedulerJobState(
+            SchedulerState.COMPLETED,
+            exit_code=0,
+            started_at=NOW,
+            finished_at=NOW,
+        ),
+    )
+
+    await _run(
+        tmp_path,
+        pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        storage=storage,
+    )
+    assert scheduler.cancellations == 1
+    assert scheduler.polls == 1
+    assert any(call[0] == "uncertain" and call[1][0] == "cancel_uncertain" for call in store.calls)
+    assert ("poll", SchedulerState.COMPLETED) in store.calls
+    assert store.pending is not None
+
+    await _run(
+        tmp_path,
+        store.pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        storage=storage,
+    )
+    assert store.pending is None
+    assert storage.collect_calls == 1
+    assert any(call[0] == "finalize" for call in store.calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "state", [SchedulerState.PENDING, SchedulerState.RUNNING, SchedulerState.UNKNOWN]
+)
+async def test_cancel_error_with_nonterminal_or_unknown_state_retries_cancel_and_poll(
+    tmp_path: Path, state: SchedulerState
+) -> None:
+    pending = _pending(cancel=True, job_id="job-1")
+    store = _Store(pending)
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        cancel_error=SchedulerError("cancel rejected"),
+        poll_state=SchedulerJobState(state, reason="still authoritative"),
+    )
+
+    for _ in range(2):
+        assert store.pending is not None
+        await _run(
+            tmp_path,
+            store.pending,
+            scheduler.correlation,
+            scheduler=scheduler,
+            store=store,
+        )
+
+    assert scheduler.cancellations == 2
+    assert scheduler.polls == 2
+    assert store.pending is not None
+    assert [call[0] for call in store.calls].count("defer") == 2
 
 
 @pytest.mark.asyncio

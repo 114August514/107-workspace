@@ -68,50 +68,53 @@ class Settings(BaseSettings):
     worker_idle_seconds: float = 0.5
 
     @model_validator(mode="after")
-    def validate_slurm_contract(self) -> Self:
-        """Mock 仅限本地/测试；Slurm 必须显式确认完整外部契约。"""
+    def validate_common_settings(self) -> Self:
         if self.shared_gid is not None and self.shared_gid < 0:
             raise ValueError("WORKSPACE107_SHARED_GID must be non-negative")
+        return self
+
+    def ensure_worker_configuration(self) -> None:
+        """Fail before Worker acquires its lock or constructs scheduler adapters."""
         if self.scheduler == "mock":
             if self.env not in {"local", "test", "export"}:
                 raise ValueError("Mock scheduler is only allowed in local/test environments")
-            return self
-        if self.shared_gid is None:
-            raise ValueError("Slurm scheduler requires explicit WORKSPACE107_SHARED_GID")
-
-        required = {
-            "SLURM_API_BASE_URL": self.slurm_api_base_url,
-            "SLURM_API_USER": self.slurm_api_user,
-            "SLURM_JWT": self.slurm_jwt,
-            "SLURM_TARGET_CLUSTER_ID": self.slurm_target_cluster_id,
-            "SLURM_API_VERSION": self.slurm_api_version,
-            "SLURM_API_SCHEMA_PROFILE": self.slurm_api_schema_profile,
-            "SLURM_SUBMIT_PATH": self.slurm_submit_path,
-            "SLURM_JOB_PATH_TEMPLATE": self.slurm_job_path_template,
-            "SLURM_JOBS_PATH": self.slurm_jobs_path,
-            "SLURM_CANCEL_PATH_TEMPLATE": self.slurm_cancel_path_template,
-            "SLURM_CORRELATION_FIELD": self.slurm_correlation_field,
-            "SLURM_CORRELATION_QUERY_PARAMETER": self.slurm_correlation_query_parameter,
-        }
-        missing = [name for name, value in required.items() if not value.strip()]
-        if missing:
-            names = ", ".join(f"WORKSPACE107_{name}" for name in missing)
-            raise ValueError(f"Slurm scheduler requires explicit configuration: {names}")
-        if not self.slurm_correlation_query_complete:
-            raise ValueError(
-                "WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE must be true only after the "
-                "target cluster confirms permission and pagination completeness"
-            )
-        if self.slurm_correlation_max_bytes < 1:
-            raise ValueError("WORKSPACE107_SLURM_CORRELATION_MAX_BYTES must be positive")
-        if self.slurm_timeout_seconds <= 0:
-            raise ValueError("WORKSPACE107_SLURM_TIMEOUT_SECONDS must be positive")
-        if self.slurm_runtime_mode != "native":
-            raise ValueError(
-                "Apptainer runtime is not implemented or target-validated; use native only "
-                "after the human runtime gate"
-            )
-        return self
+        else:
+            if self.shared_gid is None:
+                raise ValueError("Slurm scheduler requires explicit WORKSPACE107_SHARED_GID")
+            required = {
+                "SLURM_API_BASE_URL": self.slurm_api_base_url,
+                "SLURM_API_USER": self.slurm_api_user,
+                "SLURM_JWT": self.slurm_jwt,
+                "SLURM_TARGET_CLUSTER_ID": self.slurm_target_cluster_id,
+                "SLURM_API_VERSION": self.slurm_api_version,
+                "SLURM_API_SCHEMA_PROFILE": self.slurm_api_schema_profile,
+                "SLURM_SUBMIT_PATH": self.slurm_submit_path,
+                "SLURM_JOB_PATH_TEMPLATE": self.slurm_job_path_template,
+                "SLURM_JOBS_PATH": self.slurm_jobs_path,
+                "SLURM_CANCEL_PATH_TEMPLATE": self.slurm_cancel_path_template,
+                "SLURM_CORRELATION_FIELD": self.slurm_correlation_field,
+                "SLURM_CORRELATION_QUERY_PARAMETER": self.slurm_correlation_query_parameter,
+            }
+            missing = [name for name, value in required.items() if not value.strip()]
+            if missing:
+                names = ", ".join(f"WORKSPACE107_{name}" for name in missing)
+                raise ValueError(f"Slurm scheduler requires explicit configuration: {names}")
+            if not self.slurm_correlation_query_complete:
+                raise ValueError(
+                    "WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE must be true only after the "
+                    "target cluster confirms permission and pagination completeness"
+                )
+            if self.slurm_correlation_max_bytes < 1:
+                raise ValueError("WORKSPACE107_SLURM_CORRELATION_MAX_BYTES must be positive")
+            if self.slurm_timeout_seconds <= 0:
+                raise ValueError("WORKSPACE107_SLURM_TIMEOUT_SECONDS must be positive")
+            if self.slurm_runtime_mode != "native":
+                raise ValueError(
+                    "Apptainer runtime is not implemented or target-validated; use native only "
+                    "after the human runtime gate"
+                )
+        if not self.database_url.startswith("postgresql+"):
+            raise ValueError("Independent Worker 必须使用 PostgreSQL 数据库")
 
     @property
     def resolved_shared_gid(self) -> int:
@@ -148,11 +151,6 @@ class Settings(BaseSettings):
         sqlite_file = self.sqlite_file
         if sqlite_file is not None:
             sqlite_file.parent.mkdir(parents=True, exist_ok=True)
-
-    def ensure_worker_database(self) -> None:
-        """Single-active Worker 的 session advisory lock 必须使用 PostgreSQL。"""
-        if not self.database_url.startswith("postgresql+"):
-            raise ValueError("Independent Worker 必须使用 PostgreSQL 数据库")
 
     def __str__(self) -> str:  # pragma: no cover - 仅用于日志
         return (

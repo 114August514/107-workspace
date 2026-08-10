@@ -8,7 +8,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-from pydantic import ValidationError
 
 from workspace107.config import Settings
 from workspace107.domain.compute import ResolvedSchedulerConfiguration
@@ -95,15 +94,17 @@ def _scheduler(
     )
 
 
-def test_slurm_settings_fail_fast_without_human_verified_contract() -> None:
-    with pytest.raises(ValidationError, match="SLURM_API_VERSION") as captured:
-        Settings(
-            scheduler="slurm",
-            slurm_api_base_url="https://slurm.invalid",
-            slurm_api_user="fixture-user",
-            slurm_jwt=JWT,
-            shared_gid=10001,
-        )
+def test_worker_slurm_settings_fail_fast_without_human_verified_contract() -> None:
+    settings = Settings(
+        scheduler="slurm",
+        slurm_api_base_url="https://slurm.invalid",
+        slurm_api_user="fixture-user",
+        slurm_jwt=JWT,
+        shared_gid=10001,
+    )
+
+    with pytest.raises(ValueError, match="SLURM_API_VERSION") as captured:
+        settings.ensure_worker_configuration()
 
     assert "SLURM_TARGET_CLUSTER_ID" in str(captured.value)
 
@@ -111,6 +112,7 @@ def test_slurm_settings_fail_fast_without_human_verified_contract() -> None:
 def test_slurm_settings_accept_only_explicit_verified_candidate_contract() -> None:
     settings = Settings(
         scheduler="slurm",
+        database_url="postgresql+asyncpg://fixture@db/workspace107",
         slurm_api_base_url="https://slurm.invalid",
         slurm_api_user="fixture-user",
         slurm_jwt=JWT,
@@ -128,6 +130,7 @@ def test_slurm_settings_accept_only_explicit_verified_candidate_contract() -> No
         slurm_correlation_max_bytes=128,
         slurm_runtime_mode="native",
     )
+    settings.ensure_worker_configuration()
 
     assert settings.slurm_api_version == "v0.0.40"
     assert JWT not in repr(settings)

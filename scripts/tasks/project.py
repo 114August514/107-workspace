@@ -12,6 +12,9 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -140,21 +143,69 @@ def compose(action: str) -> None:
     require_commands("docker")
     arguments: dict[str, list[str]] = {
         "build": ["build"],
-        "config": ["config"],
+        "config": ["config", "--format", "json"],
         "up": ["up", "--build"],
         "down": ["down"],
     }
-    run(
-        [
-            "docker",
-            "compose",
-            "--project-directory",
-            REPO_ROOT,
-            "--file",
-            COMPOSE_FILE,
-            *arguments[action],
-        ]
-    )
+    command = [
+        "docker",
+        "compose",
+        "--project-directory",
+        REPO_ROOT,
+        "--file",
+        COMPOSE_FILE,
+        *arguments[action],
+    ]
+    if action != "config":
+        run(command)
+        return
+    result = run(command, capture=True)
+    try:
+        rendered = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise TaskError("Docker Compose returned invalid JSON configuration") from error
+    _validate_compose_config(rendered)
+    print(result.stdout, end="")
+
+
+def _validate_compose_config(rendered: dict[str, Any]) -> None:
+    services = rendered.get("services", {})
+    api = services.get("api", {})
+    worker = services.get("worker", {})
+    if not api or not worker:
+        raise TaskError("Compose config must define separate api and worker services")
+
+    api_environment = api.get("environment", {})
+    forbidden_api = {
+        name
+        for name in api_environment
+        if name in {"WORKSPACE107_SCHEDULER", "WORKSPACE107_SHARED_GID"}
+        or name.startswith("WORKSPACE107_SLURM_")
+        or name.startswith("WORKSPACE107_WORKER_")
+    }
+    if forbidden_api:
+        raise TaskError(
+            "API service contains Worker-only configuration: " + ", ".join(sorted(forbidden_api))
+        )
+
+    worker_environment = worker.get("environment", {})
+    required_worker = {
+        "WORKSPACE107_SCHEDULER",
+        "WORKSPACE107_SHARED_GID",
+        "WORKSPACE107_SLURM_API_USER",
+        "WORKSPACE107_SLURM_JWT",
+        "WORKSPACE107_SLURM_API_SCHEMA_PROFILE",
+    }
+    missing_worker = sorted(required_worker - set(worker_environment))
+    if missing_worker:
+        raise TaskError("Worker service is missing configuration: " + ", ".join(missing_worker))
+
+    dependencies = worker.get("depends_on", {})
+    if "db" not in dependencies or "api" in dependencies:
+        raise TaskError("Worker must depend on PostgreSQL directly, not API health")
+    health_command = json.dumps(worker.get("healthcheck", {}).get("test", []))
+    if "8000" in health_command or "workspace107.worker" not in health_command:
+        raise TaskError("Worker healthcheck must probe the Worker process, not API port 8000")
 
 
 def install_hooks() -> None:
@@ -247,6 +298,42 @@ def _stop_processes(processes: list[subprocess.Popen[str]]) -> None:
             process.wait(timeout=5)
 
 
+@contextmanager
+def _temporary_smoke_database(admin_url: str) -> Iterator[str]:
+    name = f"workspace107_smoke_{uuid.uuid4().hex}"
+    environment = merged_environment(
+        {
+            "WORKSPACE107_SMOKE_ADMIN_DATABASE_URL": admin_url,
+            "WORKSPACE107_SMOKE_DATABASE_NAME": name,
+        }
+    )
+    created = backend_uv(
+        "run",
+        "python",
+        "-m",
+        "workspace107.tools.smoke_database",
+        "create",
+        env=environment,
+        capture=True,
+        quiet=True,
+    ).stdout.strip()
+    try:
+        if not created.startswith("postgresql+"):
+            raise TaskError("Smoke database helper did not return a PostgreSQL URL")
+        yield created
+    finally:
+        backend_uv(
+            "run",
+            "python",
+            "-m",
+            "workspace107.tools.smoke_database",
+            "drop",
+            env=environment,
+            capture=True,
+            quiet=True,
+        )
+
+
 def demo(*, smoke: bool = False) -> None:
     heading("Isolated core run smoke" if smoke else "Core run demo")
     ensure_backend_dependencies(quiet=True)
@@ -259,14 +346,17 @@ def demo(*, smoke: bool = False) -> None:
             "Independent Worker smoke requires WORKSPACE107_DATABASE_URL pointing to PostgreSQL"
         )
 
-    with tempfile.TemporaryDirectory(prefix="workspace107-demo-") as directory:
+    with (
+        tempfile.TemporaryDirectory(prefix="workspace107-demo-") as directory,
+        _temporary_smoke_database(database_url) as isolated_database_url,
+    ):
         workdir = Path(directory)
         server_log = workdir / "uvicorn.log"
         worker_log = workdir / "worker.log"
         environment = merged_environment(
             {
                 "WORKSPACE107_ENV": "local",
-                "WORKSPACE107_DATABASE_URL": database_url,
+                "WORKSPACE107_DATABASE_URL": isolated_database_url,
                 "WORKSPACE107_STORAGE_ROOT": str(workdir / "storage"),
                 "WORKSPACE107_SCHEDULER": "mock",
             }

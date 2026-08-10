@@ -71,7 +71,6 @@ class RunWorker:
                     await self._store.record_uncertain(
                         run.id, "cancel_uncertain", _safe_detail(exc)
                     )
-                    return
             try:
                 state = await self._scheduler.poll(run.scheduler_job_id)
             except SchedulerError as exc:

@@ -50,7 +50,7 @@ def build_scheduler(settings: Settings) -> SchedulerPort:
 
 
 async def run(settings: Settings) -> None:
-    settings.ensure_worker_database()
+    settings.ensure_worker_configuration()
     settings.ensure_local_directories()
     configure_logging(settings.log_level, json_output=settings.use_json_logs)
     engine = create_engine(settings)

@@ -17,7 +17,8 @@ if [ "${WORKSPACE107_SKIP_BOOTSTRAP:-false}" != "true" ]; then
   fi
 fi
 
-if [ "${WORKSPACE107_SCHEDULER:-mock}" = "mock" ]; then
+if [ "$1" = "python" ] && [ "${2:-}" = "-m" ] && [ "${3:-}" = "workspace107.worker" ] \
+  && [ "${WORKSPACE107_SCHEDULER:-mock}" = "mock" ]; then
   echo "!!  当前使用 mock 调度器：用户作业会在本容器内以子进程执行。"
   echo "!!  仅用于演示和内部试用，对外提供服务必须切换到 slurm。"
 fi

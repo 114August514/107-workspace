@@ -10,9 +10,9 @@ import os
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
 
 from workspace107.config import Settings
+from workspace107.main import create_app
 
 
 def test_initial_setup_creates_storage_and_database_directories(tmp_path: Path) -> None:
@@ -67,8 +67,13 @@ def test_local_mock_uses_current_gid_when_not_explicit() -> None:
     assert Settings().resolved_shared_gid == os.getegid()
 
 
-def test_production_mock_and_slurm_without_gid_fail_fast() -> None:
-    with pytest.raises(ValidationError, match="Mock scheduler is only allowed"):
-        Settings(env="production", scheduler="mock")
-    with pytest.raises(ValidationError, match="WORKSPACE107_SHARED_GID"):
-        Settings(scheduler="slurm")
+def test_api_accepts_worker_only_slurm_configuration_as_unresolved() -> None:
+    settings = Settings(env="production", scheduler="slurm")
+    assert create_app(settings).title == "107 Workspace API"
+
+
+def test_worker_configuration_fails_fast_for_mock_production_and_incomplete_slurm() -> None:
+    with pytest.raises(ValueError, match="Mock scheduler is only allowed"):
+        Settings(env="production", scheduler="mock").ensure_worker_configuration()
+    with pytest.raises(ValueError, match="WORKSPACE107_SHARED_GID"):
+        Settings(scheduler="slurm").ensure_worker_configuration()
