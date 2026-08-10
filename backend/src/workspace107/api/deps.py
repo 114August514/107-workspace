@@ -112,7 +112,6 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             guard,
             context.clock,
             context.storage,
-            context.project_content,
             context.scheduler,
             vault,
             activity,

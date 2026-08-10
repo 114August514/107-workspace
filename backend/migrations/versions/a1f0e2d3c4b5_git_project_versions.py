@@ -1,8 +1,7 @@
 """Project Version clean cutover 到完整 Git commit OID。
 
-旧 project_files / project_version_files 只描述 blob manifest，无法证明真实 Git
-repository 与 commit identity。本迁移明确删除可重建的开发版本数据，不做 fallback；
-部署前若发现必须保留的数据，应停止升级并另行设计一次性导入。
+旧 blob manifest 无法证明真实 Git repository 与 commit identity。升级只允许空开发
+状态；发现任一 Project graph 数据时必须成对重建数据库与 storage，避免留下悬空状态。
 
 Revision ID: a1f0e2d3c4b5
 Revises: b48640074b91
@@ -22,12 +21,48 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+_PROJECT_GRAPH_TABLES = (
+    "projects",
+    "project_versions",
+    "project_files",
+    "project_version_files",
+    "run_configurations",
+    "run_snapshots",
+    "runs",
+    "run_events",
+    "artifacts",
+    "fork_relations",
+)
+
+
+def _require_empty_project_graph(direction: str) -> None:
+    connection = op.get_bind()
+    existing = set(sa.inspect(connection).get_table_names())
+    populated = [
+        table
+        for table in _PROJECT_GRAPH_TABLES
+        if table in existing
+        and connection.execute(sa.text(f'SELECT 1 FROM "{table}" LIMIT 1')).first() is not None
+    ]
+    if populated:
+        names = ", ".join(populated)
+        raise RuntimeError(
+            f"Project Git clean cutover {direction} refused: populated tables: {names}. "
+            "Rebuild the database and project storage together."
+        )
+
+
 def upgrade() -> None:
+    _require_empty_project_graph("upgrade")
     op.drop_table("project_version_files")
     op.drop_table("project_files")
 
-    # 旧版本没有可验证的 Git commit identity，不能伪造 OID 或保留不可读取的记录。
-    op.execute(sa.text("DELETE FROM project_versions"))
+    with op.batch_alter_table("projects", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("repository_identity", sa.String(length=64), nullable=False))
+        batch_op.create_unique_constraint(
+            "uq_projects_repository_identity", ["repository_identity"]
+        )
+
     with op.batch_alter_table("project_versions", schema=None) as batch_op:
         batch_op.add_column(sa.Column("commit_oid", sa.String(length=64), nullable=False))
         batch_op.add_column(sa.Column("file_count", sa.Integer(), nullable=False))
@@ -39,13 +74,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # downgrade 恢复旧 schema，不可能从 commit OID 无损重建已删除的旧 blob manifest。
+    _require_empty_project_graph("downgrade")
     with op.batch_alter_table("project_versions", schema=None) as batch_op:
         batch_op.drop_constraint("uq_version_commit_oid", type_="unique")
         batch_op.drop_constraint("ck_version_commit_oid_length", type_="check")
         batch_op.drop_column("total_size")
         batch_op.drop_column("file_count")
         batch_op.drop_column("commit_oid")
+
+    with op.batch_alter_table("projects", schema=None) as batch_op:
+        batch_op.drop_constraint("uq_projects_repository_identity", type_="unique")
+        batch_op.drop_column("repository_identity")
 
     op.create_table(
         "project_files",

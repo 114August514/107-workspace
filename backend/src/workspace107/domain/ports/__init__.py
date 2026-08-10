@@ -14,12 +14,20 @@ from .scheduler import (
 )
 from .secret_vault import SecretVault
 from .storage import ArtifactContent, RunPaths, StoragePort
+from .version_control import (
+    ProjectVersionExporter,
+    ProjectVersionExportEvidence,
+    ProjectVersionExportFile,
+)
 
 __all__ = [
     "ArtifactContent",
     "Clock",
     "CommitManifest",
     "ProjectContentPort",
+    "ProjectVersionExportEvidence",
+    "ProjectVersionExportFile",
+    "ProjectVersionExporter",
     "RunPaths",
     "SchedulerJobState",
     "SchedulerPort",

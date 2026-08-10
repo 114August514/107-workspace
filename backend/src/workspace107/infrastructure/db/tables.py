@@ -111,6 +111,7 @@ class ProjectRow(Base):
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     name: Mapped[str] = mapped_column(String(128))
+    repository_identity: Mapped[str] = mapped_column(String(64), unique=True)
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32))
     environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)

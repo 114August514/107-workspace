@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import re
 from collections.abc import AsyncIterator
@@ -16,6 +15,7 @@ from workspace107.api.deps import AppContext
 from workspace107.config import Settings
 from workspace107.infrastructure.db import tables as t
 from workspace107.infrastructure.db.tables import Base
+from workspace107.infrastructure.project_version_exporter import GitProjectVersionExporter
 from workspace107.main import build_context, create_app
 from workspace107.tools.seed import seed_catalog
 
@@ -51,7 +51,7 @@ async def git_api(tmp_path: Path) -> AsyncIterator[tuple[httpx.AsyncClient, AppC
     await context.engine.dispose()
 
 
-async def test_req_m1_a_project_api_version_restore_fork_and_run_use_exact_commit(
+async def test_req_m1_a_project_api_version_restore_fork_and_export_exact_commit(
     git_api: tuple[httpx.AsyncClient, AppContext], tmp_path: Path
 ) -> None:
     client, context = git_api
@@ -133,43 +133,13 @@ async def test_req_m1_a_project_api_version_restore_fork_and_run_use_exact_commi
 
     export = tmp_path / "caller-export"
     export.mkdir()
-    await context.project_content.export_commit(project["id"], v1_oid, export)
+    exporter = GitProjectVersionExporter(context.session_factory, context.project_content)
+    evidence = await exporter.export(
+        project_version_id=v1["id"],
+        expected_commit_oid=v1_oid,
+        target=export,
+    )
+    assert evidence.commit_oid == v1_oid
+    assert FULL_OID.fullmatch(evidence.tree_oid)
+    assert [entry.path for entry in evidence.manifest] == ["main.py"]
     assert (export / "main.py").read_bytes() == b"print('v1')\n"
-
-    await client.patch(
-        f"/api/v1/workspaces/{workspace_id}",
-        json={"default_environment_version_id": "ev_python_312"},
-    )
-    configuration = (
-        await client.post(
-            f"/api/v1/projects/{project['id']}/run-configurations",
-            json={
-                "name": "exact version",
-                "command": "python main.py",
-                "compute_plan_id": "plan_cpu_quick",
-            },
-        )
-    ).json()
-    await client.put(
-        f"/api/v1/projects/{project['id']}/files",
-        json={"path": "main.py", "content": "raise RuntimeError('working state')\n"},
-    )
-    run_response = await client.post(
-        f"/api/v1/projects/{project['id']}/runs",
-        json={
-            "run_configuration_id": configuration["id"],
-            "project_version_id": v1["id"],
-        },
-    )
-    assert run_response.status_code == 201, run_response.text
-    run = run_response.json()
-    run_file = context.settings.storage_root / "runs" / run["id"] / "work" / "main.py"
-    assert run_file.read_bytes() == b"print('v1')\n"
-
-    for _ in range(20):
-        await asyncio.sleep(0.05)
-        await client.post("/api/v1/runs/sync")
-        detail = (await client.get(f"/api/v1/runs/{run['id']}")).json()
-        if detail["run"]["status"] in {"succeeded", "failed", "submit_failed"}:
-            break
-    assert detail["run"]["status"] == "succeeded"

@@ -17,6 +17,7 @@ from ..domain.errors import (
     ConflictError,
     ObjectNotFound,
     ProjectContentIdentityMismatch,
+    ProjectContentMissing,
     ValidationFailed,
 )
 from ..domain.models import (
@@ -112,12 +113,13 @@ class ProjectService:
             id=ids.new_id(ids.PROJECT),
             workspace_id=workspace_id,
             name=name,
+            repository_identity=ids.new_id(ids.PROJECT_REPOSITORY),
             description=description,
             created_by=user_id,
             created_at=now,
             updated_at=now,
         )
-        await self._content.initialize_project(project.id)
+        await self._content.initialize_project(project.id, project.repository_identity)
         await self._repos.projects.add(project)
         await self._activity.record(
             actor_id=user_id,
@@ -191,12 +193,16 @@ class ProjectService:
     # -- 文件 -----------------------------------------------------------
 
     async def list_files(self, user_id: str, project_id: str) -> list[ProjectFile]:
-        await self._guard.project(user_id, project_id)
-        return await self._content.list_working_files(project_id)
+        access = await self._guard.project(user_id, project_id)
+        return await self._content.list_working_files(
+            project_id, access.project.repository_identity
+        )
 
     async def read_file(self, user_id: str, project_id: str, path: str) -> bytes:
-        await self._guard.project(user_id, project_id)
-        return await self._content.read_working_file(project_id, normalize_path(path))
+        access = await self._guard.project(user_id, project_id)
+        return await self._content.read_working_file(
+            project_id, access.project.repository_identity, normalize_path(path)
+        )
 
     async def write_file(
         self, user_id: str, project_id: str, path: str, content: bytes
@@ -213,7 +219,11 @@ class ProjectService:
             )
 
         record = await self._content.write_working_file(
-            project_id, normalized, content, self._clock.now()
+            project_id,
+            access.project.repository_identity,
+            normalized,
+            content,
+            self._clock.now(),
         )
         await self._touch(access.project)
         return record
@@ -222,7 +232,9 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
-        removed = await self._content.delete_working_path(project_id, normalize_path(path))
+        removed = await self._content.delete_working_path(
+            project_id, access.project.repository_identity, normalize_path(path)
+        )
         await self._touch(access.project)
         return removed
 
@@ -238,7 +250,13 @@ class ProjectService:
             raise ValidationFailed("源路径和目标路径相同")
         if dst.startswith(src + "/"):
             raise ValidationFailed("不能把目录移动到自己的子目录中")
-        moved = await self._content.move_working_path(project_id, src, dst, self._clock.now())
+        moved = await self._content.move_working_path(
+            project_id,
+            access.project.repository_identity,
+            src,
+            dst,
+            self._clock.now(),
+        )
         await self._touch(access.project)
         return moved
 
@@ -248,10 +266,7 @@ class ProjectService:
         self, user_id: str, project_id: str, page: PageRequest
     ) -> Page[ProjectVersion]:
         await self._guard.project(user_id, project_id)
-        versions = await self._repos.project_versions.list_for_project(project_id, page)
-        for version in versions.items:
-            await self._verified_manifest(version)
-        return versions
+        return await self._repos.project_versions.list_for_project(project_id, page)
 
     async def get_version(self, user_id: str, version_id: str) -> ProjectVersion:
         version = await self._repos.project_versions.get(version_id)
@@ -270,10 +285,12 @@ class ProjectService:
 
     async def working_changes(self, user_id: str, project_id: str) -> list[WorkingTreeChange]:
         """查看当前 Working State 与最近保存 commit 的差异。"""
-        await self._guard.project(user_id, project_id)
+        access = await self._guard.project(user_id, project_id)
         latest = await self._repos.project_versions.latest(project_id)
         changes = await self._content.working_changes(
-            project_id, latest.commit_oid if latest is not None else None
+            project_id,
+            access.project.repository_identity,
+            latest.commit_oid if latest is not None else None,
         )
         return [WorkingTreeChange(path=path, change=change) for path, change in changes]
 
@@ -284,15 +301,18 @@ class ProjectService:
         latest = await self._repos.project_versions.latest(project_id)
         created_at = self._clock.now()
         resolved_message = message.strip() or "保存版本"
+        version_id = ids.new_id(ids.PROJECT_VERSION)
         manifest = await self._content.commit_working(
             project_id,
+            access.project.repository_identity,
+            version_id=version_id,
             parent_commit_oid=latest.commit_oid if latest is not None else None,
             message=resolved_message,
             created_by=user_id,
             created_at=created_at,
         )
         version = ProjectVersion(
-            id=ids.new_id(ids.PROJECT_VERSION),
+            id=version_id,
             project_id=project_id,
             sequence=await self._repos.project_versions.next_sequence(project_id),
             message=resolved_message,
@@ -323,8 +343,14 @@ class ProjectService:
         target = await self.get_version(user_id, target_version_id)
         if base.project_id != target.project_id:
             raise ValidationFailed("只能比较同一个 Project 的两个版本")
+        project = await self._repos.projects.get(base.project_id)
+        if project is None:
+            raise ObjectNotFound("Project", base.project_id)
         changes = await self._content.diff_commits(
-            base.project_id, base.commit_oid, target.commit_oid
+            base.project_id,
+            project.repository_identity,
+            base.commit_oid,
+            target.commit_oid,
         )
         return [VersionDiffEntry(path=path, change=change) for path, change in changes]
 
@@ -334,7 +360,10 @@ class ProjectService:
             user_id, version.project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
         restored = await self._content.restore_working(
-            version.project_id, version.commit_oid, self._clock.now()
+            version.project_id,
+            access.project.repository_identity,
+            version.commit_oid,
+            self._clock.now(),
         )
         await self._touch(access.project)
         await self._activity.record(
@@ -350,8 +379,14 @@ class ProjectService:
 
     async def read_version_file(self, user_id: str, version_id: str, path: str) -> bytes:
         version = await self.get_version(user_id, version_id)
+        project = await self._repos.projects.get(version.project_id)
+        if project is None:
+            raise ObjectNotFound("Project Version", version_id)
         return await self._content.read_commit_file(
-            version.project_id, version.commit_oid, normalize_path(path)
+            version.project_id,
+            project.repository_identity,
+            version.commit_oid,
+            normalize_path(path),
         )
 
     # -- 内部 -----------------------------------------------------------
@@ -404,6 +439,7 @@ class ProjectService:
             id=ids.new_id(ids.PROJECT),
             workspace_id=target_workspace_id,
             name=name,
+            repository_identity=ids.new_id(ids.PROJECT_REPOSITORY),
             description=description or source_access.project.description,
             # 环境选择作为可复用引用跟着复制（GR-503）。目标空间不一定能用，
             # 创建 Run 时仍需按目标 Workspace 的资格重新校验（GR-401）。
@@ -413,10 +449,14 @@ class ProjectService:
             updated_at=now,
         )
         fork_message = f"Fork 自 {source_access.project.name} 的 {source_version.label}"
+        version_id = ids.new_id(ids.PROJECT_VERSION)
         manifest = await self._content.fork_commit(
             source_version.project_id,
+            source_access.project.repository_identity,
             source_version.commit_oid,
             project.id,
+            project.repository_identity,
+            version_id=version_id,
             message=fork_message,
             created_by=user_id,
             created_at=now,
@@ -424,7 +464,7 @@ class ProjectService:
         await self._repos.projects.add(project)
         await self._repos.project_versions.add(
             ProjectVersion(
-                id=ids.new_id(ids.PROJECT_VERSION),
+                id=version_id,
                 project_id=project.id,
                 sequence=1,
                 message=fork_message,
@@ -493,7 +533,12 @@ class ProjectService:
         return await self._repos.fork_relations.get_for_project(project_id)
 
     async def _verified_manifest(self, version: ProjectVersion) -> CommitManifest:
-        manifest = await self._content.manifest(version.project_id, version.commit_oid)
+        project = await self._repos.projects.get(version.project_id)
+        if project is None:
+            raise ProjectContentMissing(f"Project {version.project_id} 不存在")
+        manifest = await self._content.manifest(
+            version.project_id, project.repository_identity, version.commit_oid
+        )
         if manifest.file_count != version.file_count or manifest.total_size != version.total_size:
             raise ProjectContentIdentityMismatch(
                 f"Project Version {version.id} 的 Git manifest 与持久化 identity 不一致"

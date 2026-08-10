@@ -122,6 +122,7 @@ class Project:
     id: str
     workspace_id: str
     name: str
+    repository_identity: str
     description: str = ""
     status: ProjectStatus = ProjectStatus.ACTIVE
     environment_version_id: str | None = None

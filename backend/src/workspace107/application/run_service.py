@@ -33,8 +33,6 @@ from ..domain.errors import (
     ConflictError,
     ObjectNotFound,
     PreflightRejected,
-    ProjectContentIdentityMismatch,
-    ProjectContentMissing,
     SchedulerError,
     ValidationFailed,
 )
@@ -50,7 +48,6 @@ from ..domain.models import (
 )
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
-from ..domain.ports.project_content import ProjectContentPort
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.secret_vault import SecretVault
@@ -121,7 +118,6 @@ class RunService:
         guard: AccessGuard,
         clock: Clock,
         storage: StoragePort,
-        content: ProjectContentPort,
         scheduler: SchedulerPort,
         secrets: SecretVault,
         activity: ActivityRecorder,
@@ -131,7 +127,6 @@ class RunService:
         self._guard = guard
         self._clock = clock
         self._storage = storage
-        self._content = content
         self._scheduler = scheduler
         self._secrets = secrets
         self._activity = activity
@@ -370,7 +365,7 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, result.project_version, access.workspace.id)
+        await self._submit(run, snapshot, access.workspace.id)
         await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
         return RunSubmission(run=run, created=True)
 
@@ -456,7 +451,7 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, project_version, access.workspace.id)
+        await self._submit(run, snapshot, access.workspace.id)
         await self._record_run_activity(
             user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
         )
@@ -482,15 +477,12 @@ class RunService:
 
     # -- 内部 -----------------------------------------------------------
 
-    async def _submit(
-        self, run: Run, snapshot: RunSnapshot, version: ProjectVersion, workspace_id: str
-    ) -> None:
+    async def _submit(self, run: Run, snapshot: RunSnapshot, workspace_id: str) -> None:
         try:
             paths = await self._storage.prepare_run_directory(
                 run.id,
                 inputs=[(b.access_path, b.source_id) for b in snapshot.input_bindings],
             )
-            await self._content.export_commit(version.project_id, version.commit_oid, paths.work)
             environment = dict(snapshot.env_literals)
             # 输入内容在执行环境中的根目录。Input Binding 的 access_path 是
             # 相对于它的绝对路径，例如 /inputs/train -> $WORKSPACE107_INPUTS_DIR/inputs/train。
@@ -526,8 +518,6 @@ class RunService:
             SchedulerError,
             OSError,
             ValidationFailed,
-            ProjectContentMissing,
-            ProjectContentIdentityMismatch,
         ) as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
