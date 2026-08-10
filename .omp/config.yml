@@ -15,3 +15,6 @@ autolearn:
 task:
   isolation:
     mode: none
+
+github:
+  enabled: false
