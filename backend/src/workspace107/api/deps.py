@@ -28,6 +28,7 @@ from ..domain.models import User
 from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.notification import NotificationPublisher
+from ..domain.ports.project_content import ProjectContentPort
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.scheduler import SchedulerPort
 from ..domain.ports.secret_vault import SecretVault
@@ -48,6 +49,7 @@ class AppContext:
     engine: AsyncEngine
     session_factory: async_sessionmaker[AsyncSession]
     storage: StoragePort
+    project_content: ProjectContentPort
     scheduler: SchedulerPort
     clock: Clock
 
@@ -100,7 +102,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             repos,
             guard,
             context.clock,
-            context.storage,
+            context.project_content,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
         ),
@@ -110,6 +112,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             guard,
             context.clock,
             context.storage,
+            context.project_content,
             context.scheduler,
             vault,
             activity,

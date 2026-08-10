@@ -5,6 +5,7 @@ application 层只依赖这里定义的协议，具体实现在 infrastructure �
 """
 
 from .clock import Clock
+from .project_content import CommitManifest, ProjectContentPort
 from .scheduler import (
     SchedulerJobState,
     SchedulerPort,
@@ -17,6 +18,8 @@ from .storage import ArtifactContent, RunPaths, StoragePort
 __all__ = [
     "ArtifactContent",
     "Clock",
+    "CommitManifest",
+    "ProjectContentPort",
     "RunPaths",
     "SchedulerJobState",
     "SchedulerPort",

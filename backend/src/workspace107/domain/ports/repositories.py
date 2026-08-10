@@ -22,7 +22,6 @@ from ..models import (
     Membership,
     Notification,
     Project,
-    ProjectFile,
     ProjectVersion,
     Run,
     RunConfiguration,
@@ -81,16 +80,6 @@ class ProjectRepository(Protocol):
         ...
 
     async def name_exists(self, workspace_id: str, name: str) -> bool: ...
-
-
-class ProjectFileRepository(Protocol):
-    async def list_for_project(self, project_id: str) -> list[ProjectFile]: ...
-    async def get(self, project_id: str, path: str) -> ProjectFile | None: ...
-    async def upsert(self, file: ProjectFile) -> None: ...
-    async def delete(self, project_id: str, path: str) -> None: ...
-    async def delete_under(self, project_id: str, prefix: str) -> int:
-        """删除某个目录前缀下的全部文件，返回删除数量。"""
-        ...
 
 
 class ProjectVersionRepository(Protocol):
@@ -231,7 +220,6 @@ class Repositories(Protocol):
     memberships: MembershipRepository
     variables: VariableRepository
     projects: ProjectRepository
-    project_files: ProjectFileRepository
     project_versions: ProjectVersionRepository
     environments: EnvironmentRepository
     compute_plans: ComputePlanRepository

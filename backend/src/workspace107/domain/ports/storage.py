@@ -1,10 +1,7 @@
-"""存储端口。
+"""Run workspace、日志与 Artifact 存储端口。
 
-Project 文件、Run 工作目录、日志和 Artifact 的内容都在存储层，
-数据库只保存元数据和内容摘要。
-
-内容按摘要寻址（content-addressed），因此保存同一份内容的多个 Project
-Version 不会重复占用空间，而且 ProjectVersion 的不可变性天然成立。
+Project Working State 与 Version 由独立的 ProjectContentPort / Git repository 拥有；
+StoragePort 不再承载 Project blob 或 version manifest。
 """
 
 from __future__ import annotations
@@ -54,16 +51,6 @@ class ArtifactEntry:
 
 
 class StoragePort(Protocol):
-    # -- 内容寻址存储 ---------------------------------------------------
-
-    async def write_blob(self, data: bytes) -> str:
-        """写入内容，返回内容摘要。"""
-        ...
-
-    async def read_blob(self, content_hash: str) -> bytes: ...
-
-    async def blob_exists(self, content_hash: str) -> bool: ...
-
     # -- Run 工作目录 ---------------------------------------------------
 
     def run_paths(self, run_id: str) -> RunPaths: ...
@@ -72,14 +59,9 @@ class StoragePort(Protocol):
         self,
         run_id: str,
         *,
-        files: list[tuple[str, str]],
         inputs: list[tuple[str, str]],
     ) -> RunPaths:
-        """准备 Run 工作目录。
-
-        ``files``  是 ``(相对路径, 内容摘要)``，来自 Project Version。
-        ``inputs`` 是 ``(访问路径, Artifact ID)``，内容以只读方式放置。
-        """
+        """准备空的 Run 工作目录并物化确定的 Artifact 输入。"""
         ...
 
     async def read_log(self, run_id: str, stream: LogStream, *, max_bytes: int) -> tuple[str, bool]:

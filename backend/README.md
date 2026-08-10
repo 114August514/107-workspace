@@ -15,12 +15,12 @@ src/workspace107/
 │   ├── run_snapshot.py   不可变执行事实（GR-202）
 │   ├── secrets.py        环境变量表达式与 Secret 引用（GR-304）
 │   ├── compute.py        算力方案、请求与调度解析
-│   └── ports/            Scheduler / Storage / SecretVault / Repositories / Clock
+│   └── ports/            ProjectContent / Scheduler / Storage / Repositories 等端口
 ├── application/      用例编排、权限校验、事务边界
 │   ├── access.py         AccessGuard（GR-101 / GR-102 / GR-103）
 │   ├── run_service.py    提交前检查、创建 Run、重跑、取消
 │   └── run_lifecycle.py  调度状态同步与 Artifact 收集
-├── infrastructure/   端口实现：SQLAlchemy 仓储、本地存储、Mock/Slurm 调度
+├── infrastructure/   系统 Git CLI、SQLAlchemy、本地 Run/Artifact、Scheduler 适配器
 ├── api/              路由与 schema，不写业务规则
 ├── tools/            OpenAPI 导出、种子数据
 └── main.py           唯一的装配点
@@ -78,7 +78,7 @@ cp ../.env.example .env
 | 变量 | 说明 |
 | :--- | :--- |
 | `WORKSPACE107_DATABASE_URL` | 默认 SQLite；部署时改 PostgreSQL |
-| `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
+| `WORKSPACE107_STORAGE_ROOT` | Project Git repositories、Run 目录、日志和 Artifact 的根目录 |
 | `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
 | `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
 | `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |

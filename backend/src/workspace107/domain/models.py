@@ -134,10 +134,7 @@ class Project:
 
 @dataclass(slots=True)
 class ProjectFile:
-    """Project Working Tree 中的一个文件。
-
-    内容存放在存储层，这里只保存元数据和内容摘要。
-    """
+    """真实 Git working tree 中当前文件的可观察内容事实。"""
 
     project_id: str
     path: str
@@ -148,7 +145,7 @@ class ProjectFile:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVersionFile:
-    """Project Version 中的一个文件条目。不可变。"""
+    """由 Project Version commit tree 派生的不可变文件条目。"""
 
     path: str
     size: int
@@ -157,17 +154,16 @@ class ProjectVersionFile:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVersion:
-    """Project 在确定时刻保存的不可变内容版本。
-
-    被归档或源 Project 后续变化，都不改变已有版本的内容。
-    """
+    """Project 的不可变版本身份；完整 commit OID 是内容事实。"""
 
     id: str
     project_id: str
     sequence: int
     """在该 Project 内自增，用于展示为 v1、v2……"""
     message: str
-    files: tuple[ProjectVersionFile, ...]
+    commit_oid: str
+    file_count: int
+    total_size: int
     created_by: str
     created_at: datetime
 
@@ -175,9 +171,13 @@ class ProjectVersion:
     def label(self) -> str:
         return f"v{self.sequence}"
 
-    @property
-    def total_size(self) -> int:
-        return sum(f.size for f in self.files)
+
+@dataclass(frozen=True, slots=True)
+class ProjectVersionDetail:
+    """版本元数据及从精确 commit tree 读取的 manifest。"""
+
+    version: ProjectVersion
+    files: tuple[ProjectVersionFile, ...]
 
 
 # --------------------------------------------------------------------------

@@ -33,6 +33,8 @@ from ..domain.errors import (
     ConflictError,
     ObjectNotFound,
     PreflightRejected,
+    ProjectContentIdentityMismatch,
+    ProjectContentMissing,
     SchedulerError,
     ValidationFailed,
 )
@@ -48,6 +50,7 @@ from ..domain.models import (
 )
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
+from ..domain.ports.project_content import ProjectContentPort
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.secret_vault import SecretVault
@@ -118,6 +121,7 @@ class RunService:
         guard: AccessGuard,
         clock: Clock,
         storage: StoragePort,
+        content: ProjectContentPort,
         scheduler: SchedulerPort,
         secrets: SecretVault,
         activity: ActivityRecorder,
@@ -127,6 +131,7 @@ class RunService:
         self._guard = guard
         self._clock = clock
         self._storage = storage
+        self._content = content
         self._scheduler = scheduler
         self._secrets = secrets
         self._activity = activity
@@ -483,9 +488,9 @@ class RunService:
         try:
             paths = await self._storage.prepare_run_directory(
                 run.id,
-                files=[(f.path, f.content_hash) for f in version.files],
                 inputs=[(b.access_path, b.source_id) for b in snapshot.input_bindings],
             )
+            await self._content.export_commit(version.project_id, version.commit_oid, paths.work)
             environment = dict(snapshot.env_literals)
             # 输入内容在执行环境中的根目录。Input Binding 的 access_path 是
             # 相对于它的绝对路径，例如 /inputs/train -> $WORKSPACE107_INPUTS_DIR/inputs/train。
@@ -517,7 +522,13 @@ class RunService:
                     environment=environment,
                 )
             )
-        except (SchedulerError, OSError, ValidationFailed) as exc:
+        except (
+            SchedulerError,
+            OSError,
+            ValidationFailed,
+            ProjectContentMissing,
+            ProjectContentIdentityMismatch,
+        ) as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
             run.finished_at = self._clock.now()
