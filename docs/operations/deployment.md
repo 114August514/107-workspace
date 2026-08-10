@@ -119,10 +119,11 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
    `.env`、日志、异常、数据库、evidence bundle 或 sbatch 正文。
 3. Slurm `comment` 是否能无截断保存完整 correlation、最大字节数、精确查询参数与查询权限；
    还要证明结果没有隐藏分页。只有这些证据齐全才能把
-   `WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE` 设为 `true`。权限、网络、分页或 schema
-   任一不确定时，adapter 返回 `complete=false`，不得把空 jobs 当作零匹配。
-4. 本次获批的 Account、Partition、QoS、nodes、tasks、CPU-per-task、memory-per-node、GPU
-   GRES 和 time limit。当前候选固定“一节点一 task”；站点语义不同就先改契约，不现场猜测。
+   `WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE` 设为 `true`。权限、网络、分页、metadata、
+   filter 或 schema 任一不确定时，adapter 返回 `complete=false`，不得把空 `job_ids` 当作零匹配。
+4. 本次获批的 Account、Partition、QoS、nodes、tasks、CPU、memory、GPU GRES 和 time limit。
+   当前 M1 adapter 只接受 `nodes=1`，将总 CPU/memory/GPU 安全映射到这个节点的单个 task；
+   `nodes>1` 会在 HTTP 前 fail-fast，不能把总量静默放大为 per-node 资源。
 5. API、独立 Worker、Shared FS 和计算节点的 mount mapping、canonical path、UID/GID 与权限。
 6. 选择 Native 还是 Apptainer。当前只实现 Native：所选 Environment Version 的
    `environment_image` 必须为空，`setup_command` 必须是已批准的原生环境准备步骤。
@@ -150,9 +151,11 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 #### 3. 脱敏证据与停止条件
 
 evidence bundle 只保存版本、配置项名称、脱敏值、请求 correlation/job id、状态/时间、marker
-摘要和验收结论；删除 JWT、认证 header、Secret、endpoint 中的内部信息及用户凭据。HTTP 4xx
-是明确拒绝，submit timeout/传输失败/5xx/2xx 缺 job id 是 ambiguous，poll 404 或未映射 state
-是 `UNKNOWN`；这些都不能伪造成成功或确定的零匹配。
+摘要和验收结论；删除 JWT、认证 header、Secret、endpoint 中的内部信息及用户凭据。缺少
+目标 107 的状态码及响应 schema allowlist 时，submit 的任意 HTTP 非 2xx（包括普通 400、
+408、409、425、429 和 5xx）、timeout、传输失败或 2xx 缺 job id 都是 ambiguous；只有 HTTP
+请求前的本地校验失败是明确 Rejected。poll 404 或未映射 state 是 `UNKNOWN`，上述情况都
+不能伪造成成功或确定的零匹配。
 
 在上述 human gate 产生 fresh evidence 前，真实 slurmrestd/Slurm、三方 mount、Native 环境和
 端到端 M1 证据均为 **INSUFFICIENT**。本地 fixture 通过只证明 adapter 候选的协议行为。

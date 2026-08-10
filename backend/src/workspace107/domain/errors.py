@@ -79,7 +79,7 @@ class SchedulerProtocolError(SchedulerError):
 
 
 class SchedulerSubmissionRejected(SchedulerError):
-    """调度端明确拒绝提交，调用方可确定没有拿到 job id。"""
+    """请求发出前被本地校验拒绝；未来远端拒绝必须先有人工核验 allowlist。"""
 
     code = "scheduler_submission_rejected"
 

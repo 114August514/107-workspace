@@ -45,7 +45,7 @@ def _contract(*, complete: bool = True) -> SlurmRestApiContract:
     )
 
 
-def _submission(root: Path, *, image: str = "") -> SchedulerSubmission:
+def _submission(root: Path, *, image: str = "", nodes: int = 1) -> SchedulerSubmission:
     work = root / "work"
     logs = root / "logs"
     work.mkdir()
@@ -65,7 +65,7 @@ def _submission(root: Path, *, image: str = "") -> SchedulerSubmission:
             account="fixture-account",
             partition="fixture-partition",
             qos="fixture-qos",
-            nodes=1,
+            nodes=nodes,
             cpus=2,
             memory_mb=1024,
             gpus=1,
@@ -185,8 +185,11 @@ async def test_submit_uses_full_comment_correlation_and_keeps_secrets_out_of_scr
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("status", [500, 502, 503, 504])
-async def test_submit_server_error_is_ambiguous_and_redacted(tmp_path: Path, status: int) -> None:
+@pytest.mark.parametrize(
+    "status",
+    [300, 307, 400, 401, 403, 404, 408, 409, 425, 429, 500, 502, 503, 504],
+)
+async def test_submit_non_2xx_is_ambiguous_and_redacted(tmp_path: Path, status: int) -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, text=f"echoed {JWT} {ENV_SECRET}")
 
@@ -214,13 +217,6 @@ async def test_submit_timeout_is_ambiguous_and_redacted(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_submit_4xx_is_definite_rejection(tmp_path: Path) -> None:
-    scheduler = _scheduler(httpx.MockTransport(lambda _request: httpx.Response(400)))
-    with pytest.raises(SchedulerSubmissionRejected, match="400"):
-        await scheduler.submit(_submission(tmp_path))
-
-
-@pytest.mark.asyncio
 async def test_submit_rejects_unsafe_correlation_before_http(tmp_path: Path) -> None:
     def unexpected_http(_request: httpx.Request) -> httpx.Response:
         raise AssertionError("invalid correlation must fail before HTTP")
@@ -230,6 +226,17 @@ async def test_submit_rejects_unsafe_correlation_before_http(tmp_path: Path) -> 
 
     with pytest.raises(SchedulerSubmissionRejected, match="correlation"):
         await scheduler.submit(submission)
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_multi_node_total_resources_before_http(tmp_path: Path) -> None:
+    def unexpected_http(_request: httpx.Request) -> httpx.Response:
+        raise AssertionError("multi-node submissions must fail before HTTP")
+
+    scheduler = _scheduler(httpx.MockTransport(unexpected_http))
+
+    with pytest.raises(SchedulerSubmissionRejected, match="nodes=1"):
+        await scheduler.submit(_submission(tmp_path, nodes=2))
 
 
 @pytest.mark.asyncio
@@ -384,12 +391,13 @@ async def test_find_by_correlation_complete_zero_one_and_multiple(
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["comment"] == CORRELATION
-        return httpx.Response(200, json={"jobs": jobs})
+        return httpx.Response(200, json={"jobs": jobs, "errors": [], "warnings": []})
 
     result = await _scheduler(httpx.MockTransport(handler)).find_by_correlation(CORRELATION)
 
     assert result.complete is True
-    assert tuple(job.job_id for job in result.jobs) == expected_ids
+    assert result.job_ids == expected_ids
+    assert result.reason == ""
 
 
 @pytest.mark.asyncio
@@ -400,7 +408,8 @@ async def test_find_by_correlation_http_failure_is_incomplete(response: httpx.Re
     result = await scheduler.find_by_correlation(CORRELATION)
 
     assert result.complete is False
-    assert result.jobs == ()
+    assert result.job_ids == ()
+    assert result.reason
 
 
 @pytest.mark.asyncio
@@ -411,23 +420,41 @@ async def test_find_by_correlation_network_failure_is_incomplete() -> None:
     result = await _scheduler(httpx.MockTransport(handler)).find_by_correlation(CORRELATION)
 
     assert result.complete is False
-    assert result.jobs == ()
+    assert result.job_ids == ()
+    assert result.reason
 
 
 @pytest.mark.asyncio
 async def test_find_by_correlation_pagination_or_schema_uncertainty_is_incomplete() -> None:
     responses = iter(
         [
-            httpx.Response(200, json={"jobs": [], "meta": {"has_more": True}}),
+            httpx.Response(200, json={"jobs": [], "pagination": {"complete": True}}),
+            httpx.Response(200, json={"jobs": [], "meta": {"has_more": False}}),
+            httpx.Response(200, json={"jobs": [], "next_cursor": ""}),
             httpx.Response(200, json={"jobs": "not-a-list"}),
             httpx.Response(200, json={"jobs": [{"job_id": 731}]}),
+            httpx.Response(
+                200,
+                json={"jobs": [{"job_id": 731, "comment": "another-run"}]},
+            ),
+            httpx.Response(200, json={"jobs": [], "warnings": ["partial result"]}),
+            httpx.Response(
+                200,
+                json={
+                    "jobs": [
+                        {"job_id": 731, "comment": CORRELATION},
+                        {"job_id": 731, "comment": CORRELATION},
+                    ]
+                },
+            ),
         ]
     )
     scheduler = _scheduler(httpx.MockTransport(lambda _request: next(responses)))
 
-    for _ in range(3):
+    for _ in range(8):
         result = await scheduler.find_by_correlation(CORRELATION)
         assert result.complete is False
+        assert result.reason
 
 
 @pytest.mark.asyncio
@@ -440,7 +467,8 @@ async def test_find_by_correlation_requires_verified_complete_query() -> None:
     result = await scheduler.find_by_correlation(CORRELATION)
 
     assert result.complete is False
-    assert result.jobs == ()
+    assert result.job_ids == ()
+    assert result.reason
 
 
 @pytest.mark.asyncio

@@ -63,18 +63,12 @@ class SchedulerJobState:
 
 
 @dataclass(frozen=True, slots=True)
-class SchedulerCorrelatedJob:
-    """按 correlation 找到的一个调度作业。"""
-
-    job_id: str
-
-
-@dataclass(frozen=True, slots=True)
 class SchedulerCorrelationResult:
-    """correlation 查询结果及其完整性。"""
+    """correlation 查询结果、完整性与脱敏诊断。"""
 
     complete: bool
-    jobs: tuple[SchedulerCorrelatedJob, ...] = ()
+    job_ids: tuple[str, ...] = ()
+    reason: str = ""
 
 
 class SchedulerPort(Protocol):

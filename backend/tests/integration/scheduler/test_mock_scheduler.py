@@ -66,7 +66,8 @@ async def test_windows_uses_system_command_interpreter(monkeypatch, tmp_path: Pa
     assert captured["command"] == submission.command
     assert "executable" not in captured
     assert correlation.complete is True
-    assert tuple(job.job_id for job in correlation.jobs) == (job_id,)
+    assert correlation.job_ids == (job_id,)
+    assert correlation.reason == ""
 
 
 @pytest.mark.asyncio

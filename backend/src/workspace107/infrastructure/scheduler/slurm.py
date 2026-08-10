@@ -24,7 +24,6 @@ from ...domain.errors import (
     SchedulerSubmissionUncertain,
 )
 from ...domain.ports.scheduler import (
-    SchedulerCorrelatedJob,
     SchedulerCorrelationResult,
     SchedulerJobState,
     SchedulerState,
@@ -178,6 +177,10 @@ class SlurmRestScheduler:
             )
 
         config = submission.configuration
+        if config.nodes != 1:
+            raise SchedulerSubmissionRejected(
+                "M1 Slurm adapter requires nodes=1 because compute resources are total values"
+            )
         payload: dict[str, Any] = {
             "script": render_sbatch_script(submission),
             "job": {
@@ -212,40 +215,25 @@ class SlurmRestScheduler:
     async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
         try:
             self._validate_correlation(correlation)
+        except ValueError:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="correlation is invalid for the configured Slurm comment field",
+            )
+
+        try:
             data = await self._request_json(
                 "find by correlation",
                 "GET",
                 self._contract.jobs_path,
                 params={self._contract.correlation_query_parameter: correlation},
             )
-        except (SchedulerError, ValueError):
-            return SchedulerCorrelationResult(complete=False)
-
-        jobs_raw = data.get("jobs")
-        if not isinstance(jobs_raw, list) or data.get("errors"):
-            return SchedulerCorrelationResult(complete=False)
-
-        complete = self._contract.correlation_query_complete and not _has_more_pages(data)
-        matches: list[SchedulerCorrelatedJob] = []
-        seen_ids: set[str] = set()
-        for raw in jobs_raw:
-            if not isinstance(raw, dict):
-                complete = False
-                continue
-            if raw.get(self._contract.correlation_field) != correlation:
-                complete = False
-                continue
-            try:
-                job_id = _job_id(raw.get("job_id"))
-            except ValueError:
-                complete = False
-                continue
-            if job_id in seen_ids:
-                complete = False
-                continue
-            seen_ids.add(job_id)
-            matches.append(SchedulerCorrelatedJob(job_id=job_id))
-        return SchedulerCorrelationResult(complete=complete, jobs=tuple(matches))
+        except SchedulerError:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="correlation query failed, was unauthorized, or returned non-2xx",
+            )
+        return _parse_v0040_correlation_result(data, correlation, self._contract)
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         path = self._job_path(self._contract.job_path_template, job_id)
@@ -371,14 +359,12 @@ class SlurmRestScheduler:
         status = response.status_code
         if 200 <= status < 300:
             return response
-        if status == 404 and not ambiguous_submit:
-            raise SchedulerJobNotFound(f"Slurm {operation} returned 404")
-        if ambiguous_submit and 400 <= status < 500:
-            raise SchedulerSubmissionRejected(f"Slurm submit was rejected with HTTP {status}")
         if ambiguous_submit:
             raise SchedulerSubmissionUncertain(
                 f"Slurm submit returned HTTP {status}; reconcile by correlation"
             )
+        if status == 404:
+            raise SchedulerJobNotFound(f"Slurm {operation} returned 404")
         raise SchedulerError(f"Slurm {operation} returned HTTP {status}; response body redacted")
 
     def _redact(self, raw: Any) -> str:
@@ -430,10 +416,58 @@ def _timestamp(raw: Any) -> datetime | None:
     return datetime.fromtimestamp(raw, tz=UTC)
 
 
-def _has_more_pages(data: dict[str, Any]) -> bool:
-    if data.get("has_more") is True or data.get("next") or data.get("next_cursor"):
-        return True
-    meta = data.get("meta")
-    return isinstance(meta, dict) and (
-        meta.get("has_more") is True or bool(meta.get("next") or meta.get("next_cursor"))
-    )
+def _parse_v0040_correlation_result(
+    data: dict[str, Any], correlation: str, contract: SlurmRestApiContract
+) -> SchedulerCorrelationResult:
+    """Parse the exact locally-fixtured non-paginated correlation response shape."""
+    if not contract.correlation_query_complete:
+        return SchedulerCorrelationResult(
+            complete=False,
+            reason="target query completeness and pagination behavior are not verified",
+        )
+
+    unknown_fields = set(data) - {"jobs", "errors", "warnings"}
+    if unknown_fields:
+        return SchedulerCorrelationResult(
+            complete=False,
+            reason="response contains unsupported pagination or metadata fields",
+        )
+    for field in ("errors", "warnings"):
+        messages = data.get(field, [])
+        if not isinstance(messages, list) or messages:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason=f"response field {field} is non-empty or has an unsupported shape",
+            )
+
+    jobs = data.get("jobs")
+    if not isinstance(jobs, list):
+        return SchedulerCorrelationResult(
+            complete=False,
+            reason="response field jobs is not a list",
+        )
+
+    job_ids: list[str] = []
+    seen_ids: set[str] = set()
+    for job in jobs:
+        if not isinstance(job, dict) or job.get(contract.correlation_field) != correlation:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="response does not prove an exact correlation filter",
+            )
+        try:
+            job_id = _job_id(job.get("job_id"))
+        except ValueError:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="response contains a job without a valid job_id",
+            )
+        if job_id in seen_ids:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="response contains duplicate job ids",
+            )
+        seen_ids.add(job_id)
+        job_ids.append(job_id)
+
+    return SchedulerCorrelationResult(complete=True, job_ids=tuple(job_ids))

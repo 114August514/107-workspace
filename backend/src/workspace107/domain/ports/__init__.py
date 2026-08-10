@@ -6,7 +6,6 @@ application 层只依赖这里定义的协议，具体实现在 infrastructure �
 
 from .clock import Clock
 from .scheduler import (
-    SchedulerCorrelatedJob,
     SchedulerCorrelationResult,
     SchedulerJobState,
     SchedulerPort,
@@ -20,7 +19,6 @@ __all__ = [
     "ArtifactContent",
     "Clock",
     "RunPaths",
-    "SchedulerCorrelatedJob",
     "SchedulerCorrelationResult",
     "SchedulerJobState",
     "SchedulerPort",
