@@ -539,6 +539,11 @@ class GitProjectContent:
                 parent_commit_oid,
             )
         self._git(project_root, "add", "-A", "-f", "--", ".")
+        # Windows Git commonly uses ``core.checkStat=minimal``. A same-size replacement with the
+        # same caller-supplied mtime can therefore look clean in the index even though its bytes
+        # changed. The first add preserves normal new/deleted-file semantics; renormalize then
+        # forces Git's own clean/hash pipeline over every tracked working-tree file.
+        self._git(project_root, "add", "--renormalize", "-f", "--", ".")
         tree_oid = self._git_text(project_root, "write-tree").strip()
         if parent_commit_oid is not None:
             parent_tree = self._git_text(

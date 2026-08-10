@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,6 +107,52 @@ async def test_req_m1_a_immutable_ref_survives_branch_changes_and_gc(tmp_path: P
     )
 
 
+async def test_req_m1_a_commit_rehashes_same_size_same_mtime_with_minimal_stat(
+    tmp_path: Path,
+) -> None:
+    content = GitProjectContent(tmp_path / "projects")
+    await content.initialize_project(PROJECT_ID, REPOSITORY_IDENTITY)
+    project_root = tmp_path / "projects" / PROJECT_ID
+    _git(project_root, "config", "core.checkStat", "minimal")
+
+    await content.write_working_file(
+        PROJECT_ID, REPOSITORY_IDENTITY, "src/removed.py", b"remove\n", NOW
+    )
+    first = await _version(
+        content,
+        version_id="pv_first",
+        payload=b"print('v1')\n",
+        parent_version_id=None,
+        parent_commit_oid=None,
+    )
+
+    await content.write_working_file(
+        PROJECT_ID, REPOSITORY_IDENTITY, "src/main.py", b"print('v2')\n", NOW
+    )
+    await content.write_working_file(
+        PROJECT_ID, REPOSITORY_IDENTITY, "src/added.py", b"added\n", NOW
+    )
+    await content.delete_working_path(PROJECT_ID, REPOSITORY_IDENTITY, "src/removed.py")
+    second = await content.commit_working(
+        PROJECT_ID,
+        REPOSITORY_IDENTITY,
+        version_id="pv_second",
+        parent_version_id="pv_first",
+        parent_commit_oid=first,
+        message="second",
+        created_by="usr_alice",
+        created_at=NOW,
+    )
+
+    assert (
+        await content.read_commit_file(
+            PROJECT_ID, REPOSITORY_IDENTITY, "pv_second", second.commit_oid, "src/main.py"
+        )
+        == b"print('v2')\n"
+    )
+    assert [entry.path for entry in second.files] == ["src/added.py", "src/main.py"]
+
+
 @pytest.mark.parametrize("revision", ["HEAD", "main", "latest", "refs/heads/main", "deadbeef"])
 async def test_req_m1_a_rejects_movable_or_abbreviated_revision(
     tmp_path: Path, revision: str
@@ -164,7 +211,9 @@ async def test_req_m1_a_missing_tree_blob_fails_explicitly(tmp_path: Path) -> No
     )
     project_root = tmp_path / "projects" / PROJECT_ID
     blob_oid = _git(project_root, "rev-parse", f"{commit_oid}:src/main.py")
-    (project_root / "repository.git" / "objects" / blob_oid[:2] / blob_oid[2:]).unlink()
+    object_path = project_root / "repository.git" / "objects" / blob_oid[:2] / blob_oid[2:]
+    object_path.chmod(object_path.stat().st_mode | stat.S_IWRITE)
+    object_path.unlink()
 
     with pytest.raises(ProjectContentMissing):
         await content.manifest(PROJECT_ID, REPOSITORY_IDENTITY, "pv_missing", commit_oid)
