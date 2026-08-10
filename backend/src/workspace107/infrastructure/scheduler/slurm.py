@@ -242,7 +242,6 @@ class SlurmRestScheduler:
             )
         return _parse_v0040_correlation_result(data, correlation, self._contract)
 
-
     async def poll(self, job_id: str) -> SchedulerJobState:
         path = self._job_path(self._contract.job_path_template, job_id)
         try:

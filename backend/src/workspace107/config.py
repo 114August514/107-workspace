@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
@@ -41,6 +42,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./var/workspace107.db"
     storage_root: Path = Path("./var/storage")
+    shared_gid: int | None = None
 
     scheduler: SchedulerKind = "mock"
     slurm_api_base_url: str = ""
@@ -67,9 +69,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_slurm_contract(self) -> Self:
-        """选择 Slurm 时必须显式提供并确认完整的外部 API 契约。"""
-        if self.scheduler != "slurm":
+        """Mock 仅限本地/测试；Slurm 必须显式确认完整外部契约。"""
+        if self.shared_gid is not None and self.shared_gid < 0:
+            raise ValueError("WORKSPACE107_SHARED_GID must be non-negative")
+        if self.scheduler == "mock":
+            if self.env not in {"local", "test", "export"}:
+                raise ValueError("Mock scheduler is only allowed in local/test environments")
             return self
+        if self.shared_gid is None:
+            raise ValueError("Slurm scheduler requires explicit WORKSPACE107_SHARED_GID")
 
         required = {
             "SLURM_API_BASE_URL": self.slurm_api_base_url,
@@ -104,6 +112,14 @@ class Settings(BaseSettings):
                 "after the human runtime gate"
             )
         return self
+
+    @property
+    def resolved_shared_gid(self) -> int:
+        if self.shared_gid is not None:
+            return self.shared_gid
+        if self.scheduler == "mock" and self.env in {"local", "test", "export"}:
+            return os.getegid()
+        raise ValueError("WORKSPACE107_SHARED_GID is required for this deployment")
 
     @property
     def use_json_logs(self) -> bool:

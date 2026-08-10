@@ -173,7 +173,7 @@ class PosixRunWorkspace:
         *,
         artifact_id: str,
         source_path: str,
-    ) -> RunArtifactEvidence:
+    ) -> RunArtifactEvidence | None:
         """Install one immutable Artifact under the single-active-Worker contract."""
         self._validate_identity(identity)
         self._validate_segment("artifact_id", artifact_id)
@@ -206,6 +206,8 @@ class PosixRunWorkspace:
                 shutil.rmtree(staging)
 
         source = self._open_artifact_source(workspace.work, source_path)
+        if source is None:
+            return None
         try:
             staging.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
             staging.chmod(_PRIVATE_DIRECTORY_MODE)
@@ -457,7 +459,7 @@ class PosixRunWorkspace:
             os.chown(path, -1, self._shared_gid)
             path.chmod(mode)
 
-    def _open_artifact_source(self, work: Path, source_path: str) -> _OpenSource:
+    def _open_artifact_source(self, work: Path, source_path: str) -> _OpenSource | None:
         parts = PurePosixPath(source_path).parts
         directory_flag = os.O_DIRECTORY
         nofollow = os.O_NOFOLLOW
@@ -483,7 +485,7 @@ class PosixRunWorkspace:
                     "Artifact source contains a symbolic link or non-directory ancestor"
                 ) from exc
             if exc.errno == errno.ENOENT:
-                raise RunWorkspaceConflict("Artifact source path does not exist") from exc
+                return None
             raise
         except BaseException:
             os.close(current)

@@ -74,8 +74,8 @@ class RunWorkspacePort(Protocol):
         *,
         artifact_id: str,
         source_path: str,
-    ) -> RunArtifactEvidence:
-        """从 prepared Run work 目录原子安装不可变 Artifact。
+    ) -> RunArtifactEvidence | None:
+        """从 prepared work 原子安装 Artifact；source 不存在时返回 ``None``。
 
         部署前提：C 保证只有一个 active Worker，且不会重叠调用本端口；本端口不提供
         多 writer 协调。Worker 与计算任务使用不同 UID，并共同属于实现构造时配置的

@@ -7,29 +7,39 @@ import logging
 import posixpath
 from collections.abc import Iterable
 
-from ..domain.errors import SchedulerError, SchedulerSubmissionRejected, ValidationFailed
+from ..domain.errors import (
+    ProjectContentIdentityMismatch,
+    ProjectContentMissing,
+    SchedulerError,
+    SchedulerSubmissionRejected,
+    ValidationFailed,
+)
 from ..domain.execution import CollectedArtifact, PendingExecution
 from ..domain.ports.execution import ExecutionStore
+from ..domain.ports.run_workspace import (
+    RunWorkspaceError,
+    RunWorkspaceIdentity,
+    RunWorkspacePort,
+)
 from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
-from ..domain.ports.storage import StoragePort
 from ..domain.secrets import redact
 
 logger = logging.getLogger(__name__)
 
 
 class RunWorker:
-    """只编排正式 ports；B 合入时只替换 StoragePort 调用点。"""
+    """按 Snapshot 编排唯一的 Git exporter、RunWorkspacePort 与 SchedulerPort。"""
 
     def __init__(
         self,
         *,
         store: ExecutionStore,
-        storage: StoragePort,
+        workspace: RunWorkspacePort,
         scheduler: SchedulerPort,
         action_delay_seconds: float,
     ) -> None:
         self._store = store
-        self._storage = storage
+        self._workspace = workspace
         self._scheduler = scheduler
         self._action_delay_seconds = action_delay_seconds
 
@@ -103,14 +113,21 @@ class RunWorker:
             await self._store.cancel_without_job(run.id)
             return
 
-        try:
-            # B 的 RunWorkspacePort 尚未合入；这是 C 唯一、明确的替换点。
-            paths = await self._storage.prepare_run_directory(
-                run.id,
-                files=[(item.path, item.content_hash) for item in pending.project_version.files],
-                inputs=[(item.access_path, item.source_id) for item in snapshot.input_bindings],
+        if snapshot.input_bindings:
+            await self._store.record_submit_failed(
+                run.id, "M1 只接受无 Input Binding 的 Run；Shared Resource 属于 M3"
             )
-        except (OSError, ValidationFailed) as exc:
+            return
+        identity = _workspace_identity(pending)
+        try:
+            paths = await self._workspace.prepare(identity, inputs=())
+        except (
+            OSError,
+            ProjectContentIdentityMismatch,
+            ProjectContentMissing,
+            RunWorkspaceError,
+            ValidationFailed,
+        ) as exc:
             await self._store.record_submit_failed(run.id, _safe_detail(exc))
             return
 
@@ -178,25 +195,39 @@ class RunWorker:
 
     async def _collect_artifacts(self, pending: PendingExecution) -> tuple[CollectedArtifact, ...]:
         snapshot = pending.snapshot
+        identity = _workspace_identity(pending)
         collected: list[CollectedArtifact] = []
         for rule in snapshot.artifact_rules:
             source_path = rule.path
             if snapshot.working_directory not in {"", "."}:
                 source_path = posixpath.join(snapshot.working_directory, rule.path)
             artifact_id = stable_artifact_id(pending.run.id, rule.path)
-            content = await self._storage.collect_artifact(pending.run.id, artifact_id, source_path)
+            evidence = await self._workspace.collect_artifact(
+                identity,
+                artifact_id=artifact_id,
+                source_path=source_path,
+            )
             collected.append(
                 CollectedArtifact(
                     id=artifact_id,
                     source_path=rule.path,
                     name=rule.name or rule.path,
                     optional=rule.optional,
-                    size=content.size if content else None,
-                    file_count=content.file_count if content else None,
-                    content_hash=content.content_hash if content else None,
+                    size=evidence.size if evidence else None,
+                    file_count=evidence.file_count if evidence else None,
+                    content_hash=evidence.content_hash if evidence else None,
                 )
             )
         return tuple(collected)
+
+
+def _workspace_identity(pending: PendingExecution) -> RunWorkspaceIdentity:
+    return RunWorkspaceIdentity(
+        run_id=pending.run.id,
+        snapshot_id=pending.snapshot.id,
+        project_version_id=pending.project_version.id,
+        commit_oid=pending.project_version.commit_oid,
+    )
 
 
 def stable_artifact_id(run_id: str, source_path: str) -> str:

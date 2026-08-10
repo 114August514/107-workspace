@@ -90,7 +90,7 @@ def test_git_version_downgrade_aborts_on_git_backed_project(tmp_path: Path) -> N
             ),
         )
 
-    result = _alembic(database, "downgrade", "-1")
+    result = _alembic(database, "downgrade", PREVIOUS_REVISION)
     assert result.returncode != 0
     assert "Rebuild the database and project storage together" in result.stderr
     with sqlite3.connect(database) as connection:
@@ -101,7 +101,7 @@ def test_git_version_downgrade_aborts_on_git_backed_project(tmp_path: Path) -> N
 def test_git_version_migration_empty_up_down_up(tmp_path: Path) -> None:
     database = tmp_path / "empty.db"
     assert _alembic(database, "upgrade", "head").returncode == 0
-    assert _alembic(database, "downgrade", "-1").returncode == 0
+    assert _alembic(database, "downgrade", PREVIOUS_REVISION).returncode == 0
     assert _alembic(database, "upgrade", "head").returncode == 0
 
     with sqlite3.connect(database) as connection:

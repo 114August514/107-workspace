@@ -102,6 +102,7 @@ def test_slurm_settings_fail_fast_without_human_verified_contract() -> None:
             slurm_api_base_url="https://slurm.invalid",
             slurm_api_user="fixture-user",
             slurm_jwt=JWT,
+            shared_gid=10001,
         )
 
     assert "SLURM_TARGET_CLUSTER_ID" in str(captured.value)
@@ -113,6 +114,7 @@ def test_slurm_settings_accept_only_explicit_verified_candidate_contract() -> No
         slurm_api_base_url="https://slurm.invalid",
         slurm_api_user="fixture-user",
         slurm_jwt=JWT,
+        shared_gid=10001,
         slurm_target_cluster_id="fixture-cluster",
         slurm_api_version="v0.0.40",
         slurm_api_schema_profile="slurm-v0.0.40",
@@ -189,6 +191,7 @@ async def test_submit_uses_full_comment_correlation_and_keeps_secrets_out_of_scr
     assert payload["job"]["tasks"] == 1
     assert f"#SBATCH --comment={CORRELATION}" in payload["script"]
     assert "#SBATCH --ntasks-per-node=1" in payload["script"]
+    assert payload["script"].index("umask 0007") < payload["script"].index("module load")
     assert ENV_SECRET not in payload["script"]
     assert JWT not in payload["script"]
     assert CORRELATION not in payload["job"]["name"]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -71,19 +72,25 @@ async def test_windows_uses_system_command_interpreter(monkeypatch, tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_posix_continues_to_use_bash(monkeypatch, tmp_path: Path) -> None:
+async def test_posix_executes_canonical_bash_script_with_umask_first(
+    monkeypatch, tmp_path: Path
+) -> None:
     captured: dict[str, Any] = {}
 
-    async def create_process(command: str, **options: Any) -> _FinishedProcess:
+    async def create_process(*arguments: str, **options: Any) -> _FinishedProcess:
+        captured["arguments"] = arguments
         captured.update(options)
         return _FinishedProcess()
 
     submission = _submission(tmp_path)
     monkeypatch.setattr(mock_module.os, "name", "posix")
-    monkeypatch.setattr(mock_module.asyncio, "create_subprocess_shell", create_process)
+    monkeypatch.setattr(mock_module.asyncio, "create_subprocess_exec", create_process)
 
     scheduler = mock_module.MockScheduler()
     job_id = await scheduler.submit(submission)
     await scheduler.poll(job_id)
 
-    assert captured["executable"] == "/bin/bash"
+    executable, script_path = captured["arguments"]
+    script = await asyncio.to_thread(Path(script_path).read_text, encoding="utf-8")
+    assert executable == "/bin/bash"
+    assert script.index("umask 0007") < script.index(submission.command)

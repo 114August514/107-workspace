@@ -14,12 +14,12 @@ from workspace107.domain.enums import RunStatus
 from workspace107.domain.errors import SchedulerSubmissionRejected, SchedulerSubmissionUncertain
 from workspace107.domain.execution import ExecutionIntent, PendingExecution
 from workspace107.domain.models import ArtifactCollectionRule, ProjectVersion, Run
+from workspace107.domain.ports.run_workspace import RunArtifactEvidence, RunWorkspace
 from workspace107.domain.ports.scheduler import (
     SchedulerCorrelationResult,
     SchedulerJobState,
     SchedulerState,
 )
-from workspace107.domain.ports.storage import ArtifactContent, RunPaths
 from workspace107.domain.run_snapshot import build_snapshot
 from workspace107.domain.secrets import ResolvedEnv
 
@@ -111,24 +111,31 @@ class _Store:
 
 class _Storage:
     def __init__(self, root: Path) -> None:
-        self.paths = RunPaths(
+        self.paths = RunWorkspace(
             root=root,
             work=root / "work",
             inputs=root / "inputs",
             logs=root / "logs",
+            artifact_staging=root / "artifacts",
+            identity_marker=root / ".workspace-identity.json",
         )
-        for path in (self.paths.work, self.paths.inputs, self.paths.logs):
+        for path in (
+            self.paths.work,
+            self.paths.inputs,
+            self.paths.logs,
+            self.paths.artifact_staging,
+        ):
             path.mkdir(parents=True, exist_ok=True)
         self.paths.stdout.touch()
         self.paths.stderr.touch()
         self.collect_calls = 0
 
-    async def prepare_run_directory(self, *args, **kwargs) -> RunPaths:
+    async def prepare(self, *args, **kwargs) -> RunWorkspace:
         return self.paths
 
-    async def collect_artifact(self, *args) -> ArtifactContent:
+    async def collect_artifact(self, *args, **kwargs) -> RunArtifactEvidence:
         self.collect_calls += 1
-        return ArtifactContent(size=3, file_count=1, content_hash="a" * 64)
+        return RunArtifactEvidence(size=3, file_count=1, content_hash="a" * 64)
 
 
 class _Scheduler:
@@ -222,9 +229,12 @@ def _pending(
         project_version=ProjectVersion(
             id="pv_1",
             project_id="prj_1",
+            repository_identity="repo_1",
             sequence=1,
             message="v1",
-            files=(),
+            commit_oid="1" * 40,
+            file_count=1,
+            total_size=1,
             created_by="usr_1",
             created_at=NOW,
         ),
@@ -257,7 +267,7 @@ async def _run(
     storage = storage or _Storage(tmp_path)
     worker = RunWorker(
         store=store,
-        storage=storage,
+        workspace=storage,
         scheduler=scheduler,
         action_delay_seconds=1,
     )
@@ -305,7 +315,7 @@ async def test_arm_then_submit_crash_recovers_without_second_submit(tmp_path: Pa
     )
     worker = RunWorker(
         store=store,
-        storage=_Storage(tmp_path),
+        workspace=_Storage(tmp_path),
         scheduler=first_scheduler,
         action_delay_seconds=0,
     )
@@ -330,7 +340,7 @@ async def test_terminal_artifact_restart_reuses_evidence_then_finalizes(tmp_path
     storage = _Storage(tmp_path)
     worker = RunWorker(
         store=store,
-        storage=storage,
+        workspace=storage,
         scheduler=_Scheduler(SchedulerCorrelationResult(complete=False)),
         action_delay_seconds=0,
     )

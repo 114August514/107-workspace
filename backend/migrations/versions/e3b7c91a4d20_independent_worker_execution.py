@@ -1,7 +1,7 @@
 """建立 single-active Independent Worker 的最小 execution intent。
 
 Revision ID: e3b7c91a4d20
-Revises: b48640074b91
+Revises: a1f0e2d3c4b5
 Create Date: 2026-08-10
 """
 
@@ -18,7 +18,7 @@ from workspace107.infrastructure.db.migration_guards import (
 )
 
 revision: str = "e3b7c91a4d20"
-down_revision: str | None = "b48640074b91"
+down_revision: str | None = "a1f0e2d3c4b5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

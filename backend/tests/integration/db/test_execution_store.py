@@ -177,7 +177,7 @@ async def test_migration_refuses_nonterminal_data_and_creates_only_minimal_inten
             await connection.execute(text("CREATE SCHEMA public"))
         empty_upgrade = await _alembic(backend_root, migration_env, "upgrade", "head")
         assert empty_upgrade.returncode == 0, empty_upgrade.stderr
-        empty_downgrade = await _alembic(backend_root, migration_env, "downgrade", "b48640074b91")
+        empty_downgrade = await _alembic(backend_root, migration_env, "downgrade", "a1f0e2d3c4b5")
         assert empty_downgrade.returncode == 0, empty_downgrade.stderr
 
         factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
@@ -226,7 +226,7 @@ async def test_migration_refuses_nonterminal_data_and_creates_only_minimal_inten
                 )
             )
         downgrade_rejected = await _alembic(
-            backend_root, migration_env, "downgrade", "b48640074b91"
+            backend_root, migration_env, "downgrade", "a1f0e2d3c4b5"
         )
         assert downgrade_rejected.returncode != 0
         assert "仍有 execution intent" in downgrade_rejected.stderr
@@ -234,7 +234,7 @@ async def test_migration_refuses_nonterminal_data_and_creates_only_minimal_inten
         async with factory() as session, session.begin():
             intent = await session.get(t.RunExecutionIntentRow, "run_claim")
             await session.delete(intent)
-        downgrade = await _alembic(backend_root, migration_env, "downgrade", "b48640074b91")
+        downgrade = await _alembic(backend_root, migration_env, "downgrade", "a1f0e2d3c4b5")
         assert downgrade.returncode == 0, downgrade.stderr
         restored = await _alembic(backend_root, migration_env, "upgrade", "head")
         assert restored.returncode == 0, restored.stderr

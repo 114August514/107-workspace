@@ -14,7 +14,7 @@ from .scheduler import (
     SchedulerSubmission,
 )
 from .secret_vault import SecretVault
-from .storage import ArtifactContent, RunPaths, StoragePort
+from .storage import StoragePort
 from .version_control import (
     ProjectVersionExporter,
     ProjectVersionExportEvidence,
@@ -22,14 +22,12 @@ from .version_control import (
 )
 
 __all__ = [
-    "ArtifactContent",
     "Clock",
     "CommitManifest",
     "ProjectContentPort",
     "ProjectVersionExportEvidence",
     "ProjectVersionExportFile",
     "ProjectVersionExporter",
-    "RunPaths",
     "SchedulerCorrelationResult",
     "SchedulerJobState",
     "SchedulerPort",

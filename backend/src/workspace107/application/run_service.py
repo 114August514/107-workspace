@@ -604,15 +604,10 @@ class RunService:
         ]
 
     async def _check_inputs(self, configuration: RunConfiguration, workspace_id: str) -> list[str]:
-        problems: list[str] = []
-        for binding in configuration.input_bindings:
-            artifact = await self._repos.artifacts.get(binding.source_id)
-            # 归属 Workspace 不同的一律按「不存在」处理，避免泄露跨空间对象。
-            if artifact is None or artifact.workspace_id != workspace_id:
-                problems.append(f"输入 {binding.access_path} 引用的 Artifact 不存在或无权访问")
-            elif not artifact.is_available:
-                problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
-        return problems
+        del workspace_id
+        if not configuration.input_bindings:
+            return []
+        return ["M1 只接受无 Input Binding 的 Run；Shared Resource 与完整输入属于 M3"]
 
     async def _revalidate_snapshot(self, snapshot: RunSnapshot, workspace_id: str) -> list[str]:
         """重跑之前按当前权限和资源资格重新校验历史快照中的每一个引用。"""
@@ -650,12 +645,8 @@ class RunService:
             if secret_name not in available_secrets:
                 problems.append(f"环境变量 {env_name} 引用的 Workspace Secret {secret_name} 不存在")
 
-        for binding in snapshot.input_bindings:
-            artifact = await self._repos.artifacts.get(binding.source_id)
-            if artifact is None or artifact.workspace_id != workspace_id:
-                problems.append(f"输入 {binding.access_path} 引用的 Artifact 不存在或无权访问")
-            elif not artifact.is_available:
-                problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
+        if snapshot.input_bindings:
+            problems.append("M1 只接受无 Input Binding 的 Run；Shared Resource 与完整输入属于 M3")
 
         return problems
 

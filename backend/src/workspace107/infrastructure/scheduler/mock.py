@@ -71,22 +71,28 @@ class MockScheduler:
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
         stderr = submission.stderr_path.open("ab")
-        shell_options = {} if os.name == "nt" else {"executable": "/bin/bash"}
-
         try:
-            process = await asyncio.create_subprocess_shell(
-                submission.command,
-                cwd=str(work_dir),
-                stdout=stdout,
-                stderr=stderr,
-                env=environment,
-                **shell_options,
-            )
+            if os.name == "nt":
+                process = await asyncio.create_subprocess_shell(
+                    submission.command,
+                    cwd=str(work_dir),
+                    stdout=stdout,
+                    stderr=stderr,
+                    env=environment,
+                )
+            else:
+                process = await asyncio.create_subprocess_exec(
+                    "/bin/bash",
+                    str(script_path),
+                    cwd=str(work_dir),
+                    stdout=stdout,
+                    stderr=stderr,
+                    env=environment,
+                )
         except OSError as exc:  # pragma: no cover - 取决于宿主机环境
             stdout.close()
             stderr.close()
             raise SchedulerSubmissionRejected(f"无法启动任务：{exc}") from exc
-
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
             correlation=submission.correlation,

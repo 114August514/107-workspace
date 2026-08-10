@@ -10,8 +10,8 @@ from ...domain.ports.scheduler import SchedulerSubmission
 
 
 def render_body(submission: SchedulerSubmission) -> str:
-    """渲染脚本正文：准备命令 + 用户命令。"""
-    lines = ["set -euo pipefail", ""]
+    """先固定共享组写权限，再运行任何 setup 或用户命令。"""
+    lines = ["set -euo pipefail", "umask 0007", ""]
     if submission.setup_command.strip():
         lines += [
             "# 运行环境准备命令",

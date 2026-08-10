@@ -6,7 +6,11 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
 
 from workspace107.config import Settings
 
@@ -57,3 +61,14 @@ def test_in_memory_database_has_no_file_path(tmp_path: Path) -> None:
     assert settings.sqlite_file is None
     settings.ensure_local_directories()
     assert (tmp_path / "storage").is_dir()
+
+
+def test_local_mock_uses_current_gid_when_not_explicit() -> None:
+    assert Settings().resolved_shared_gid == os.getegid()
+
+
+def test_production_mock_and_slurm_without_gid_fail_fast() -> None:
+    with pytest.raises(ValidationError, match="Mock scheduler is only allowed"):
+        Settings(env="production", scheduler="mock")
+    with pytest.raises(ValidationError, match="WORKSPACE107_SHARED_GID"):
+        Settings(scheduler="slurm")

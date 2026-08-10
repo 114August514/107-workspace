@@ -130,6 +130,19 @@ async def test_installed_marker_returns_first_evidence_without_reopening_source(
 
 
 @pytest.mark.asyncio
+async def test_missing_source_returns_no_evidence_without_staging(tmp_path: Path) -> None:
+    root, service = await prepared_manager(tmp_path)
+
+    evidence = await service.collect_artifact(
+        identity(), artifact_id="art_missing", source_path="missing-output"
+    )
+
+    assert evidence is None
+    assert not (root / "artifact-store" / ".staging" / "art_missing").exists()
+    assert not (root / "artifact-store" / "art_missing").exists()
+
+
+@pytest.mark.asyncio
 async def test_real_process_exit_before_artifact_marker_cleans_owned_half_init(
     tmp_path: Path,
 ) -> None:
