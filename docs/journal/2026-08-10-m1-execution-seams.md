@@ -42,7 +42,7 @@ A Git Version、B Shared FS、C Worker、D Slurm 已集成到同一 vertical sli
 
 ## GitHub MCP blocker：已解除
 
-新 OMP 会话已实际挂载 `get_me`、`issue_write` 与 `create_pull_request`。`get_me` 确认认证用户为 `114August514`，`issue_write` 已创建 M1 Issue [#7](https://github.com/114August514/107-workspace/issues/7)。本地分支已按项目流程从 `integration/m1-executable-skeleton` 重命名为 `feat/7-m1-executable-skeleton`；push 与 PR 仍需在本 checkpoint commit 后完成。
+新 OMP 会话已实际挂载 `get_me`、`issue_write` 与 `create_pull_request`。`get_me` 确认认证用户为 `114August514`；`issue_write` 已创建 M1 Issue [#7](https://github.com/114August514/107-workspace/issues/7)；本地分支已按项目流程重命名并 push 为 `feat/7-m1-executable-skeleton`；`create_pull_request` 已创建 PR [#8](https://github.com/114August514/107-workspace/pull/8)。PR 使用 `Refs #7`，因为真实 107 human gate 尚未完成；本流程不 merge。
 
 ## Blocker 2：真实 107 Shared FS/Slurm human gate
 
@@ -60,17 +60,16 @@ A Git Version、B Shared FS、C Worker、D Slurm 已集成到同一 vertical sli
 
 - 已创建 GitHub Issue [#7](https://github.com/114August514/107-workspace/issues/7)。
 - 本地分支已从 `integration/m1-executable-skeleton` 重命名为 `feat/7-m1-executable-skeleton`。
-- 尚未 push，尚未创建或 merge PR。
+- `feat/7-m1-executable-skeleton` 已 push，GitHub PR [#8](https://github.com/114August514/107-workspace/pull/8) 已创建但未 merge。
+- 未访问 107、Shared FS、slurmrestd 或 Slurm，未提交真实作业。
 - 未删除 Docker volume。
 - 本次 handoff 只更新现有 journal 并创建本地普通 commit；不记录本机 Secret。
 
 ## 下一步顺序
 
-1. 将本 journal 的 Issue 与 branch 事实创建为普通 commit。
-2. 记录 intended commit ID，push `feat/7-m1-executable-skeleton` 并用远端 ref 核对结果。
-3. push 确认后使用 `create_pull_request` 创建关联 Issue #7 的 PR；不得使用 `gh` 或 REST 替代 GitHub MCP，不 merge。
-4. 向用户收集并确认真实 107 human gate 参数与执行授权。
-5. 在新授权窗口执行 Shared FS/Slurm 验收并保存脱敏 evidence；只有 fresh evidence 满足验收后，才重新判断 M1 状态。
+1. 保持 Issue #7 与 PR #8 打开，不在本流程 merge。
+2. 向用户收集并确认真实 107 human gate 参数与执行授权。
+3. 只在新的明确授权窗口执行 Shared FS/Slurm 验收并保存脱敏 evidence；只有 fresh evidence 满足验收后，才重新判断 M1 状态。
 
 ## 回退方式
 
