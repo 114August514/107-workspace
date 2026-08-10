@@ -97,6 +97,7 @@ async def _seed(factory: async_sessionmaker, *, with_intent: bool) -> None:
                 id="prj_claim",
                 workspace_id="ws_claim",
                 name="Claim",
+                repository_identity="repo_claim",
                 description="",
                 status="active",
                 created_by="usr_claim",
@@ -109,9 +110,13 @@ async def _seed(factory: async_sessionmaker, *, with_intent: bool) -> None:
             t.ProjectVersionRow(
                 id="pv_claim",
                 project_id="prj_claim",
+                repository_identity="repo_claim",
                 sequence=1,
                 message="claim",
                 created_by="usr_claim",
+                commit_oid="1" * 40,
+                file_count=1,
+                total_size=1,
                 created_at=NOW,
             )
         )
@@ -481,6 +486,7 @@ async def test_second_worker_fails_then_sigkill_releases_lock(tmp_path: Path) ->
             lock_pid = await connection.scalar(
                 text(
                     "SELECT pid FROM pg_locks WHERE locktype='advisory' AND granted "
+                    "AND database=(SELECT oid FROM pg_database WHERE datname=current_database()) "
                     "AND classid=:namespace AND objid=:key"
                 ),
                 {"namespace": WORKER_LOCK_NAMESPACE, "key": WORKER_LOCK_KEY},

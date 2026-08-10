@@ -65,7 +65,7 @@ class MockScheduler:
             work_dir.mkdir(parents=True, exist_ok=True)
 
         # 把渲染出的作业脚本留在 Run 目录里，用户可以直接看到平台生成了什么。
-        script_path = submission.stdout_path.parent.parent / "job.sh"
+        script_path = submission.stdout_path.parent / "job.sh"
         script_path.write_text(render_sbatch_script(submission), encoding="utf-8")
 
         environment = build_job_environment(submission)

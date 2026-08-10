@@ -33,6 +33,10 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
     WORKSPACE107_STORAGE_ROOT=/var/lib/workspace107/storage
 
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/*
+
 # 非 root 运行。uid 写死方便挂载共享存储时对齐属主。
 RUN groupadd --gid 10001 workspace \
  && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin workspace
