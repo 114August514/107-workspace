@@ -506,6 +506,7 @@ class RunService:
             job_id = await self._scheduler.submit(
                 SchedulerSubmission(
                     run_id=run.id,
+                    correlation=run.id,
                     job_name=run.name,
                     work_dir=work_dir,
                     command=snapshot.command,

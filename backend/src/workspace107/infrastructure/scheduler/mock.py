@@ -18,7 +18,13 @@ from typing import IO
 from uuid import uuid4
 
 from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.ports.scheduler import (
+    SchedulerCorrelatedJob,
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
 # 用户作业只继承这些基础变量。
@@ -37,6 +43,7 @@ def build_job_environment(submission: SchedulerSubmission) -> dict[str, str]:
 @dataclass
 class _MockJob:
     process: asyncio.subprocess.Process
+    correlation: str
     stdout: IO[bytes]
     stderr: IO[bytes]
     started_at: datetime
@@ -82,12 +89,21 @@ class MockScheduler:
 
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
+            correlation=submission.correlation,
             process=process,
             stdout=stdout,
             stderr=stderr,
             started_at=datetime.now(UTC),
         )
         return job_id
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        matches = tuple(
+            SchedulerCorrelatedJob(job_id=job_id)
+            for job_id, job in self._jobs.items()
+            if job.correlation == correlation
+        )
+        return SchedulerCorrelationResult(complete=True, jobs=matches)
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         job = self._jobs.get(job_id)

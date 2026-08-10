@@ -23,6 +23,7 @@ def _submission(root: Path) -> SchedulerSubmission:
     logs.mkdir(parents=True)
     return SchedulerSubmission(
         run_id="run_windows",
+        correlation="run_windows",
         job_name="Windows portability",
         work_dir=work,
         command="python main.py",
@@ -59,10 +60,13 @@ async def test_windows_uses_system_command_interpreter(monkeypatch, tmp_path: Pa
 
     scheduler = mock_module.MockScheduler()
     job_id = await scheduler.submit(submission)
+    correlation = await scheduler.find_by_correlation(submission.correlation)
     await scheduler.poll(job_id)
 
     assert captured["command"] == submission.command
     assert "executable" not in captured
+    assert correlation.complete is True
+    assert tuple(job.job_id for job in correlation.jobs) == (job_id,)
 
 
 @pytest.mark.asyncio

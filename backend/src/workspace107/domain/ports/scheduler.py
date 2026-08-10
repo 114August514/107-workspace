@@ -1,10 +1,9 @@
-"""调度端口。
+"""目标集群调度端口。
 
-当前实现把底层调度系统作为实际调度状态来源，不在 107 内重新实现调度算法。
-
-因此这个端口**只有** submit / poll / cancel 三个方法，
-刻意不提供任何「把任务标记为成功」的入口——Run 状态只能由 poll 结果驱动。
-平台记录与调度系统不一致时，保留异常状态并同步或人工处置，不伪造成功。
+底层调度系统是状态事实来源；端口不提供伪造成功状态的入口。提交由完整稳定的
+``correlation`` 标识，响应不确定时只能先调用 ``find_by_correlation`` 恢复。
+查询结果用 ``complete`` 区分权威的零匹配与网络、权限、分页或 schema 不确定；
+调用方绝不能把 ``complete=False`` 的空列表当成没有作业。
 """
 
 from __future__ import annotations
@@ -38,6 +37,8 @@ class SchedulerSubmission:
     """
 
     run_id: str
+    correlation: str
+    """一次逻辑执行的完整稳定标识；不能退化为可能截断的 job name。"""
     job_name: str
     work_dir: Path
     command: str
@@ -61,17 +62,39 @@ class SchedulerJobState:
     reason: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class SchedulerCorrelatedJob:
+    """按 correlation 找到的一个调度作业。"""
+
+    job_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class SchedulerCorrelationResult:
+    """correlation 查询结果及其完整性。"""
+
+    complete: bool
+    jobs: tuple[SchedulerCorrelatedJob, ...] = ()
+
+
 class SchedulerPort(Protocol):
     """底层调度系统适配器。"""
 
     name: str
 
     async def submit(self, submission: SchedulerSubmission) -> str:
-        """提交任务，返回调度任务标识。失败时抛 ``SchedulerError``。"""
+        """提交任务，返回调度任务标识。
+
+        明确拒绝与结果不确定必须使用不同异常类型；不确定时禁止直接重提。
+        """
+        ...
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        """查找逻辑执行对应作业；只有 ``complete=True`` 的零匹配才是权威零。"""
         ...
 
     async def poll(self, job_id: str) -> SchedulerJobState:
-        """查询任务当前状态。"""
+        """查询任务当前状态；不可见或未映射状态返回 ``UNKNOWN``。"""
         ...
 
     async def cancel(self, job_id: str) -> None:
