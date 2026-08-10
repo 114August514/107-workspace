@@ -34,6 +34,8 @@ from ..domain.errors import (
     ObjectNotFound,
     PreflightRejected,
     SchedulerError,
+    SchedulerSubmissionRejected,
+    SchedulerSubmissionUncertain,
     ValidationFailed,
 )
 from ..domain.models import (
@@ -518,20 +520,32 @@ class RunService:
                     environment=environment,
                 )
             )
-        except (SchedulerError, OSError, ValidationFailed) as exc:
+        except SchedulerSubmissionRejected as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
             run.finished_at = self._clock.now()
             await self._repos.runs.update(run)
             await self._record_event(run.id, RunEventType.SUBMIT_FAILED, str(exc))
-            # 提交失败是「交上去就没下文了」，用户不主动刷新根本不知道。
-            # 收件人是 Run 的创建人——即使就是当前操作者也要发。
             await self._notifier.run_submit_failed(
                 recipient_id=run.created_by,
                 run_id=run.id,
                 run_name=run.name,
                 workspace_id=workspace_id,
                 reason=str(exc),
+            )
+            return
+        except SchedulerSubmissionUncertain:
+            await self._record_event(
+                run.id,
+                RunEventType.ERROR,
+                "提交结果不确定；保持排队，等待 Worker 按 correlation 恢复",
+            )
+            return
+        except (SchedulerError, OSError, ValidationFailed):
+            await self._record_event(
+                run.id,
+                RunEventType.ERROR,
+                "提交未完成且无法证明未创建调度任务；保持排队等待安全恢复",
             )
             return
 
