@@ -1,35 +1,46 @@
-"""Slurm REST 调度适配器。
+"""Configurable slurmrestd adapter candidate.
 
-通过 Slurm REST API 提交作业。认证使用 SLURM_JWT，它等价于密码，
-只能从环境变量注入，不写入代码、日志或数据库。
-
-状态映射按 Slurm 返回值进行：Slurm 报什么状态就映射什么状态。查不到作业时返回
-``UNKNOWN``，由上层保留异常状态并同步或人工处置，不伪造成功。
-
-> 说明：当前迁移实现默认使用 ``mock``，尚未完成现行 M1 要求的真实 Slurm 验证。
-> 本适配器的接口按 Slurm REST API
-> v0.0.40 编写，实际接入时需要按目标集群启用的 API 版本核对路径与字段，
-> **以平台页面和集群实际配置为准**。
+The only implemented schema profile is exercised by local v0.0.40 fixtures. Selecting Slurm still
+requires an explicit, human-verified version/path/query contract; this module does not claim those
+fixtures match the target 107 deployment. Authentication remains in memory and error messages never
+include response bodies, request payloads, URLs with credentials, or exception text.
 """
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote, urlsplit
 
 import httpx
 
-from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.errors import (
+    SchedulerError,
+    SchedulerJobNotFound,
+    SchedulerProtocolError,
+    SchedulerSubmissionRejected,
+    SchedulerSubmissionUncertain,
+)
+from ...domain.ports.scheduler import (
+    SchedulerCorrelatedJob,
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
-API_VERSION = "v0.0.40"
+_SUPPORTED_SCHEMA_PROFILE = "slurm-v0.0.40"
+_SUPPORTED_API_VERSION = "v0.0.40"
+_CORRELATION_PATTERN = re.compile(r"[A-Za-z0-9_.:-]+")
 
-# Slurm 作业状态 -> 平台调度状态
 _STATE_MAP = {
     "PENDING": SchedulerState.PENDING,
     "CONFIGURING": SchedulerState.PENDING,
     "REQUEUED": SchedulerState.PENDING,
+    "RESIZING": SchedulerState.PENDING,
     "RUNNING": SchedulerState.RUNNING,
     "COMPLETING": SchedulerState.RUNNING,
     "SUSPENDED": SchedulerState.RUNNING,
@@ -45,25 +56,133 @@ _STATE_MAP = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class SlurmRestApiContract:
+    """Human-verified external API facts consumed by the adapter.
+
+    Paths are complete URL paths relative to ``base_url``. They deliberately live in deployment
+    configuration instead of being inferred from an unverified version number.
+    """
+
+    api_version: str
+    schema_profile: str
+    submit_path: str
+    job_path_template: str
+    jobs_path: str
+    cancel_path_template: str
+    correlation_field: str
+    correlation_query_parameter: str
+    correlation_query_complete: bool
+    correlation_max_bytes: int
+
+    def __post_init__(self) -> None:
+        if self.schema_profile != _SUPPORTED_SCHEMA_PROFILE:
+            raise ValueError(
+                "unsupported Slurm schema profile; target version requires a reviewed "
+                "adapter profile"
+            )
+        if self.api_version != _SUPPORTED_API_VERSION:
+            raise ValueError(
+                "configured Slurm API version is not covered by the local fixture profile"
+            )
+        paths = {
+            "submit_path": self.submit_path,
+            "job_path_template": self.job_path_template,
+            "jobs_path": self.jobs_path,
+            "cancel_path_template": self.cancel_path_template,
+        }
+        for name, path in paths.items():
+            invalid_path = (
+                not path.startswith("/")
+                or path.startswith("//")
+                or "://" in path
+                or any(character in path for character in ("\\", "?", "#"))
+            )
+            if invalid_path:
+                raise ValueError(f"{name} must be an absolute path relative to the configured host")
+            if self.api_version not in path:
+                raise ValueError(f"{name} must contain the explicitly configured API version")
+        for name, template in (
+            ("job_path_template", self.job_path_template),
+            ("cancel_path_template", self.cancel_path_template),
+        ):
+            if template.count("{job_id}") != 1:
+                raise ValueError(f"{name} must contain exactly one {{job_id}} placeholder")
+        if "{job_id}" in self.submit_path or "{job_id}" in self.jobs_path:
+            raise ValueError("collection and submit paths cannot contain {job_id}")
+        if self.correlation_field != "comment":
+            raise ValueError("only the fixture-backed Slurm comment correlation field is supported")
+        if not self.correlation_query_parameter.strip():
+            raise ValueError("correlation query parameter must be explicit")
+        if self.correlation_max_bytes < 1:
+            raise ValueError("correlation_max_bytes must be positive")
+
+
 class SlurmRestScheduler:
+    """HTTP adapter for one explicit, locally fixture-backed slurmrestd profile."""
+
     name = "slurm"
 
-    def __init__(self, base_url: str, user: str, jwt: str, *, timeout: float = 20.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        user: str,
+        jwt: str,
+        contract: SlurmRestApiContract,
+        *,
+        runtime_mode: str,
+        timeout: float = 20.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         if not base_url or not user or not jwt:
-            raise SchedulerError(
-                "Slurm 适配器需要 WORKSPACE107_SLURM_API_BASE_URL、"
-                "WORKSPACE107_SLURM_API_USER 和 WORKSPACE107_SLURM_JWT 三项配置"
+            raise ValueError("Slurm base URL, user, and JWT must be injected at runtime")
+        parsed = urlsplit(base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Slurm base URL must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("Slurm base URL cannot contain credentials, query, or fragment")
+        if timeout <= 0:
+            raise ValueError("Slurm HTTP timeout must be positive")
+        if runtime_mode != "native":
+            raise ValueError(
+                "Apptainer runtime is not implemented or target-validated; human approval "
+                "is required"
             )
+
         self._base_url = base_url.rstrip("/")
         self._headers = {"X-SLURM-USER-NAME": user, "X-SLURM-USER-TOKEN": jwt}
+        self._authentication_secret = jwt
+        self._contract = contract
+        self._runtime_mode = runtime_mode
         self._timeout = timeout
+        self._transport = transport
+
+    def __repr__(self) -> str:
+        return (
+            "SlurmRestScheduler("
+            f"base_url={self._base_url!r}, api_version={self._contract.api_version!r}, "
+            f"runtime_mode={self._runtime_mode!r}, credentials='[REDACTED]')"
+        )
 
     async def submit(self, submission: SchedulerSubmission) -> str:
+        try:
+            self._validate_correlation(submission.correlation)
+        except ValueError:
+            raise SchedulerSubmissionRejected(
+                "submission correlation is invalid for the configured Slurm comment field"
+            ) from None
+        if submission.environment_image.strip():
+            raise SchedulerSubmissionRejected(
+                "native runtime does not apply environment_image; use an explicitly native "
+                "environment or wait for the human-approved Apptainer implementation"
+            )
+
         config = submission.configuration
         payload: dict[str, Any] = {
             "script": render_sbatch_script(submission),
             "job": {
                 "name": submission.job_name,
+                self._contract.correlation_field: submission.correlation,
                 "account": config.account,
                 "partition": config.partition,
                 "qos": config.qos,
@@ -74,87 +193,247 @@ class SlurmRestScheduler:
                 "cpus_per_task": config.cpus,
                 "memory_per_node": config.memory_mb,
                 "time_limit": config.time_limit_minutes,
-                # Secret 明文只走环境变量，不进脚本正文。
                 "environment": submission.environment,
             },
         }
         if config.gpus > 0:
             payload["job"]["tres_per_node"] = f"gres/gpu:{config.gpus}"
 
-        data = await self._request("POST", f"/slurm/{API_VERSION}/job/submit", json=payload)
-        job_id = data.get("job_id")
-        if job_id is None:
-            errors = "；".join(str(e) for e in data.get("errors", [])) or "Slurm 未返回 job_id"
-            raise SchedulerError(f"提交失败：{errors}")
-        return str(job_id)
+        data = await self._request_json(
+            "submit", "POST", self._contract.submit_path, ambiguous_submit=True, json=payload
+        )
+        try:
+            return _job_id(data.get("job_id"))
+        except ValueError as exc:
+            raise SchedulerSubmissionUncertain(
+                "Slurm submit response did not contain a valid job_id; reconcile by correlation"
+            ) from exc
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        try:
+            self._validate_correlation(correlation)
+            data = await self._request_json(
+                "find by correlation",
+                "GET",
+                self._contract.jobs_path,
+                params={self._contract.correlation_query_parameter: correlation},
+            )
+        except (SchedulerError, ValueError):
+            return SchedulerCorrelationResult(complete=False)
+
+        jobs_raw = data.get("jobs")
+        if not isinstance(jobs_raw, list) or data.get("errors"):
+            return SchedulerCorrelationResult(complete=False)
+
+        complete = self._contract.correlation_query_complete and not _has_more_pages(data)
+        matches: list[SchedulerCorrelatedJob] = []
+        seen_ids: set[str] = set()
+        for raw in jobs_raw:
+            if not isinstance(raw, dict):
+                complete = False
+                continue
+            if raw.get(self._contract.correlation_field) != correlation:
+                complete = False
+                continue
+            try:
+                job_id = _job_id(raw.get("job_id"))
+            except ValueError:
+                complete = False
+                continue
+            if job_id in seen_ids:
+                complete = False
+                continue
+            seen_ids.add(job_id)
+            matches.append(SchedulerCorrelatedJob(job_id=job_id))
+        return SchedulerCorrelationResult(complete=complete, jobs=tuple(matches))
 
     async def poll(self, job_id: str) -> SchedulerJobState:
+        path = self._job_path(self._contract.job_path_template, job_id)
         try:
-            data = await self._request("GET", f"/slurm/{API_VERSION}/job/{job_id}")
-        except SchedulerError as exc:
-            if "404" in str(exc):
-                return SchedulerJobState(
-                    state=SchedulerState.UNKNOWN,
-                    reason=f"Slurm 中查不到作业 {job_id}",
-                )
-            raise
+            data = await self._request_json("poll", "GET", path)
+        except SchedulerJobNotFound:
+            return SchedulerJobState(
+                state=SchedulerState.UNKNOWN,
+                reason="Slurm job is not visible to the configured identity",
+            )
 
-        jobs = data.get("jobs") or []
+        jobs = data.get("jobs")
+        if not isinstance(jobs, list):
+            raise SchedulerProtocolError("Slurm poll response field jobs is not a list")
         if not jobs:
             return SchedulerJobState(
                 state=SchedulerState.UNKNOWN,
-                reason=f"Slurm 中查不到作业 {job_id}",
+                reason="Slurm poll returned no visible job",
             )
+        if len(jobs) != 1 or not isinstance(jobs[0], dict):
+            raise SchedulerProtocolError("Slurm poll response did not contain exactly one job")
 
         job = jobs[0]
-        raw_state = _first_state(job.get("job_state"))
+        if job.get("job_id") is not None:
+            try:
+                returned_job_id = _job_id(job["job_id"])
+            except ValueError as exc:
+                raise SchedulerProtocolError("Slurm poll response has an invalid job_id") from exc
+            if returned_job_id != job_id:
+                raise SchedulerProtocolError(
+                    "Slurm poll response job_id does not match the request"
+                )
+
+        try:
+            raw_state = _state_name(job.get("job_state"))
+            exit_code = _exit_code(job.get("exit_code"))
+            started_at = _timestamp(job.get("start_time"))
+            finished_at = _timestamp(job.get("end_time"))
+        except (TypeError, ValueError) as exc:
+            raise SchedulerProtocolError(
+                "Slurm poll response contains invalid state or timing data"
+            ) from exc
+
         state = _STATE_MAP.get(raw_state, SchedulerState.UNKNOWN)
+        reason = self._redact(job.get("state_reason", ""))
+        if state is SchedulerState.UNKNOWN and not reason:
+            reason = f"Slurm state {raw_state or '[empty]'} is not mapped"
         return SchedulerJobState(
             state=state,
-            exit_code=_exit_code(job),
-            started_at=_timestamp(job.get("start_time")),
-            finished_at=_timestamp(job.get("end_time")),
-            reason=job.get("state_reason", "") or "",
+            exit_code=exit_code,
+            started_at=started_at,
+            finished_at=finished_at,
+            reason=reason,
         )
 
     async def cancel(self, job_id: str) -> None:
-        await self._request("DELETE", f"/slurm/{API_VERSION}/job/{job_id}")
+        path = self._job_path(self._contract.cancel_path_template, job_id)
+        await self._request("cancel", "DELETE", path)
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        url = f"{self._base_url}{path}"
+    def _validate_correlation(self, correlation: str) -> None:
+        if not correlation or _CORRELATION_PATTERN.fullmatch(correlation) is None:
+            raise ValueError(
+                "correlation must use only ASCII letters, digits, dot, colon, dash, underscore"
+            )
+        if len(correlation.encode("utf-8")) > self._contract.correlation_max_bytes:
+            raise ValueError("correlation exceeds the human-verified Slurm field capacity")
+
+    @staticmethod
+    def _job_path(template: str, job_id: str) -> str:
+        if not job_id or any(ord(character) < 32 for character in job_id):
+            raise SchedulerProtocolError("job_id is empty or contains control characters")
+        return template.replace("{job_id}", quote(job_id, safe=""))
+
+    async def _request_json(
+        self,
+        operation: str,
+        method: str,
+        path: str,
+        *,
+        ambiguous_submit: bool = False,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            operation, method, path, ambiguous_submit=ambiguous_submit, **kwargs
+        )
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.request(method, url, headers=self._headers, **kwargs)
-                response.raise_for_status()
-                return response.json() if response.content else {}
-        except httpx.HTTPStatusError as exc:
-            raise SchedulerError(
-                f"Slurm API 返回 {exc.response.status_code}：{exc.response.text[:200]}"
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise SchedulerError(f"无法连接 Slurm API：{exc}") from exc
+            data = response.json()
+        except ValueError:
+            error_type = (
+                SchedulerSubmissionUncertain if ambiguous_submit else SchedulerProtocolError
+            )
+            raise error_type(f"Slurm {operation} response was not valid JSON") from None
+        if not isinstance(data, dict):
+            error_type = (
+                SchedulerSubmissionUncertain if ambiguous_submit else SchedulerProtocolError
+            )
+            raise error_type(f"Slurm {operation} response was not a JSON object")
+        return data
+
+    async def _request(
+        self,
+        operation: str,
+        method: str,
+        path: str,
+        *,
+        ambiguous_submit: bool = False,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        try:
+            async with httpx.AsyncClient(
+                base_url=self._base_url,
+                headers=self._headers,
+                timeout=self._timeout,
+                transport=self._transport,
+            ) as client:
+                response = await client.request(method, path, **kwargs)
+        except httpx.RequestError:
+            error_type = SchedulerSubmissionUncertain if ambiguous_submit else SchedulerError
+            raise error_type(
+                f"Slurm {operation} transport failed; credentials and body redacted"
+            ) from None
+
+        status = response.status_code
+        if 200 <= status < 300:
+            return response
+        if status == 404 and not ambiguous_submit:
+            raise SchedulerJobNotFound(f"Slurm {operation} returned 404")
+        if ambiguous_submit and 400 <= status < 500:
+            raise SchedulerSubmissionRejected(f"Slurm submit was rejected with HTTP {status}")
+        if ambiguous_submit:
+            raise SchedulerSubmissionUncertain(
+                f"Slurm submit returned HTTP {status}; reconcile by correlation"
+            )
+        raise SchedulerError(f"Slurm {operation} returned HTTP {status}; response body redacted")
+
+    def _redact(self, raw: Any) -> str:
+        if raw is None:
+            return ""
+        text = str(raw).replace(self._authentication_secret, "[REDACTED]")
+        text = re.sub(r"(?i)(bearer\s+|token\s*[=:]\s*)\S+", r"\1[REDACTED]", text)
+        return text[:256]
 
 
-def _first_state(raw: Any) -> str:
-    """``job_state`` 在不同 API 版本里可能是字符串或字符串数组。"""
+def _job_id(raw: Any) -> str:
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        raise ValueError("invalid job id")
+    value = str(raw).strip()
+    if not value or any(ord(character) < 32 for character in value):
+        raise ValueError("invalid job id")
+    return value
+
+
+def _state_name(raw: Any) -> str:
     if isinstance(raw, list):
-        return str(raw[0]) if raw else ""
-    return str(raw or "")
+        if len(raw) != 1 or not isinstance(raw[0], str):
+            raise ValueError("invalid job state list")
+        raw = raw[0]
+    if not isinstance(raw, str):
+        raise ValueError("invalid job state")
+    return raw.strip().upper().split(maxsplit=1)[0].rstrip("+")
 
 
-def _exit_code(job: dict[str, Any]) -> int | None:
-    exit_code = job.get("exit_code")
-    if isinstance(exit_code, dict):
-        number = exit_code.get("return_code")
-        if isinstance(number, dict):
-            number = number.get("number")
-        return int(number) if number is not None else None
-    return int(exit_code) if isinstance(exit_code, int) else None
+def _exit_code(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        raw = raw.get("return_code")
+        if isinstance(raw, dict):
+            raw = raw.get("number")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError("invalid exit code")
+    return raw
 
 
 def _timestamp(raw: Any) -> datetime | None:
+    if raw is None or raw == 0:
+        return None
     if isinstance(raw, dict):
         raw = raw.get("number")
-    if not isinstance(raw, int) or raw <= 0:
-        return None
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        raise ValueError("invalid timestamp")
     return datetime.fromtimestamp(raw, tz=UTC)
+
+
+def _has_more_pages(data: dict[str, Any]) -> bool:
+    if data.get("has_more") is True or data.get("next") or data.get("next_cursor"):
+        return True
+    meta = data.get("meta")
+    return isinstance(meta, dict) and (
+        meta.get("has_more") is True or bool(meta.get("next") or meta.get("next_cursor"))
+    )

@@ -24,7 +24,7 @@ from .config import Settings, get_settings
 from .domain.ports.scheduler import SchedulerPort
 from .infrastructure.clock import SystemClock
 from .infrastructure.db.session import create_engine, create_session_factory
-from .infrastructure.scheduler import MockScheduler, SlurmRestScheduler
+from .infrastructure.scheduler import MockScheduler, SlurmRestApiContract, SlurmRestScheduler
 from .infrastructure.storage.local import LocalStorage
 from .observability import configure_logging
 
@@ -37,6 +37,20 @@ def build_scheduler(settings: Settings) -> SchedulerPort:
             base_url=settings.slurm_api_base_url,
             user=settings.slurm_api_user,
             jwt=settings.slurm_jwt,
+            contract=SlurmRestApiContract(
+                api_version=settings.slurm_api_version,
+                schema_profile=settings.slurm_api_schema_profile,
+                submit_path=settings.slurm_submit_path,
+                job_path_template=settings.slurm_job_path_template,
+                jobs_path=settings.slurm_jobs_path,
+                cancel_path_template=settings.slurm_cancel_path_template,
+                correlation_field=settings.slurm_correlation_field,
+                correlation_query_parameter=settings.slurm_correlation_query_parameter,
+                correlation_query_complete=settings.slurm_correlation_query_complete,
+                correlation_max_bytes=settings.slurm_correlation_max_bytes,
+            ),
+            runtime_mode=settings.slurm_runtime_mode,
+            timeout=settings.slurm_timeout_seconds,
         )
     return MockScheduler()
 
