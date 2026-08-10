@@ -48,7 +48,6 @@ class Settings(BaseSettings):
 
     auth_mode: AuthMode = "dev"
 
-    worker_lease_seconds: float = 30.0
     worker_poll_seconds: float = 1.0
     worker_idle_seconds: float = 0.5
 
@@ -81,7 +80,7 @@ class Settings(BaseSettings):
             sqlite_file.parent.mkdir(parents=True, exist_ok=True)
 
     def ensure_worker_database(self) -> None:
-        """PostgreSQL 的 SKIP LOCKED 是 M1 claim/lease 的必要语义。"""
+        """Single-active Worker 的 session advisory lock 必须使用 PostgreSQL。"""
         if not self.database_url.startswith("postgresql+"):
             raise ValueError("Independent Worker 必须使用 PostgreSQL 数据库")
 

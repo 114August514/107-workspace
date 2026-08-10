@@ -22,7 +22,7 @@ from ..domain.enums import (
     TargetType,
 )
 from ..domain.errors import ConflictError, ObjectNotFound, PreflightRejected
-from ..domain.execution import ExecutionIntent, ExecutionPhase
+from ..domain.execution import ExecutionIntent
 from ..domain.models import (
     Artifact,
     EnvironmentVersion,
@@ -664,10 +664,9 @@ class RunService:
 def _new_execution_intent(run_id: str, now: datetime) -> ExecutionIntent:
     return ExecutionIntent(
         run_id=run_id,
-        phase=ExecutionPhase.READY,
         correlation=f"workspace107:{run_id}",
         attempt_no=0,
-        next_attempt_at=now,
+        next_action_at=now,
         created_at=now,
         updated_at=now,
     )

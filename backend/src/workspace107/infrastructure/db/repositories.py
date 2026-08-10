@@ -824,15 +824,10 @@ class ExecutionIntentRepositoryImpl:
         self._session.add(
             t.RunExecutionIntentRow(
                 run_id=intent.run_id,
-                phase=intent.phase.value,
                 correlation=intent.correlation,
                 attempt_no=intent.attempt_no,
-                next_attempt_at=func.now(),
+                next_action_at=func.now(),
                 cancel_requested_at=intent.cancel_requested_at,
-                lease_owner=intent.lease_owner,
-                lease_token=intent.lease_token,
-                lease_generation=intent.lease_generation,
-                lease_expires_at=intent.lease_expires_at,
                 uncertainty_code=intent.uncertainty_code,
                 uncertainty_detail=intent.uncertainty_detail,
                 observed_scheduler_state=intent.observed_scheduler_state,
@@ -842,7 +837,6 @@ class ExecutionIntentRepositoryImpl:
                 observed_reason=intent.observed_reason,
                 created_at=func.now(),
                 updated_at=func.now(),
-                completed_at=intent.completed_at,
             )
         )
         await _flush(self._session)
@@ -850,11 +844,8 @@ class ExecutionIntentRepositoryImpl:
     async def request_cancel(self, run_id: str, at: datetime) -> bool:
         result = await self._session.execute(
             update(t.RunExecutionIntentRow)
-            .where(
-                t.RunExecutionIntentRow.run_id == run_id,
-                t.RunExecutionIntentRow.completed_at.is_(None),
-            )
-            .values(cancel_requested_at=at, next_attempt_at=func.now(), updated_at=func.now())
+            .where(t.RunExecutionIntentRow.run_id == run_id)
+            .values(cancel_requested_at=at, next_action_at=func.now(), updated_at=func.now())
         )
         return int(result.rowcount or 0) == 1
 

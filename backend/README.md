@@ -36,7 +36,7 @@ domain/ports/     用 Protocol 描述 Scheduler / Storage / Execution Store
 application/      构造函数注入，只认这些协议
 infrastructure/   实现协议
 main.py           API：数据库、存储、时钟
-worker.py         Worker：数据库 claim/lease、存储、调度器、时钟
+worker.py         Worker：PostgreSQL 全局 advisory lock、存储、调度器
 api/deps.py       请求级仓储与用例服务
 ```
 
@@ -52,7 +52,7 @@ api/deps.py       请求级仓储与用例服务
                         不要往 Services 容器里塞端口
 ```
 
-API 不启动后台同步任务；Worker 使用 PostgreSQL claim/lease 独立推进 Run。
+API 不启动后台同步任务；Worker 持有一条 PostgreSQL session advisory lock 串行推进 Run。
 
 ## 安装与运行
 

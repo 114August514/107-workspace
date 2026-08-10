@@ -1,127 +1,86 @@
-"""独立 Worker 的一次 claim/prepare/submit/correlation lookup/poll/finalize 编排。"""
+"""单 active 独立 Worker：按持久事实串行推进一个 Run。"""
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import hashlib
 import logging
 import posixpath
-from collections.abc import Awaitable, Iterable
-from typing import TypeVar
+from collections.abc import Iterable
 
-from ..domain.errors import (
-    SchedulerError,
-    SchedulerSubmissionRejected,
-    ValidationFailed,
-)
-from ..domain.execution import ClaimedExecution, CollectedArtifact, ExecutionPhase, LeaseLost
-from ..domain.ports.clock import Clock
+from ..domain.errors import SchedulerError, SchedulerSubmissionRejected, ValidationFailed
+from ..domain.execution import CollectedArtifact, PendingExecution
 from ..domain.ports.execution import ExecutionStore
 from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.storage import StoragePort
 from ..domain.secrets import redact
 
 logger = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 class RunWorker:
-    """只编排正式 ports；StoragePort 是 B seam 合入前唯一可替换的 FS 接缝。"""
+    """只编排正式 ports；B 合入时只替换 StoragePort 调用点。"""
 
     def __init__(
         self,
         *,
-        worker_id: str,
         store: ExecutionStore,
         storage: StoragePort,
         scheduler: SchedulerPort,
-        clock: Clock,
-        lease_seconds: float,
-        poll_seconds: float,
+        action_delay_seconds: float,
     ) -> None:
-        self._worker_id = worker_id
         self._store = store
         self._storage = storage
         self._scheduler = scheduler
-        self._clock = clock
-        self._lease_seconds = lease_seconds
-        self._poll_seconds = poll_seconds
+        self._action_delay_seconds = action_delay_seconds
 
     async def run_once(self) -> bool:
-        claimed = await self._store.claim_one(self._worker_id, self._lease_seconds)
-        if claimed is None:
+        pending = await self._store.next_due()
+        if pending is None:
             return False
-        token = claimed.intent.lease_token
-        if token is None:  # pragma: no cover - DB lease tuple constraint protects this
-            raise RuntimeError("claimed execution 缺少 lease token")
-
-        try:
-            await self._process(claimed, token)
-        except LeaseLost:
-            logger.warning(
-                "Worker lease 已失效，停止推进",
-                extra=_log(claimed, outcome="lease_lost"),
-            )
-        except Exception as exc:
-            detail = _safe_detail(exc)
-            logger.exception(
-                "Worker 处理 Run 失败",
-                extra=_log(claimed, outcome="worker_error"),
-            )
-            with contextlib.suppress(LeaseLost):
-                await self._store.record_uncertain(
-                    claimed.run.id,
-                    token,
-                    self._clock.now(),
-                    "worker_error",
-                    detail,
-                )
-        finally:
-            await self._store.release(claimed.run.id, token, self._poll_seconds)
+        logger.info("Worker 推进 Run", extra=_log(pending, outcome="selected"))
+        await self._process(pending)
+        # intent 已被终态事务删除时这是安全 no-op；否则用 PostgreSQL 时间安排下一步。
+        await self._store.defer(pending.run.id, self._action_delay_seconds)
         return True
 
-    async def _process(self, claimed: ClaimedExecution, token: str) -> None:
-        run = claimed.run
-        snapshot = claimed.snapshot
-        intent = claimed.intent
-        logger.info("Worker 已领取 Run", extra=_log(claimed, outcome="claimed"))
+    async def _process(self, pending: PendingExecution) -> None:
+        run = pending.run
+        snapshot = pending.snapshot
+        intent = pending.intent
 
-        if intent.phase is ExecutionPhase.FINALIZING:
-            artifacts = await self._collect_artifacts(claimed, token)
-            await self._store.finalize(run.id, token, self._clock.now(), artifacts)
+        if intent.observed_scheduler_state is not None:
+            artifacts = await self._collect_artifacts(pending)
+            await self._store.finalize(run.id, artifacts)
             return
 
         if run.scheduler_job_id is not None:
             if intent.cancel_requested_at is not None:
                 try:
-                    await self._external(
-                        claimed, token, self._scheduler.cancel(run.scheduler_job_id)
-                    )
+                    await self._scheduler.cancel(run.scheduler_job_id)
                 except SchedulerError as exc:
                     await self._store.record_uncertain(
-                        run.id,
-                        token,
-                        self._clock.now(),
-                        "cancel_uncertain",
-                        _safe_detail(exc),
+                        run.id, "cancel_uncertain", _safe_detail(exc)
                     )
                     return
-            state = await self._external(claimed, token, self._scheduler.poll(run.scheduler_job_id))
-            await self._store.record_poll(run.id, token, self._clock.now(), state)
+            try:
+                state = await self._scheduler.poll(run.scheduler_job_id)
+            except SchedulerError as exc:
+                await self._store.record_uncertain(run.id, "poll_uncertain", _safe_detail(exc))
+                return
+            await self._store.record_poll(run.id, state)
             return
 
         if intent.attempt_no > 0:
-            correlation = await self._external(
-                claimed,
-                token,
-                self._scheduler.find_by_correlation(intent.correlation),
-            )
+            try:
+                correlation = await self._scheduler.find_by_correlation(intent.correlation)
+            except SchedulerError as exc:
+                await self._store.record_uncertain(
+                    run.id, "correlation_incomplete", _safe_detail(exc)
+                )
+                return
             if not correlation.complete:
                 await self._store.record_uncertain(
                     run.id,
-                    token,
-                    self._clock.now(),
                     "correlation_incomplete",
                     correlation.reason or "Scheduler correlation 查询不完整",
                 )
@@ -129,47 +88,30 @@ class RunWorker:
             if len(correlation.job_ids) > 1:
                 await self._store.record_uncertain(
                     run.id,
-                    token,
-                    self._clock.now(),
                     "correlation_multiple",
                     f"correlation 匹配到 {len(correlation.job_ids)} 个任务",
-                    multiple=True,
                 )
                 return
             if len(correlation.job_ids) == 1:
-                await self._store.attach_job(
-                    run.id,
-                    token,
-                    correlation.job_ids[0],
-                    self._clock.now(),
-                    reconciled=True,
-                )
+                await self._store.attach_job(run.id, correlation.job_ids[0], reconciled=True)
                 return
-            await self._store.record_reconcile_zero(run.id, token, self._clock.now())
+            await self._store.clear_reconciled_zero(run.id)
             if intent.cancel_requested_at is not None:
-                await self._store.cancel_without_job(run.id, token, self._clock.now())
+                await self._store.cancel_without_job(run.id)
                 return
         elif intent.cancel_requested_at is not None:
-            await self._store.cancel_without_job(run.id, token, self._clock.now())
+            await self._store.cancel_without_job(run.id)
             return
 
         try:
-            # B 合入后只替换这个注入端口；C 不实现 Git、FS 布局或并发目录恢复。
-            paths = await self._external(
-                claimed,
-                token,
-                self._storage.prepare_run_directory(
-                    run.id,
-                    files=[
-                        (item.path, item.content_hash) for item in claimed.project_version.files
-                    ],
-                    inputs=[(item.access_path, item.source_id) for item in snapshot.input_bindings],
-                ),
+            # B 的 RunWorkspacePort 尚未合入；这是 C 唯一、明确的替换点。
+            paths = await self._storage.prepare_run_directory(
+                run.id,
+                files=[(item.path, item.content_hash) for item in pending.project_version.files],
+                inputs=[(item.access_path, item.source_id) for item in snapshot.input_bindings],
             )
         except (OSError, ValidationFailed) as exc:
-            await self._store.record_submit_failed(
-                run.id, token, self._clock.now(), _safe_detail(exc)
-            )
+            await self._store.record_submit_failed(run.id, _safe_detail(exc))
             return
 
         environment = dict(snapshot.env_literals)
@@ -186,8 +128,6 @@ class RunWorker:
         work_dir = paths.work
         if snapshot.working_directory not in {"", "."}:
             work_dir = paths.work / snapshot.working_directory
-
-        await self._store.arm(run.id, token, self._clock.now())
         submission = SchedulerSubmission(
             run_id=run.id,
             correlation=intent.correlation,
@@ -201,48 +141,44 @@ class RunWorker:
             configuration=snapshot.scheduler,
             environment=environment,
         )
+
+        # 短事务先递增 attempt；进程在此后任何位置退出，恢复都必须先 correlation lookup。
+        attempt_no = await self._store.arm(run.id)
+        if attempt_no is None:
+            await self._store.cancel_without_job(run.id)
+            environment.clear()
+            secret_values.clear()
+            return
         try:
-            job_id = await self._external(claimed, token, self._scheduler.submit(submission))
+            job_id = await self._scheduler.submit(submission)
         except SchedulerSubmissionRejected as exc:
             await self._store.record_submit_failed(
-                run.id,
-                token,
-                self._clock.now(),
-                _safe_detail(exc, secret_values=secret_values.values()),
+                run.id, _safe_detail(exc, secret_values=secret_values.values())
             )
             return
         except Exception as exc:
-            # 未经 adapter 明确确认 rejected 的异常一律可能已创建任务。
+            # adapter 未明确确认本地 rejected 的异常都可能已经创建 Scheduler Job。
             await self._store.record_uncertain(
                 run.id,
-                token,
-                self._clock.now(),
                 "submit_uncertain",
                 _safe_detail(exc, secret_values=secret_values.values()),
             )
             return
         finally:
-            # 局部 Secret 只活到 submit 边界，不进入持久状态或结构化日志。
             environment.clear()
             secret_values.clear()
 
-        await self._store.attach_job(run.id, token, job_id, self._clock.now(), reconciled=False)
+        await self._store.attach_job(run.id, job_id, reconciled=False)
 
-    async def _collect_artifacts(
-        self, claimed: ClaimedExecution, token: str
-    ) -> tuple[CollectedArtifact, ...]:
-        snapshot = claimed.snapshot
+    async def _collect_artifacts(self, pending: PendingExecution) -> tuple[CollectedArtifact, ...]:
+        snapshot = pending.snapshot
         collected: list[CollectedArtifact] = []
         for rule in snapshot.artifact_rules:
             source_path = rule.path
             if snapshot.working_directory not in {"", "."}:
                 source_path = posixpath.join(snapshot.working_directory, rule.path)
-            artifact_id = stable_artifact_id(claimed.run.id, rule.path)
-            content = await self._external(
-                claimed,
-                token,
-                self._storage.collect_artifact(claimed.run.id, artifact_id, source_path),
-            )
+            artifact_id = stable_artifact_id(pending.run.id, rule.path)
+            content = await self._storage.collect_artifact(pending.run.id, artifact_id, source_path)
             collected.append(
                 CollectedArtifact(
                     id=artifact_id,
@@ -256,28 +192,6 @@ class RunWorker:
             )
         return tuple(collected)
 
-    async def _external(self, claimed: ClaimedExecution, token: str, operation: Awaitable[T]) -> T:
-        stopped = asyncio.Event()
-        heartbeat = asyncio.create_task(self._heartbeat(claimed.run.id, token, stopped))
-        try:
-            result = await operation
-        finally:
-            stopped.set()
-            await heartbeat
-        if not await self._store.renew(claimed.run.id, token, self._lease_seconds):
-            raise LeaseLost("外部调用结束时 lease 已失效")
-        return result
-
-    async def _heartbeat(self, run_id: str, token: str, stopped: asyncio.Event) -> None:
-        interval = max(self._lease_seconds / 3, 0.1)
-        while True:
-            try:
-                await asyncio.wait_for(stopped.wait(), timeout=interval)
-                return
-            except TimeoutError:
-                if not await self._store.renew(run_id, token, self._lease_seconds):
-                    return
-
 
 def stable_artifact_id(run_id: str, source_path: str) -> str:
     digest = hashlib.sha256(f"{run_id}\0{source_path}".encode()).hexdigest()[:20]
@@ -289,14 +203,11 @@ def _safe_detail(exc: BaseException, *, secret_values: Iterable[str] = ()) -> st
     return redact(detail, list(secret_values))
 
 
-def _log(claimed: ClaimedExecution, *, outcome: str) -> dict[str, object]:
-    intent = claimed.intent
+def _log(pending: PendingExecution, *, outcome: str) -> dict[str, object]:
     return {
-        "run_id": claimed.run.id,
-        "correlation": intent.correlation,
-        "lease_generation": intent.lease_generation,
-        "phase": intent.phase.value,
-        "attempt_no": intent.attempt_no,
-        "scheduler_job_id": claimed.run.scheduler_job_id,
+        "run_id": pending.run.id,
+        "correlation": pending.intent.correlation,
+        "attempt_no": pending.intent.attempt_no,
+        "scheduler_job_id": pending.run.scheduler_job_id,
         "outcome": outcome,
     }

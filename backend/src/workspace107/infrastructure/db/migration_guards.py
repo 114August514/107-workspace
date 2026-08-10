@@ -1,4 +1,4 @@
-"""M1 migration 的数据保留边界；不猜测 execution intent 或重复 Artifact。"""
+"""M1 migration 的最小数据保留边界。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ def guard_worker_upgrade(connection: Connection) -> None:
     ).scalar_one()
     if unfinished:
         raise RuntimeError(
-            "Independent Worker migration 发现既有非终态 Run；无法猜测 execution intent，"
+            "Independent Worker migration 发现既有非终态 Run；无法安全补造 intent，"
             "请确认开发数据可丢弃后重建 schema"
         )
     duplicate_artifacts = connection.execute(
@@ -29,23 +29,11 @@ def guard_worker_upgrade(connection: Connection) -> None:
 
 
 def guard_worker_downgrade(connection: Connection) -> None:
-    unfinished_intents = connection.execute(
-        text(
-            "SELECT COUNT(*) FROM run_execution_intents "
-            "WHERE phase <> 'complete' OR completed_at IS NULL"
-        )
-    ).scalar_one()
+    intents = connection.execute(text("SELECT COUNT(*) FROM run_execution_intents")).scalar_one()
     unfinished_runs = connection.execute(
         text("SELECT COUNT(*) FROM runs WHERE status IN ('queued','running')")
     ).scalar_one()
-    unresolved_attempts = connection.execute(
-        text(
-            "SELECT COUNT(*) FROM run_submission_attempts "
-            "WHERE resolved_at IS NULL OR outcome IN ('armed','uncertain','reconciled_multiple')"
-        )
-    ).scalar_one()
-    if unfinished_intents or unfinished_runs or unresolved_attempts:
+    if intents or unfinished_runs:
         raise RuntimeError(
-            "Independent Worker downgrade 被拒绝：仍有未完成 intent、非终态 Run "
-            "或 unresolved submission attempt"
+            "Independent Worker downgrade 被拒绝：仍有 execution intent 或非终态 Run"
         )
