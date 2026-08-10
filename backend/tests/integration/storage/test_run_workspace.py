@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
+import signal
 import sys
 from pathlib import Path
 
@@ -24,6 +25,10 @@ from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
 
 COMMIT_OID = "1" * 40
 TREE_OID = "2" * 40
+
+
+class SimulatedCrash(BaseException):
+    pass
 
 
 class FakeExporter:
@@ -62,6 +67,43 @@ class FakeExporter:
                     size=len(content),
                     content_hash=hashlib.sha256(content).hexdigest(),
                 ),
+            ),
+        )
+
+
+class SlowExporter(FakeExporter):
+    async def export(
+        self, *, project_version_id: str, expected_commit_oid: str, target: Path
+    ) -> ProjectVersionExportEvidence:
+        await asyncio.sleep(0.05)
+        return await super().export(
+            project_version_id=project_version_id,
+            expected_commit_oid=expected_commit_oid,
+            target=target,
+        )
+
+
+class InternalSymlinkExporter(FakeExporter):
+    async def export(
+        self, *, project_version_id: str, expected_commit_oid: str, target: Path
+    ) -> ProjectVersionExportEvidence:
+        evidence = await super().export(
+            project_version_id=project_version_id,
+            expected_commit_oid=expected_commit_oid,
+            target=target,
+        )
+        (target / "alias.py").symlink_to("main.py")
+        main = evidence.manifest[0]
+        return ProjectVersionExportEvidence(
+            commit_oid=evidence.commit_oid,
+            tree_oid=evidence.tree_oid,
+            manifest=(
+                ProjectVersionExportFile(
+                    path="alias.py",
+                    size=main.size,
+                    content_hash=main.content_hash,
+                ),
+                main,
             ),
         )
 
@@ -224,6 +266,7 @@ async def test_existing_symlink_workspace_is_rejected_without_writing_outside(
     outside.mkdir()
     runs = root / "runs"
     runs.mkdir()
+    runs.chmod(0o750)
     (runs / "run_test").symlink_to(outside, target_is_directory=True)
     manager = PosixRunWorkspace(root, FakeExporter())
 
@@ -240,7 +283,7 @@ async def test_exporter_symlink_escape_is_rejected_without_prepared_marker(tmp_p
     outside.write_text("outside", encoding="utf-8")
     manager = PosixRunWorkspace(root, FakeExporter(symlink_target=outside))
 
-    with pytest.raises(UnsafeRunWorkspacePath, match="escapes"):
+    with pytest.raises(UnsafeRunWorkspacePath, match="symbolic links"):
         await manager.prepare(identity(), inputs=())
 
     workspace = manager.paths_for("run_test")
@@ -254,11 +297,12 @@ async def test_unmarked_existing_directory_is_never_deleted_or_rebuilt(tmp_path:
     root = storage_root(tmp_path)
     existing = root / "runs" / "run_test"
     existing.mkdir(parents=True)
+    (root / "runs").chmod(0o750)
     sentinel = existing / "keep.txt"
     sentinel.write_text("keep", encoding="utf-8")
     manager = PosixRunWorkspace(root, FakeExporter())
 
-    with pytest.raises(RunWorkspaceConflict, match="identity marker"):
+    with pytest.raises(RunWorkspaceConflict, match="ownership claim"):
         await manager.prepare(identity(), inputs=())
 
     assert sentinel.read_text(encoding="utf-8") == "keep"
@@ -301,3 +345,152 @@ async def test_two_independent_processes_read_the_same_prepared_marker(tmp_path:
 
     assert outputs[0] == outputs[1]
     assert json.loads(outputs[0])["commit_oid"] == COMMIT_OID
+
+
+@pytest.mark.asyncio
+async def test_initialization_crash_before_preparing_marker_recovers_from_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = storage_root(tmp_path)
+    manager = PosixRunWorkspace(root, FakeExporter())
+    write_marker = manager._write_marker
+
+    def crash_before_marker(path: Path, marker: dict[str, object]) -> None:
+        if marker.get("state") == "preparing":
+            raise RuntimeError("crash before preparing marker")
+        write_marker(path, marker)
+
+    monkeypatch.setattr(manager, "_write_marker", crash_before_marker)
+    with pytest.raises(RuntimeError, match="crash before preparing marker"):
+        await manager.prepare(identity(), inputs=())
+    monkeypatch.undo()
+
+    exporter = FakeExporter()
+    workspace = await PosixRunWorkspace(root, exporter).prepare(identity(), inputs=())
+
+    assert exporter.calls == 1
+    assert json.loads(workspace.identity_marker.read_text())["state"] == "prepared"
+
+
+@pytest.mark.asyncio
+async def test_finalizing_crash_before_work_rename_is_recovered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = storage_root(tmp_path)
+    manager = PosixRunWorkspace(root, FakeExporter())
+    rename = Path.rename
+
+    def crash_install(source: Path, target: Path) -> Path:
+        if source.name == ".work-staging" and Path(target).name == "work":
+            raise SimulatedCrash("crash before work rename")
+        return rename(source, target)
+
+    monkeypatch.setattr(Path, "rename", crash_install)
+    with pytest.raises(SimulatedCrash, match="crash before work rename"):
+        await manager.prepare(identity(), inputs=())
+    workspace = manager.paths_for("run_test")
+    finalizing = json.loads(workspace.identity_marker.read_text())
+    assert finalizing["state"] == "finalizing"
+    assert finalizing["staging"] == ".work-staging"
+    monkeypatch.undo()
+
+    recovered = await PosixRunWorkspace(root, FakeExporter()).prepare(identity(), inputs=())
+
+    assert recovered.work.is_dir()
+    assert json.loads(recovered.identity_marker.read_text())["state"] == "prepared"
+
+
+@pytest.mark.asyncio
+async def test_finalizing_crash_after_work_rename_is_recovered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = storage_root(tmp_path)
+    manager = PosixRunWorkspace(root, FakeExporter())
+    write_marker = manager._write_marker
+
+    def crash_before_prepared(path: Path, marker: dict[str, object]) -> None:
+        if marker.get("state") == "prepared":
+            raise RuntimeError("crash before prepared marker")
+        write_marker(path, marker)
+
+    monkeypatch.setattr(manager, "_write_marker", crash_before_prepared)
+    with pytest.raises(RuntimeError, match="crash before prepared marker"):
+        await manager.prepare(identity(), inputs=())
+    workspace = manager.paths_for("run_test")
+    assert workspace.work.is_dir()
+    assert json.loads(workspace.identity_marker.read_text())["state"] == "finalizing"
+    monkeypatch.undo()
+
+    recovered = await PosixRunWorkspace(root, FakeExporter()).prepare(identity(), inputs=())
+
+    assert (recovered.work / "main.py").is_file()
+    assert json.loads(recovered.identity_marker.read_text())["state"] == "prepared"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_identity_prepares_once_and_both_callers_recover(
+    tmp_path: Path,
+) -> None:
+    exporter = SlowExporter()
+    manager = PosixRunWorkspace(storage_root(tmp_path), exporter)
+
+    first, second = await asyncio.gather(
+        manager.prepare(identity(), inputs=()),
+        manager.prepare(identity(), inputs=()),
+    )
+
+    assert first == second
+    assert exporter.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_sigkill_staging_is_marker_owned_and_same_identity_recovers(
+    tmp_path: Path,
+) -> None:
+    root = storage_root(tmp_path)
+    script = f"""
+import asyncio, os, signal
+from pathlib import Path
+from workspace107.domain.ports.run_workspace import RunWorkspaceIdentity
+from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
+
+class KillingExporter:
+    async def export(self, *, project_version_id, expected_commit_oid, target):
+        (target / 'partial.txt').write_text('partial')
+        os.kill(os.getpid(), signal.SIGKILL)
+
+asyncio.run(PosixRunWorkspace(Path({str(root)!r}), KillingExporter()).prepare(
+    RunWorkspaceIdentity('run_test', 'snap_test', 'prjv_test', {"1" * 40!r}), inputs=()
+))
+"""
+    process = await asyncio.create_subprocess_exec(sys.executable, "-c", script)
+    assert await process.wait() == -signal.SIGKILL
+
+    manager = PosixRunWorkspace(root, FakeExporter())
+    workspace = manager.paths_for("run_test")
+    interrupted = json.loads(workspace.identity_marker.read_text())
+    assert interrupted["state"] == "exporting"
+    assert interrupted["staging"] == ".work-staging"
+
+    recovered = await manager.prepare(identity(), inputs=())
+
+    assert json.loads(recovered.identity_marker.read_text())["state"] == "prepared"
+    assert not (recovered.root / ".work-staging").exists()
+
+
+@pytest.mark.asyncio
+async def test_exported_internal_symlink_is_rejected_for_m1(tmp_path: Path) -> None:
+    manager = PosixRunWorkspace(storage_root(tmp_path), InternalSymlinkExporter())
+
+    with pytest.raises(UnsafeRunWorkspacePath, match="symbolic links"):
+        await manager.prepare(identity(), inputs=())
+
+
+@pytest.mark.asyncio
+async def test_permission_drift_is_rejected_during_recovery(tmp_path: Path) -> None:
+    manager = PosixRunWorkspace(storage_root(tmp_path), FakeExporter())
+    workspace = await manager.prepare(identity(), inputs=())
+    workspace.logs.chmod(0o777)
+
+    with pytest.raises(UnsafeRunWorkspacePath, match="mode"):
+        await manager.prepare(identity(), inputs=())
