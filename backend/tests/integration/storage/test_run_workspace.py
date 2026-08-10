@@ -373,6 +373,34 @@ async def test_initialization_crash_before_preparing_marker_recovers_from_claim(
 
 
 @pytest.mark.asyncio
+async def test_marker_tmp_crash_before_fchmod_is_cleaned_and_recovered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = storage_root(tmp_path)
+    manager = PosixRunWorkspace(root, FakeExporter())
+
+    def crash_with_created_tmp(path: Path, marker: dict[str, object]) -> None:
+        temporary = path.parent / f".{path.name}.{'a' * 32}.tmp"
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        os.close(descriptor)
+        raise SimulatedCrash("crash before marker fchmod")
+
+    monkeypatch.setattr(manager, "_write_marker", crash_with_created_tmp)
+    with pytest.raises(SimulatedCrash, match="crash before marker fchmod"):
+        await manager.prepare(identity(), inputs=())
+    monkeypatch.undo()
+
+    workspace = manager.paths_for("run_test")
+    temporary = workspace.root / f".{workspace.identity_marker.name}.{'a' * 32}.tmp"
+    assert temporary.stat().st_mode & 0o777 == 0o600
+
+    recovered = await PosixRunWorkspace(root, FakeExporter()).prepare(identity(), inputs=())
+
+    assert not temporary.exists()
+    assert json.loads(recovered.identity_marker.read_text())["state"] == "prepared"
+
+
+@pytest.mark.asyncio
 async def test_finalizing_crash_before_work_rename_is_recovered(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

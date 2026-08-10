@@ -42,6 +42,7 @@ _MARKER_SCHEMA_VERSION = 1
 _CLAIM_SCHEMA_VERSION = 1
 _HASH_CHUNK_BYTES = 1024 * 1024
 _OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
+_MARKER_TEMP_NAME = re.compile(rf"\A\.{re.escape(_MARKER_NAME)}\.[0-9a-f]{{32}}\.tmp\Z")
 _StateAction = Literal["prepared", "export", "finalize"]
 
 
@@ -529,10 +530,23 @@ class PosixRunWorkspace:
 
     def _remove_marker_temporaries(self, root: Path) -> None:
         removed = False
-        for path in root.glob(f".{_MARKER_NAME}.*.tmp"):
-            self._validate_owned_path(
-                path, expected_mode=_MARKER_MODE, kind="file", label="identity marker temporary"
-            )
+        for path in root.iterdir():
+            if not _MARKER_TEMP_NAME.fullmatch(path.name):
+                continue
+            info = path.lstat()
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                raise UnsafeRunWorkspacePath(
+                    "Run workspace identity marker temporary is not a regular file"
+                )
+            if info.st_uid != self._owner_uid or info.st_gid != self._owner_gid:
+                raise UnsafeRunWorkspacePath(
+                    "Run workspace identity marker temporary ownership drifted"
+                )
+            mode = stat.S_IMODE(info.st_mode)
+            if mode not in {0o600, _MARKER_MODE}:
+                raise UnsafeRunWorkspacePath(
+                    f"Run workspace identity marker temporary mode drifted: {mode:#o}"
+                )
             path.unlink()
             removed = True
         if removed:
