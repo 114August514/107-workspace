@@ -47,6 +47,25 @@ PR #3 实现 M3 Shared Resource，并与 B/C 有机械重叠。它不是 M1 依�
 
 这些事实与当前 v0.0.40/X-SLURM-header 候选冲突，且参考材料明确要求实际使用前重新核实。因此它们只触发 human gate，**不得直接写成实现事实或默认配置**。
 
+### 成熟实现核验与复用决定
+
+以下是外部证据，读取日期均为 **2026-08-10**；tag/commit 只固定本次核验对象，不把上游整体变成本项目依赖：
+
+- **系统 Git**：官方 [`git update-ref` 2.53.0](https://git-scm.com/docs/git-update-ref/2.53.0)、[`git cat-file` 2.53.0](https://git-scm.com/docs/git-cat-file/2.53.0) 与 [`git gc` 2.52.0](https://git-scm.com/docs/git-gc/2.52.0) 证明 create-only CAS、按对象读取与 ref 保活语义；DB 只存 OID 不能防止 unreachable object 被回收。
+- **Cromwell**：官方 tag `92`、commit `e94341fdb32f0526b4338f9e1206a84b936dfcac`；[HPC 文档](https://raw.githubusercontent.com/broadinstitute/cromwell/e94341fdb32f0526b4338f9e1206a84b936dfcac/docs/backends/HPC.md) 与 [SFS actor](https://raw.githubusercontent.com/broadinstitute/cromwell/e94341fdb32f0526b4338f9e1206a84b936dfcac/supportedBackends/sfs/src/main/scala/cromwell/backend/sfs/SharedFileSystemAsyncJobExecutionActor.scala) 使用 durable workflow/call workspace、持久 job id、存活查询和 `rc.tmp → rc` 发布恢复；源码也暴露 submit 成功而 job id 尚未持久化的窗口。
+- **OpenSCOW**：官方 tag `v1.6.4`、commit `7c238148d4ebcab50f174b3807a4e7de4e27bcb0`；[submit API](https://raw.githubusercontent.com/PKUHPC/OpenSCOW/7c238148d4ebcab50f174b3807a4e7de4e27bcb0/apps/portal-web/src/pages/api/job/submitJob.ts) 与 [portal job service](https://raw.githubusercontent.com/PKUHPC/OpenSCOW/7c238148d4ebcab50f174b3807a4e7de4e27bcb0/apps/portal-server/src/services/job.ts) 把认证 identity 贯穿 scheduler，并显式传递 `cwd`、`stdout`、`stderr`。
+- **Airflow/PostgreSQL**：Airflow stable `3.3.0`、源码 commit `7cdb9ad47aff1168a6de06363066184dd029d8b9`；官方 [多 scheduler 文档](https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/scheduler.html#running-more-than-one-scheduler) 和 PostgreSQL 18 [`SKIP LOCKED`](https://www.postgresql.org/docs/18/sql-select.html#SQL-FOR-UPDATE-SHARE) 文档说明该 queue-like claim/heartbeat/lease 模式解决多消费者并发，而不是单 active 进程的必需品。
+- **Gitaly/Praefect**：核验 GitLab docs `19.3/master` 的 [operation atomicity](https://docs.gitlab.com/administration/gitaly/praefect/#atomicity-of-operations)：逻辑可见性最后发布、失败允许 orphan；这是发布顺序证据，不是引入 Gitaly/Praefect 服务的理由。
+- **slurmrestd**：官方 [Slurm 25.11.3 slurmrestd](https://slurm.schedmd.com/archive/slurm-25.11.3/slurmrestd.html)、[REST API archive](https://slurm.schedmd.com/archive/slurm-24.05.8/rest_api.html) 与 [JWT 文档](https://slurm.schedmd.com/archive/slurm-25.11.3/jwt.html) 表明 25.11 可同时加载多个 `data_parser`；v0.0.41 官方路径是 singular `/slurm/v0.0.41/job/submit`，native JWT 使用 `X-SLURM-USER-NAME`/`X-SLURM-USER-TOKEN`。仓内 PDF 的 `Authorization: Bearer` 和 proxy 路径可能描述前置网关，与 native 契约冲突。
+
+基于上述证据，本 ADR 作以下技术决定：
+
+1. **直接复用**系统 Git `update-ref`/`cat-file` 和精确 tree 导出，不自建 Git storage service。
+2. **只借窄模式**：借 Cromwell 的 durable workspace、job-id/存活/终态 marker 恢复，但用本 ADR 的 arm + correlation 消除其 job-id 落库窗口；借 OpenSCOW 的 identity 贯穿及显式 `cwd`/`stdout`/`stderr`，不复制其 SSH/SFTP 执行架构。
+3. **明确不采用** Airflow 的 `SKIP LOCKED` claim、per-Run lease、heartbeat 和 fencing；它们适合多 scheduler，而 M1 已决定单 active Worker + session advisory lock。
+4. 不引入 OpenSCOW、Cromwell、Airflow、Gitaly/Praefect 整套组件，也不新增 MQ、provider registry、全量 SDK 或第二套运行平台。
+5. slurmrestd 只实现 human gate 确认后的一个 `data_parser`/path/auth profile；25.11、v0.0.41、native headers 与 PDF proxy 的冲突仍是外部核验项，不得靠多版本/header fallback 掩盖。
+
 ### 核心风险
 
 - HTTP 数据库事务不能与 Slurm submit 原子提交；“Slurm 已接受、job id 未落库”时盲目重试会重复作业。
