@@ -264,9 +264,15 @@ async def test_minimal_intent_arm_poll_artifact_finalize_and_delete() -> None:
         assert await store.attach_job("run_claim", "job-1", reconciled=False) is True
         assert await store.attach_job("run_claim", "job-1", reconciled=True) is False
         await store.record_poll(
-            "run_claim", SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW)
+            "run_claim",
+            SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW),
+            cancel_failure=None,
         )
-        await store.record_poll("run_claim", SchedulerJobState(state=SchedulerState.PENDING))
+        await store.record_poll(
+            "run_claim",
+            SchedulerJobState(state=SchedulerState.PENDING),
+            cancel_failure=None,
+        )
         await store.record_poll(
             "run_claim",
             SchedulerJobState(
@@ -275,6 +281,7 @@ async def test_minimal_intent_arm_poll_artifact_finalize_and_delete() -> None:
                 started_at=NOW,
                 finished_at=NOW + timedelta(seconds=10),
             ),
+            cancel_failure=None,
         )
         observed = await store.next_due()
         assert observed is not None
@@ -334,7 +341,7 @@ async def test_minimal_intent_arm_poll_artifact_finalize_and_delete() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_uncertainty_survives_nonterminal_polls_without_error_growth() -> None:
+async def test_poll_failure_uncertainty_is_stable_across_cancel_retries() -> None:
     engine = create_async_engine(DATABASE_URL)
     try:
         async with engine.begin() as connection:
@@ -348,59 +355,12 @@ async def test_cancel_uncertainty_survives_nonterminal_polls_without_error_growt
         async with factory() as session, session.begin():
             assert await SqlRepositories(session).execution_intents.request_cancel("run_claim")
 
-        states = (
-            SchedulerJobState(state=SchedulerState.PENDING),
-            SchedulerJobState(state=SchedulerState.PENDING),
-            SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW),
-            SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW),
-            SchedulerJobState(state=SchedulerState.UNKNOWN, reason="temporarily invisible 1"),
-            SchedulerJobState(state=SchedulerState.UNKNOWN, reason="temporarily invisible 2"),
-        )
-        for state in states:
-            await store.record_uncertain("run_claim", "cancel_uncertain", "cancel rejected")
-            await store.record_poll("run_claim", state)
+        for _ in range(3):
+            # Worker 仅持久化 poll failure；同轮 cancel failure 保持为进程内局部事实。
+            await store.record_uncertain("run_claim", "poll_uncertain", "poll failed")
 
         async with factory() as session:
             intent = await session.get(t.RunExecutionIntentRow, "run_claim")
-            run = await session.get(t.RunRow, "run_claim")
-            error_events = (
-                (
-                    await session.execute(
-                        select(t.RunEventRow).where(
-                            t.RunEventRow.run_id == "run_claim",
-                            t.RunEventRow.type == "error",
-                        )
-                    )
-                )
-                .scalars()
-                .all()
-            )
-        assert intent is not None
-        assert (intent.uncertainty_code, intent.uncertainty_detail) == (
-            "cancel_uncertain",
-            "cancel rejected",
-        )
-        assert run.status == "running"
-        assert len(error_events) == 1
-
-        await store.record_poll(
-            "run_claim",
-            SchedulerJobState(
-                state=SchedulerState.CANCELLED,
-                started_at=NOW,
-                finished_at=NOW + timedelta(seconds=10),
-                reason="cancelled by scheduler",
-            ),
-        )
-        observed = await store.next_due()
-        assert observed is not None
-        assert observed.intent.observed_scheduler_state == "cancelled"
-        assert observed.intent.uncertainty_code is None
-        await store.finalize("run_claim", ())
-
-        async with factory() as session:
-            assert await session.get(t.RunExecutionIntentRow, "run_claim") is None
-            run = await session.get(t.RunRow, "run_claim")
             error_count = (
                 await session.execute(
                     select(func.count())
@@ -411,8 +371,148 @@ async def test_cancel_uncertainty_survives_nonterminal_polls_without_error_growt
                     )
                 )
             ).scalar_one()
-        assert run.status == "cancelled"
+        assert intent is not None
+        assert (intent.uncertainty_code, intent.uncertainty_detail) == (
+            "poll_uncertain",
+            "poll failed",
+        )
         assert error_count == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_poll_outcome_atomically_resolves_cancel_uncertainty_precedence() -> None:
+    engine = create_async_engine(DATABASE_URL)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(t.Base.metadata.drop_all)
+            await connection.run_sync(t.Base.metadata.create_all)
+        factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        await _seed(factory, with_intent=True)
+        store = SqlExecutionStore(factory)
+        assert await store.arm("run_claim") == 1
+        assert await store.attach_job("run_claim", "job-1", reconciled=False)
+        async with factory() as session, session.begin():
+            assert await SqlRepositories(session).execution_intents.request_cancel("run_claim")
+
+        for reason in (
+            "temporarily invisible 1",
+            "temporarily invisible 2",
+            "temporarily invisible 2",
+        ):
+            await store.record_poll(
+                "run_claim",
+                SchedulerJobState(state=SchedulerState.UNKNOWN, reason=reason),
+                cancel_failure="cancel rejected",
+            )
+        async with factory() as session:
+            intent = await session.get(t.RunExecutionIntentRow, "run_claim")
+            unknown_error_count = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(t.RunEventRow)
+                    .where(
+                        t.RunEventRow.run_id == "run_claim",
+                        t.RunEventRow.type == "error",
+                    )
+                )
+            ).scalar_one()
+        assert (intent.uncertainty_code, intent.uncertainty_detail) == (
+            "job_unknown",
+            "temporarily invisible 2",
+        )
+        assert unknown_error_count == 2
+
+        for state in (
+            SchedulerJobState(state=SchedulerState.PENDING),
+            SchedulerJobState(state=SchedulerState.PENDING),
+            SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW),
+            SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW),
+        ):
+            await store.record_poll("run_claim", state, cancel_failure="cancel rejected")
+        async with factory() as session:
+            intent = await session.get(t.RunExecutionIntentRow, "run_claim")
+            run = await session.get(t.RunRow, "run_claim")
+            cancel_error_count = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(t.RunEventRow)
+                    .where(
+                        t.RunEventRow.run_id == "run_claim",
+                        t.RunEventRow.type == "error",
+                    )
+                )
+            ).scalar_one()
+        assert (intent.uncertainty_code, intent.uncertainty_detail) == (
+            "cancel_uncertain",
+            "cancel rejected",
+        )
+        assert run.status == "running"
+        assert cancel_error_count == 3
+
+        await store.record_poll(
+            "run_claim",
+            SchedulerJobState(state=SchedulerState.RUNNING, started_at=NOW),
+            cancel_failure=None,
+        )
+        await store.record_poll(
+            "run_claim",
+            SchedulerJobState(state=SchedulerState.PENDING),
+            cancel_failure=None,
+        )
+        async with factory() as session:
+            intent = await session.get(t.RunExecutionIntentRow, "run_claim")
+            cleared_error_count = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(t.RunEventRow)
+                    .where(
+                        t.RunEventRow.run_id == "run_claim",
+                        t.RunEventRow.type == "error",
+                    )
+                )
+            ).scalar_one()
+        assert intent.uncertainty_code is None
+        assert intent.uncertainty_detail == ""
+        assert cleared_error_count == 3
+
+        await store.record_poll(
+            "run_claim",
+            SchedulerJobState(state=SchedulerState.PENDING),
+            cancel_failure="cancel rejected",
+        )
+        await store.record_poll(
+            "run_claim",
+            SchedulerJobState(
+                state=SchedulerState.CANCELLED,
+                started_at=NOW,
+                finished_at=NOW + timedelta(seconds=10),
+                reason="cancelled by scheduler",
+            ),
+            cancel_failure="cancel rejected",
+        )
+        observed = await store.next_due()
+        assert observed is not None
+        assert observed.intent.observed_scheduler_state == "cancelled"
+        assert observed.intent.uncertainty_code is None
+        await store.finalize("run_claim", ())
+
+        async with factory() as session:
+            assert await session.get(t.RunExecutionIntentRow, "run_claim") is None
+            run = await session.get(t.RunRow, "run_claim")
+            final_error_count = (
+                await session.execute(
+                    select(func.count())
+                    .select_from(t.RunEventRow)
+                    .where(
+                        t.RunEventRow.run_id == "run_claim",
+                        t.RunEventRow.type == "error",
+                    )
+                )
+            ).scalar_one()
+        assert run.status == "cancelled"
+        assert final_error_count == 4
     finally:
         await engine.dispose()
 
@@ -431,7 +531,9 @@ async def test_completed_without_exit_code_stays_uncertain_and_keeps_intent() ->
         assert await store.attach_job("run_claim", "job-1", reconciled=False)
 
         await store.record_poll(
-            "run_claim", SchedulerJobState(state=SchedulerState.COMPLETED, exit_code=None)
+            "run_claim",
+            SchedulerJobState(state=SchedulerState.COMPLETED, exit_code=None),
+            cancel_failure=None,
         )
         async with factory() as session:
             intent = await session.get(t.RunExecutionIntentRow, "run_claim")

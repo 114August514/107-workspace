@@ -25,7 +25,13 @@ class ExecutionStore(Protocol):
 
     async def cancel_without_job(self, run_id: str) -> None: ...
 
-    async def record_poll(self, run_id: str, state: SchedulerJobState) -> None: ...
+    async def record_poll(
+        self,
+        run_id: str,
+        state: SchedulerJobState,
+        *,
+        cancel_failure: str | None,
+    ) -> None: ...
 
     async def finalize(
         self,

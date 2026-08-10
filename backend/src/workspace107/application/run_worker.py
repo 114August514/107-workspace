@@ -64,19 +64,23 @@ class RunWorker:
             return
 
         if run.scheduler_job_id is not None:
+            cancel_failure: str | None = None
             if intent.cancel_requested_at is not None:
                 try:
                     await self._scheduler.cancel(run.scheduler_job_id)
                 except SchedulerError as exc:
-                    await self._store.record_uncertain(
-                        run.id, "cancel_uncertain", _safe_detail(exc)
-                    )
+                    # Poll 是本轮更权威的 Scheduler 事实；取消失败只在 poll 成功后参与合并。
+                    cancel_failure = _safe_detail(exc)
             try:
                 state = await self._scheduler.poll(run.scheduler_job_id)
             except SchedulerError as exc:
                 await self._store.record_uncertain(run.id, "poll_uncertain", _safe_detail(exc))
                 return
-            await self._store.record_poll(run.id, state)
+            await self._store.record_poll(
+                run.id,
+                state,
+                cancel_failure=cancel_failure,
+            )
             return
 
         if intent.attempt_no > 0:

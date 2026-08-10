@@ -84,7 +84,13 @@ class _Store:
         self.calls.append(("cancel", run_id))
         self.pending = None
 
-    async def record_poll(self, run_id: str, state: SchedulerJobState) -> None:
+    async def record_poll(
+        self,
+        run_id: str,
+        state: SchedulerJobState,
+        *,
+        cancel_failure: str | None,
+    ) -> None:
         assert self.pending is not None
         if state.state in {
             SchedulerState.COMPLETED,
@@ -100,7 +106,7 @@ class _Store:
                     observed_finished_at=state.finished_at or NOW,
                 ),
             )
-        self.calls.append(("poll", state.state))
+        self.calls.append(("poll", (state.state, cancel_failure)))
 
     async def finalize(self, run_id: str, artifacts) -> None:
         self.calls.append(("finalize", tuple(artifacts)))
@@ -151,10 +157,12 @@ class _Scheduler:
         *,
         submit_error: BaseException | None = None,
         poll_state: SchedulerJobState | None = None,
+        poll_error: BaseException | None = None,
         cancel_error: BaseException | None = None,
     ) -> None:
         self.correlation = correlation
         self.submit_error = submit_error
+        self.poll_error = poll_error
         self.cancel_error = cancel_error
         self.poll_state = poll_state or SchedulerJobState(SchedulerState.PENDING)
         self.submissions = 0
@@ -172,6 +180,8 @@ class _Scheduler:
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         self.polls += 1
+        if self.poll_error is not None:
+            raise self.poll_error
         return self.poll_state
 
     async def cancel(self, job_id: str) -> None:
@@ -410,8 +420,8 @@ async def test_cancel_error_still_polls_terminal_then_collects_and_finalizes(
     )
     assert scheduler.cancellations == 1
     assert scheduler.polls == 1
-    assert any(call[0] == "uncertain" and call[1][0] == "cancel_uncertain" for call in store.calls)
-    assert ("poll", SchedulerState.COMPLETED) in store.calls
+    assert not any(call[0] == "uncertain" for call in store.calls)
+    assert ("poll", (SchedulerState.COMPLETED, "cancel rejected")) in store.calls
     assert store.pending is not None
 
     await _run(
@@ -425,6 +435,34 @@ async def test_cancel_error_still_polls_terminal_then_collects_and_finalizes(
     assert store.pending is None
     assert storage.collect_calls == 1
     assert any(call[0] == "finalize" for call in store.calls)
+
+
+@pytest.mark.asyncio
+async def test_cancel_and_poll_errors_persist_only_poll_uncertainty(tmp_path: Path) -> None:
+    pending = _pending(cancel=True, job_id="job-1")
+    store = _Store(pending)
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        cancel_error=SchedulerError("cancel request\nrejected"),
+        poll_error=SchedulerError("poll request\nfailed"),
+    )
+
+    for _ in range(2):
+        assert store.pending is not None
+        await _run(
+            tmp_path,
+            store.pending,
+            scheduler.correlation,
+            scheduler=scheduler,
+            store=store,
+        )
+
+    uncertainties = [call[1] for call in store.calls if call[0] == "uncertain"]
+    assert uncertainties == [
+        ("poll_uncertain", "poll request failed"),
+        ("poll_uncertain", "poll request failed"),
+    ]
+    assert scheduler.cancellations == scheduler.polls == 2
 
 
 @pytest.mark.asyncio
@@ -456,6 +494,10 @@ async def test_cancel_error_with_nonterminal_or_unknown_state_retries_cancel_and
     assert scheduler.polls == 2
     assert store.pending is not None
     assert [call[0] for call in store.calls].count("defer") == 2
+    assert [call[1] for call in store.calls if call[0] == "poll"] == [
+        (state, "cancel rejected"),
+        (state, "cancel rejected"),
+    ]
 
 
 @pytest.mark.asyncio

@@ -185,22 +185,22 @@ class SqlExecutionStore(ExecutionStore):
                 await _add_activity(session, run, ActivityAction.RUN_CANCELLED, now)
             await session.delete(intent)
 
-    async def record_poll(self, run_id: str, state: SchedulerJobState) -> None:
+    async def record_poll(
+        self,
+        run_id: str,
+        state: SchedulerJobState,
+        *,
+        cancel_failure: str | None,
+    ) -> None:
         async with self._factory() as session, session.begin():
             intent = await _intent_for_update(session, run_id)
             run = await _run_for_update(session, run_id)
             now = await _database_now(session)
-            cancel_uncertain = intent.uncertainty_code == "cancel_uncertain"
             if run.status in _TERMINAL_VALUES:
                 await session.delete(intent)
                 return
             if state.state is SchedulerState.UNKNOWN:
-                if cancel_uncertain:
-                    intent.updated_at = now
-                else:
-                    await _uncertain(
-                        session, intent, now, "job_unknown", state.reason or "任务未知"
-                    )
+                await _uncertain(session, intent, now, "job_unknown", state.reason or "任务未知")
                 return
             if state.state is SchedulerState.COMPLETED and state.exit_code is None:
                 await _uncertain(
@@ -212,27 +212,28 @@ class SqlExecutionStore(ExecutionStore):
                 )
                 return
 
-            if (
-                state.state
-                in {
-                    SchedulerState.COMPLETED,
-                    SchedulerState.FAILED,
-                    SchedulerState.CANCELLED,
-                }
-                or not cancel_uncertain
-            ):
-                intent.uncertainty_code = None
-                intent.uncertainty_detail = ""
-            intent.updated_at = now
-            if state.state is SchedulerState.PENDING:
-                return
-            if state.state is SchedulerState.RUNNING:
-                if run.status == RunStatus.QUEUED.value:
+            if state.state in {SchedulerState.PENDING, SchedulerState.RUNNING}:
+                if cancel_failure is None:
+                    intent.uncertainty_code = None
+                    intent.uncertainty_detail = ""
+                    intent.updated_at = now
+                else:
+                    await _uncertain(
+                        session,
+                        intent,
+                        now,
+                        "cancel_uncertain",
+                        cancel_failure,
+                    )
+                if state.state is SchedulerState.RUNNING and run.status == RunStatus.QUEUED.value:
                     run.status = RunStatus.RUNNING.value
                     run.started_at = state.started_at or now
                     await _add_event(session, run_id, RunEventType.STARTED, "任务开始执行", now)
                 return
 
+            intent.uncertainty_code = None
+            intent.uncertainty_detail = ""
+            intent.updated_at = now
             intent.observed_scheduler_state = state.state.value
             intent.observed_exit_code = state.exit_code
             intent.observed_started_at = state.started_at
