@@ -1,10 +1,8 @@
 """调度端口。
 
-当前实现把底层调度系统作为实际调度状态来源，不在 107 内重新实现调度算法。
-
-因此这个端口**只有** submit / poll / cancel 三个方法，
-刻意不提供任何「把任务标记为成功」的入口——Run 状态只能由 poll 结果驱动。
-平台记录与调度系统不一致时，保留异常状态并同步或人工处置，不伪造成功。
+调度系统是实际状态来源，端口既不提供「标记成功」入口，也不把查询失败
+伪装成「没有任务」。提交 correlation 必须能精确对应完整 Run identity；
+只有 ``reconcile.complete`` 为真时，空结果才是可安全重提的权威事实。
 """
 
 from __future__ import annotations
@@ -38,6 +36,8 @@ class SchedulerSubmission:
     """
 
     run_id: str
+    correlation: str
+    """完整、稳定的逻辑执行关联值。禁止使用会截断的展示名。"""
     job_name: str
     work_dir: Path
     command: str
@@ -61,13 +61,26 @@ class SchedulerJobState:
     reason: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class SchedulerCorrelationResult:
+    """按 correlation 查询 Scheduler 的完整性与匹配结果。"""
+
+    complete: bool
+    job_ids: tuple[str, ...] = ()
+    reason: str = ""
+
+
 class SchedulerPort(Protocol):
     """底层调度系统适配器。"""
 
     name: str
 
     async def submit(self, submission: SchedulerSubmission) -> str:
-        """提交任务，返回调度任务标识。失败时抛 ``SchedulerError``。"""
+        """返回 job id；确定未创建抛 SubmissionRejected，其余歧义抛 SubmissionUncertain。"""
+        ...
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        """查询 correlation；权限、网络或分页不完整时必须返回 complete=False。"""
         ...
 
     async def poll(self, job_id: str) -> SchedulerJobState:

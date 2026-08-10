@@ -25,7 +25,7 @@ def main(argv: list[str]) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # 导出只需要路由和 schema，不连接数据库和调度系统。
-    app = create_app(Settings(env="export", run_sync_interval_seconds=0))
+    app = create_app(Settings(env="export"))
     schema = app.openapi()
 
     output.write_text(

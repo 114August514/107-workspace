@@ -23,6 +23,7 @@ def _submission(root: Path) -> SchedulerSubmission:
     logs.mkdir(parents=True)
     return SchedulerSubmission(
         run_id="run_windows",
+        correlation="workspace107:run_windows",
         job_name="Windows portability",
         work_dir=work,
         command="python main.py",

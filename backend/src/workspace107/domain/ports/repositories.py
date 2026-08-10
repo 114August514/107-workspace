@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
+from ..execution import ExecutionIntent
 from ..models import (
     Activity,
     Artifact,
@@ -148,15 +149,15 @@ class RunRepository(Protocol):
     async def update(self, run: Run) -> None: ...
     async def list_for_project(self, project_id: str, page: PageRequest) -> Page[Run]: ...
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Run]: ...
-    async def list_unfinished(self) -> list[Run]:
-        """列出所有未进入终态的 Run，供状态同步使用。"""
-        ...
-
-    async def claim_terminal(self, run: Run) -> bool:
-        """条件更新把 Run 推进到终态。抢到返回 True，别人已推进过返回 False。"""
-        ...
 
     async def count_unfinished_for_plan(self, workspace_id: str, compute_plan_id: str) -> int: ...
+
+
+class ExecutionIntentRepository(Protocol):
+    async def add(self, intent: ExecutionIntent) -> None: ...
+    async def request_cancel(self, run_id: str) -> bool:
+        """持久化取消请求；不存在或已完成时返回 False。"""
+        ...
 
 
 class IdempotencyRepository(Protocol):
@@ -231,6 +232,7 @@ class Repositories(Protocol):
     run_configurations: RunConfigurationRepository
     run_snapshots: RunSnapshotRepository
     runs: RunRepository
+    execution_intents: ExecutionIntentRepository
     run_events: RunEventRepository
     idempotency: IdempotencyRepository
     artifacts: ArtifactRepository

@@ -40,12 +40,39 @@ services:
       WORKSPACE107_SLURM_API_USER: ${WORKSPACE107_SLURM_API_USER:-}
       WORKSPACE107_SLURM_JWT: ${WORKSPACE107_SLURM_JWT:-}
       WORKSPACE107_AUTH_MODE: ${WORKSPACE107_AUTH_MODE:-dev}
-      WORKSPACE107_RUN_SYNC_INTERVAL_SECONDS: ${WORKSPACE107_RUN_SYNC_INTERVAL_SECONDS:-1.0}
       WORKSPACE107_SEED_DEMO: ${WORKSPACE107_SEED_DEMO:-false}
     volumes:
       - ${WORKSPACE107_STORAGE_MOUNT:-storage-data}:/var/lib/workspace107/storage
     depends_on:
       db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+    image: ${WORKSPACE107_IMAGE_API:-workspace107/api:local}
+    restart: unless-stopped
+    deploy:
+      replicas: 1
+    command: ["python", "-m", "workspace107.worker"]
+    environment:
+      WORKSPACE107_ENV: production
+      WORKSPACE107_LOG_LEVEL: ${WORKSPACE107_LOG_LEVEL:-INFO}
+      WORKSPACE107_LOG_FORMAT: json
+      WORKSPACE107_DATABASE_URL: >-
+        postgresql+asyncpg://${POSTGRES_USER:-workspace107}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-workspace107}
+      WORKSPACE107_STORAGE_ROOT: /var/lib/workspace107/storage
+      WORKSPACE107_SCHEDULER: ${WORKSPACE107_SCHEDULER:-mock}
+      WORKSPACE107_SLURM_API_BASE_URL: ${WORKSPACE107_SLURM_API_BASE_URL:-}
+      WORKSPACE107_SLURM_API_USER: ${WORKSPACE107_SLURM_API_USER:-}
+      WORKSPACE107_SLURM_JWT: ${WORKSPACE107_SLURM_JWT:-}
+      WORKSPACE107_WORKER_POLL_SECONDS: ${WORKSPACE107_WORKER_POLL_SECONDS:-1.0}
+      WORKSPACE107_WORKER_IDLE_SECONDS: ${WORKSPACE107_WORKER_IDLE_SECONDS:-0.5}
+      WORKSPACE107_SKIP_BOOTSTRAP: "true"
+    volumes:
+      - ${WORKSPACE107_STORAGE_MOUNT:-storage-data}:/var/lib/workspace107/storage
+    depends_on:
+      api:
         condition: service_healthy
 
   web:

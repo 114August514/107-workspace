@@ -7,6 +7,7 @@ application 层只依赖这里定义的协议，具体实现在 infrastructure �
 from .clock import Clock
 from .project_content import CommitManifest, ProjectContentPort
 from .scheduler import (
+    SchedulerCorrelationResult,
     SchedulerJobState,
     SchedulerPort,
     SchedulerState,
@@ -29,6 +30,7 @@ __all__ = [
     "ProjectVersionExportFile",
     "ProjectVersionExporter",
     "RunPaths",
+    "SchedulerCorrelationResult",
     "SchedulerJobState",
     "SchedulerPort",
     "SchedulerState",
