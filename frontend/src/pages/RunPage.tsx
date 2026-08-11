@@ -44,14 +44,8 @@ export function RunPage() {
   const run = detail.data?.run
   const active = run !== undefined && !isTerminal(run.status)
 
-  /**
-   * 未结束时定时刷新。
-   *
-   * 先触发一次后端同步，再读 Run——状态只能来自调度系统的轮询结果，
-   * 平台不会自己编一个状态出来。
-   */
-  const refresh = useCallback(async () => {
-    await api.syncRuns().catch(() => undefined)
+  /** 未结束时只读取 API；Scheduler reconciliation 由独立 Worker 驱动。 */
+  const refresh = useCallback(() => {
     detail.reload()
     logs.reload()
   }, [detail, logs])

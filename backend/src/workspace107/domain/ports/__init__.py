@@ -5,19 +5,30 @@ application 层只依赖这里定义的协议，具体实现在 infrastructure �
 """
 
 from .clock import Clock
+from .project_content import CommitManifest, ProjectContentPort
 from .scheduler import (
+    SchedulerCorrelationResult,
     SchedulerJobState,
     SchedulerPort,
     SchedulerState,
     SchedulerSubmission,
 )
 from .secret_vault import SecretVault
-from .storage import ArtifactContent, RunPaths, StoragePort
+from .storage import StoragePort
+from .version_control import (
+    ProjectVersionExporter,
+    ProjectVersionExportEvidence,
+    ProjectVersionExportFile,
+)
 
 __all__ = [
-    "ArtifactContent",
     "Clock",
-    "RunPaths",
+    "CommitManifest",
+    "ProjectContentPort",
+    "ProjectVersionExportEvidence",
+    "ProjectVersionExportFile",
+    "ProjectVersionExporter",
+    "SchedulerCorrelationResult",
     "SchedulerJobState",
     "SchedulerPort",
     "SchedulerState",

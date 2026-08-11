@@ -7,7 +7,7 @@
 | :--- | :--- |
 | [`platform/`](platform/README.md) | 107 集群与比赛培训的原始 PDF |
 | [`engineering/hpc-helper.md`](engineering/hpc-helper.md) | 外部 `hpc-helper` 的固定来源与吸收边界 |
+| [`engineering/platform-positioning-chat.md`](engineering/platform-positioning-chat.md) | ChatGPT 分享“算力平台定位与重构”的来源与吸收边界 |
 
 早期产品愿景、后端初始化指南和派生的平台说明已被现行设计取代，不再保留在活动树；
-取回方式见 [`../archive/README.md`](../archive/README.md)。当前产品事实以
-[`../product/design.md`](../product/design.md) 为准。
+取回方式见 [`../archive/README.md`](../archive/README.md)。参考材料及其来源记录不会恢复、授权或重新生效任何历史指南；当前产品事实以[`../product/design.md`](../product/design.md) 为准。

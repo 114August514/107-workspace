@@ -451,12 +451,10 @@ export interface paths {
         put?: never;
         /**
          * 提交 Run
-         * @description 需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。
+         * @description 需要提交 Run 权限；校验后原子固定 Snapshot、QUEUED Run 与执行意图。
          *
-         *     提交失败仍会保留 Run，作为可排查的历史事实。
-         *
-         *     带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），
-         *     不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。
+         *     请求路径不准备目录或调用 Scheduler；独立 Worker 在事务提交后领取。带
+         *     ``Idempotency-Key`` 的重放返回同一个 Run（200），新建返回 201。
          */
         post: operations["create_run_api_v1_projects__project_id__runs_post"];
         delete?: never;
@@ -561,29 +559,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 同步 Run 状态
-         * @description 无需用户身份，主动轮询全部未结束 Run 的调度状态。
-         *
-         *     状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会
-         *     中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。
-         */
-        post: operations["sync_runs_api_v1_runs_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -615,10 +590,7 @@ export interface paths {
         put?: never;
         /**
          * 取消 Run
-         * @description 需要取消 Run 权限，且 Run 尚未进入终态。
-         *
-         *     已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务
-         *     会直接标记为已取消。
+         * @description 持久化取消请求；Scheduler cancel 与最终状态确认由独立 Worker 完成。
          */
         post: operations["cancel_run_api_v1_runs__run_id__cancel_post"];
         delete?: never;
@@ -2011,11 +1983,6 @@ export interface components {
             name: string;
             /** Value */
             value: string;
-        };
-        /** SyncOut */
-        SyncOut: {
-            /** Changed */
-            changed: number;
         };
         /**
          * TargetType
@@ -4639,80 +4606,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    sync_runs_api_v1_runs_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncOut"];
-                };
             };
             /** @description 请求不合法 */
             400: {

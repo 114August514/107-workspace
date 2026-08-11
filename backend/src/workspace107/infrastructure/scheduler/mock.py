@@ -17,8 +17,13 @@ from datetime import UTC, datetime
 from typing import IO
 from uuid import uuid4
 
-from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.errors import SchedulerError, SchedulerSubmissionRejected
+from ...domain.ports.scheduler import (
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
 # 用户作业只继承这些基础变量。
@@ -37,6 +42,7 @@ def build_job_environment(submission: SchedulerSubmission) -> dict[str, str]:
 @dataclass
 class _MockJob:
     process: asyncio.subprocess.Process
+    correlation: str
     stdout: IO[bytes]
     stderr: IO[bytes]
     started_at: datetime
@@ -51,6 +57,7 @@ class MockScheduler:
 
     def __init__(self) -> None:
         self._jobs: dict[str, _MockJob] = {}
+        self._correlations: dict[str, list[str]] = {}
 
     async def submit(self, submission: SchedulerSubmission) -> str:
         work_dir = submission.work_dir
@@ -58,36 +65,53 @@ class MockScheduler:
             work_dir.mkdir(parents=True, exist_ok=True)
 
         # 把渲染出的作业脚本留在 Run 目录里，用户可以直接看到平台生成了什么。
-        script_path = submission.stdout_path.parent.parent / "job.sh"
+        script_path = submission.stdout_path.parent / "job.sh"
         script_path.write_text(render_sbatch_script(submission), encoding="utf-8")
 
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
         stderr = submission.stderr_path.open("ab")
-        shell_options = {} if os.name == "nt" else {"executable": "/bin/bash"}
-
         try:
-            process = await asyncio.create_subprocess_shell(
-                submission.command,
-                cwd=str(work_dir),
-                stdout=stdout,
-                stderr=stderr,
-                env=environment,
-                **shell_options,
-            )
+            if os.name == "nt":
+                process = await asyncio.create_subprocess_shell(
+                    submission.command,
+                    cwd=str(work_dir),
+                    stdout=stdout,
+                    stderr=stderr,
+                    env=environment,
+                )
+            else:
+                process = await asyncio.create_subprocess_exec(
+                    "/bin/bash",
+                    str(script_path),
+                    cwd=str(work_dir),
+                    stdout=stdout,
+                    stderr=stderr,
+                    env=environment,
+                )
         except OSError as exc:  # pragma: no cover - 取决于宿主机环境
             stdout.close()
             stderr.close()
-            raise SchedulerError(f"无法启动任务：{exc}") from exc
-
+            raise SchedulerSubmissionRejected(f"无法启动任务：{exc}") from exc
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
+            correlation=submission.correlation,
             process=process,
             stdout=stdout,
             stderr=stderr,
             started_at=datetime.now(UTC),
         )
+        self._correlations.setdefault(submission.correlation, []).append(job_id)
         return job_id
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        job_ids = self._correlations.get(correlation)
+        if job_ids is None:
+            return SchedulerCorrelationResult(
+                complete=False,
+                reason="Mock Scheduler 进程内 correlation registry 不含该 Run；可能已重启",
+            )
+        return SchedulerCorrelationResult(complete=True, job_ids=tuple(job_ids))
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         job = self._jobs.get(job_id)

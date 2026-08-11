@@ -56,6 +56,18 @@ class ImmutableObjectError(ConflictError):
     code = "immutable_object"
 
 
+class ProjectContentMissing(ConflictError):
+    """Project Version 指向的 Git repository 或 object 已不存在。"""
+
+    code = "project_content_missing"
+
+
+class ProjectContentIdentityMismatch(ConflictError):
+    """Git commit 存在，但不属于所声明的 Project repository identity。"""
+
+    code = "project_content_identity_mismatch"
+
+
 class PreflightRejected(DomainError):
     """提交前检查未通过，附带全部阻止提交的问题。"""
 
@@ -70,3 +82,27 @@ class SchedulerError(DomainError):
     """底层调度系统返回错误。"""
 
     code = "scheduler_error"
+
+
+class SchedulerProtocolError(SchedulerError):
+    """调度 API 返回的成功响应不符合已配置的 schema profile。"""
+
+    code = "scheduler_protocol_error"
+
+
+class SchedulerSubmissionRejected(SchedulerError):
+    """请求发出前被本地校验拒绝；未来远端拒绝必须先有人工核验 allowlist。"""
+
+    code = "scheduler_submission_rejected"
+
+
+class SchedulerSubmissionUncertain(SchedulerError):
+    """提交可能已经被接受，必须按 correlation 恢复，禁止盲目重试。"""
+
+    code = "scheduler_submission_uncertain"
+
+
+class SchedulerJobNotFound(SchedulerError):
+    """指定 job id 在调度端不可见；不能当作取消成功。"""
+
+    code = "scheduler_job_not_found"

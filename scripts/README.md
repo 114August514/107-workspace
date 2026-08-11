@@ -1,11 +1,14 @@
 # 仓库任务入口
 
-`workspace.py` 是任务的唯一实现，`Makefile` 只是方便使用的薄入口。没有 Make 的协作者，
-包括使用原生 Windows 的协作者，直接运行同一个 Python CLI：
+`workspace.py` 是任务的唯一实现，`Makefile` 只是 Linux / WSL2 上方便使用的薄入口。
+原生 Windows 协作者直接运行同一个 Python CLI；该入口保留 setup/check 以及适用的
+前端、API、Git 检查，不代表支持 M1 POSIX Worker、Shared FS、smoke 或部署：
 
 ```powershell
 uv run --no-project python scripts/workspace.py check
 ```
+
+权威能力边界见 [ADR-0004](../docs/decisions/0004-platform-support-matrix.md)。
 
 前端工具链统一使用 Node.js 24 LTS 与 pnpm 11。仓库只提交
 `frontend/pnpm-lock.yaml` 这一份前端依赖锁文件；同目录的 `pnpm-workspace.yaml` 只允许
@@ -27,6 +30,11 @@ doctor                 检查本地工程基线
 
 `target` 可以是 `all`、`backend`、`frontend`；`check` 还支持 `contract`。
 
+`smoke` 默认启动并清理隔离的本地栈。已有 Compose 栈使用
+`smoke --base-url http://127.0.0.1:8107/api/v1`；该模式为每次调用生成唯一 dev user，
+复用同一条 Project → Git Version → Run → Worker → Log → Artifact 断言链路，但不接管
+外部栈的启动、停止或数据清理。
+
 任务实现按职责分层：
 
 ```text
@@ -42,9 +50,10 @@ scripts/
     └── posix/bootstrap.sh
 ```
 
-各平台的 bootstrap 文件只检查前置条件并进入公共 Python 工作流。质量检查、契约、迁移
-和演示逻辑都不在 shell 或 PowerShell 中重复实现。
+各平台的 bootstrap 文件只检查前置条件并进入公共 Python 工作流。质量检查、契约和迁移
+逻辑不在 shell 或 PowerShell 中重复实现。
 
-公共 CLI 不包含按平台复制的任务逻辑。CI 会在 Windows runner 上实际运行不依赖 Make
-的入口，防止跨平台支持静默退化；Windows 兼容性以该 runner 的结果为准，不从 Linux
-环境推测。
+公共 CLI 不复制平台任务逻辑。CI 在 Windows runner 上实际运行 contributor setup/check；
+依赖 POSIX UID/GID、signal 或文件系统语义的 adapter tests 只在 POSIX 执行。Windows
+兼容性以该 runner 的结果为准，不从 Linux 环境推测；完整 Worker smoke 由 Linux
+Compose + PostgreSQL job 负责。

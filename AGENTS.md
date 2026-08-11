@@ -81,22 +81,20 @@ API contract、scheduler / Slurm、部署或真实共享环境时，
 
 ## 验证
 
-完整项目验证入口：
+Linux / WSL2 完整项目验证入口：
 
 `make check`
 
-Windows：
+原生 Windows contributor 验证入口：
 
 `uv run --no-project python scripts/workspace.py check`
 
-开发过程中选择能够证明当前 Claim 的最小有效验证，
-不要求每次局部修改都机械运行完整检查。
+原生 Windows 不承担 M1 POSIX Worker、Shared FS、smoke 或部署；权威能力边界见
+`docs/decisions/0004-platform-support-matrix.md`。
 
-测试策略、测试粒度和长期测试资产规则见：
-
-`docs/testing/README.md`
-
-未运行的相关验证必须明确说明。
+开发过程中选择能够证明当前 Claim 的最小有效验证，不要求每次局部修改都机械运行完整
+检查。测试策略、测试粒度和长期测试资产规则见 `docs/testing/README.md`。未运行的相关
+验证必须明确说明。
 
 ## 在途工作
 

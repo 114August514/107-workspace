@@ -1,5 +1,67 @@
 # 产品设计
 
+## 零. 产品定位与 Competition Minimum 交付契约
+
+本节是产品定位、近期比赛交付口径与证据边界的权威摘要。它是现阶段的设计判断，
+不宣称已经完成独立的用户研究或获得统计意义上的需求验证。
+
+### 0.1 问题、用户与价值
+
+107 Workspace 的根本价值是让普通 107 算力用户及其协作者更容易**正确、可靠**地使用
+计算资源。产品以 Workspace、Project、不可变 Project Version / Run Snapshot、Run、
+独立 Worker、Scheduler、Status / Log / Artifact 组成的证据链为主线，使一次计算的内容、
+配置、执行过程和结果能够被复现、追溯和审计；隐私、配置、访问、协作和复用是支撑这条
+主线的产品分支。Workspace 管理员与平台管理员是资源、权限和真实环境对接的合作方，
+不是 Competition Minimum 的主要使用者。
+
+本产品不替代 Slurm 等底层调度器，不建设通用 HPC control plane，不把本地执行环境宣称
+为安全沙箱，也不以 Competition Minimum 证明生产就绪、真实 107 兼容性或学校认证已经完成。
+比赛只是近期可评审切片，不是产品终点；长期方向是按第六章的层次逐步实现本设计中有用的
+活动能力，再依据真实使用证据优化。
+
+### 0.2 Competition Minimum 交付契约
+
+Competition Minimum 默认在受信任、非公开的 Linux / WSL2 或私有外部 Linux 服务器上，
+以 Compose、PostgreSQL、Git、单个独立 Worker 和 MockScheduler 演示。演示必须能够观察到：
+
+1. **不可变证据链**：保存 Project Version，从确定版本创建 Run 与 Run Snapshot；API 返回后
+   由独立 Worker 推进执行，并通过产品 API 或界面读回与该 Run 绑定的状态、原因、脱敏 Log
+   和已安装 Artifact；
+2. **Shared Resource 最小闭环**：至少使用一个平台持有、demo-public scope 的不可变
+   Shared Resource Version；发现和使用均由服务端授权，Run Snapshot 固定资源版本和规范化、
+   只读的 Input Binding 访问位置。可以再演示一个 Workspace-private 资源，但不要求搜索、
+   广泛授权、审批、有效期、统计或公共治理；
+3. **Fork 最小闭环**：从当前用户可读的确定 Project Version 创建目标 Workspace 持有的独立
+   Project，保留来源版本 provenance；不得复制或继承源 Workspace 的 Secret 值或权限、
+   Membership、Asset Grant、Resource Entitlement、Ownership、Run 历史或结果；
+4. **引导式 Run**：从已知不可变版本和经过审查的默认运行方案 / preset 出发，提交前展示全部
+   阻止问题；提交时固定最终 Snapshot，同一提交意图复用同一 Idempotency-Key；提交后展示
+   状态、时间线、失败或不确定原因、Log 和 Artifact，遇到不明确的调度接受结果不得盲目重提；
+5. **可观察权限边界**：至少以两个 development persona 走正常授权路径，演示一个允许结果和
+   一个不可见或禁止结果；对象 ownership、版本与路径规则不得因演示身份而绕过；
+6. `make check` 通过，隔离执行的 `make smoke` 通过且完成清理。
+
+演示界面、讲解和证据必须明确标注 `mock` / development / trusted commands。MockScheduler
+会在 Worker 容器及其运行身份下通过 shell 真实执行命令，只适合受信任的开发、测试和演示；
+它不是沙箱。Shared Resource 执行链尚未实现，因此在真实非空 Input Binding 经服务端授权、
+固定并执行前，不得声称 Competition Minimum 已完成。
+
+Competition Minimum 不要求真实 107 live product E2E。Mock、本地 fixture 和个人操作探针均
+不能证明真实 107；真实集成继续受 M1 human gate 约束，并保持 `BLOCKED / HANDOFF`。
+
+### 0.3 原型安全与硬编码边界
+
+在明显标注 development、受信任且非公开的原型中，生产认证 Provider 和生产级主机 / 网络
+加固可以延后；应用授权、Ownership、不可变版本、路径与链接校验、Secret 不返回和脱敏、
+幂等提交、correlation 对账及明确不确定状态不能延后。`.env`、防火墙、私有网络和 OS 权限是
+缓解措施，不是产品认证或隐私模型；外部主机的 root / admin 只对该主机实际控制的服务、
+数据和凭据属于 TCB。容器必须保持非 root，Mock 不得向不受信任用户开放。
+
+可以硬编码的只有显式 development 的 demo personas、非敏感 fixture、默认值、已审命令和
+Mock preset，且仍须经过正常授权与版本规则。不得硬编码 Secret / token / 密码 / SSH key、
+生产 UID / GID / mount、未经核验的 Scheduler / Account / Partition / QoS / API profile
+事实、认证或授权结果；不得把控制面值插入 shell，也不得在不明确结果后盲目重提。
+
 ## 一. 顶级结构
 
 ```text
@@ -24,12 +86,15 @@
 
 ## 二. 产品能力细化
 
-### 2.0 阶段标记
+### 2.0 能力阶段标记
+
+下列标记描述完整产品设计中的能力成熟度，不等于 Competition Minimum 验收，也不等于
+第六章 M0–M5 工程阶段：
 
 ```text
 [Core]
 构成 107 Workspace 产品身份的基础能力。
-后续 MVP 会从 Core 中进一步裁剪，并不代表 Core 必须一次全部实现。
+Competition Minimum 会从 Core 中裁剪一条评审切片，并不代表 Core 必须一次全部实现。
 
 [V1]
 核心工作流稳定后，首批扩展能力。
@@ -38,7 +103,7 @@
 面向成熟协作、教学、数据管理和算力治理的增强能力。
 
 [Future]
-长期规划，当前只预留产品方向。
+长期方向；进入实现前仍须按证据细化设计。
 ```
 
 ### 2.1 用户、个人入口与全局导航
@@ -292,7 +357,7 @@ Project 派生、模板发布与复用
 │   ├── [V1] 弃用模板
 │   └── [V1] 取消发布模板
 │
-├── D. 模板发现与使用
+├── D. Template Gallery：模板发现与使用
 │   ├── [V1] 浏览当前用户可使用的模板
 │   ├── [V1] 搜索模板
 │   ├── [V1] 按分类和标签筛选模板
@@ -973,7 +1038,7 @@ Membership
 └── Status
 ```
 
-Profile 不改变 Workspace 的基础归属和权限边界。Course Profile 及课程专用领域对象尚未进入正式设计，统一记录在 `docs/product/deferred.md`。
+Profile 不改变 Workspace 的基础归属和权限边界。Course Profile 是活动的产品演进方向；课程专用领域对象的详细模型仍记录在 `docs/product/deferred.md`，进入实现时必须复用 Workspace、Role、Fork、Project Version 和 Run Snapshot 规则。
 
 #### 3.1.2 Project 与版本
 
@@ -2682,117 +2747,92 @@ Journal 仅补充 Issue 和 Git 难以表达的在途状态、影响范围、仓
 
 ## 六. 开发与迭代规划
 
-当前开发以 Competition V1 为近期目标，以真实投产为长期目标。开发按垂直切片推进，优先验证核心执行链路，再逐步完善复用、协作与产品体验。
-
-### 6.1 开发策略
-
-开发顺序遵循：
+Roadmap 只有本章一个权威入口，按三层表达不同问题：
 
 ```text
-工程基线
-→ 验证执行链路
-→ 单用户计算闭环
-→ Run 复用
-→ 协作复用
-→ Competition V1
+A. Competition Minimum / judging slice
+→ B. Product V1 capability baseline（M0–M5 工程阶段）
+→ C. Product evolution（逐步实现第二章的有用活动能力并优化）
 ```
 
-前期以后端为主，通过稳定的 API Contract 与前端解耦；前端可以独立推进，并在核心接口稳定后逐步接入。
+三层不是同一份清单的重命名。Competition Minimum 是近期评审切片；M0–M5 是工程依赖和
+验收阶段；Product V1 是最低能力基线，不是产品终点。
 
-外部能力通过 Port 隔离。开发和测试阶段允许使用 Fake Implementation，但核心技术边界应尽早替换为真实 PostgreSQL、Git、Shared FS、slurmrestd / Slurm 等实现进行验证。
+### 6.1 A — Competition Minimum
 
-### 6.2 Walking Skeleton
+Competition Minimum 的唯一验收口径是 §0.2。它在受信任、非公开的开发环境中以
+MockScheduler 展示不可变证据链、Shared Resource 最小闭环、Fork 最小闭环、引导式 Run
+和真实授权边界，不要求先完成 M0–M5，也不要求真实 107 live product E2E。
 
-Walking Skeleton 是系统最先跑通的最薄真实端到端链路，用于验证整体架构和核心技术边界是否成立；它不要求具备完整的产品功能。
+现有本地候选可以复用真实 Git Project Version、Run workspace、独立 Worker 和 Scheduler
+Port，但 Mock 证据不能升级为真实 107 证据。当前 Fork 路径已经存在；它从所选不可变版本
+复制文件并记录 provenance，但 Run Configuration 来自源 Project 的当前配置而非该版本，
+因此比赛只能使用一个已知运行方案，不得声称运行配置随来源版本冻结。Shared Resource
+执行链尚不存在，必须在服务端授权、固定非空 Input Binding 并实际执行后才能验收。
 
-```text
-HTTP API
-   ↓
-Application
-   ↓
-Run + Snapshot
-   ↓
-Background Worker
-   ↓
-Load Project Version
-   ↓
-Materialize to Shared FS
-   ↓
-Prepare Runtime
-(Apptainer / Native)
-   ↓
-Submit via slurmrestd
-   ↓
-Slurm
-   ↓
-Status Update
-```
+### 6.2 B — Product V1 capability baseline
 
-M0 可以使用 Fake Port 验证应用结构；M1 开始优先接入真实 Worker、Git / Shared FS 和 Slurm，尽早验证核心技术可行性。
-
-### 6.3 Milestone
-
-Milestone 按可交付能力划分，而不是按领域模块逐个完成。
+M0–M5 保留其技术含义，作为 Product V1 的工程基线阶段，而不是 Competition 验收或长期
+Roadmap 的全部范围：
 
 | Milestone | 目标 |
-| :-------: | :---: |
+| :-------: | :--- |
 | **M0 Engineering Baseline** | 建立 Monorepo、Backend、Worker、测试、配置与统一工程入口，使后端可本地运行 |
-| **M1 Executable Skeleton** | 使用真实 Git / Shared FS / Slurm 打通最小 Run 执行链路 |
+| **M1 Executable Skeleton** | 使用真实 Git / Shared FS / 独立 Worker / slurmrestd / Slurm 打通目标 107 的最小 Run 执行链路 |
 | **M2 Single-user Compute Loop** | 完成 Personal Workspace、Project / Version、Run Configuration、Run / Snapshot、Log / Artifact 等基本计算闭环 |
 | **M3 Reusable Run** | 完善重跑、Fork、Environment、Shared Resource、Input Binding 等能力，使已验证计算工作能够复用 |
 | **M4 Collaborative Reuse** | 完成 Collaborative Workspace、Membership / Role、Asset Grant、Compute Plan / Entitlement 等协作与授权能力 |
-| **M5 Competition V1** | 接入必要认证和前端，完善关键流程、异常处理与演示环境，达到比赛可用状态 |
+| **M5 Product V1** | 接入必要认证和前端，完善关键流程、异常处理与可部署产品形态，形成 Product V1 |
 
-Template 与 Profile 不作为 Competition V1 的阻塞项；核心链路稳定且时间允许时，可以作为增强能力继续推进。
+M1 保持真实 Git / Shared FS / 独立 Worker / slurmrestd / Slurm 的 human-gate 含义。当前
+目标 profile、correlation、三方 mount、身份映射和真实端到端证据不足，状态为
+`BLOCKED / HANDOFF`；只有 [`107 集群运行事实与 M1 人工验收`](../operations/107-cluster.md)
+的 fresh evidence 满足验收时才能声明 M1 `DONE`。
 
-Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
+M1 只阻塞真实 107 兼容与部署声明，不阻塞在明确 Mock / development 边界内继续开发和
+验证 M2–M5 的产品能力。外部能力必须通过 Port 隔离；真实 107 profile 最终须 clean
+replace 为经核验的单一实现，并保持 fail-fast、submit ambiguity、证据充分性和禁止 fallback。
 
-### 6.4 迭代与范围控制
+### 6.3 C — Product evolution
 
-开发按照：
+Product V1 之后继续逐步实现第二章中有用的活动能力，而不是停止在比赛或 M5：
 
-```text
-Milestone
-   ↓
-Issue
-   ↓
-垂直切片
-   ↓
-Pull Request
-   ↓
-验证
-   ↓
-当前默认分支
-```
+1. 先从已经部分实现的 Run 成功、失败和提交失败站内通知出发，补齐终态任务通知，再扩展
+   到资源、权限与 Profile 事件、偏好和外部送达；
+2. 在 Role、授权、可复用资产和不可变 Run Snapshot 稳定后实现通用 Profile；
+3. 在 Fork、Role、Project Version 与 Run Snapshot 稳定后实现 Course Profile，使课程流程
+   编排基础对象而不绕过其权限和版本规则；
+4. 在 Template Revision、Shared Resource 的不可变性、Visibility 和治理语义稳定后实现
+   Template Gallery；
+5. 只有证据表明确有共同抽象需求时，才评估统一 Shareable Asset、Official Library 和
+   Community 模型；这些详细抽象继续由 `docs/product/deferred.md` 管理；
+6. 端到端能力形成真实使用数据后，再优化引导默认值、发现、可靠性和运维体验。
 
-进入某个 Milestone 时再拆分具体 Issue，不提前固定整个 V1 的全部任务。
+### 6.4 真实 107 集成证据边界
 
-Milestone 完成时至少要求：
+个人 SSH / Tailscale / SCOW runner 目前只是独立操作探针，不是产品 bridge，也不是
+`SshScheduler`。A2（外部 Worker + 站点支持的 canonical shared mount + tunnelled REST）、
+C（外部 control plane + 107 薄 agent）和 D（完整 Worker 部署在 107）都是条件候选；在站点
+部署政策、网络方向、service / delegated identity、凭据生命周期、审计、共享路径、
+profile / correlation 和恢复证据齐全前不排序、不选型，也不创建永久拓扑 ADR。
 
-- 目标能力能够实际运行；
-- 相关验收条件满足；
-- 关键路径经过验证；
-- `make check` 通过；
-- 当前默认分支保持完整、一致、可继续开发。
+A1（只有外部 Worker 与 tunnelled slurmrestd、没有 canonical shared mount）只能触达控制面，
+不能闭合当前 Run workspace、Log 和 Artifact 数据链。Mock 仍是独立的本地逻辑 / 演示模式。
+候选拓扑、停止条件与 fresh evidence 统一由
+[`docs/operations/107-cluster.md`](../operations/107-cluster.md) 管理，不在产品设计中复制矩阵。
 
-Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式更新对应记录，不在开发过程中静默扩大目标。
+### 6.5 迭代、验收与当前状态
 
-开发早期无保留义务的数据可以重建；进入共享演示、部署或需要保留数据的阶段后，再按照 Migration 和兼容性规则演进。
+开发按照 `Roadmap layer → Issue → 垂直切片 → Pull Request → 验证 → 默认分支` 推进。
+进入某个阶段时再拆分具体 Issue，不提前冻结完整 backlog。完成一项切片或阶段至少要求目标
+能力实际运行、相关验收满足、关键路径有与 Claim 相称的证据、`make check` 通过，并保持
+默认分支完整一致。范围变化必须更新本章，不在开发中静默扩大。
 
-### 6.5 Roadmap
+当前状态必须如实表达：
 
-当前 Roadmap 以 Competition V1 为近期目标，不绑定具体日期，并根据实现反馈持续更新。
-
-| Milestone | 核心目标 | 关键能力 | V1 要求 |
-| :---: | :---: | :---: | :---: |
-| **M0 Engineering Baseline** | 建立可持续开发的工程基线 | Monorepo、Backend、Worker、测试、配置、统一工程入口 | 必须 |
-| **M1 Executable Skeleton** | 跑通最薄真实执行链路 | Run / Snapshot、Worker、Git / Shared FS、slurmrestd / Slurm、状态回写 | 必须 |
-| **M2 Single-user Compute Loop** | 形成单用户完整计算闭环 | Personal Workspace、Project / Version、Run Configuration、Run、Log、Artifact | 必须 |
-| **M3 Reusable Run** | 使已验证计算工作能够复用 | 重跑、Fork、Environment、Shared Resource、Input Binding | 必须 |
-| **M4 Collaborative Reuse** | 支持多人协作与跨 Workspace 复用 | Collaborative Workspace、Membership / Role、Asset Grant、Compute Plan / Entitlement | 必须 |
-| **M5 Competition V1** | 完成比赛可用产品形态 | USTC CAS、必要前端、关键异常流程、演示环境与整体收口 | 必须 |
-| **Optional Enhancement** | 扩展项目创建与场景化复用能力 | Template、Profile... | 时间允许 |
-
-Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
-
-Competition V1 之后，再根据真实投产需求规划部署、监控、备份恢复、数据迁移、安全和长期运维等生产化能力。
+- 不可变 Project Version / Run Snapshot、引导式 preflight、幂等提交、独立 Worker、
+  status / reason / Log / Artifact 已有实现基础，仍须按具体交付闭环验收；
+- Fork 后端与界面路径存在，但其当前 Run Configuration 不是来源版本的一部分；
+- Shared Resource Version 执行与非空 Input Binding 尚未实现；
+- Run 终态和部分 Workspace 通知、通知列表与已读操作已实现，完整通知能力尚未完成；
+- 真实 107 M1 为 `BLOCKED / HANDOFF`，个人探针、Mock 和本地 fixture 均不得改变该状态。

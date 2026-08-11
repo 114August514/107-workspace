@@ -25,6 +25,7 @@ from ..domain.models import (
     Project,
     ProjectFile,
     ProjectVersion,
+    ProjectVersionDetail,
     Run,
     RunConfiguration,
     RunEvent,
@@ -122,19 +123,19 @@ def version_out(version: ProjectVersion) -> s.ProjectVersionOut:
         sequence=version.sequence,
         label=version.label,
         message=version.message,
-        file_count=len(version.files),
+        file_count=version.file_count,
         total_size=version.total_size,
         created_by=version.created_by,
         created_at=version.created_at,
     )
 
 
-def version_detail_out(version: ProjectVersion) -> s.ProjectVersionDetailOut:
+def version_detail_out(detail: ProjectVersionDetail) -> s.ProjectVersionDetailOut:
     return s.ProjectVersionDetailOut(
-        **version_out(version).model_dump(),
+        **version_out(detail.version).model_dump(),
         files=[
             s.ProjectVersionFileOut(path=f.path, size=f.size, content_hash=f.content_hash)
-            for f in version.files
+            for f in detail.files
         ],
     )
 

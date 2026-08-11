@@ -6,16 +6,18 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SchedulerKind = Literal["mock", "slurm"]
 AuthMode = Literal["dev", "ustc"]
 LogFormat = Literal["auto", "json", "text"]
+SlurmRuntimeMode = Literal["native", "apptainer"]
 
 
 class Settings(BaseSettings):
@@ -40,16 +42,91 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./var/workspace107.db"
     storage_root: Path = Path("./var/storage")
+    shared_gid: int | None = None
 
     scheduler: SchedulerKind = "mock"
     slurm_api_base_url: str = ""
     slurm_api_user: str = ""
     slurm_jwt: str = Field(default="", repr=False)
+    slurm_target_cluster_id: str = ""
+    slurm_api_version: str = ""
+    slurm_api_schema_profile: str = ""
+    slurm_submit_path: str = ""
+    slurm_job_path_template: str = ""
+    slurm_jobs_path: str = ""
+    slurm_cancel_path_template: str = ""
+    slurm_correlation_field: str = ""
+    slurm_correlation_query_parameter: str = ""
+    slurm_correlation_query_complete: bool = False
+    slurm_correlation_max_bytes: int = 0
+    slurm_runtime_mode: SlurmRuntimeMode = "native"
+    slurm_timeout_seconds: float = 20.0
 
     auth_mode: AuthMode = "dev"
 
-    # 后台状态同步间隔（秒）。设为 0 表示不启动后台同步，由调用方显式触发。
-    run_sync_interval_seconds: float = 1.0
+    worker_poll_seconds: float = 1.0
+    worker_idle_seconds: float = 0.5
+
+    @model_validator(mode="after")
+    def validate_common_settings(self) -> Self:
+        if self.shared_gid is not None and self.shared_gid < 0:
+            raise ValueError("WORKSPACE107_SHARED_GID must be non-negative")
+        return self
+
+    def ensure_worker_configuration(self) -> None:
+        """Fail before Worker acquires its lock or constructs scheduler adapters."""
+        if os.name != "posix":
+            raise ValueError("Independent Worker requires a POSIX host; use Linux or WSL2")
+        if self.scheduler == "mock":
+            if self.env not in {"local", "test", "export"}:
+                raise ValueError("Mock scheduler is only allowed in local/test environments")
+        else:
+            if self.shared_gid is None:
+                raise ValueError("Slurm scheduler requires explicit WORKSPACE107_SHARED_GID")
+            required = {
+                "SLURM_API_BASE_URL": self.slurm_api_base_url,
+                "SLURM_API_USER": self.slurm_api_user,
+                "SLURM_JWT": self.slurm_jwt,
+                "SLURM_TARGET_CLUSTER_ID": self.slurm_target_cluster_id,
+                "SLURM_API_VERSION": self.slurm_api_version,
+                "SLURM_API_SCHEMA_PROFILE": self.slurm_api_schema_profile,
+                "SLURM_SUBMIT_PATH": self.slurm_submit_path,
+                "SLURM_JOB_PATH_TEMPLATE": self.slurm_job_path_template,
+                "SLURM_JOBS_PATH": self.slurm_jobs_path,
+                "SLURM_CANCEL_PATH_TEMPLATE": self.slurm_cancel_path_template,
+                "SLURM_CORRELATION_FIELD": self.slurm_correlation_field,
+                "SLURM_CORRELATION_QUERY_PARAMETER": self.slurm_correlation_query_parameter,
+            }
+            missing = [name for name, value in required.items() if not value.strip()]
+            if missing:
+                names = ", ".join(f"WORKSPACE107_{name}" for name in missing)
+                raise ValueError(f"Slurm scheduler requires explicit configuration: {names}")
+            if not self.slurm_correlation_query_complete:
+                raise ValueError(
+                    "WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE must be true only after the "
+                    "target cluster confirms permission and pagination completeness"
+                )
+            if self.slurm_correlation_max_bytes < 1:
+                raise ValueError("WORKSPACE107_SLURM_CORRELATION_MAX_BYTES must be positive")
+            if self.slurm_timeout_seconds <= 0:
+                raise ValueError("WORKSPACE107_SLURM_TIMEOUT_SECONDS must be positive")
+            if self.slurm_runtime_mode != "native":
+                raise ValueError(
+                    "Apptainer runtime is not implemented or target-validated; use native only "
+                    "after the human runtime gate"
+                )
+        if not self.database_url.startswith("postgresql+"):
+            raise ValueError("Independent Worker 必须使用 PostgreSQL 数据库")
+
+    @property
+    def resolved_shared_gid(self) -> int:
+        if os.name != "posix":
+            raise ValueError("Independent Worker shared GID requires a POSIX host")
+        if self.shared_gid is not None:
+            return self.shared_gid
+        if self.scheduler == "mock" and self.env in {"local", "test", "export"}:
+            return os.getegid()
+        raise ValueError("WORKSPACE107_SHARED_GID is required for this deployment")
 
     @property
     def use_json_logs(self) -> bool:

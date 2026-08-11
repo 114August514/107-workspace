@@ -58,6 +58,20 @@
 不要为了“更安全”在 unit、integration、system 等多个层级
 重复完整验证同一条规则。
 
+## 测试归属与合并门禁
+
+新增永久测试前，先确认其权威目的或来源：
+当前 `GR-xxx`、契约、ADR、测试与工程规则，
+或由 Issue 记录的长期回归。
+这类 Issue 必须写明缺陷、当前预期行为和长期防回归的必要性；
+任意或仅记录历史的 Issue 不能单独成为权威来源。
+如果稳定来源尚未建立，分支开发期间应立即把测试选择器登记到
+[待归属测试](pending-registration.md)，说明其保护目的。
+
+所有登记项必须在合并前按该文档完成处置。
+当前不增加 CI 脚本或自动检查；
+Review 负责确认最终合并状态中活动队列为空。
+
 ## 粒度
 
 ```text
@@ -90,6 +104,7 @@ frontend/tests/
 
 当前仓库已有测试只代表它们实际保护的行为和工程边界，
 不因为测试已经存在就自动获得永久兼容地位。
+完整 GR 规则覆盖情况见 [GR 规则—测试追踪矩阵](requirements-traceability.md)。
 
 当前较稳定的保护包括：
 
@@ -176,13 +191,15 @@ System 用于保护少量真正重要的跨进程核心闭环。
 
 ## 运行
 
+Linux / WSL2 运行完整测试与工程验证：
+
 ```bash
 make test
 make check
 make coverage
 ```
 
-原生 Windows 没有 Make 时使用相同任务实现：
+原生 Windows 用同一 Python 任务入口验证 contributor surface：
 
 ```powershell
 uv run --no-project python scripts/workspace.py test
@@ -190,13 +207,13 @@ uv run --no-project python scripts/workspace.py check
 uv run --no-project python scripts/workspace.py coverage
 ```
 
-`make test` 是项目测试套件的统一入口。
+依赖 POSIX UID/GID、signal 与文件系统语义的 Run workspace adapter tests 在 non-POSIX
+平台按模块跳过；API、Git、前端和公共任务入口测试不得借此跳过。原生 Windows 不运行
+M1 Worker smoke。权威边界见 [ADR-0004](../decisions/0004-platform-support-matrix.md)。
 
-`make check` 是完整工程验证入口，
-但开发中的每个局部步骤不要求机械运行完整检查。
-
-`make coverage` 在当前测试基线演进期间只生成报告，
-不设置全仓统一百分比门槛。
+`make test` 是 Linux / WSL2 的完整项目测试套件入口，`make check` 是完整工程验证入口，
+但开发中的每个局部步骤不要求机械运行完整检查。`make coverage` 在当前测试基线演进期间
+只生成报告，不设置全仓统一百分比门槛。
 
 如果未来需要 coverage gate，
 应根据模块风险、稳定边界和可测试性决定，

@@ -1114,26 +1114,22 @@ Reviewer 按以下顺序检查：
 
 ## 八. 针对 107 Workspace 的 CI
 
-共享主分支的本地与 CI 统一入口是：
+Linux / WSL2 的本地与 CI 完整入口是：
 
 ```bash
 make check
 ```
 
-Windows 没有 Make 时使用同一份 Python 实现：
+原生 Windows contributor check 使用同一份 Python 实现：
 
 ```powershell
 uv run --no-project python scripts/workspace.py check
 ```
 
-统一检查至少覆盖：
-
-```text
-workflow lint / tests
-backend lint / format / tests
-frontend format / lint / typecheck / tests / build
-OpenAPI 与前端类型契约
-```
+两者使用同一任务图，至少覆盖 workflow lint/tests、backend lint/format/tests、frontend
+format/lint/typecheck/tests/build，以及 OpenAPI 与前端类型契约。依赖 POSIX UID/GID、signal
+与文件系统语义的 adapter tests 只在 POSIX 执行；原生 Windows 不承担 M1 Worker smoke。
+权威边界见 [ADR-0004](../decisions/0004-platform-support-matrix.md)。
 
 接口发生变化时：
 
@@ -1147,9 +1143,9 @@ OpenAPI 与前端类型契约
 CI 检查生成文件是否存在未提交差异
 ```
 
-CI 还单独验证数据库 migration 的升级、回退和再升级、Windows 无 Make 入口，以及
-Compose 构建与 HTTP smoke。不要在 workflow 中复制另一套检查命令；新的质量门应先
-进入 `scripts/workspace.py`，再由本地与 CI 共同调用。
+CI 还单独验证数据库 migration 的升级、回退和再升级、Windows contributor setup/check，
+以及 Linux Compose + PostgreSQL + Worker HTTP smoke。不要在 workflow 中复制另一套检查
+命令；新的质量门应先进入 `scripts/workspace.py`，再由本地与 CI 共同调用。
 
 ---
 

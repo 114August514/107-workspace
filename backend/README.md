@@ -15,27 +15,29 @@ src/workspace107/
 │   ├── run_snapshot.py   不可变执行事实（GR-202）
 │   ├── secrets.py        环境变量表达式与 Secret 引用（GR-304）
 │   ├── compute.py        算力方案、请求与调度解析
-│   └── ports/            Scheduler / Storage / SecretVault / Repositories / Clock
+│   └── ports/            ProjectContent / Scheduler / Storage / Repositories 等端口
 ├── application/      用例编排、权限校验、事务边界
 │   ├── access.py         AccessGuard（GR-101 / GR-102 / GR-103）
-│   ├── run_service.py    提交前检查、创建 Run、重跑、取消
-│   └── run_lifecycle.py  调度状态同步与 Artifact 收集
-├── infrastructure/   端口实现：SQLAlchemy 仓储、本地存储、Mock/Slurm 调度
+│   ├── run_service.py    请求事务内固定 Snapshot、QUEUED Run 与执行意图
+│   └── run_worker.py     独立恢复、调度同步与 Artifact finalization
+├── infrastructure/   系统 Git、Shared FS workspace、SQLAlchemy 与 Scheduler 适配器
 ├── api/              路由与 schema，不写业务规则
 ├── tools/            OpenAPI 导出、种子数据
-└── main.py           唯一的装配点
+├── main.py           API 装配入口
+└── worker.py         Independent Worker 装配与进程入口
 ```
 
 ## 依赖注入
 
-当前旧实现只在两个组合入口里构造具体实现，别处一律拿协议：
+API 与 Worker 是两个组合入口，业务代码只依赖 domain ports：
 
 ```text
-domain/ports/     用 Protocol 描述「需要什么能力」
+domain/ports/     用 Protocol 描述 Scheduler / Storage / Execution Store
 application/      构造函数注入，只认这些协议
 infrastructure/   实现协议
-main.py           进程级装配：数据库引擎、存储、调度器、时钟
-api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
+main.py           API：数据库、存储、时钟
+worker.py         Worker：PostgreSQL 全局 advisory lock、存储、调度器
+api/deps.py       请求级仓储与用例服务
 ```
 
 路由通过 `Services` 容器拿用例服务，而 `Services` **只暴露 application 层的服务**——
@@ -50,8 +52,11 @@ api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
                         不要往 Services 容器里塞端口
 ```
 
-这两处入口是当前代码事实，不是未来组合根数量门禁。目标架构还需要独立 Worker 入口；
-依赖方向和未来模块边界以 `docs/product/design.md` 为准。
+API 不启动后台同步任务；Worker 持有一条 PostgreSQL session advisory lock 串行推进 Run。
+
+完整 Worker 运行需要 Linux / WSL2、PostgreSQL 和 POSIX Shared FS 语义；原生 Windows
+只保留 contributor API/Git 检查，不构造 Worker。权威矩阵见
+[`ADR-0004`](../docs/decisions/0004-platform-support-matrix.md)。
 
 ## 安装与运行
 
@@ -60,6 +65,7 @@ uv sync --all-extras
 uv run alembic upgrade head
 uv run python -m workspace107.tools.seed
 uv run uvicorn workspace107.main:create_app --factory --reload
+uv run python -m workspace107.worker               # Linux / WSL2；需要 PostgreSQL
 ```
 
 接口文档：<http://127.0.0.1:8000/docs>
@@ -78,7 +84,7 @@ cp ../.env.example .env
 | 变量 | 说明 |
 | :--- | :--- |
 | `WORKSPACE107_DATABASE_URL` | 默认 SQLite；部署时改 PostgreSQL |
-| `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
+| `WORKSPACE107_STORAGE_ROOT` | Project Git repositories、Run 目录、日志和 Artifact 的根目录 |
 | `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
 | `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
 | `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |
@@ -101,8 +107,9 @@ curl -H 'X-User: student' http://127.0.0.1:8000/api/v1/me
 | `mock` | 在本机以子进程**真实执行**作业，状态来自真实退出码 |
 | `slurm` | 通过 Slurm REST API 提交，状态来自 Slurm |
 
-两者都只实现 `submit` / `poll` / `cancel`，没有「标记成功」的入口——
-当前实现中，Run 状态只能由调度系统的轮询结果驱动。
+两者实现 `submit/find_by_correlation/poll/cancel`，没有「标记成功」入口。Mock 可在本地按完整
+correlation 权威查询；Slurm correlation 尚未经目标环境核验时返回 incomplete，Worker
+保持 Run 待恢复且绝不盲目重提。
 
 Mock 模式下会把渲染出的 sbatch 脚本写到 `var/storage/runs/<run_id>/job.sh`，
 用户可以直接看到平台替他生成了什么。
