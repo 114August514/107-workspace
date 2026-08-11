@@ -11,7 +11,9 @@
 默认要求获得与风险相称的验证证据，
 但不默认要求每次修改都新增测试文件。
 
-尚未实现的能力记录在 Issue/[`../product/deferred.md`](../product/deferred.md) 中。
+普通缺陷和尚未被接受为当前实现妥协的未完成能力记录在 Issue 中。有意保留的代码妥协
+还必须登记到 [`../product/deferred.md`](../product/deferred.md)，并由引入该妥协的 PR
+引用登记 ID。
 不要为了表达未来计划提交 skip、xfail 或占位测试。
 
 ## 永久测试与一次性验证

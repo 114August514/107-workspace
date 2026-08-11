@@ -14,6 +14,7 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 | 内容 | 位置 |
 | :--- | :--- |
 | 产品能力、领域术语与规则 | [`docs/product/design.md`](docs/product/design.md) |
+| 延后设计事项与已接受的实现妥协 | [`docs/product/deferred.md`](docs/product/deferred.md) |
 | Git、分支、提交与评审 | [`docs/contributing/git-workflow.md`](docs/contributing/git-workflow.md) |
 | AI 与工程协作入口 | [`AGENTS.md`](AGENTS.md) |
 | 高影响工程决策 | [`docs/decisions/`](docs/decisions/README.md) |
