@@ -81,8 +81,9 @@ POSIX 下使用 Bash。完整 Worker 组合仍只支持 Linux / WSL2，平台不
 
 ## 接入真实集群
 
-当前代码包含 Slurm REST 适配器，但尚未在真实 107 集群完成版本、认证、网络和状态
-映射验收。切换配置不等于完成接入。
+当前代码包含 Slurm REST 适配器。2026-08-11 的真实 107 探针已确认部分平台事实，
+但 PR8 当前 v0.0.40 profile 与目标 API 不兼容，且 correlation 精确查询能力未满足；
+切换配置不等于完成接入。
 
 ### 共享存储
 
@@ -126,16 +127,19 @@ canonical mount mapping，并验证：
 
 ### Slurm 与运行环境：M1 人工验收 runbook
 
-当前实现只是**本地候选**：唯一 schema profile 由确定性 v0.0.40 fixture 覆盖，并不证明
-目标 107 使用该版本、路径或字段。Agent 不登录 SCOW、不调用 SSH、不挂载共享存储、
-不获取 JWT，也不提交或查询真实作业。以下步骤只能由获授权的人在新的受控窗口执行。
+当前实现只是**本地候选**：唯一 schema profile 由确定性 v0.0.40 fixture 覆盖。2026-08-11
+真实探针确认目标 Slurm/client/local slurmrestd 为 25.11.2、ClusterName 为 `training`；
+登录节点 local plugins 列出 `v0.0.41-44`，authenticated online OpenAPI 也独立 advertise
+`v0.0.41-44`；两者均不提供当前 v0.0.40 profile，因此 PR8 当前 profile 与目标兼容性 **FAIL**。
+未经明确授权不得登录 SCOW、调用 SSH、挂载共享存储、获取 JWT、提交或查询真实作业；
+2026-08-11 的 evidence 来自本次获授权 probe，只有实际执行者或 runner 才能在受控窗口
+执行这些动作。
 
-> **Human gate BLOCKER（历史输入冲突）**：2026-06 培训 PDF 只能作为待核对的历史输入；
-> 它描述共享路径为 `/public` 与 `/home`、Slurm 25.11、REST 路径为
-> `/slurm/v0.0.41/*`，并使用 `Authorization: Bearer`。这些描述与当前仅供本地 fixture
-> 验证的 v0.0.40 profile、`X-SLURM-*` 认证 header 及现有 mount 假设明显冲突，不能直接
-> 写入默认配置或据此扩展 adapter。必须先调查成熟项目或官方 v0.0.41 契约，再由实际环境
-> 确认版本、path、认证和 mount mapping；在此之前不得启用 Slurm profile 或执行真实验收。
+> **Human gate BLOCKER（历史输入冲突已重新分类）**：2026-07-14 采集的培训材料只能作为
+> 待核对的历史输入；它描述 `/public`、`/home`、Slurm 25.11、`v0.0.41` 和
+> `Authorization: Bearer`。这些历史描述不覆盖下方 2026-08-11 的 current facts，也不能
+> 直接写入默认配置。认证、correlation 完整性和三方部署映射仍须按当前证据与后续 profile
+> 重新核验。
 
 #### 1. 提交前记录并再次确认
 
@@ -190,9 +194,48 @@ evidence bundle 只保存版本、配置项名称、脱敏值、请求 correlati
 Worker 发出 slurmrestd HTTP 请求前的本地校验失败是明确 Rejected。poll 404 或未映射 state
 是 `UNKNOWN`，上述情况都不能伪造成成功或确定的零匹配。
 
-在成熟项目或官方 v0.0.41 调查与实际环境确认完成、且上述 human gate 产生 fresh evidence
-前，真实 slurmrestd/Slurm、认证、三方 mount、Native 环境和端到端 M1 证据均为
-**INSUFFICIENT**。本地 v0.0.40 fixture 通过只证明 adapter 候选的协议行为。
+2026-08-11 的 fresh evidence 已确认目标版本、ClusterName、认证探针和部分 Shared FS 行为；
+但真实 M1 Worker/REST submit 尚未执行，PR8 v0.0.40 profile 与目标 v0.0.41-44 不兼容，
+且 v0.0.44 暴露的查询接口没有 comment 精确过滤，也无法证明 correlation 查询完整性。
+因此真实 slurmrestd/Slurm 端到端、认证 profile、三方 mount、Native 环境和 M1 仍为
+**INSUFFICIENT**；PR8 correlation server-side exact filter 与 `correlation_query_complete`
+为 **FAIL**。不得把没有分页参数夸大为服务必然截断。
+本地 v0.0.40 fixture 通过只证明 adapter 候选的协议行为。
+
+### 2026-08-11 current facts（带日期的可复用事实）
+
+以下只记录可跨后续验收复用的、已脱敏且带日期的平台事实；一次性 job 详情和仓外副作用
+记录在当前 journal，不在这里重复。历史 `docs/references/` 材料不覆盖本矩阵。
+
+| fact | 状态（2026-08-11） | 证据边界与复验触发 |
+| :--- | :--- | :--- |
+| Slurm/client/local slurmrestd 版本 | 已确认：25.11.2 | 版本升级、endpoint/profile 变化时复验 |
+| target cluster | 已确认：`training` | cluster identity、Snapshot 或 endpoint 变化时复验 |
+| API schema/profile | 已确认目标 advertise `v0.0.41-44`；PR8 v0.0.40 兼容性 **FAIL** | adapter profile 变更或 API 升级时复验 |
+| 认证方式 | 已确认：远端进程内短时生成 token，仅通过 `X-SLURM-USER-NAME`/`X-SLURM-USER-TOKEN` 使用 | Secret 管理、认证插件或进程模型变化时复验；不记录 token |
+| 关联查询 | **FAIL**：v0.0.44 jobs 查询未提供 comment 精确过滤，无法证明完整性；不得设 `correlation_query_complete=true` | schema、权限、filter 或分页能力变化后复验 |
+| `stu`/`Students` 资源 | 已确认：默认 QoS `qos_stu_medium_2gpu`；允许 `qos_stu_default,qos_stu_medium_2gpu`；DefMemPerCPU 4096 MiB、MaxNodes 2、up | association、partition、QoS 或资源策略变化时复验 |
+| Shared FS | 部分确认：login/compute 对 canonical HOME 与 `/public` 可见同 backend/inodes；login marker read、同目录 staging→final rename 可见且 inode 保持 | service identity、shared_gid、专用 storage root 或挂载路径变化时复验 |
+| 身份边界 | 仅确认 probe compute identity `66703:66703`；不是 service identity | service image、compute identity 或权限策略变化时复验 |
+
+安全复验入口（命令均为只读、不含 endpoint、token、个人绝对路径或凭据）：
+
+```bash
+scontrol --version
+scontrol show config | grep -E '^(ClusterName|AuthAltTypes|SlurmctldParameters)[[:space:]]*='
+sacctmgr -nP show assoc where user="$USER" account=stu partition=students format=Cluster,Account,User,Partition,DefaultQOS,QOS
+scontrol show partition Students -o
+slurmrestd -a list
+slurmrestd -d list
+slurmrestd -d v0.0.44 --generate-openapi-spec | python3 -c 'import json,re,sys; d=json.load(sys.stdin); versions=sorted({v for path in d.get("paths",{}) for v in re.findall(r"/slurm/(v[0-9.]+)",path)}); params=sorted({p["name"] for path,item in d.get("paths",{}).items() if "job" in path.lower() for op in item.values() if isinstance(op,dict) for p in op.get("parameters",[]) if isinstance(p,dict) and isinstance(p.get("name"),str)}); print({"versions":versions,"job_query_parameters":params})'
+```
+
+以上命令只核对版本、cluster、认证插件、association、partition、profile 与 OpenAPI
+查询参数名；不得把缺少分页参数解释为服务必然截断。mount/rename 需要新的授权脚本，
+并须分别以 service/compute 身份执行，本文不提供假命令。
+
+复验输出只能保存配置项名称、脱敏值、时间、摘要和结论；JWT、认证 header 值、Secret、
+内部 endpoint/IP、用户凭据和个人绝对路径不得进入文档或 evidence。
 
 ## 探针和排障
 
