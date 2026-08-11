@@ -5,7 +5,7 @@
 | 问题 | 文档 |
 | :--- | :--- |
 | 产品能力、术语、规则和 Roadmap | [`product/design.md`](product/design.md) |
-| 延后但尚未进入正式设计的事项 | [`product/deferred.md`](product/deferred.md) |
+| 延后设计事项与已接受的实现妥协登记 | [`product/deferred.md`](product/deferred.md) |
 | Git、Issue、分支、提交和 PR | [`contributing/git-workflow.md`](contributing/git-workflow.md) |
 | Coding Agent 项目入口、工程原则和工作路由 | [`../AGENTS.md`](../AGENTS.md) |
 | 测试策略、测试粒度和验证边界 | [`testing/`](testing/README.md) |
