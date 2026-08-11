@@ -1,5 +1,33 @@
 # 产品设计
 
+## 零. 产品定位与 Competition Demo 交付契约
+
+本节是当前产品定位与近期比赛交付口径的权威摘要。它是现阶段的设计判断，
+不宣称已经完成独立的用户研究或获得统计意义上的需求验证。
+
+### 0.1 问题、用户与价值
+
+107 Workspace 面向普通 107 算力用户及其协作者，组织一条从 Workspace、Project、不可变 Project Version / Run Snapshot、Run、独立 Worker、Scheduler 到状态、Log 和Artifact 的协作式计算链路，使一次计算的内容、配置、执行过程和结果证据能够被复现、追溯和审计。Workspace 管理员与平台管理员是资源、权限和真实环境对接的合作方，不是当前 Competition Demo 的主要使用者。
+
+当前产品价值主张是：让用户在同一工作空间内保存确定的项目版本，提交并观察一次
+确定的计算执行，并取回与该执行绑定的日志和产物；在多人场景中，继续沿用相同的
+版本、权限和证据边界进行协作。
+
+本产品不替代 Slurm 等底层调度器，不建设通用 HPC control plane，不把本地执行环境宣称为安全沙箱，也不以 Competition Demo 证明生产就绪、真实 107 兼容性或学校认证已经完成。
+
+### 0.2 Competition Demo 交付契约
+
+Competition Demo 的当前目标是在受信任的本地 Linux / WSL2 环境中，以 Compose、PostgreSQL、Git、单个独立 Worker 和 MockScheduler 展示可信、可重复的产品闭环。演示必须能够观察到：
+
+1. 创建 Project，保存不可变 Project Version；
+2. 从确定版本创建 Run 和 Run Snapshot，API 返回后 Run 从 `QUEUED` 推进到终态；
+3. 由单个独立 Worker 处理执行，通过 MockScheduler 在宿主机 shell 中真实运行受信任命令；
+4. 通过产品 API 或界面读回与该 Run 绑定的状态、Log 和 Artifact；
+5. `make check` 通过，隔离执行的 `make smoke` 通过且完成清理。
+
+演示界面、讲解和证据必须明确标注 `mock` / development 模式。MockScheduler 会在宿主机 shell 中执行用户命令，只适合受信任的开发、测试和演示；它不是沙箱。
+Competition Demo 不得声称已接入真实 107、已通过真实 Slurm / Shared FS 验收、达到生产就绪或完成 USTC CAS。
+
 ## 一. 顶级结构
 
 ```text
@@ -2682,28 +2710,34 @@ Journal 仅补充 Issue 和 Git 难以表达的在途状态、影响范围、仓
 
 ## 六. 开发与迭代规划
 
-当前开发以 Competition V1 为近期目标，以真实投产为长期目标。开发按垂直切片推进，优先验证核心执行链路，再逐步完善复用、协作与产品体验。
+当前近期交付轨是 **Competition Demo**；它与产品 Milestone 分开管理。真实 107 的
+M1 human gate 调整为赛后集成轨，随后再按 M2–M5 推进 Product V1。Competition Demo
+可以复用本地 M1 候选中的 Git Version、Run workspace、独立 Worker 和调度 seam，
+但本地候选通过不代表 M1 `DONE`。
 
 ### 6.1 开发策略
 
-开发顺序遵循：
+当前优先顺序是：
 
 ```text
-工程基线
-→ 验证执行链路
-→ 单用户计算闭环
-→ Run 复用
-→ 协作复用
-→ Competition V1
+Competition Demo
+→ 赛后 M1 真实 107 集成
+→ M2 单用户计算闭环
+→ M3 Run 复用
+→ M4 协作复用
+→ M5 Product V1
 ```
 
 前期以后端为主，通过稳定的 API Contract 与前端解耦；前端可以独立推进，并在核心接口稳定后逐步接入。
 
-外部能力通过 Port 隔离。开发和测试阶段允许使用 Fake Implementation，但核心技术边界应尽早替换为真实 PostgreSQL、Git、Shared FS、slurmrestd / Slurm 等实现进行验证。
+外部能力通过 Port 隔离。开发、测试和 Competition Demo 可以使用 Fake 或 Mock
+Implementation，但必须显式标注其运行模式和证据边界。真实 107 集成仍必须
+clean replace 为经核验的单一 profile；所有 fail-fast、submit ambiguity、证据充分性
+和禁止 fallback 的规则保持不变。
 
 ### 6.2 Walking Skeleton
 
-Walking Skeleton 是系统最先跑通的最薄真实端到端链路，用于验证整体架构和核心技术边界是否成立；它不要求具备完整的产品功能。
+Walking Skeleton 是系统最先跑通的最薄端到端链路，用于验证整体架构和核心技术边界是否成立；它不要求具备完整的产品功能。
 
 ```text
 HTTP API
@@ -2716,43 +2750,43 @@ Background Worker
    ↓
 Load Project Version
    ↓
-Materialize to Shared FS
+Materialize to Run Workspace
    ↓
 Prepare Runtime
-(Apptainer / Native)
    ↓
-Submit via slurmrestd
+Scheduler
    ↓
-Slurm
-   ↓
-Status Update
+Status / Log / Artifact
 ```
 
-M0 可以使用 Fake Port 验证应用结构；M1 开始优先接入真实 Worker、Git / Shared FS 和 Slurm，尽早验证核心技术可行性。
+Competition Demo 在受信任本地环境中以 MockScheduler 验收这条产品闭环，具体口径以
+§0.2 为准。M1 保留真实 Git / Shared FS / 独立 Worker / slurmrestd / Slurm 的技术含义；
+只有目标 107 human gate 的 fresh evidence 满足验收时才能声明 M1 `DONE`。
 
 ### 6.3 Milestone
 
-Milestone 按可交付能力划分，而不是按领域模块逐个完成。
+以下是产品 Milestone 的权威定义。Milestone 按可交付能力划分，而不是按领域模块逐个完成。
 
 | Milestone | 目标 |
 | :-------: | :---: |
 | **M0 Engineering Baseline** | 建立 Monorepo、Backend、Worker、测试、配置与统一工程入口，使后端可本地运行 |
-| **M1 Executable Skeleton** | 使用真实 Git / Shared FS / Slurm 打通最小 Run 执行链路 |
+| **M1 Executable Skeleton** | 使用真实 Git / Shared FS / 独立 Worker / slurmrestd / Slurm 打通目标 107 的最小 Run 执行链路 |
 | **M2 Single-user Compute Loop** | 完成 Personal Workspace、Project / Version、Run Configuration、Run / Snapshot、Log / Artifact 等基本计算闭环 |
 | **M3 Reusable Run** | 完善重跑、Fork、Environment、Shared Resource、Input Binding 等能力，使已验证计算工作能够复用 |
 | **M4 Collaborative Reuse** | 完成 Collaborative Workspace、Membership / Role、Asset Grant、Compute Plan / Entitlement 等协作与授权能力 |
-| **M5 Competition V1** | 接入必要认证和前端，完善关键流程、异常处理与演示环境，达到比赛可用状态 |
+| **M5 Product V1** | 接入必要认证和前端，完善关键流程、异常处理与可部署产品形态，形成 Product V1 |
 
-Template 与 Profile 不作为 Competition V1 的阻塞项；核心链路稳定且时间允许时，可以作为增强能力继续推进。
-
-Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
+Competition Demo 不是 M1–M5 的重命名，也不要求先完成全部产品 Milestone；其验收只以
+§0.2 为准。Template 与 Profile 不作为 Product V1 的阻塞项；只有核心链路稳定且时间允许时，
+才可以作为增强能力继续评估。Gallery、Official Asset / Official Library、Course Profile、
+Shareable Asset 等仍不进入当前 Roadmap，继续作为延后设计事项管理。
 
 ### 6.4 迭代与范围控制
 
 开发按照：
 
 ```text
-Milestone
+Milestone / Competition Demo
    ↓
 Issue
    ↓
@@ -2765,9 +2799,9 @@ Pull Request
 当前默认分支
 ```
 
-进入某个 Milestone 时再拆分具体 Issue，不提前固定整个 V1 的全部任务。
+进入某个 Milestone 时再拆分具体 Issue，不提前固定 Product V1 的全部任务。
 
-Milestone 完成时至少要求：
+Milestone 或 Competition Demo 完成时至少要求：
 
 - 目标能力能够实际运行；
 - 相关验收条件满足；
@@ -2775,24 +2809,17 @@ Milestone 完成时至少要求：
 - `make check` 通过；
 - 当前默认分支保持完整、一致、可继续开发。
 
-Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式更新对应记录，不在开发过程中静默扩大目标。
+Roadmap、Milestone 和 Competition Demo 可以根据实现反馈调整，但范围变化应显式更新
+对应记录，不在开发过程中静默扩大目标。
 
-开发早期无保留义务的数据可以重建；进入共享演示、部署或需要保留数据的阶段后，再按照 Migration 和兼容性规则演进。
+开发早期无保留义务的数据可以重建；进入共享演示、部署或需要保留数据的阶段后，
+再按照 Migration 和兼容性规则演进。
 
-### 6.5 Roadmap
+### 6.5 当前优先轨
 
-当前 Roadmap 以 Competition V1 为近期目标，不绑定具体日期，并根据实现反馈持续更新。
+当前顺序是：先交付符合 §0.2 的可信本地 Competition Demo；赛后继续完成 M1 真实 107
+profile、认证、Shared FS / 身份映射、correlation 与恢复验收；M1 获得 fresh evidence 后，
+再按 M2、M3、M4、M5 Product V1 推进。
 
-| Milestone | 核心目标 | 关键能力 | V1 要求 |
-| :---: | :---: | :---: | :---: |
-| **M0 Engineering Baseline** | 建立可持续开发的工程基线 | Monorepo、Backend、Worker、测试、配置、统一工程入口 | 必须 |
-| **M1 Executable Skeleton** | 跑通最薄真实执行链路 | Run / Snapshot、Worker、Git / Shared FS、slurmrestd / Slurm、状态回写 | 必须 |
-| **M2 Single-user Compute Loop** | 形成单用户完整计算闭环 | Personal Workspace、Project / Version、Run Configuration、Run、Log、Artifact | 必须 |
-| **M3 Reusable Run** | 使已验证计算工作能够复用 | 重跑、Fork、Environment、Shared Resource、Input Binding | 必须 |
-| **M4 Collaborative Reuse** | 支持多人协作与跨 Workspace 复用 | Collaborative Workspace、Membership / Role、Asset Grant、Compute Plan / Entitlement | 必须 |
-| **M5 Competition V1** | 完成比赛可用产品形态 | USTC CAS、必要前端、关键异常流程、演示环境与整体收口 | 必须 |
-| **Optional Enhancement** | 扩展项目创建与场景化复用能力 | Template、Profile... | 时间允许 |
-
-Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
-
-Competition V1 之后，再根据真实投产需求规划部署、监控、备份恢复、数据迁移、安全和长期运维等生产化能力。
+本地 M1 候选可以支持 Competition Demo，但不能据此宣称目标 107 已兼容或 M1 已完成。
+真实 107 对接不得保留历史 profile、Mock 或 Native fallback 来掩盖未核验事实。

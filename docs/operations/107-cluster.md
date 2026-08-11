@@ -1,8 +1,9 @@
 # 107 集群运行事实与 M1 人工验收
 
-这里记录目标 107 的可复用运行事实与 M1 human-gate runbook。
-通用部署拓扑、容器与共享存储边界仍以 [`deployment.md`](deployment.md) 为准；
-一次性作业及仓外副作用只记录在当前 [`journal`](../journal/2026-08-10-m1-execution-seams.md)。
+这里记录赛后目标 107 集成轨的可复用运行事实与 M1 human-gate runbook；该验收不再
+阻塞当前 Competition Demo，也不会因本地演示通过而自动完成。通用部署拓扑、容器与
+共享存储边界仍以 [`deployment.md`](deployment.md) 为准；一次性作业及仓外副作用只记录在
+当前 [`journal`](../journal/2026-08-10-m1-execution-seams.md)。
 
 ## Slurm 与运行环境：M1 人工验收 runbook
 

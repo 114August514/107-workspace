@@ -1,25 +1,28 @@
 # 107 Workspace
 
-面向中国科学技术大学 107 算力平台的协作式计算工作空间。用户可以在浏览器中管理
-Workspace 和 Project、保存 Project Version、配置并提交 Run，以及查看日志和
-Artifact。
+面向中国科学技术大学 107 算力场景的协作式计算工作空间。平台把 Workspace、Project、
+不可变 Version / Snapshot、Run、独立 Worker、调度执行、状态、日志和 Artifact 组织为
+可复现、可追溯的协作计算工作流。当前交付目标是
+[`Competition Demo`](docs/product/design.md)：在受信任的本地 Linux / WSL2 环境中展示
+完整产品闭环，不把本地证据表述为真实 107 或生产证据。
 
-当前仓库是**可运行的开发基线**，不是 `docs/product/design.md` 路线图中 M1 已完成的声明。
-现有实现覆盖 FastAPI 后端、React 控制台、数据库迁移、真实 Git Project Version、
-本地内容存储、Mock 调度和 Slurm REST 适配器；Shared FS、独立 Worker、Apptainer、
-学校认证和真实 Slurm 环境仍需要按现行 Milestone 验证或实现。
+当前仓库是**可运行的本地候选**，不是 M1 已完成的声明。现有实现覆盖 FastAPI 后端、
+React 控制台、数据库迁移、真实 Git Project Version、独立 Worker、Run workspace /
+Shared FS seam、本地内容存储、MockScheduler 和 Slurm REST 适配器。目标 107 当前
+advertise 的 API profile 与候选不兼容；真实 profile、认证、三方存储/身份映射、
+correlation 恢复和端到端验收属于赛后 M1 human gate。
 
 ## 事实来源
 
 | 内容 | 位置 |
 | :--- | :--- |
-| 产品能力、领域术语与规则 | [`docs/product/design.md`](docs/product/design.md) |
+| 产品定位、Competition Demo 契约、产品能力、领域术语与规则 | [`docs/product/design.md`](docs/product/design.md) |
 | Git、分支、提交与评审 | [`docs/contributing/git-workflow.md`](docs/contributing/git-workflow.md) |
 | AI 与工程协作入口 | [`AGENTS.md`](AGENTS.md) |
 | 高影响工程决策 | [`docs/decisions/`](docs/decisions/README.md) |
 | 在途工作记录 | [`docs/journal/`](docs/journal/) |
 | 通用部署入口与运行边界 | [`deploy/`](deploy/README.md) 与 [`docs/operations/deployment.md`](docs/operations/deployment.md) |
-| 107 当前运行事实与 M1 人工验收 | [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md) |
+| 赛后真实 107 集成事实与 M1 人工验收 | [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md) |
 | 前后端 API 机器契约 | [`contracts/`](contracts/README.md) |
 
 迁移来源 `workspace107@293c8d8` 的完整快照保存在
@@ -86,6 +89,7 @@ cp .env.example .env
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
-浏览器访问 <http://127.0.0.1:8107>。通用部署和共享存储约束见
-[`docs/operations/deployment.md`](docs/operations/deployment.md)；目标 107 运行事实与 M1
-人工验收见 [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md)。
+浏览器访问 <http://127.0.0.1:8107>。Competition Demo 的交付边界见
+[`docs/product/design.md`](docs/product/design.md)；通用部署和共享存储约束见
+[`docs/operations/deployment.md`](docs/operations/deployment.md)；赛后目标 107 运行事实与
+M1 人工验收见 [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md)。

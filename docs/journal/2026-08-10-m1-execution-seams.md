@@ -102,3 +102,15 @@ submit ambiguity/restart 恢复。当前仍需：
 
 本次 checkpoint 更新 operations 与 journal，未创建 commit；如需撤销应使用受控、可审计的
 文档变更，不 amend、不 rebase、不重写 Git 历史。
+
+## 2026-08-11 Competition Demo 轨道调整 checkpoint
+
+产品近期目标已调整为受信任本地环境中的 Competition Demo，交付与验收权威口径见
+[`docs/product/design.md`](../product/design.md) §0.2。真实 107 M1 human gate 转为赛后
+集成轨，仍保持 **BLOCKED/HANDOFF**；本地候选可以支持 Competition Demo，但不因此成为
+真实 M1 `DONE`。上文记录的外部 probe、FAIL / INSUFFICIENT 结论、仓外副作用和后续
+human-gate 验收项均未改变。
+
+外部 ChatGPT 分享只作为带归属的设计输入记录在
+[`platform-positioning-chat.md`](../references/engineering/platform-positioning-chat.md)，
+不作为产品动机、用户研究、目标 107 事实或比赛规则的权威来源。
