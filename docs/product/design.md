@@ -2413,8 +2413,6 @@ Application 负责用例编排并调用 Domain 执行业务规则，同时通过
 
 身份认证通过外部 Identity Provider 接入 USTC CAS；认证后的身份由平台映射为 User，再按照 Membership、Role 和 Eligibility 等领域规则进行授权。
 
-USTC CAS 仍是长期身份认证目标；Competition V1 可以在受控演示环境中延后 CAS 协议接入和更丰富的权限管理体验，但不得移除现有服务端 Ownership、Membership、Role 与对象范围校验。任何共享或不受信任环境都必须先具备不可伪造的身份边界。
-
 ### 4.3 后端分层与依赖边界
 
 后端采用分层设计：
@@ -2616,20 +2614,6 @@ Port / Infrastructure
 
 高影响、反悔成本较高的决策使用 ADR 记录；局部、可逆的实现决策直接完成。
 
-#### 5.3.1 独立可消费能力切片
-
-当完整 Workspace107 尚未完成时，已经实现的能力应保持为 **independently consumable capability slice（独立可消费能力切片）**：原 107 系统通过有文档、带版本的 HTTP / OpenAPI 接口子集和一个窄 Host Adapter 使用该能力，而不导入 Workspace107 内部 Python 模块、不直接访问或共享数据库表，也不依赖整套 Workspace107 前端。
-
-能力切片仍运行在模块化单体内；“独立”描述消费边界，不要求提前拆成独立微服务。每个可交付切片至少满足：
-
-1. 明确用例、接口子集、数据归属、认证假设、外部副作用和错误语义；
-2. 接口进入生成式 OpenAPI 契约，并由 Host Adapter 完成身份和对象引用映射；
-3. 通过一次原 107 驱动的集成探针，证明调用、结果读取和失败路径均可观察；
-4. 原 107 不消费其他接口也能继续运行，移除 Adapter 不会要求修改双方数据库；
-5. 竞争阶段的限制和工程妥协登记在 `docs/product/deferred.md`。
-
-当前承诺是 **HTTP-adaptable**，不是动态安装、发现或卸载的通用插件框架。在真实 Host-driven integration probe 通过前，不宣称 drop-in plugin compatibility。第三方 ABI / SDK、共享数据库、稳定内部 Python API、通用事件总线、Microfrontend 框架和任意 UI 注入均不在当前范围。
-
 ### 5.4 测试与工程入口
 
 测试按照责任和风险分层：
@@ -2676,7 +2660,7 @@ make check
 | Pull Request | 对 Issue 的实际代码变更及验证结果 |
 | ADR | 已确定的高影响设计或工程决策 |
 | Journal | 跨会话、并行或存在仓外副作用工作的在途记录 |
-| `docs/product/deferred.md` | 已识别的未来设计延后项，以及当前明确接受并受约束的工程 / 代码妥协 |
+| `docs/product/deferred.md` | 已识别但当前明确延后的产品或领域设计事项 |
 | AGENTS.md | 长期有效的 AI 协作规则与工作入口 |
 
 Issue 应至少明确目标、验收条件和必要约束，并作为具体任务的权威描述；需求变化时应更新 Issue，而不是只保留在聊天记录中。
@@ -2692,38 +2676,30 @@ Journal 仅补充 Issue 和 Git 难以表达的在途状态、影响范围、仓
 当前代码事实  → 当前默认分支
 设计决策      → Design Document / ADR
 在途状态      → Journal
-延后设计与工程妥协 → docs/product/deferred.md
+延后设计      → docs/product/deferred.md
 协作规则      → AGENTS.md
 ```
 
 ## 六. 开发与迭代规划
 
-当前开发以 Competition V1 为近期目标，以真实投产为长期目标。Competition V1 优先交付连贯、评委可见、端到端可运行的垂直切片，不以依次完成 M0 至 M5 的全部能力和生产化事项为前提。
+当前开发以 Competition V1 为近期目标，以真实投产为长期目标。开发按垂直切片推进，优先验证核心执行链路，再逐步完善复用、协作与产品体验。
 
 ### 6.1 开发策略
 
-Competition V1 按以下顺序判断工作优先级：
+开发顺序遵循：
 
 ```text
-评委可观察的用户价值
-→ 端到端闭环完整度
-→ 演示可靠性与失败可见性
-→ 原 107 可独立消费性
-→ 实现与集成成本
+工程基线
+→ 验证执行链路
+→ 单用户计算闭环
+→ Run 复用
+→ 协作复用
+→ Competition V1
 ```
 
-Project / Version、Run Configuration / Snapshot、提交、状态、日志和 Artifact 等闭环优先；重跑、Fork、环境与资源选择、活动和通知等可见复用能力在形成完整切片时继续推进。USTC CAS 协议接入、更丰富的权限与安全管理体验，以及部署、监控、备份恢复等生产化工作可以登记后延，但不得用模糊的“一揽子延后”覆盖具体缺口。
+前期以后端为主，通过稳定的 API Contract 与前端解耦；前端可以独立推进，并在核心接口稳定后逐步接入。
 
-延后事项不得改变第三章的长期产品规则，也不得移除现有服务端 Ownership、Membership、Role 和对象范围校验。为避免受控演示直接造成伤害，以下环境与发布边界不可延后：
-
-- 不在不安全的演示存储中使用真实 Secret，只允许无长期价值且可撤销的演示凭据；
-- 不允许不受信任用户通过 Mock Scheduler 在 API 主机 Shell 中执行命令；
-- 共享或不受信任环境不得使用可由调用方伪造的身份；
-- 文件读写、收集和删除不得暴露未受控的宿主机文件系统范围。
-
-这些边界只约束支持环境和发布声明，不建立与功能交付竞争的第二套产品优先级。开发和测试可以使用 Fake / Mock，但必须披露运行模式；Mock 闭环不能作为真实 107 Git、Shared FS、Worker 或 Slurm 链路已经验证的证据。
-
-前期以后端为主，通过稳定的 API Contract 与前端和原 107 Host Adapter 解耦。外部能力通过 Port 隔离；只有在声称真实平台能力时，才以真实 PostgreSQL、Git、Shared FS、slurmrestd / Slurm 等实现及对应环境证据支持该声明。
+外部能力通过 Port 隔离。开发和测试阶段允许使用 Fake Implementation，但核心技术边界应尽早替换为真实 PostgreSQL、Git、Shared FS、slurmrestd / Slurm 等实现进行验证。
 
 ### 6.2 Walking Skeleton
 
@@ -2756,18 +2732,20 @@ M0 可以使用 Fake Port 验证应用结构；M1 开始优先接入真实 Worke
 
 ### 6.3 Milestone
 
-Milestone 是能力分组和证据标签，不是 Competition V1 必须依次全部完成的阶段门。一个 Milestone 只有在其目标能力整体满足时才可宣称完成；比赛可以从不同 Milestone 选择连贯的垂直切片交付，但不得借此宣称未完成的 Milestone 已完成。
+Milestone 按可交付能力划分，而不是按领域模块逐个完成。
 
 | Milestone | 目标 |
 | :-------: | :---: |
-| **M0 Engineering Baseline** | 建立 Monorepo、Backend、测试、配置与统一工程入口，使后端可本地运行 |
-| **M1 Executable Skeleton** | 使用真实 Git / Shared FS / Worker / Slurm 打通最小 Run 执行链路 |
+| **M0 Engineering Baseline** | 建立 Monorepo、Backend、Worker、测试、配置与统一工程入口，使后端可本地运行 |
+| **M1 Executable Skeleton** | 使用真实 Git / Shared FS / Slurm 打通最小 Run 执行链路 |
 | **M2 Single-user Compute Loop** | 完成 Personal Workspace、Project / Version、Run Configuration、Run / Snapshot、Log / Artifact 等基本计算闭环 |
 | **M3 Reusable Run** | 完善重跑、Fork、Environment、Shared Resource、Input Binding 等能力，使已验证计算工作能够复用 |
 | **M4 Collaborative Reuse** | 完成 Collaborative Workspace、Membership / Role、Asset Grant、Compute Plan / Entitlement 等协作与授权能力 |
-| **M5 Competition V1** | 组合优先切片、必要前端、关键异常流程、身份边界和受控演示环境，形成比赛可用产品形态 |
+| **M5 Competition V1** | 接入必要认证和前端，完善关键流程、异常处理与演示环境，达到比赛可用状态 |
 
-USTC CAS、完整权限管理体验和生产化加固不再是 Competition V1 的无条件阻塞项；其长期目标不变，延后时必须逐项登记。Template、Profile 或其他增强能力可以按可见价值和闭环成本进入比赛切片，但 Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等未正式设计事项仍由延后登记管理。
+Template 与 Profile 不作为 Competition V1 的阻塞项；核心链路稳定且时间允许时，可以作为增强能力继续推进。
+
+Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
 
 ### 6.4 迭代与范围控制
 
@@ -2789,8 +2767,6 @@ Pull Request
 
 进入某个 Milestone 时再拆分具体 Issue，不提前固定整个 V1 的全部任务。
 
-Competition V1 选择切片时不要求先关闭所有较早 Milestone；所选切片仍须逐项满足自己的验收条件、模式披露、安全边界和原 107 消费验收。
-
 Milestone 完成时至少要求：
 
 - 目标能力能够实际运行；
@@ -2807,16 +2783,16 @@ Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式�
 
 当前 Roadmap 以 Competition V1 为近期目标，不绑定具体日期，并根据实现反馈持续更新。
 
-| 能力分组 | 核心目标 | Competition V1 处理方式 |
-| :---: | :---: | :---: |
-| **M0 Engineering Baseline** | 可持续开发和可运行基线 | 必要基础；未完成工程项按实际证据披露 |
-| **M1 Executable Skeleton** | 真实 Run 执行链路 | 声称真实 107 能力时必须；Mock 仅证明受控演示闭环 |
-| **M2 Single-user Compute Loop** | 单用户完整计算闭环 | 优先选择评委可见、端到端完整的切片 |
-| **M3 Reusable Run** | 使已验证计算工作能够复用 | 按可见价值与闭环成本选择切片 |
-| **M4 Collaborative Reuse** | 多人协作与跨 Workspace 复用 | 按可见价值选择；现有服务端对象范围校验不得移除 |
-| **M5 Competition V1** | 比赛演示收口 | 必须完成所选切片、必要身份边界、模式披露与受控演示环境；CAS、丰富权限 UX 和生产化加固可逐项延后 |
-| **Optional Enhancement** | 扩展项目创建与场景化复用能力 | 时间允许且能形成完整可见切片时进入 |
+| Milestone | 核心目标 | 关键能力 | V1 要求 |
+| :---: | :---: | :---: | :---: |
+| **M0 Engineering Baseline** | 建立可持续开发的工程基线 | Monorepo、Backend、Worker、测试、配置、统一工程入口 | 必须 |
+| **M1 Executable Skeleton** | 跑通最薄真实执行链路 | Run / Snapshot、Worker、Git / Shared FS、slurmrestd / Slurm、状态回写 | 必须 |
+| **M2 Single-user Compute Loop** | 形成单用户完整计算闭环 | Personal Workspace、Project / Version、Run Configuration、Run、Log、Artifact | 必须 |
+| **M3 Reusable Run** | 使已验证计算工作能够复用 | 重跑、Fork、Environment、Shared Resource、Input Binding | 必须 |
+| **M4 Collaborative Reuse** | 支持多人协作与跨 Workspace 复用 | Collaborative Workspace、Membership / Role、Asset Grant、Compute Plan / Entitlement | 必须 |
+| **M5 Competition V1** | 完成比赛可用产品形态 | USTC CAS、必要前端、关键异常流程、演示环境与整体收口 | 必须 |
+| **Optional Enhancement** | 扩展项目创建与场景化复用能力 | Template、Profile... | 时间允许 |
 
-未被 Competition V1 选中的目标能力不视为取消或完成；其长期语义继续由本设计和 GR 规则约束，已接受的延后或代码妥协登记在 `docs/product/deferred.md`。Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等仍不进入当前正式 Roadmap。
+Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
 
-Competition V1 之后，再根据真实投产需求推进 CAS、完整授权治理、部署、监控、备份恢复、数据迁移和长期运维。任何环境在进入共享或不受信任使用前，必须先满足 6.1 的不可延后边界。
+Competition V1 之后，再根据真实投产需求规划部署、监控、备份恢复、数据迁移、安全和长期运维等生产化能力。
