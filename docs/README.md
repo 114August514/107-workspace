@@ -10,7 +10,8 @@
 | Coding Agent 项目入口、工程原则和工作路由 | [`../AGENTS.md`](../AGENTS.md) |
 | 测试策略、测试粒度和验证边界 | [`testing/`](testing/README.md) |
 | API、生成类型和跨组件机器契约 | [`../contracts/`](../contracts/README.md) |
-| 部署方式与生产边界 | `operations/deployment.md`，可执行清单见 [`../deploy/`](../deploy/README.md) |
+| 通用部署方式与生产边界 | [`operations/deployment.md`](operations/deployment.md)，可执行清单见 [`../deploy/`](../deploy/README.md) |
+| 107 当前运行事实、资源与 M1 人工验收 | [`operations/107-cluster.md`](operations/107-cluster.md) |
 | 长期工程决策及其取舍 | [`decisions/`](decisions/README.md) |
 | 在途工作、跨会话恢复、并行协作和交接 | [`journal/`](journal/README.md) |
 

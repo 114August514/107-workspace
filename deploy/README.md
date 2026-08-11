@@ -1,7 +1,8 @@
 # 部署文件
 
-本目录保存可执行的部署编排；部署原理、生产边界和排障说明仍以
-[`docs/operations/deployment.md`](../docs/operations/deployment.md) 为准。
+本目录保存可执行的部署编排；通用部署原理、生产边界和排障说明仍以
+[`docs/operations/deployment.md`](../docs/operations/deployment.md) 为准。目标 107 当前运行事实
+与 M1 人工验收见 [`docs/operations/107-cluster.md`](../docs/operations/107-cluster.md)。
 
 当前只有 [`compose.yaml`](compose.yaml)，用于本机开发和受信任演示。它不提供 HTTPS、
 生产级 Secret 管理、自动备份、多副本编排或监控告警，因此不构成生产部署方案。

@@ -18,7 +18,8 @@ Artifact。
 | AI 与工程协作入口 | [`AGENTS.md`](AGENTS.md) |
 | 高影响工程决策 | [`docs/decisions/`](docs/decisions/README.md) |
 | 在途工作记录 | [`docs/journal/`](docs/journal/) |
-| 部署入口与运行边界 | [`deploy/`](deploy/README.md) 与 [`docs/operations/`](docs/operations/deployment.md) |
+| 通用部署入口与运行边界 | [`deploy/`](deploy/README.md) 与 [`docs/operations/deployment.md`](docs/operations/deployment.md) |
+| 107 当前运行事实与 M1 人工验收 | [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md) |
 | 前后端 API 机器契约 | [`contracts/`](contracts/README.md) |
 
 迁移来源 `workspace107@293c8d8` 的完整快照保存在
@@ -72,7 +73,7 @@ api -> application -> domain ports <- infrastructure
 - `contracts/`：后端导出、前端消费的 OpenAPI 机器契约。
 - `deploy/`：可执行的容器编排和部署入口，不存放服务自己的镜像构建文件。
 - `scripts/`：跨平台 Python 任务实现，以及位于平台边缘的引导脚本。
-- `docs/operations/`：当前容器部署方式和上线前仍需满足的约束。
+- `docs/operations/`：通用容器部署方式、目标 107 当前运行事实和上线前约束。
 
 本地 `mock` 调度器会通过宿主机 shell **真实执行用户命令**，仅适合开发、测试和
 受信任演示。它不是沙箱，也不能替代真实集群验收。
@@ -85,5 +86,6 @@ cp .env.example .env
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
-浏览器访问 <http://127.0.0.1:8107>。部署和共享存储约束见
-[`docs/operations/deployment.md`](docs/operations/deployment.md)。
+浏览器访问 <http://127.0.0.1:8107>。通用部署和共享存储约束见
+[`docs/operations/deployment.md`](docs/operations/deployment.md)；目标 107 运行事实与 M1
+人工验收见 [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md)。

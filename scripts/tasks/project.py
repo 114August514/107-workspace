@@ -726,6 +726,7 @@ def doctor() -> None:
         "docs/product/deferred.md",
         "docs/contributing/git-workflow.md",
         "docs/operations/deployment.md",
+        "docs/operations/107-cluster.md",
         "deploy/README.md",
         "deploy/compose.yaml",
         "docs/README.md",

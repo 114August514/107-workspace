@@ -46,6 +46,8 @@ A Git Version、B Shared FS、C Worker、D Slurm 已集成到同一 vertical sli
 
 ## Blocker 2：真实 107 M1 human gate（2026-08-11 fresh evidence）
 
+可复用事实与 runbook 见 [`107-cluster.md`](../operations/107-cluster.md)。
+
 本次获授权 probe 已访问 107：先运行一次 `sbatch --test-only`（不产生 job），再提交
 一次实际最小 batch job 36100；没有执行真实 M1 Worker/REST submit，也没有证明
 submit ambiguity/restart 恢复。当前仍需：
