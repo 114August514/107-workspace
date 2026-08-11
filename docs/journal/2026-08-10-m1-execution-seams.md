@@ -84,7 +84,7 @@ submit ambiguity/restart 恢复。当前仍需：
 - REST endpoint 仅记录为可达且未认证返回 401；一次 120s token 只在远端单进程内存生成，
   通过 `X-SLURM-USER-NAME`/`X-SLURM-USER-TOKEN` 访问 OpenAPI（200），未打印、落盘、
   export 或放入 argv，进程退出后不保留。不得记录 token 或 endpoint 细节。
-- 未删除 Docker volume；本次更新 operations 与 journal，未 commit；无 Docker volume 变化。
+- 探针期间与后续文档收敛均未删除 Docker volume；无 Docker volume 变化。
 
 ## 下一步顺序
 

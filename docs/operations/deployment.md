@@ -214,7 +214,7 @@ Worker 发出 slurmrestd HTTP 请求前的本地校验失败是明确 Rejected�
 | API schema/profile | 已确认目标 advertise `v0.0.41-44`；PR8 v0.0.40 兼容性 **FAIL** | adapter profile 变更或 API 升级时复验 |
 | 认证方式 | 已确认：远端进程内短时生成 token，仅通过 `X-SLURM-USER-NAME`/`X-SLURM-USER-TOKEN` 使用 | Secret 管理、认证插件或进程模型变化时复验；不记录 token |
 | 关联查询 | **FAIL**：v0.0.44 jobs 查询未提供 comment 精确过滤，无法证明完整性；不得设 `correlation_query_complete=true` | schema、权限、filter 或分页能力变化后复验 |
-| `stu`/`Students` 资源 | 已确认：默认 QoS `qos_stu_medium_2gpu`；允许 `qos_stu_default,qos_stu_medium_2gpu`；DefMemPerCPU 4096 MiB、MaxNodes 2、up | association、partition、QoS 或资源策略变化时复验 |
+| account `stu` / partition `Students` 资源 | 已确认：默认 QoS `qos_stu_medium_2gpu`；允许 `qos_stu_default,qos_stu_medium_2gpu`；DefMemPerCPU 4096 MiB、MaxNodes 2、up | association、partition、QoS 或资源策略变化时复验 |
 | Shared FS | 部分确认：login/compute 对 canonical HOME 与 `/public` 可见同 backend/inodes；login marker read、同目录 staging→final rename 可见且 inode 保持 | service identity、shared_gid、专用 storage root 或挂载路径变化时复验 |
 | 身份边界 | 仅确认 probe compute identity `66703:66703`；不是 service identity | service image、compute identity 或权限策略变化时复验 |
 
