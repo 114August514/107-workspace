@@ -1,14 +1,15 @@
 # 部署
 
-这里说明当前 107 Workspace 应用容器的运行方式，以及它距离真实集群部署还差什么。
-容器编排是开发和受信任演示基线，不代表生产验收已经完成。
+这里说明当前 107 Workspace 应用容器在本机或受信任、访问受控的私有外部 Linux 服务器
+上的运行方式，以及它距离真实集群和公开生产部署还差什么。容器编排是开发与私有演示
+基线，不代表产品认证、隐私、生产验收或真实 107 已经完成。
 可执行清单及目录边界见 [`deploy/README.md`](../../deploy/README.md)。以下命令均在仓库
 根目录运行。
 
 本部署拓扑和 M1 Worker 只支持 Linux / WSL2 的 POSIX 语义；原生 Windows 不属于部署
 目标。权威平台矩阵见 [ADR-0004](../decisions/0004-platform-support-matrix.md)。
 
-## 本机演示
+## 受信任的私有演示
 
 ```bash
 cp .env.example .env
@@ -24,6 +25,15 @@ docker compose --project-directory . --file deploy/compose.yaml down
 
 `docker compose --project-directory . --file deploy/compose.yaml down -v` 会删除数据库和
 存储卷，只能在明确不需要其中数据时执行。
+
+默认从同一主机访问 `127.0.0.1`。也可以把 Compose 运行在私有外部 Linux 演示服务器上，
+但入口必须只对受信任参与者开放，不得直接发布为公开服务，容器必须保持非 root。
+
+`.env`、文件权限、防火墙、VPN 或私有网络只能降低暴露面，不提供产品认证或隐私语义。
+应用仍须按 development persona 执行正常的 Workspace ownership、Membership、能力、
+版本、路径、Secret 脱敏、幂等和 correlation 规则。外部主机的 root / admin 对该主机实际
+控制的 API、数据库、存储、执行请求及放置其中的凭据属于 TCB；没有放在该主机上的集群
+凭据不能因此被假定由它控制。公开访问必须先满足本页“上线前最低条件”，不能沿用 dev 身份。
 
 ## 拓扑
 
@@ -65,24 +75,27 @@ API 容器启动时会执行 Alembic 升级和幂等的平台目录 seed，然�
 | `WORKSPACE107_SLURM_*_PATH*` | Worker 使用、经人工核验的 submit/job/list/cancel 路径契约；无默认猜测 |
 | `WORKSPACE107_SLURM_CORRELATION_*` | Worker 使用的完整 correlation 字段、精确查询参数、容量和查询完整性确认 |
 | `WORKSPACE107_SLURM_RUNTIME_MODE` | Worker 当前候选只支持经人工确认的 `native`；`apptainer` 会 fail-fast |
-| `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；真实部署必须替换 |
+| `WORKSPACE107_AUTH_MODE` | `dev` 只用于受信任、非公开的 development persona；不构成认证 |
 
-镜像不包含凭据，`.env` 也不会进入 Git 或构建上下文。
+镜像不包含凭据，`.env` 也不会进入 Git 或构建上下文；这只减少凭据泄露风险，不提供认证。
 
 ## Mock 不是沙箱
 
-`WORKSPACE107_SCHEDULER=mock` 会由独立 Worker 在 **Worker 容器及其运行身份**下，通过
-宿主 shell 子进程真实执行 Run Configuration 的命令；Mock 子进程的创建、轮询和取消均
-归 Worker，不归 API。任何能提交 Run 的用户都能执行该 Worker 身份允许的命令，因此它
-只能用于本地开发、自动化测试和受信任演示，不能对不受信任用户开放。
+`WORKSPACE107_SCHEDULER=mock` 会由独立 Worker 在 **Worker 容器及其非 root 运行身份**下，
+通过 shell 子进程真实执行 Run Configuration 的命令；Mock 子进程的创建、轮询和取消均归
+Worker，不归 API。任何能提交 Run 的用户都能执行该 Worker 身份允许的命令，因此它只能用于
+本地开发、自动化测试和受信任的私有演示，不能对不受信任用户开放。主机或容器权限限制只是
+执行影响的边界，不会把 Mock 变成多租户沙箱。
 
 `MockScheduler` adapter 保留 Windows 系统命令解释器分支并由 contributor check 覆盖；
 POSIX 下使用 Bash。完整 Worker 组合仍只支持 Linux / WSL2，平台不会翻译 Project 命令。
 
 ## 接入真实集群
 
-当前代码包含 Slurm REST 适配器。目标 107 的可复用运行事实与 M1 人工验收见
-[`107 集群运行事实与 M1 人工验收`](107-cluster.md)。切换配置不等于完成接入。
+当前代码包含 Slurm REST 适配器，但切换配置不等于完成接入。个人 SSH / Tailscale / SCOW
+runner 只是独立探针，不是部署方式、产品 bridge 或 `SshScheduler`。A2 / C / D 条件拓扑、
+站点 gate、可复用运行事实与 M1 `BLOCKED / HANDOFF` 验收统一见
+[`107 集群运行事实与 M1 人工验收`](107-cluster.md)。
 
 ### 共享存储
 

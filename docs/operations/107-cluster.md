@@ -1,9 +1,37 @@
 # 107 集群运行事实与 M1 人工验收
 
-这里记录赛后目标 107 集成轨的可复用运行事实与 M1 human-gate runbook；该验收不再
-阻塞当前 Competition Demo，也不会因本地演示通过而自动完成。通用部署拓扑、容器与
-共享存储边界仍以 [`deployment.md`](deployment.md) 为准；一次性作业及仓外副作用只记录在
-当前 [`journal`](../journal/2026-08-10-m1-execution-seams.md)。
+这里记录目标 107 集成轨的可复用运行事实、条件拓扑与 M1 human-gate runbook。M1 当前为
+`BLOCKED / HANDOFF`；它只阻塞真实 107 兼容与部署声明，不阻塞明确标注 Mock /
+development 的产品能力工作，也不会因私有 Competition Minimum、本地 fixture 或操作探针
+通过而自动完成。通用部署拓扑、容器与共享存储边界仍以
+[`deployment.md`](deployment.md) 为准；一次性作业及仓外副作用只记录在当前
+[`journal`](../journal/2026-08-10-m1-execution-seams.md)。
+
+## 条件拓扑与证据边界
+
+个人 SSH / Tailscale / SCOW runner 当前只能作为管理员控制的独立探针，间接提交一个有界
+真实作业并采集有限证据；它不是产品 bridge、部署依赖或 `SshScheduler`。操作探针的成功
+不能证明产品 API / Worker、无人值守恢复、多用户授权、Secret 或完整数据链。
+
+当前只保留三个未排序的条件候选：
+
+- **A2**：外部 Worker + 站点正式支持的 canonical shared mount + tunnelled slurmrestd；
+- **C**：外部 control plane + 部署在 107 的薄 agent；
+- **D**：完整 Worker 部署在 107。
+
+在站点明确回答部署许可、网络方向、service / delegated identity、审计归属、凭据签发 /
+最小权限 / 轮换 / 撤销、canonical storage 和 UID / GID 映射前，不得排序或选择 A2 / C / D。
+任一候选还必须通过目标单一 API profile、submit / poll / cancel、active + history correlation
+完整性、原子发布、路径逃逸防护、Log / Artifact 来源校验以及断线 / 重启无盲目重提的真实
+端到端验收。满足这些 gate 前不创建永久拓扑 ADR。
+
+**A1**（外部 Worker 只经隧道访问 slurmrestd、没有站点支持的 canonical shared mount）
+至多验证 REST 控制面，不能让计算节点看到 Run workspace，也不能闭合 Log / Artifact 数据链。
+Mock 是独立的本地逻辑和私有演示模式，不属于真实 107 候选。
+
+以下 runbook 继续作为 verified-info gate；任何 endpoint、token、UID / GID、mount、
+Scheduler / Account / Partition / QoS、API path / profile 或授权结果都不得用 demo 默认值
+替代现场证据。
 
 ## Slurm 与运行环境：M1 人工验收 runbook
 
@@ -75,12 +103,12 @@ Worker 发出 slurmrestd HTTP 请求前的本地校验失败是明确 Rejected�
 是 `UNKNOWN`，上述情况都不能伪造成成功或确定的零匹配。
 
 2026-08-11 的 fresh evidence 已确认目标版本、ClusterName、认证探针和部分 Shared FS 行为；
-但真实 M1 Worker/REST submit 尚未执行，PR8 v0.0.40 profile 与目标 v0.0.41-44 不兼容，
+但真实 M1 Worker / REST submit 尚未执行，PR8 v0.0.40 profile 与目标 v0.0.41–44 不兼容，
 且 v0.0.44 暴露的查询接口没有 comment 精确过滤，也无法证明 correlation 查询完整性。
-因此真实 slurmrestd/Slurm 端到端、认证 profile、三方 mount、Native 环境和 M1 仍为
-**INSUFFICIENT**；PR8 correlation server-side exact filter 与 `correlation_query_complete`
-为 **FAIL**。不得把没有分页参数夸大为服务必然截断。
-本地 v0.0.40 fixture 通过只证明 adapter 候选的协议行为。
+因此真实 slurmrestd / Slurm 端到端、认证 profile、三方 mount、Native 环境和 M1 仍为
+**INSUFFICIENT**，工作状态保持 `BLOCKED / HANDOFF`；PR8 correlation server-side exact
+filter 与 `correlation_query_complete` 为 **FAIL**。不得把没有分页参数夸大为服务必然截断，
+也不得把本地 v0.0.40 fixture 或个人 runner 探针外推为产品集成证据。
 
 ## 2026-08-11 current facts（带日期的可复用事实）
 
