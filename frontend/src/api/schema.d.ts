@@ -1585,6 +1585,11 @@ export interface components {
             source_id: string;
             /**
              * Source Subpath
+             * @description 可选子路径，只取来源内容的一个子目录/文件（设计稿 §3.1.3）；空串取整份内容。
+             *
+             *     shared_resource_version 来源的无效子路径在 preflight（配置保存/提交前）即被挡下；
+             *     artifact 来源的无效子路径在 Run 提交物化时才以错误暴露（artifact 无文件清单，
+             *     无法在 preflight 校验存在性）。
              * @default
              */
             source_subpath: string;
@@ -1595,7 +1600,8 @@ export interface components {
          * InputSourceType
          * @description Input Binding 的来源类型。
          *
-         *     当前迁移实现只支持 artifact；shared_resource_version 已建模但能力未开放。
+         *     两种来源都已实现：``artifact`` 从产物目录物化，``shared_resource_version``
+         *     从版本的文件清单按 blob 物化（设计稿 §3.1.3、§2.6）。
          * @enum {string}
          */
         InputSourceType: "artifact" | "shared_resource_version";
