@@ -66,6 +66,10 @@ class RunInput:
     ``(path, content_hash)`` 列表物化到 ``access_path`` 下，复用 Project
     Version 已在用的 blob 池。``artifact`` 路径则按 ``artifact_id`` 找到
     已经收集好的目录直接复制。
+
+    ``source_subpath`` 非空时只物化该子路径下的内容并剥掉前缀映射到 ``access_path``
+    下（设计稿 §3.1.3 的可选 Source Subpath）；空串表示物化整份内容。子路径已在
+    ``InputBinding`` 层规范化，storage 端直接按规范值匹配。
     """
 
     source_type: InputSourceType
@@ -73,6 +77,8 @@ class RunInput:
     access_path: str
     files: tuple[tuple[str, str], ...] = ()
     """``(relative_path, content_hash)``，仅 shared_resource_version 使用。"""
+    source_subpath: str = ""
+    """规范化后的子路径，空串表示物化整份内容；两种来源都用。"""
 
 
 class StoragePort(Protocol):

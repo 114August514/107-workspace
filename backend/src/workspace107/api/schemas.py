@@ -318,6 +318,12 @@ class InputBindingModel(Model):
     source_id: str
     access_path: str
     source_subpath: str = ""
+    """可选子路径，只取来源内容的一个子目录/文件（设计稿 §3.1.3）；空串取整份内容。
+
+    shared_resource_version 来源的无效子路径在 preflight（配置保存/提交前）即被挡下；
+    artifact 来源的无效子路径在 Run 提交物化时才以错误暴露（artifact 无文件清单，
+    无法在 preflight 校验存在性）。
+    """
 
 
 class ArtifactRuleModel(Model):

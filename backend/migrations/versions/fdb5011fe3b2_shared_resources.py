@@ -96,6 +96,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """回滚会删除 Shared Resource 的全部元数据（资源、版本、文件清单三张表）。
+
+    存储层按内容寻址的 blob 正文与 Project Version 共用同一 blob 池，
+    这里只删表、不回收 blob——已被其他对象引用的 blob 仍保留，未引用的
+    由存储层既有的 GC 流程处理（与删 Project Version 同策略）。回滚前确认
+    没有正在被 Run 输入引用的版本，否则引用它们的快照会变成悬空引用。
+    """
     op.drop_table("shared_resource_version_files")
     with op.batch_alter_table("shared_resource_versions", schema=None) as batch_op:
         batch_op.drop_index(

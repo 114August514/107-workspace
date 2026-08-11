@@ -47,6 +47,7 @@ from ..domain.models import (
     RunConfiguration,
     RunEvent,
     RunLogChunk,
+    SharedResourceVersion,
 )
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
@@ -711,20 +712,27 @@ class RunService:
                     problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 problem = await self._check_shared_resource_version_input(
-                    binding.source_id, binding.access_path, workspace_id
+                    binding.source_id,
+                    binding.access_path,
+                    workspace_id,
+                    binding.source_subpath,
                 )
                 if problem is not None:
                     problems.append(problem)
         return problems
 
     async def _check_shared_resource_version_input(
-        self, version_id: str, access_path: str, workspace_id: str
+        self, version_id: str, access_path: str, workspace_id: str, subpath: str = ""
     ) -> str | None:
         """校验 Shared Resource Version 输入引用。
 
-        Platform 持有的资源对所有登录用户可见；Workspace 持有的资源只对
-        该 Workspace 的成员可见。仓储层不内置可见性判断，所以这里通过
-        ``shared_resources.get`` 取出资源再判断 ``owner_workspace_id``。
+        Platform 持有的资源可以浏览，但作为 Run 输入消费需要有效的 Workspace
+        Asset Grant（GR-401）；Asset Grant 在 M4 实现，本 Core 阶段一律拒绝
+        Platform 资源作 Run 输入。Workspace 持有的资源只对该 Workspace 可见，
+        仓储层不内置可见性判断，所以这里通过 ``shared_resources.get`` 取出资源
+        再判断 ``owner_workspace_id``。
+
+        ``subpath`` 非空时还要校验该子路径在版本文件中确实存在，否则物化会落空。
         """
         version = await self._repos.shared_resources.get_version(version_id)
         if version is None:
@@ -732,8 +740,15 @@ class RunService:
         resource = await self._repos.shared_resources.get(version.shared_resource_id)
         if resource is None:  # pragma: no cover - 版本存在则资源必存在
             return f"输入 {access_path} 引用的 Shared Resource 不存在"
-        if not resource.is_platform_owned and resource.owner_workspace_id != workspace_id:
+        if resource.is_platform_owned:
+            return (
+                f"输入 {access_path} 引用的 Platform Shared Resource 需要 M4 "
+                "Workspace Asset Grant，暂不可作为 Run 输入"
+            )
+        if resource.owner_workspace_id != workspace_id:
             return f"输入 {access_path} 引用的 Shared Resource 不存在或无权访问"
+        if subpath and not _subpath_exists_in_version(subpath, version):
+            return f"输入 {access_path} 引用的子路径 {subpath!r} 不存在"
         return None
 
     async def _materialize_inputs(self, bindings: tuple[InputBinding, ...]) -> list[RunInput]:
@@ -751,6 +766,7 @@ class RunService:
                         source_type=binding.source_type,
                         source_id=binding.source_id,
                         access_path=binding.access_path,
+                        source_subpath=binding.source_subpath,
                     )
                 )
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
@@ -765,6 +781,7 @@ class RunService:
                         source_id=binding.source_id,
                         access_path=binding.access_path,
                         files=tuple((f.path, f.content_hash) for f in version.files),
+                        source_subpath=binding.source_subpath,
                     )
                 )
         return inputs
@@ -814,7 +831,10 @@ class RunService:
                     problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 problem = await self._check_shared_resource_version_input(
-                    binding.source_id, binding.access_path, workspace_id
+                    binding.source_id,
+                    binding.access_path,
+                    workspace_id,
+                    binding.source_subpath,
                 )
                 if problem is not None:
                     problems.append(problem)
@@ -824,3 +844,14 @@ class RunService:
 
 def _as_resolved_env(literals: dict[str, str], secret_refs: dict[str, str]) -> ResolvedEnv:
     return ResolvedEnv(literals=dict(literals), secret_refs=dict(secret_refs))
+
+
+def _subpath_exists_in_version(subpath: str, version: SharedResourceVersion) -> bool:
+    """子路径是否落在版本文件树里。
+
+    匹配规则与 ``LocalStorage._prepare_sync`` 一致：子路径要么正好命名一个文件
+    （``f.path == subpath``），要么是一个目录前缀（``f.path.startswith(subpath + "/")``）。
+    用目录边界前缀而不是裸 ``startswith``，避免 ``subpath="train"`` 误匹配
+    ``training/``。两端都是规范化后的值（无尾斜杠、无 ``.``/``..``）。
+    """
+    return any(f.path == subpath or f.path.startswith(subpath + "/") for f in version.files)

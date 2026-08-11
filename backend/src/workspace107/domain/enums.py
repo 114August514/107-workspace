@@ -107,7 +107,8 @@ class ArtifactStatus(StrEnum):
 class InputSourceType(StrEnum):
     """Input Binding 的来源类型。
 
-    当前迁移实现只支持 artifact；shared_resource_version 已建模但能力未开放。
+    两种来源都已实现：``artifact`` 从产物目录物化，``shared_resource_version``
+    从版本的文件清单按 blob 物化（设计稿 §3.1.3、§2.6）。
     """
 
     ARTIFACT = "artifact"

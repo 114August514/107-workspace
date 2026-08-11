@@ -11,6 +11,7 @@ Artifact 的内容不可变，但展示元数据和清理状态可以更新。
 
 from __future__ import annotations
 
+import posixpath
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -222,6 +223,12 @@ class InputBinding:
 
     统一引用一份确定内容，不针对来源类型设计不同结构。
     绑定的内容只读提供给 Run（GR-404）。
+
+    ``source_subpath`` 可选地只取来源内容的一个子路径（设计稿 §3.1.3）：例如
+    ``dataset-v2`` 的 ``train/`` 子目录，绑定后只在 Run 中暴露该子目录。空串表示
+    取整份内容。这里把子路径规范化成与 ``SharedResourceFile.path`` 一致的形式
+    （``posixpath.normpath``，无尾斜杠、无 ``.``/``..``/``//``），否则物化时按规范
+    路径匹配会静默落空。因为是 frozen dataclass，规范化后用 ``object.__setattr__`` 写回。
     """
 
     source_type: InputSourceType
@@ -234,6 +241,18 @@ class InputBinding:
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 必须是绝对路径")
         if ".." in self.access_path.split("/"):
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 不允许包含 ..")
+        if self.source_subpath:
+            candidate = self.source_subpath.strip().replace("\\", "/").lstrip("/")
+            if not candidate:
+                # 纯空白/纯斜杠：等同于不指定子路径，物化整份内容。
+                object.__setattr__(self, "source_subpath", "")
+            else:
+                normalized = posixpath.normpath(candidate)
+                if normalized in {".", ".."} or normalized.startswith("../"):
+                    raise ValidationFailed(f"输入子路径 {self.source_subpath!r} 越出了来源根目录")
+                # frozen dataclass：__post_init__ 里改字段只能走 object.__setattr__。
+                # 在此规范化（单一真相源）而非每个匹配点都规范化，避免静默落空。
+                object.__setattr__(self, "source_subpath", normalized)
 
     def as_payload(self) -> dict[str, str]:
         return {
