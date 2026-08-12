@@ -118,6 +118,19 @@ class WorkspaceCliTests(unittest.TestCase):
             quiet=True,
         )
 
+    def test_demo_command_quotes_posix_python_paths(self) -> None:
+        self.assertEqual(
+            project._demo_command(r"C:\workspace\backend\.venv\Scripts\python.exe"),
+            r"'C:\workspace\backend\.venv\Scripts\python.exe' train.py",
+        )
+
+    def test_demo_command_quotes_windows_python_paths(self) -> None:
+        with mock.patch.object(project.os, "name", "nt"):
+            self.assertEqual(
+                project._demo_command(r"C:\Program Files\Python\python.exe"),
+                r'"C:\Program Files\Python\python.exe" train.py',
+            )
+
     def test_smoke_dispatches_the_isolated_demo(self) -> None:
         with mock.patch.object(project, "demo") as demo:
             result = workspace.main(["smoke"])
