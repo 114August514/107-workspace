@@ -1,4 +1,4 @@
-import { Form, Input, Modal, message } from 'antd'
+import { Dialog, Flash, FormControl, TextInput } from '@primer/react'
 import { useState } from 'react'
 
 import { api } from '../../api/client'
@@ -12,48 +12,102 @@ interface Props {
 }
 
 export function CreateSharedResourceModal({ open, workspaceId, onClose, onCreated }: Props) {
-  const [form] = Form.useForm<{ name: string; description: string }>()
+  const [name, setName] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [feedback, setFeedback] = useState<{ variant: 'success' | 'danger'; text: string } | null>(
+    null,
+  )
 
-  const submit = async () => {
-    const values = await form.validateFields()
-    setSubmitting(true)
-    try {
-      const resource = await api.createSharedResource(
-        workspaceId,
-        values.name,
-        values.description ?? '',
-      )
-      message.success(`已创建 Shared Resource「${resource.name}」`)
-      form.resetFields()
-      onCreated(resource)
+  const reset = () => {
+    setName('')
+    setNameError('')
+    setDescription('')
+    setFeedback(null)
+    setSubmitting(false)
+  }
+
+  const handleClose = () => {
+    if (!submitting) {
+      reset()
       onClose()
-    } catch (error) {
-      message.error((error as Error).message)
+    }
+  }
+
+  const handleSubmit = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setNameError('名称不能为空')
+      return
+    }
+    setSubmitting(true)
+    setFeedback(null)
+    try {
+      const resource = await api.createSharedResource(workspaceId, trimmed, description.trim())
+      reset()
+      onCreated(resource)
+    } catch (err) {
+      setFeedback({ variant: 'danger', text: (err as Error).message })
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (!open) return null
   return (
-    <Modal
-      open={open}
+    <Dialog
+      onClose={handleClose}
       title="创建 Shared Resource"
-      okText="创建"
-      cancelText="取消"
-      confirmLoading={submitting}
-      onOk={submit}
-      onCancel={onClose}
-      destroyOnHidden
+      footerButtons={[
+        { content: '取消', onClick: handleClose, disabled: submitting, buttonType: 'default' },
+        {
+          content: submitting ? '创建中…' : '创建',
+          onClick: handleSubmit,
+          buttonType: 'primary',
+          disabled: submitting,
+        },
+      ]}
     >
-      <Form form={form} layout="vertical" requiredMark="optional">
-        <Form.Item name="name" label="名称" rules={[{ required: true, message: '请填写资源名称' }]}>
-          <Input placeholder="例如：预训练权重" maxLength={128} />
-        </Form.Item>
-        <Form.Item name="description" label="说明">
-          <Input.TextArea rows={3} maxLength={500} />
-        </Form.Item>
-      </Form>
-    </Modal>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {feedback && <Flash variant={feedback.variant}>{feedback.text}</Flash>}
+        <FormControl required>
+          <FormControl.Label>名称</FormControl.Label>
+          <TextInput
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (nameError) setNameError('')
+            }}
+            placeholder="例如：预训练权重"
+            maxLength={128}
+          />
+          {nameError && (
+            <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
+          )}
+        </FormControl>
+
+        <FormControl>
+          <FormControl.Label>说明</FormControl.Label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="（选填）"
+            maxLength={4096}
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: 14,
+              lineHeight: 1.5,
+              border: '1px solid var(--borderColor-default)',
+              borderRadius: 6,
+              resize: 'vertical',
+              fontFamily: 'inherit',
+            }}
+          />
+        </FormControl>
+      </div>
+    </Dialog>
   )
 }

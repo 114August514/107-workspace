@@ -1,4 +1,4 @@
-import { Form, Input, Modal, message } from 'antd'
+import { Dialog, Flash, FormControl, TextInput } from '@primer/react'
 import { useEffect, useState } from 'react'
 
 import { api } from '../../api/client'
@@ -12,53 +12,102 @@ interface Props {
 }
 
 export function EditSharedResourceModal({ open, resource, onClose, onUpdated }: Props) {
-  const [form] = Form.useForm<{ name: string; description: string }>()
+  const [name, setName] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [feedback, setFeedback] = useState<{ variant: 'success' | 'danger'; text: string } | null>(
+    null,
+  )
 
-  // 每次打开都把当前值回填进去——表单是受控的，不复位就会留着上一次的改动。
   useEffect(() => {
     if (open && resource) {
-      form.setFieldsValue({ name: resource.name, description: resource.description })
+      setName(resource.name)
+      setDescription(resource.description ?? '')
+      setNameError('')
+      setFeedback(null)
+      setSubmitting(false)
     }
-  }, [open, resource, form])
+  }, [open, resource])
 
-  const submit = async () => {
-    const values = await form.validateFields()
+  const handleClose = () => {
+    if (!submitting) onClose()
+  }
+
+  const handleSubmit = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setNameError('名称不能为空')
+      return
+    }
     setSubmitting(true)
+    setFeedback(null)
     try {
       await api.updateSharedResource(resource!.id, {
-        name: values.name,
-        description: values.description ?? '',
+        name: trimmed,
+        description: description.trim(),
       })
-      message.success('已保存修改')
       onUpdated()
       onClose()
-    } catch (error) {
-      message.error((error as Error).message)
+    } catch (err) {
+      setFeedback({ variant: 'danger', text: (err as Error).message })
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (!open) return null
   return (
-    <Modal
-      open={open}
+    <Dialog
+      onClose={handleClose}
       title="修改 Shared Resource"
-      okText="保存"
-      cancelText="取消"
-      confirmLoading={submitting}
-      onOk={submit}
-      onCancel={onClose}
-      destroyOnHidden
+      footerButtons={[
+        { content: '取消', onClick: handleClose, disabled: submitting, buttonType: 'default' },
+        {
+          content: submitting ? '保存中…' : '保存',
+          onClick: handleSubmit,
+          buttonType: 'primary',
+          disabled: submitting,
+        },
+      ]}
     >
-      <Form form={form} layout="vertical" requiredMark="optional">
-        <Form.Item name="name" label="名称" rules={[{ required: true, message: '请填写资源名称' }]}>
-          <Input maxLength={128} />
-        </Form.Item>
-        <Form.Item name="description" label="说明">
-          <Input.TextArea rows={3} maxLength={500} />
-        </Form.Item>
-      </Form>
-    </Modal>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {feedback && <Flash variant={feedback.variant}>{feedback.text}</Flash>}
+        <FormControl required>
+          <FormControl.Label>名称</FormControl.Label>
+          <TextInput
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value)
+              if (nameError) setNameError('')
+            }}
+            maxLength={128}
+          />
+          {nameError && (
+            <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
+          )}
+        </FormControl>
+
+        <FormControl>
+          <FormControl.Label>说明</FormControl.Label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={4096}
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              fontSize: 14,
+              lineHeight: 1.5,
+              border: '1px solid var(--borderColor-default)',
+              borderRadius: 6,
+              resize: 'vertical',
+              fontFamily: 'inherit',
+            }}
+          />
+        </FormControl>
+      </div>
+    </Dialog>
   )
 }
