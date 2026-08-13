@@ -1,6 +1,8 @@
 # 前端
 
-107 Workspace 控制台。React + TypeScript + Vite，组件库使用 Ant Design。
+107 Workspace 控制台。React + TypeScript + Vite；目标组件系统使用 Primer React、
+Primer Primitives、Primer Octicons 与 CSS Modules。当前 Ant Design 界面是迁移期间的
+旧实现，不是新页面继续扩展的默认方案。
 工具链统一使用 Node.js 24 LTS 与 pnpm 11；版本约束同时记录在 `.node-version`、
 `package.json` 和 CI 中。
 
@@ -41,6 +43,46 @@ tests/
 页面只做编排，数据获取和交互细节都在组件里。跨页面复用的展示逻辑
 （状态标签、加载与错误处理、时长与容量格式化）只定义一次。
 
+## 组件系统与迁移边界
+
+目标前端技术选型以 [`docs/product/design.md`](../docs/product/design.md) 为准。
+Primer 迁移由 [GitHub Issue #16](https://github.com/114August514/107-workspace/issues/16)
+统一跟踪，但迁移进度不改变产品设计或 API 契约。
+
+迁移遵守以下边界：
+
+1. 按完整用户表面迁移，不按 Button、Tag、Modal 等组件类别横切全仓；
+2. 迁移期间允许未迁移页面继续使用 Ant Design，但同一个已迁移表面不得混用两套组件；
+3. 已迁移文件不得继续导入 `antd` 或 `@ant-design/icons`；
+4. 新增页面默认使用 Primer；只在真实切片出现复用需求时提取公共组件；
+5. 视觉迁移不顺便修改领域术语、API、权限判断或状态管理架构；
+6. 最后一个清理切片删除 Ant Design Provider、主题、专属 helper 和直接依赖，不保留兼容别名。
+
+### 样式与组件
+
+- 颜色、间距、圆角和字体优先使用 Primer Primitives，不在项目里复制一套 GitHub 色值；
+- 107 Workspace 特有的高密度文件、版本、Run、日志和 Artifact 布局使用 CSS Modules；
+- 页面不通过行内样式堆叠长期视觉规则，也不使用组件库私有 class；
+- 可交互组件必须覆盖 `default`、`hover`、`active`、`focus`、`disabled`、`loading`、
+  `selected` 和 `error` 中适用的状态；
+- 网络数据必须区分加载、成功但为空、成功有数据和失败，空态和错误态都提供下一步操作；
+- 语义元素、关联表单标签、可见键盘焦点和正文对比度是最低可访问性要求。
+
+迁移基础切片应提供 `/design-system` 页面，展示实际采用的 token、组件状态、数据四态和
+常用文案。该页面是可运行的实现参考，不替代产品设计。
+
+### UI 验证
+
+UI 改动除类型检查和生产构建外，还必须在真实浏览器中检查：
+
+- 桌面宽度和 375 px 窄屏；
+- 键盘完成主要交互且焦点可见；
+- 加载、空数据和请求失败；
+- 发生变更的表单、浮层或下载等关键交互。
+
+PR 提供与改动范围相称的关键状态截图。组件测试断言用户可观察行为，不绑定 Primer 或
+Ant Design 的私有 DOM 和 class。
+
 ## 接口类型来自契约，不是手写的
 
 ```text
@@ -63,8 +105,9 @@ await http.GET('/api/v1/projects/{project_id}/files/content', {
 
 路径写错、路径参数漏传、query 名字拼错、请求体字段不对，都是编译期错误。
 
-表格列名用 `field<T>('exit_code')` 而不是裸字符串——antd 的 `dataIndex`
-声明成 `string`，不检查字段是否存在，字段改名后表格会安静地渲染成空列。
+仍未迁移的 Ant Design 表格列名使用 `field<T>('exit_code')` 而不是裸字符串：
+其 `dataIndex` 声明成 `string`，字段改名后可能安静地渲染成空列。最终删除
+Ant Design 时同时复核并清理这个专属 helper。
 
 仓库的统一检查会重新生成并比对差异，所以前端类型不能悄悄和后端脱节。
 
@@ -97,9 +140,9 @@ pnpm run generate:api     # 仅重新生成类型；平时在根目录用 make c
 
 仓库根目录执行 `make check-frontend` 会跑与 CI 相同的前端检查。
 
-当前 UI 是后续重构的旧实现，因此不保留绑定 Ant Design 组件、私有 class 或视觉偏好的
+当前 Ant Design UI 是后续迁移的旧实现，因此不保留绑定组件库私有 class 或视觉偏好的
 测试。新组件和页面切片进入实现时，按 [`../docs/testing/README.md`](../docs/testing/README.md)
-定义的 unit、component、feature 和 e2e 粒度重新建立测试。
+定义的 unit、component、feature 和 e2e 粒度保护用户可观察行为。
 
 ## 关于展示内容
 
