@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import IO
@@ -64,7 +65,9 @@ class MockScheduler:
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
         stderr = submission.stderr_path.open("ab")
-        shell_options = {} if os.name == "nt" else {"executable": "/bin/bash"}
+        shell_options = (
+            {} if os.name == "nt" else {"executable": "/bin/bash", "start_new_session": True}
+        )
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -92,11 +95,11 @@ class MockScheduler:
     async def poll(self, job_id: str) -> SchedulerJobState:
         job = self._jobs.get(job_id)
         if job is None:
-            # 进程注册表里没有这个任务——可能是服务重启过。
-            # 这是异常状态，交给上层保留并处置，不猜测结果。
+            # Mock 的任务注册表只存在于 API 进程内。进程重启后已经无法继续
+            # 观察或控制原子进程，不能让数据库里的 Run 永久停在 queued。
             return SchedulerJobState(
-                state=SchedulerState.UNKNOWN,
-                reason=f"调度系统中没有任务 {job_id} 的记录",
+                state=SchedulerState.FAILED,
+                reason=f"Mock 调度器已丢失任务 {job_id}；后端进程可能发生过重启",
             )
 
         return_code = job.process.returncode
@@ -130,7 +133,12 @@ class MockScheduler:
             raise SchedulerError(f"调度系统中没有任务 {job_id} 的记录")
         job.cancelled = True
         if job.process.returncode is None:
-            job.process.terminate()
+            if os.name == "nt":
+                job.process.terminate()
+            else:
+                # create_subprocess_shell 启动的是外层 shell。终止整个进程组，
+                # 才能同时停掉它拉起的 Python 等实际用户进程。
+                os.killpg(job.process.pid, signal.SIGTERM)
 
     async def wait_for_exit(self, job_id: str, *, seconds: float = 30.0) -> None:
         """等待任务结束。仅供测试和 demo 脚本使用，不属于 SchedulerPort。"""

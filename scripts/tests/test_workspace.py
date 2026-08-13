@@ -138,6 +138,20 @@ class WorkspaceCliTests(unittest.TestCase):
         self.assertEqual(result, 0)
         demo.assert_called_once_with(smoke=True)
 
+    def test_backend_dev_reload_only_watches_source(self) -> None:
+        process = mock.Mock()
+        process.poll.return_value = 0
+        with (
+            mock.patch.object(project, "ensure_backend_dependencies"),
+            mock.patch.object(project, "_backend_python_executable", return_value="python"),
+            mock.patch.object(project.subprocess, "Popen", return_value=process) as popen,
+        ):
+            project.run_dev("backend")
+
+        command = popen.call_args.args[0]
+        self.assertIn("--reload-dir", command)
+        self.assertEqual(command[command.index("--reload-dir") + 1], "src")
+
     def test_coverage_reports_without_a_global_gate(self) -> None:
         with (
             mock.patch.object(project, "ensure_backend_dependencies"),

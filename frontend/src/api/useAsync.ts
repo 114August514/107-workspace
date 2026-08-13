@@ -8,7 +8,7 @@ export interface AsyncState<T> {
   data: T | undefined
   loading: boolean
   error: ApiError | Error | undefined
-  reload: () => void
+  reload: (options?: { silent?: boolean }) => Promise<void>
 }
 
 /**
@@ -20,9 +20,10 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
   const [data, setData] = useState<T>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | Error>()
-  const [tick, setTick] = useState(0)
   const alive = useRef(true)
+  const dataRef = useRef<T | undefined>(undefined)
   const loaderRef = useRef(loader)
+  const requestId = useRef(0)
   loaderRef.current = loader
 
   useEffect(() => {
@@ -32,25 +33,39 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
     }
   }, [])
 
+  const reload = useCallback(async (options: { silent?: boolean } = {}) => {
+    const currentRequest = ++requestId.current
+    const silent = options.silent === true && dataRef.current !== undefined
+    if (!silent) {
+      setLoading(true)
+      setError(undefined)
+    }
+
+    try {
+      const result = await loaderRef.current()
+      if (alive.current && currentRequest === requestId.current) {
+        dataRef.current = result
+        setData(result)
+        setError(undefined)
+      }
+    } catch (exc) {
+      // 后台轮询失败不应把仍然可用的页面替换成错误状态。
+      if (alive.current && currentRequest === requestId.current && !silent) {
+        setError(exc as Error)
+      }
+    } finally {
+      if (alive.current && currentRequest === requestId.current) {
+        setLoading(false)
+      }
+    }
+  }, [])
+
   useEffect(() => {
-    setLoading(true)
-    setError(undefined)
-    loaderRef
-      .current()
-      .then((result) => {
-        if (alive.current) setData(result)
-      })
-      .catch((exc: Error) => {
-        if (alive.current) setError(exc)
-      })
-      .finally(() => {
-        if (alive.current) setLoading(false)
-      })
+    void reload()
     // loader 通过 ref 传递，依赖只看调用方声明的 deps。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, tick])
+  }, [...deps, reload])
 
-  const reload = useCallback(() => setTick((n) => n + 1), [])
   return { data, loading, error, reload }
 }
 
@@ -60,13 +75,28 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
  * Run 状态来自调度系统，前端只能轮询——这也是为什么每次轮询前会先触发一次
  * 后端的状态同步。
  */
-export function usePolling(callback: () => void, intervalMs: number, active: boolean): void {
+export function usePolling(
+  callback: () => void | Promise<void>,
+  intervalMs: number,
+  active: boolean,
+): void {
   const saved = useRef(callback)
   saved.current = callback
 
   useEffect(() => {
     if (!active) return
-    const timer = window.setInterval(() => saved.current(), intervalMs)
-    return () => window.clearInterval(timer)
+    let cancelled = false
+    let timer: number | undefined
+
+    const poll = async () => {
+      await saved.current()
+      if (!cancelled) timer = window.setTimeout(poll, intervalMs)
+    }
+
+    timer = window.setTimeout(poll, intervalMs)
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
   }, [intervalMs, active])
 }

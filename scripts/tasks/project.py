@@ -102,6 +102,8 @@ def run_dev(component: str = "all") -> None:
                     "workspace107.main:create_app",
                     "--factory",
                     "--reload",
+                    "--reload-dir",
+                    "src",
                     "--host",
                     "127.0.0.1",
                     "--port",
