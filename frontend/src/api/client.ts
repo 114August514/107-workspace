@@ -375,6 +375,12 @@ export const api = {
         params: { path: { version_id: versionId }, query: { base } },
       }),
     ),
+  readVersionFile: async (versionId: string, path: string): Promise<FileContent> =>
+    unwrap(
+      await http.GET('/api/v1/versions/{version_id}/files/content', {
+        params: { path: { version_id: versionId }, query: { path } },
+      }),
+    ),
 
   saveVersion: async (id: string, message: string): Promise<ProjectVersion> =>
     unwrap(
