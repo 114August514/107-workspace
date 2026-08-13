@@ -247,6 +247,15 @@ class RunRow(Base):
     # 数未结束 Run 时必须能按方案过滤。方案在快照创建时就固定、之后不再变，
     # 冗余是安全的。
     compute_plan_id: Mapped[str] = mapped_column(ID, index=True)
+    # 从快照里冗余出来的列——project_version_id 只存在于快照 JSON 里，
+    # 无法在 Run 列表查询中直接获取。冗余到列后 Run History 可直接展示
+    # 对应的 Project 版本（design L192）。模式同 compute_plan_id。
+    project_version_id: Mapped[str] = mapped_column(ID, index=True)
+    # label = f"v{sequence}" 是计算属性，sequence 受
+    # UniqueConstraint("project_id", "sequence") 约束且版本不可变（GR-201），
+    # 冗余到 runs 表不会漂移，与 GR-205 一致。
+    # 先例：fork_relations.source_version_label 已采用同样的 label 冗余。
+    project_version_label: Mapped[str] = mapped_column(String(32))
     source_run_configuration_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     source_run_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     name: Mapped[str] = mapped_column(String(255))

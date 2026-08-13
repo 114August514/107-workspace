@@ -2090,6 +2090,10 @@ export interface components {
             name: string;
             /** Project Id */
             project_id: string;
+            /** Project Version Id */
+            project_version_id: string;
+            /** Project Version Label */
+            project_version_label: string;
             /** Queued Seconds */
             queued_seconds?: number | null;
             /** Running Seconds */

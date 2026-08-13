@@ -325,6 +325,10 @@ class Run:
     snapshot_id: str
     compute_plan_id: str
     """本次运行占用的算力方案。当前实现按「Workspace × 方案」计算并发额度。"""
+    project_version_id: str
+    """本次运行基于的 Project 版本。冗余自快照，用于 Run History 展示。"""
+    project_version_label: str
+    """版本的人类可读标签（f"v{sequence}"），冗余自快照，避免列表 N+1 查询。"""
     source_run_configuration_id: str | None
     """仅用于来源追踪和配置复用，不作为执行依据。"""
     source_run_id: str | None
