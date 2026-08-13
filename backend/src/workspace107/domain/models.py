@@ -11,6 +11,7 @@ Artifact 的内容不可变，但展示元数据和清理状态可以更新。
 
 from __future__ import annotations
 
+import posixpath
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -222,6 +223,12 @@ class InputBinding:
 
     统一引用一份确定内容，不针对来源类型设计不同结构。
     绑定的内容只读提供给 Run（GR-404）。
+
+    ``source_subpath`` 可选地只取来源内容的一个子路径（设计稿 §3.1.3）：例如
+    ``dataset-v2`` 的 ``train/`` 子目录，绑定后只在 Run 中暴露该子目录。空串表示
+    取整份内容。这里把子路径规范化成与 ``SharedResourceFile.path`` 一致的形式
+    （``posixpath.normpath``，无尾斜杠、无 ``.``/``..``/``//``），否则物化时按规范
+    路径匹配会静默落空。因为是 frozen dataclass，规范化后用 ``object.__setattr__`` 写回。
     """
 
     source_type: InputSourceType
@@ -234,6 +241,18 @@ class InputBinding:
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 必须是绝对路径")
         if ".." in self.access_path.split("/"):
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 不允许包含 ..")
+        if self.source_subpath:
+            candidate = self.source_subpath.strip().replace("\\", "/").lstrip("/")
+            if not candidate:
+                # 纯空白/纯斜杠：等同于不指定子路径，物化整份内容。
+                object.__setattr__(self, "source_subpath", "")
+            else:
+                normalized = posixpath.normpath(candidate)
+                if normalized in {".", ".."} or normalized.startswith("../"):
+                    raise ValidationFailed(f"输入子路径 {self.source_subpath!r} 越出了来源根目录")
+                # frozen dataclass：__post_init__ 里改字段只能走 object.__setattr__。
+                # 在此规范化（单一真相源）而非每个匹配点都规范化，避免静默落空。
+                object.__setattr__(self, "source_subpath", normalized)
 
     def as_payload(self) -> dict[str, str]:
         return {
@@ -495,3 +514,77 @@ class ForkRelation:
     """来源版本的展示名，形如 ``v3``。"""
     created_by: str
     created_at: datetime
+
+
+# --------------------------------------------------------------------------
+# Shared Resource
+# --------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class SharedResource:
+    """独立于 Project 存在、可版本化、可被多个 Project 引用的内容资源。
+
+    典型用途：数据集、预训练权重、语料库、预处理脚本。
+
+    ``owner_workspace_id`` 为 ``None`` 表示 Platform 公共资源（§2.6 D V2），
+    全平台可见；Platform 资源通过公共发布申请 → 平台管理员审核流程产生，
+    不在本 Core 子集范围，当前仅预留数据结构。
+    否则归属某个 Workspace，对该 Workspace 成员可见。
+
+    本对象可变（名称、说明可改），但其中的版本一旦发布即不可变（GR-201）。
+    """
+
+    id: str
+    name: str
+    description: str = ""
+    owner_workspace_id: str | None = None
+    """``None`` 表示 Platform 持有。"""
+    created_at: datetime | None = None
+
+    @property
+    def is_platform_owned(self) -> bool:
+        return self.owner_workspace_id is None
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceFile:
+    """Shared Resource Version 中的一个文件条目。不可变。"""
+
+    path: str
+    size: int
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceVersion:
+    """Shared Resource 已发布的不可变内容版本（GR-201）。
+
+    版本内容按 ``(path, size, content_hash)`` 三元组列表固化，
+    实际文件内容存在存储层的 blob store 中，按内容寻址——
+    因此 Shared Resource Version 不需要单独的存储目录，复用 Project
+    Version 已经在用的 blob 池。
+
+    发布后内容不得原地修改；要改内容只能发布新版本（设计稿 §3.3 GR-201）。
+    """
+
+    id: str
+    shared_resource_id: str
+    sequence: int
+    """在该 Shared Resource 内自增，用于展示为 v1、v2……"""
+    description: str
+    files: tuple[SharedResourceFile, ...]
+    created_by: str
+    created_at: datetime
+
+    @property
+    def label(self) -> str:
+        return f"v{self.sequence}"
+
+    @property
+    def total_size(self) -> int:
+        return sum(f.size for f in self.files)
+
+    @property
+    def file_count(self) -> int:
+        return len(self.files)

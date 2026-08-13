@@ -254,6 +254,54 @@ class ComputePlanOut(Model):
     max_time_limit_minutes: int
 
 
+# -- Shared Resource --------------------------------------------------------
+
+
+class SharedResourceOut(Model):
+    id: str
+    name: str
+    description: str
+    owner_workspace_id: str | None
+    is_platform_owned: bool
+    created_at: datetime
+
+
+class SharedResourceVersionFileOut(Model):
+    path: str
+    size: int
+    content_hash: str
+
+
+class SharedResourceVersionOut(Model):
+    id: str
+    shared_resource_id: str
+    sequence: int
+    label: str
+    description: str
+    file_count: int
+    total_size: int
+    created_by: str
+    created_at: datetime
+
+
+class SharedResourceVersionDetailOut(SharedResourceVersionOut):
+    files: list[SharedResourceVersionFileOut]
+
+
+class SharedResourceDetailOut(SharedResourceOut):
+    versions: list[SharedResourceVersionOut]
+
+
+class SharedResourceCreateIn(Model):
+    name: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="", max_length=4096)
+
+
+class SharedResourceUpdateIn(Model):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = Field(default=None, max_length=4096)
+
+
 # -- 运行方案 ---------------------------------------------------------------
 
 
@@ -270,6 +318,12 @@ class InputBindingModel(Model):
     source_id: str
     access_path: str
     source_subpath: str = ""
+    """可选子路径，只取来源内容的一个子目录/文件（设计稿 §3.1.3）；空串取整份内容。
+
+    shared_resource_version 来源的无效子路径在 preflight（配置保存/提交前）即被挡下；
+    artifact 来源的无效子路径在 Run 提交物化时才以错误暴露（artifact 无文件清单，
+    无法在 preflight 校验存在性）。
+    """
 
 
 class ArtifactRuleModel(Model):

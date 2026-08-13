@@ -26,9 +26,9 @@ import os
 import shutil
 from pathlib import Path
 
-from ...domain.enums import LogStream
+from ...domain.enums import InputSourceType, LogStream
 from ...domain.errors import ObjectNotFound
-from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunPaths
+from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunInput, RunPaths
 
 READONLY_DIR = 0o555
 READONLY_FILE = 0o444
@@ -75,7 +75,7 @@ class LocalStorage:
         run_id: str,
         *,
         files: list[tuple[str, str]],
-        inputs: list[tuple[str, str]],
+        inputs: list[RunInput],
     ) -> RunPaths:
         paths = self.run_paths(run_id)
         await asyncio.to_thread(self._prepare_sync, paths, files, inputs)
@@ -85,7 +85,7 @@ class LocalStorage:
         self,
         paths: RunPaths,
         files: list[tuple[str, str]],
-        inputs: list[tuple[str, str]],
+        inputs: list[RunInput],
     ) -> None:
         if paths.root.exists():
             _force_rmtree(paths.root)
@@ -97,14 +97,57 @@ class LocalStorage:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(self._blob_path(content_hash), target)
 
-        for access_path, artifact_id in inputs:
+        for entry in inputs:
             # 访问路径是运行环境中的绝对路径；本机执行时挂到 Run 的 inputs 根下。
-            target = paths.inputs / access_path.lstrip("/")
-            source = self._artifacts / artifact_id
-            if not source.exists():
-                raise FileNotFoundError(f"输入 Artifact {artifact_id} 的内容不存在")
+            target = paths.inputs / entry.access_path.lstrip("/")
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source, target)
+            sub = entry.source_subpath
+            if entry.source_type is InputSourceType.ARTIFACT:
+                source = self._artifacts / entry.source_id
+                if not source.exists():
+                    raise FileNotFoundError(f"输入 Artifact {entry.source_id} 的内容不存在")
+                if not sub:
+                    shutil.copytree(source, target)
+                else:
+                    # 子路径只取产物目录的一部分。sub 已在 InputBinding 规范化，
+                    # 再用 resolve 二次确认不逃出产物根（防御性，不依赖单层校验）。
+                    subtree = (source / sub).resolve()
+                    if not str(subtree).startswith(str(source.resolve())):
+                        raise FileNotFoundError(
+                            f"输入 {entry.access_path} 引用的子路径 {sub!r} 越出了 Artifact 根目录"
+                        )
+                    if not subtree.exists():
+                        raise FileNotFoundError(
+                            f"输入 {entry.access_path} 引用的子路径 {sub!r} 不存在"
+                        )
+                    if subtree.is_dir():
+                        shutil.copytree(subtree, target)
+                    else:
+                        # 子路径指向单个文件：物化到 target/<basename>，不能 copytree。
+                        shutil.copyfile(subtree, target / subtree.name)
+            elif entry.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
+                # Shared Resource Version 没有专门的存储目录——内容存在 blob 池里，
+                # 这里按版本的 (path, content_hash) 列表从 blob 物化到 access_path 下。
+                # sub 非空时只物化落在该子路径下的文件，并剥掉子路径前缀。
+                for relative_path, content_hash in entry.files:
+                    if sub and relative_path == sub:
+                        # 子路径正好命名一个文件：保留 basename，落到 target/<basename>。
+                        # 不能剥到空串——那会落到 target 目录本身导致 copyfile 进目录。
+                        stripped = relative_path
+                    elif sub and relative_path.startswith(sub + "/"):
+                        # 子路径是一个目录：剥掉前缀，其下的文件原样落到 target 下。
+                        stripped = relative_path[len(sub) + 1 :]
+                    elif sub:
+                        # 不在子路径下：跳过。用 "sub/" 边界前缀而非裸 startswith，
+                        # 避免 sub="train" 误纳 "training/..."。
+                        continue
+                    else:
+                        stripped = relative_path
+                    file_target = target / stripped
+                    file_target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(self._blob_path(content_hash), file_target)
+            else:  # pragma: no cover - 枚举封闭，未来加新来源类型时这里会显式失败
+                raise FileNotFoundError(f"未知输入来源类型 {entry.source_type!r}")
 
         # 输入默认只读：Run 不得原地修改输入对象（GR-404）。
         if inputs:

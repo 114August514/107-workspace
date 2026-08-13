@@ -22,6 +22,7 @@ from ..application.project_service import ProjectService
 from ..application.run_configuration_service import RunConfigurationService
 from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
+from ..application.shared_resource_service import SharedResourceService
 from ..application.workspace_service import WorkspaceService
 from ..config import Settings
 from ..domain.models import User
@@ -73,6 +74,7 @@ class Services:
     lifecycle: RunLifecycleService
     activities: ActivityService
     notifications: NotificationService
+    shared_resources: SharedResourceService
 
 
 def build_services(context: AppContext, session: AsyncSession) -> Services:
@@ -122,6 +124,14 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         ),
         notifications=NotificationService(repos, context.clock),
         activities=ActivityService(repos, guard),
+        shared_resources=SharedResourceService(
+            repos,
+            guard,
+            context.clock,
+            context.storage,
+            activity,
+            max_file_bytes=context.settings.max_file_bytes,
+        ),
     )
 
 

@@ -28,6 +28,8 @@ from ..domain.models import (
     Run,
     RunConfiguration,
     RunEvent,
+    SharedResource,
+    SharedResourceVersion,
     User,
 )
 from ..domain.pagination import Page
@@ -347,4 +349,50 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
         workspace_description=view.workspace.description,
         role=view.membership.role,
         invited_at=view.membership.created_at,
+    )
+
+
+def shared_resource_out(resource: SharedResource) -> s.SharedResourceOut:
+    return s.SharedResourceOut(
+        id=resource.id,
+        name=resource.name,
+        description=resource.description,
+        owner_workspace_id=resource.owner_workspace_id,
+        is_platform_owned=resource.is_platform_owned,
+        created_at=resource.created_at,
+    )
+
+
+def shared_resource_detail_out(
+    resource: SharedResource, versions: list[SharedResourceVersion]
+) -> s.SharedResourceDetailOut:
+    return s.SharedResourceDetailOut(
+        **shared_resource_out(resource).model_dump(),
+        versions=[shared_resource_version_out(v) for v in versions],
+    )
+
+
+def shared_resource_version_out(version: SharedResourceVersion) -> s.SharedResourceVersionOut:
+    return s.SharedResourceVersionOut(
+        id=version.id,
+        shared_resource_id=version.shared_resource_id,
+        sequence=version.sequence,
+        label=version.label,
+        description=version.description,
+        file_count=version.file_count,
+        total_size=version.total_size,
+        created_by=version.created_by,
+        created_at=version.created_at,
+    )
+
+
+def shared_resource_version_detail_out(
+    version: SharedResourceVersion,
+) -> s.SharedResourceVersionDetailOut:
+    return s.SharedResourceVersionDetailOut(
+        **shared_resource_version_out(version).model_dump(),
+        files=[
+            s.SharedResourceVersionFileOut(path=f.path, size=f.size, content_hash=f.content_hash)
+            for f in version.files
+        ],
     )

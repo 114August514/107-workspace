@@ -84,6 +84,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/shared-resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出 Platform 持有的共享资源
+         * @description 登录后只读返回 Platform 持有的 Shared Resource，不按用户区分。
+         *
+         *     Workspace 持有的资源请走 ``GET /workspaces/{id}/shared-resources``；
+         *     跨 Workspace Asset Grant 在 M4 单独 Issue。
+         */
+        get: operations["list_platform_shared_resources_api_v1_catalog_shared_resources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -670,6 +693,98 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shared-resource-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取 Shared Resource 版本详情
+         * @description 校验所属资源的可见性后，返回版本信息及完整文件清单。
+         */
+        get: operations["get_shared_resource_version_api_v1_shared_resource_versions__version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shared-resource-versions/{version_id}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 读取 Shared Resource 版本中的文件
+         * @description 按可见性校验后返回版本内指定文件的内容。
+         *
+         *     用 ``text/plain`` 直返字节，前端拿到字符串即可预览或下载；
+         *     二进制文件建议通过下载而非本接口读取。
+         */
+        get: operations["read_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shared-resources/{resource_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取 Shared Resource 详情
+         * @description 校验可见性后返回资源信息及其全部版本（按 sequence 倒序）。
+         */
+        get: operations["get_shared_resource_api_v1_shared_resources__resource_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 更新 Shared Resource 元信息
+         * @description 需要 Shared Resource 管理权限；仅修改 Workspace 持有资源的名称与说明。
+         *
+         *     Platform 持有的资源由平台维护，不接受 API 修改。
+         */
+        patch: operations["update_shared_resource_api_v1_shared_resources__resource_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/shared-resources/{resource_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上传 Shared Resource 新版本
+         * @description 需要 Shared Resource 版本创建权限；上传文件形成新的不可变版本。
+         *
+         *     上传的文件按 ``prefix/<filename>`` 写入资源；同路径文件会被视为重复路径
+         *     导致版本发布失败。版本发布后内容不可修改。
+         */
+        post: operations["publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/versions/{version_id}": {
         parameters: {
             query?: never;
@@ -1024,6 +1139,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/shared-resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出 Workspace 持有的共享资源
+         * @description 需要 Shared Resource 查看权限；返回当前 Workspace 持有的资源。
+         *
+         *     Platform 持有的资源请走 ``GET /catalog/shared-resources``；跨 Workspace
+         *     可见的资源在 M4 Asset Grant 实现后单独提供。
+         */
+        get: operations["list_workspace_shared_resources_api_v1_workspaces__workspace_id__shared_resources_get"];
+        put?: never;
+        /**
+         * 创建 Workspace 共享资源
+         * @description 需要 Shared Resource 管理权限；在当前 Workspace 下创建一个空的资源对象。
+         *
+         *     资源创建后内容为空，需通过 ``POST /shared-resources/{id}/versions`` 上传文件
+         *     形成首个版本，才能在 Input Binding 中引用。
+         */
+        post: operations["create_shared_resource_api_v1_workspaces__workspace_id__shared_resources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/transfer-ownership/{target_user_id}": {
         parameters: {
             query?: never;
@@ -1103,7 +1248,7 @@ export interface components {
          *     取值只增不改。已经写进库的活动会一直用旧值，改名等于让历史记录读不出来。
          * @enum {string}
          */
-        ActivityAction: "workspace_created" | "workspace_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished";
+        ActivityAction: "workspace_created" | "workspace_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published";
         /**
          * ActivityOut
          * @description 活动流里的一条。
@@ -1186,6 +1331,16 @@ export interface components {
          * @enum {string}
          */
         ArtifactStatus: "available" | "cleaned";
+        /** Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post */
+        Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Files */
+            files: string[];
+        };
         /** Body_upload_files_api_v1_projects__project_id__files_upload_post */
         Body_upload_files_api_v1_projects__project_id__files_upload_post: {
             /** Files */
@@ -1198,7 +1353,7 @@ export interface components {
          *     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
          * @enum {string}
          */
-        Capability: "workspace.view" | "workspace.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "entitlement.view" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel";
+        Capability: "workspace.view" | "workspace.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "entitlement.view" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create";
         /**
          * ChangeKind
          * @description 文件在两次快照之间的变化类型。
@@ -1430,6 +1585,11 @@ export interface components {
             source_id: string;
             /**
              * Source Subpath
+             * @description 可选子路径，只取来源内容的一个子目录/文件（设计稿 §3.1.3）；空串取整份内容。
+             *
+             *     shared_resource_version 来源的无效子路径在 preflight（配置保存/提交前）即被挡下；
+             *     artifact 来源的无效子路径在 Run 提交物化时才以错误暴露（artifact 无文件清单，
+             *     无法在 preflight 校验存在性）。
              * @default
              */
             source_subpath: string;
@@ -1440,7 +1600,8 @@ export interface components {
          * InputSourceType
          * @description Input Binding 的来源类型。
          *
-         *     当前迁移实现只支持 artifact；shared_resource_version 已建模但能力未开放。
+         *     两种来源都已实现：``artifact`` 从产物目录物化，``shared_resource_version``
+         *     从版本的文件清单按 blob 物化（设计稿 §3.1.3、§2.6）。
          * @enum {string}
          */
         InputSourceType: "artifact" | "shared_resource_version";
@@ -2012,6 +2173,120 @@ export interface components {
             /** Value */
             value: string;
         };
+        /** SharedResourceCreateIn */
+        SharedResourceCreateIn: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+        };
+        /** SharedResourceDetailOut */
+        SharedResourceDetailOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Is Platform Owned */
+            is_platform_owned: boolean;
+            /** Name */
+            name: string;
+            /** Owner Workspace Id */
+            owner_workspace_id: string | null;
+            /** Versions */
+            versions: components["schemas"]["SharedResourceVersionOut"][];
+        };
+        /** SharedResourceOut */
+        SharedResourceOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Is Platform Owned */
+            is_platform_owned: boolean;
+            /** Name */
+            name: string;
+            /** Owner Workspace Id */
+            owner_workspace_id: string | null;
+        };
+        /** SharedResourceUpdateIn */
+        SharedResourceUpdateIn: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+        };
+        /** SharedResourceVersionDetailOut */
+        SharedResourceVersionDetailOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Description */
+            description: string;
+            /** File Count */
+            file_count: number;
+            /** Files */
+            files: components["schemas"]["SharedResourceVersionFileOut"][];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Sequence */
+            sequence: number;
+            /** Shared Resource Id */
+            shared_resource_id: string;
+            /** Total Size */
+            total_size: number;
+        };
+        /** SharedResourceVersionFileOut */
+        SharedResourceVersionFileOut: {
+            /** Content Hash */
+            content_hash: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+        };
+        /** SharedResourceVersionOut */
+        SharedResourceVersionOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Description */
+            description: string;
+            /** File Count */
+            file_count: number;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Sequence */
+            sequence: number;
+            /** Shared Resource Id */
+            shared_resource_id: string;
+            /** Total Size */
+            total_size: number;
+        };
         /** SyncOut */
         SyncOut: {
             /** Changed */
@@ -2025,7 +2300,7 @@ export interface components {
          *     分成两个枚举只会让前端的跳转逻辑写两遍。
          * @enum {string}
          */
-        TargetType: "workspace" | "member" | "project" | "project_version" | "run";
+        TargetType: "workspace" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version";
         /** UnreadCountOut */
         UnreadCountOut: {
             /** Unread */
@@ -2395,6 +2670,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvironmentOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_platform_shared_resources_api_v1_catalog_shared_resources_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceOut"][];
                 };
             };
             /** @description 请求不合法 */
@@ -5092,6 +5443,409 @@ export interface operations {
             };
         };
     };
+    get_shared_resource_version_api_v1_shared_resource_versions__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceVersionDetailOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    read_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_content_get: {
+        parameters: {
+            query: {
+                /** @description 版本内的相对路径 */
+                path: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    get_shared_resource_api_v1_shared_resources__resource_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceDetailOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    update_shared_resource_api_v1_shared_resources__resource_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedResourceUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post: {
+        parameters: {
+            query?: {
+                prefix?: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                resource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceVersionOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     get_version_api_v1_versions__version_id__get: {
         parameters: {
             query?: never;
@@ -6786,6 +7540,166 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_workspace_shared_resources_api_v1_workspaces__workspace_id__shared_resources_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_shared_resource_api_v1_workspaces__workspace_id__shared_resources_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedResourceCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceOut"];
+                };
             };
             /** @description 请求不合法 */
             400: {

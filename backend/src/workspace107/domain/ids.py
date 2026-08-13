@@ -24,6 +24,8 @@ EVENT = "evt"
 ACTIVITY = "act"
 NOTIFICATION = "ntf"
 FORK_RELATION = "fork"
+SHARED_RESOURCE = "shr"
+SHARED_RESOURCE_VERSION = "shrv"
 
 
 def new_id(prefix: str) -> str:
