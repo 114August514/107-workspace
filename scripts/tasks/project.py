@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import tempfile
@@ -75,6 +76,14 @@ def _backend_python_executable() -> str:
     return executable
 
 
+def _demo_command(python_executable: str) -> str:
+    """Run the demo script with the interpreter that hosts its environment."""
+    arguments = [python_executable, "train.py"]
+    if os.name == "nt":
+        return subprocess.list2cmdline(arguments)
+    return shlex.join(arguments)
+
+
 def run_dev(component: str = "all") -> None:
     heading(f"Development server ({component})")
     if component in {"all", "backend"}:
@@ -93,6 +102,8 @@ def run_dev(component: str = "all") -> None:
                     "workspace107.main:create_app",
                     "--factory",
                     "--reload",
+                    "--reload-dir",
+                    "src",
                     "--host",
                     "127.0.0.1",
                     "--port",
@@ -252,6 +263,7 @@ def demo(*, smoke: bool = False) -> None:
     ensure_backend_dependencies(quiet=True)
     port = _selected_demo_port(smoke)
     base_url = f"http://127.0.0.1:{port}/api/v1"
+    python_executable = _backend_python_executable()
 
     with tempfile.TemporaryDirectory(prefix="workspace107-demo-") as directory:
         workdir = Path(directory)
@@ -270,7 +282,7 @@ def demo(*, smoke: bool = False) -> None:
         backend_uv("run", "python", "-m", "workspace107.tools.seed", env=environment, quiet=smoke)
 
         command = [
-            _backend_python_executable(),
+            python_executable,
             "-m",
             "uvicorn",
             "workspace107.main:create_app",
@@ -293,7 +305,9 @@ def demo(*, smoke: bool = False) -> None:
             )
             try:
                 _wait_until_ready(f"{base_url}/health", process, server_log)
-                _exercise_core_run(ApiClient(base_url), verbose=not smoke)
+                _exercise_core_run(
+                    ApiClient(base_url), python_executable=python_executable, verbose=not smoke
+                )
             finally:
                 _stop_processes([process])
 
@@ -303,7 +317,7 @@ def demo(*, smoke: bool = False) -> None:
         print("\nDemo complete: Project -> Version -> Run Snapshot -> logs -> Artifact.")
 
 
-def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
+def _exercise_core_run(client: ApiClient, *, python_executable: str, verbose: bool) -> None:
     def say(label: str) -> None:
         if verbose:
             print(f"\n{label}")
@@ -356,7 +370,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         f"/projects/{project_id}/run-configurations",
         {
             "name": "Default run",
-            "command": "python train.py",
+            "command": _demo_command(python_executable),
             "compute_plan_id": "plan_cpu_quick",
             "environment_variables": {"EPOCHS": "${{ vars.EPOCHS }}"},
             "artifact_rules": [{"path": "outputs", "name": "Training result", "optional": False}],

@@ -50,20 +50,22 @@ export function RunPage() {
    * 先触发一次后端同步，再读 Run——状态只能来自调度系统的轮询结果，
    * 平台不会自己编一个状态出来。
    */
-  const refresh = useCallback(async () => {
-    await api.syncRuns().catch(() => undefined)
-    detail.reload()
-    logs.reload()
-  }, [detail, logs])
+  const refresh = useCallback(
+    async (silent = true) => {
+      await api.syncRuns().catch(() => undefined)
+      await Promise.all([detail.reload({ silent }), logs.reload({ silent })])
+    },
+    [detail, logs],
+  )
 
-  usePolling(() => void refresh(), POLL_INTERVAL_MS, active)
+  usePolling(() => refresh(true), POLL_INTERVAL_MS, active)
 
   const cancel = async () => {
     setCancelling(true)
     try {
       await api.cancelRun(runId)
       message.success('已请求取消，最终状态以调度系统为准')
-      await refresh()
+      await refresh(true)
     } catch (error) {
       message.error((error as Error).message)
     } finally {
@@ -103,7 +105,7 @@ export function RunPage() {
               tags={<RunStatusTag status={run.status} />}
               actions={
                 <>
-                  <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>
+                  <Button icon={<ReloadOutlined />} onClick={() => void refresh(false)}>
                     刷新
                   </Button>
                   {active
