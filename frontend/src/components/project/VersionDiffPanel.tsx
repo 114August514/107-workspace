@@ -25,10 +25,19 @@ interface Props {
  * 后端只提供文件级粒度（哪些文件增删改），不提供行级 Diff。
  */
 export function VersionDiffPanel({ projectId, currentVersionId, currentVersionSequence }: Props) {
-  const versions = useAsync<ProjectVersionPage>(
-    () => api.listVersions(projectId, { page: 1 }),
-    [projectId],
-  )
+  const versions = useAsync<ProjectVersionPage>(async () => {
+    // 拉取全部版本，确保较老版本的前序版本也在可选基准里。
+    // 版本不可变，集合有界；循环到 has_more=false 即可。
+    const all: ProjectVersionPage['items'] = []
+    let page = 1
+    let resp: ProjectVersionPage
+    do {
+      resp = await api.listVersions(projectId, { page, page_size: 100 })
+      all.push(...resp.items)
+      page += 1
+    } while (resp.has_more)
+    return { ...resp, items: all, has_more: false }
+  }, [projectId])
 
   // 可选的基准版本：排除当前版本自身，按 sequence 降序
   const baseOptions = useMemo(() => {

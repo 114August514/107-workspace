@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -47,6 +47,7 @@ function makeVersionPage(versions: { id: string; sequence: number; label: string
 
 describe('VersionDiffPanel', () => {
   afterEach(() => {
+    cleanup()
     vi.clearAllMocks()
   })
 
@@ -112,5 +113,46 @@ describe('VersionDiffPanel', () => {
     await waitFor(() => {
       expect(screen.getByText(/没有可比较的历史版本/)).toBeInTheDocument()
     })
+  })
+
+  it('超过一页时连续拉取所有页，较老版本的前序版本出现在基准选项里', async () => {
+    // 第一页返回 has_more=true，第二页返回 has_more=false。
+    // 当前版本 ver-5 在第二页，其前序版本 ver-1 也在第二页。
+    // 如果只取第一页，ver-1 不会出现在基准选项里，diff 无法发起。
+    mockListVersions
+      .mockResolvedValueOnce({
+        ...makeVersionPage([
+          { id: 'ver-5', sequence: 5, label: 'v5' },
+          { id: 'ver-4', sequence: 4, label: 'v4' },
+        ]),
+        page: 1,
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        ...makeVersionPage([
+          { id: 'ver-3', sequence: 3, label: 'v3' },
+          { id: 'ver-2', sequence: 2, label: 'v2' },
+          { id: 'ver-1', sequence: 1, label: 'v1' },
+        ]),
+        page: 2,
+        has_more: false,
+      })
+    mockDiffVersions.mockResolvedValue([{ change: 'added', path: 'new.py' }])
+
+    render(
+      <MemoryRouter>
+        <VersionDiffPanel projectId="proj-1" currentVersionId="ver-5" currentVersionSequence={5} />
+      </MemoryRouter>,
+    )
+
+    // ver-1 只在第二页，能出现在基准下拉里才算跨页拉取成功
+    await waitFor(() => {
+      expect(screen.getByText('new.py')).toBeInTheDocument()
+    })
+
+    // 验证调用了两页
+    expect(mockListVersions).toHaveBeenCalledTimes(2)
+    expect(mockListVersions).toHaveBeenNthCalledWith(1, 'proj-1', { page: 1, page_size: 100 })
+    expect(mockListVersions).toHaveBeenNthCalledWith(2, 'proj-1', { page: 2, page_size: 100 })
   })
 })

@@ -79,6 +79,8 @@ export function RunFromVersionModal({
     if (!selectedConfigId) return
     setChecking(true)
     setError(null)
+    // 立即清掉旧 Preflight，避免切换 config 时旧结果短暂残留
+    setPreflight(null)
     try {
       setPreflight(
         await api.preflight(projectId, {
@@ -153,7 +155,7 @@ export function RunFromVersionModal({
       title={`运行版本 ${versionLabel}`}
       okText="提交"
       cancelText="取消"
-      okButtonProps={{ disabled: !preflight?.ok || noConfigs }}
+      okButtonProps={{ disabled: checking || !preflight?.ok || noConfigs }}
       confirmLoading={submitting}
       onOk={submit}
       onCancel={onClose}
