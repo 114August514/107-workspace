@@ -1,7 +1,7 @@
-# Issue #3: Shared Resource 核心实现
+# Issue #4: Shared Resource 核心实现
 
 - 状态：已完成（核心子集）
-- 认领：August / Codex
+- 认领：Anan
 - 上下文：分支 `feat/3-shared-resource-core`，提交 `05e27d0`
 - 开始：2026-08-06
 - 结束：2026-08-06

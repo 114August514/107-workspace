@@ -46,3 +46,5 @@ git show 374aa9f:docs/references/product/107-workspace-product-vision.md
   Issue、Pull Request、分支过渡与手动镜像发布入口的整理结果。
 - [`2026-08-01-repository-documentation-reorganization.md`](2026-08-01-repository-documentation-reorganization.md)：
   活动文档、历史材料、根目录与外部参考 checkout 的整理结果。
+- [`2026-08-06-issue-4-shared-resource-core.md`](2026-08-06-issue-4-shared-resource-core.md)：
+  完成 Shared Resource 核心实现及 Workspace Shared Resource → Input Binding → Run 闭环。
