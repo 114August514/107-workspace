@@ -9,6 +9,7 @@
 | Git、Issue、分支、提交和 PR | [`contributing/git-workflow.md`](contributing/git-workflow.md) |
 | Coding Agent 项目入口、工程原则和工作路由 | [`../AGENTS.md`](../AGENTS.md) |
 | 测试策略、测试粒度和验证边界 | [`testing/`](testing/README.md) |
+| 前端实现、Primer 使用与迁移边界 | [`../frontend/README.md`](../frontend/README.md) |
 | API、生成类型和跨组件机器契约 | [`../contracts/`](../contracts/README.md) |
 | 部署方式与生产边界 | `operations/deployment.md`，可执行清单见 [`../deploy/`](../deploy/README.md) |
 | 长期工程决策及其取舍 | [`decisions/`](decisions/README.md) |
