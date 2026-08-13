@@ -20,6 +20,7 @@ import { DefaultEnvironmentPicker } from '../components/workspace/DefaultEnviron
 import { EntitlementPanel } from '../components/workspace/EntitlementPanel'
 import { MemberPanel } from '../components/workspace/MemberPanel'
 import { VariablePanel } from '../components/workspace/VariablePanel'
+import { SharedResourcePanel } from '../components/sharedresource/SharedResourcePanel'
 
 export function WorkspacePage() {
   const { workspaceId = '' } = useParams()
@@ -104,6 +105,13 @@ export function WorkspacePage() {
             key: 'members',
             label: '成员',
             children: <Card>{workspace.data && <MemberPanel workspace={workspace.data} />}</Card>,
+          },
+          {
+            key: 'shared-resources',
+            label: '共享资源',
+            children: (
+              <Card>{workspace.data && <SharedResourcePanel workspace={workspace.data} />}</Card>
+            ),
           },
           {
             key: 'config',
