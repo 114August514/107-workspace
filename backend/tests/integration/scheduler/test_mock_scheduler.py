@@ -107,7 +107,12 @@ async def test_posix_cancel_stops_the_entire_process_group(monkeypatch, tmp_path
     killed: list[tuple[int, int]] = []
     monkeypatch.setattr(mock_module.os, "name", "posix")
     monkeypatch.setattr(mock_module.asyncio, "create_subprocess_shell", create_process)
-    monkeypatch.setattr(mock_module.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
+    monkeypatch.setattr(
+        mock_module.os,
+        "killpg",
+        lambda pid, sig: killed.append((pid, sig)),
+        raising=False,
+    )
 
     scheduler = mock_module.MockScheduler()
     job_id = await scheduler.submit(_submission(tmp_path))

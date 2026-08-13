@@ -119,10 +119,11 @@ class WorkspaceCliTests(unittest.TestCase):
         )
 
     def test_demo_command_quotes_posix_python_paths(self) -> None:
-        self.assertEqual(
-            project._demo_command(r"C:\workspace\backend\.venv\Scripts\python.exe"),
-            r"'C:\workspace\backend\.venv\Scripts\python.exe' train.py",
-        )
+        with mock.patch.object(project.os, "name", "posix"):
+            self.assertEqual(
+                project._demo_command(r"C:\workspace\backend\.venv\Scripts\python.exe"),
+                r"'C:\workspace\backend\.venv\Scripts\python.exe' train.py",
+            )
 
     def test_demo_command_quotes_windows_python_paths(self) -> None:
         with mock.patch.object(project.os, "name", "nt"):
