@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -83,6 +83,7 @@ function renderPage() {
 
 describe('VersionDetailPage 权限可见性', () => {
   afterEach(() => {
+    cleanup()
     vi.clearAllMocks()
   })
 
@@ -136,12 +137,7 @@ describe('VersionDetailPage 权限可见性', () => {
     mockGetVersion.mockResolvedValue(version)
     mockGetProject.mockResolvedValue(project)
     mockGetWorkspace.mockResolvedValue(
-      makeWorkspace([
-        'workspace.view',
-        'project.view',
-        'run.view',
-        'project.content.write',
-      ]),
+      makeWorkspace(['workspace.view', 'project.view', 'run.view', 'project.content.write']),
     )
 
     renderPage()
