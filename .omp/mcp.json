@@ -6,7 +6,7 @@
       "url": "https://api.githubcopilot.com/mcp/",
       "headers": {
         "Authorization": "!printf 'Bearer %s' \"$(gh auth token)\"",
-        "X-MCP-Tools": "get_me,issue_read,search_issues,add_issue_comment,pull_request_read,search_pull_requests,create_pull_request,update_pull_request,pull_request_review_write,merge_pull_request,actions_list,actions_get"
+        "X-MCP-Tools": "get_me,issue_read,search_issues,issue_write,add_issue_comment,pull_request_read,search_pull_requests,create_pull_request,update_pull_request,pull_request_review_write,merge_pull_request,actions_list,actions_get"
       }
     }
   }
