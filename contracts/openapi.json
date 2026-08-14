@@ -2114,6 +2114,14 @@
             "title": "Project Id",
             "type": "string"
           },
+          "project_version_id": {
+            "title": "Project Version Id",
+            "type": "string"
+          },
+          "project_version_label": {
+            "title": "Project Version Label",
+            "type": "string"
+          },
           "queued_seconds": {
             "anyOf": [
               {
@@ -2211,6 +2219,8 @@
           "workspace_id",
           "snapshot_id",
           "source_run_configuration_id",
+          "project_version_id",
+          "project_version_label",
           "source_run_id",
           "name",
           "status",

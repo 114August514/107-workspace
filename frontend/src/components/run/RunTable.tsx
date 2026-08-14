@@ -26,6 +26,12 @@ const columns: ColumnsType<Run> = [
     render: (name: string, run) => <Link to={`/runs/${run.id}`}>{name}</Link>,
   },
   {
+    title: '版本',
+    dataIndex: field<Run>('project_version_label'),
+    width: 80,
+    render: (label: string, run) => <Link to={`/versions/${run.project_version_id}`}>{label}</Link>,
+  },
+  {
     title: '排队',
     dataIndex: field<Run>('queued_seconds'),
     width: 90,

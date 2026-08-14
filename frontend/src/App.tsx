@@ -8,6 +8,7 @@ import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
+import { VersionDetailPage } from './pages/VersionDetailPage'
 import { WorkspacePage } from './pages/WorkspacePage'
 import { theme } from './theme'
 
@@ -36,6 +37,7 @@ export function App() {
             <Route path="/workspaces/:workspaceId" element={<WorkspacePage key={username} />} />
             <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
             <Route path="/runs/:runId" element={<RunPage key={username} />} />
+            <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AppShell>

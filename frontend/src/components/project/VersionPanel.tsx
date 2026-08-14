@@ -112,10 +112,13 @@ export function VersionPanel({
     },
     {
       title: '操作',
-      width: 190,
+      width: 260,
       key: 'actions',
       render: (_, version) => (
         <Space size={0}>
+          <Button type="link" size="small" onClick={() => navigate(`/versions/${version.id}`)}>
+            查看详情
+          </Button>
           {canWrite && (
             <Popconfirm
               title={`把工作区恢复到 ${version.label}？`}

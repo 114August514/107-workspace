@@ -234,6 +234,8 @@ def run_out(run: Run) -> s.RunOut:
         project_id=run.project_id,
         workspace_id=run.workspace_id,
         snapshot_id=run.snapshot_id,
+        project_version_id=run.project_version_id,
+        project_version_label=run.project_version_label,
         source_run_configuration_id=run.source_run_configuration_id,
         source_run_id=run.source_run_id,
         name=run.name,

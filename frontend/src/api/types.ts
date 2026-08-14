@@ -54,6 +54,7 @@ export type WorkingChange = Schemas['WorkingChangeOut']
 export type ProjectVersion = Schemas['ProjectVersionOut']
 export type ProjectVersionPage = Schemas['PageOut_ProjectVersionOut_']
 export type ProjectVersionDetail = Schemas['ProjectVersionDetailOut']
+export type ProjectVersionFile = Schemas['ProjectVersionFileOut']
 export type VersionDiff = Schemas['VersionDiffOut']
 
 // -- 运行环境与算力 ---------------------------------------------------------

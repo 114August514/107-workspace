@@ -397,6 +397,8 @@ class RunOut(Model):
     workspace_id: str
     snapshot_id: str
     source_run_configuration_id: str | None
+    project_version_id: str
+    project_version_label: str
     source_run_id: str | None
     name: str
     status: RunStatus

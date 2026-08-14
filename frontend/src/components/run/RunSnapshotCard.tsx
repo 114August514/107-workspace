@@ -1,4 +1,5 @@
 import { Descriptions, Space, Tag, Typography } from 'antd'
+import { Link } from 'react-router-dom'
 
 import type { RunSnapshot } from '../../api/types'
 import { describeComputeRequest, formatTime } from '../../utils/format'
@@ -23,7 +24,11 @@ export function RunSnapshotCard({ snapshot }: { snapshot: RunSnapshot }) {
         {
           key: 'version',
           label: 'Project Version',
-          children: <Typography.Text code>{snapshot.project_version_id}</Typography.Text>,
+          children: (
+            <Link to={`/versions/${snapshot.project_version_id}`}>
+              {snapshot.project_version_id}
+            </Link>
+          ),
         },
         {
           key: 'command',
