@@ -5,6 +5,7 @@
 | 问题 | 文档 |
 | :--- | :--- |
 | 产品能力、术语、规则和 Roadmap | [`product/design.md`](product/design.md) |
+| 用户可见术语、状态反馈和操作文案 | [`product/ui-copy.md`](product/ui-copy.md) |
 | 延后设计事项与已接受的实现妥协登记 | [`product/deferred.md`](product/deferred.md) |
 | Git、Issue、分支、提交和 PR | [`contributing/git-workflow.md`](contributing/git-workflow.md) |
 | Coding Agent 项目入口、工程原则和工作路由 | [`../AGENTS.md`](../AGENTS.md) |

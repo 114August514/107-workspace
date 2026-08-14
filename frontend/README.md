@@ -48,6 +48,8 @@ tests/
 目标前端技术选型以 [`docs/product/design.md`](../docs/product/design.md) 为准。
 Primer 迁移由 [GitHub Issue #16](https://github.com/114August514/107-workspace/issues/16)
 统一跟踪，但迁移进度不改变产品设计或 API 契约。
+用户可见术语、状态反馈和操作文案统一遵循
+[`docs/product/ui-copy.md`](../docs/product/ui-copy.md)，页面不得自行定义竞争规则。
 
 迁移遵守以下边界：
 
