@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  ssr: {
+    noExternal: ['@primer/react'],
+  },
   server: {
     port: 5173,
     // 开发时把 /api 转发到后端，避免前端代码里出现硬编码地址。

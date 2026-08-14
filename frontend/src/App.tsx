@@ -1,6 +1,6 @@
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { getCurrentUser, setCurrentUser } from './api/client'
@@ -13,8 +13,29 @@ import { WorkspacePage } from './pages/WorkspacePage'
 import { theme } from './theme'
 
 const USER_KEY = 'workspace107.devUser'
+const DesignSystemPage = lazy(() =>
+  import('./pages/design-system/DesignSystemPage').then((module) => ({
+    default: module.DesignSystemPage,
+  })),
+)
 
 export function App() {
+  return (
+    <Routes>
+      <Route
+        path="/design-system"
+        element={
+          <Suspense fallback={<div role="status">正在加载交互参考台…</div>}>
+            <DesignSystemPage />
+          </Suspense>
+        }
+      />
+      <Route path="*" element={<ProductApp />} />
+    </Routes>
+  )
+}
+
+function ProductApp() {
   const [username, setUsername] = useState(() => {
     const saved = window.localStorage.getItem(USER_KEY) ?? getCurrentUser()
     setCurrentUser(saved)

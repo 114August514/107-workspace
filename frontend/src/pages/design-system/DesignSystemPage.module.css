@@ -1,0 +1,295 @@
+.primerRoot {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  background: var(--bgColor-default);
+  color: var(--fgColor-default);
+  font-family: var(--fontStack-system);
+  line-height: var(--base-text-lineHeight-normal);
+}
+
+.primerRoot,
+.primerRoot * {
+  box-sizing: border-box;
+}
+
+.shell {
+  width: min(100% - var(--base-size-48), 88rem);
+  margin-inline: auto;
+}
+
+.header {
+  padding-block: var(--base-size-48);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  background: var(--bgColor-muted);
+}
+
+.sourceLine {
+  display: flex;
+  gap: var(--base-size-8);
+  align-items: center;
+  margin-top: var(--base-size-16);
+  color: var(--fgColor-muted);
+  font: var(--text-body-shorthand-small);
+}
+
+.sourceLine code {
+  color: var(--fgColor-default);
+}
+
+.main {
+  padding-block: var(--base-size-32) var(--base-size-80);
+}
+
+.toolbar {
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-large);
+  background: var(--bgColor-muted);
+}
+
+.toolbarTitle,
+.sectionHeading h2 {
+  margin: 0;
+  font: var(--text-title-shorthand-medium);
+}
+
+.toolbarTitle {
+  font: var(--text-title-shorthand-small);
+}
+
+.toolbarDescription,
+.sectionHeading p {
+  margin: var(--base-size-4) 0 0;
+  color: var(--fgColor-muted);
+  font: var(--text-body-shorthand-medium);
+}
+
+.segmentedGrid,
+.numericGrid,
+.statusGrid,
+.formatGrid {
+  display: grid;
+  gap: var(--base-size-16);
+}
+
+.segmentedGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.segmentedField {
+  display: grid;
+  min-width: 0;
+  gap: var(--base-size-8);
+}
+
+.controlLabel {
+  color: var(--fgColor-default);
+  font: var(--text-title-shorthand-small);
+}
+
+.numericGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.numericControl {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: var(--base-size-12);
+  align-items: end;
+}
+
+.numericControl > :first-child {
+  min-width: min(100%, 18rem);
+  flex: 1;
+}
+
+.inputUnit {
+  color: var(--fgColor-muted);
+  font: var(--text-caption-shorthand);
+}
+
+.sectionHeading {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.75fr) minmax(18rem, 1.25fr);
+  gap: var(--base-size-24);
+  align-items: end;
+  margin-bottom: var(--base-size-16);
+  padding-bottom: var(--base-size-12);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.stage {
+  overflow-x: auto;
+  padding: var(--base-size-16);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-large);
+  background: var(--bgColor-inset);
+}
+
+.canvas {
+  min-width: 20rem;
+  min-height: 18rem;
+  overflow: hidden;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-default);
+  transition: width 160ms ease-out;
+}
+
+.ruler {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  padding: var(--base-size-8) var(--base-size-12);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  background: var(--bgColor-muted);
+  color: var(--fgColor-muted);
+  font: var(--text-caption-shorthand);
+  font-family: var(--fontStack-monospace);
+}
+
+.ruler span:nth-of-type(2),
+.ruler span:nth-of-type(3) {
+  text-align: center;
+}
+
+.ruler strong {
+  color: var(--fgColor-accent);
+  text-align: center;
+}
+
+.ruler span:last-child {
+  text-align: right;
+}
+
+.canvasBody {
+  display: grid;
+  gap: var(--base-size-24);
+  padding: var(--base-size-24);
+}
+
+.statusGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.specimen,
+.recipe {
+  min-width: 0;
+}
+.cardContent {
+  display: grid;
+  gap: var(--base-size-8);
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font: var(--text-subtitle-shorthand);
+}
+
+.cardDescription {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font: var(--text-body-shorthand-medium);
+}
+
+.specimenBody {
+  min-width: 0;
+  margin-top: var(--base-size-16);
+  padding-top: var(--base-size-16);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.technicalValue,
+.breakableText {
+  overflow-wrap: anywhere;
+}
+
+.technicalValue {
+  color: var(--fgColor-muted);
+  font: var(--text-caption-shorthand);
+  font-family: var(--fontStack-monospace);
+}
+
+.formatGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.recipePreview {
+  margin-top: var(--base-size-16);
+  padding: var(--base-size-16);
+  border: var(--borderWidth-thin) solid var(--borderColor-muted);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+}
+
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--base-size-16);
+  padding: var(--base-size-8) var(--base-size-12);
+  border-radius: var(--borderRadius-medium) var(--borderRadius-medium) 0 0;
+  background: var(--bgColor-inverse);
+  color: var(--fgColor-onEmphasis);
+  font: var(--text-caption-shorthand);
+  font-family: var(--fontStack-monospace);
+}
+
+.codeBlock {
+  max-height: 24rem;
+  overflow: auto;
+  margin: 0;
+  padding: var(--base-size-16);
+  border-radius: 0 0 var(--borderRadius-medium) var(--borderRadius-medium);
+  background: var(--bgColor-inverse);
+  color: var(--fgColor-onEmphasis);
+  font: var(--text-codeBlock-shorthand);
+  white-space: pre;
+}
+
+.copyFeedback {
+  min-height: var(--base-size-24);
+  margin-top: var(--base-size-8);
+}
+
+@media (max-width: 48rem) {
+  .shell {
+    width: min(100% - var(--base-size-32), 88rem);
+  }
+
+  .header {
+    padding-block: var(--base-size-32);
+  }
+
+  .main {
+    padding-block: var(--base-size-24) var(--base-size-48);
+  }
+
+  .segmentedGrid,
+  .numericGrid,
+  .statusGrid,
+  .formatGrid,
+  .sectionHeading {
+    grid-template-columns: 1fr;
+  }
+
+  .sectionHeading {
+    gap: var(--base-size-4);
+  }
+
+  .stage {
+    padding: var(--base-size-8);
+  }
+
+  .canvasBody {
+    padding: var(--base-size-16);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas {
+    transition: none;
+  }
+}
