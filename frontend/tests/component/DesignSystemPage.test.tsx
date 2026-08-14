@@ -53,6 +53,36 @@ describe('DesignSystemPage', () => {
     expect(widthInput).toHaveValue(null)
   })
 
+  it('宽度预设段与输入共享选中语义，自定义值选中「自定义」段', () => {
+    render(<DesignSystemPage />)
+
+    const presets = screen.getByRole('list', { name: '画布宽度预设' })
+    const pressed = () => within(presets).getByRole('button', { pressed: true })
+
+    expect(pressed()).toHaveTextContent('自适应')
+
+    fireEvent.click(within(presets).getByRole('button', { name: '375 px' }))
+    expect(pressed()).toHaveTextContent('375 px')
+    expect(screen.getByLabelText('375 px 参考画布')).toBeInTheDocument()
+    expect(screen.getByRole('spinbutton', { name: '画布宽度' })).toHaveValue(375)
+
+    const widthInput = screen.getByRole('spinbutton', { name: '画布宽度' })
+    fireEvent.change(widthInput, { target: { value: '411' } })
+    fireEvent.keyDown(widthInput, { key: 'Enter' })
+    expect(pressed()).toHaveTextContent('自定义')
+  })
+
+  it('点击「自定义」段聚焦输入且不改变当前值', () => {
+    render(<DesignSystemPage />)
+
+    const widthInput = screen.getByRole('spinbutton', { name: '画布宽度' })
+    const presets = screen.getByRole('list', { name: '画布宽度预设' })
+    fireEvent.click(within(presets).getByRole('button', { name: '自定义' }))
+
+    expect(widthInput).toHaveFocus()
+    expect(screen.getByLabelText('自适应 参考画布')).toBeInTheDocument()
+  })
+
   it('权限不足时优先显示权限反馈', () => {
     render(<DesignSystemPage />)
 

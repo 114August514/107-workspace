@@ -1,6 +1,6 @@
 import { SyncIcon } from '@primer/octicons-react'
-import { Button, ButtonGroup, FormControl, SegmentedControl, Stack, TextInput } from '@primer/react'
-import { useEffect, useState } from 'react'
+import { Button, FormControl, SegmentedControl, Stack, TextInput } from '@primer/react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { Capability, ContentScale, DataState, ScenarioOption } from './model'
 import { CAPABILITIES, CONTENT_SCALES, DATA_STATES } from './model'
@@ -20,6 +20,12 @@ interface Props {
   onReset: () => void
 }
 
+interface PresetOption {
+  label: string
+  selected: boolean
+  onSelect: () => void
+}
+
 interface NumericControlProps {
   id: string
   label: string
@@ -28,10 +34,11 @@ interface NumericControlProps {
   value: number | null
   min: number
   max: number
-  presets: { label: string; value: number }[]
-  extraPreset?: { label: string; selected: boolean; onSelect: () => void }
+  presets: PresetOption[]
   onCommit: (value: number) => void
 }
+
+const CUSTOM_PRESET_LABEL = '自定义'
 
 function NumericControl({
   id,
@@ -42,11 +49,11 @@ function NumericControl({
   min,
   max,
   presets,
-  extraPreset,
   onCommit,
 }: NumericControlProps) {
   const [draft, setDraft] = useState(value === null ? '' : String(value))
   const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setDraft(value === null ? '' : String(value))
@@ -69,11 +76,23 @@ function NumericControl({
     onCommit(parsed)
   }
 
+  // 自定义值无对应预设段；SegmentedControl 内部会在全不选中时回退到第 0 段，
+  // 因此追加「自定义」段承载该状态，保证选中语义始终与当前值一致。
+  const options: PresetOption[] = [
+    ...presets,
+    {
+      label: CUSTOM_PRESET_LABEL,
+      selected: !presets.some((preset) => preset.selected),
+      onSelect: () => inputRef.current?.focus(),
+    },
+  ]
+
   return (
     <div className={styles.numericControl}>
       <FormControl id={id}>
         <FormControl.Label>{label}</FormControl.Label>
         <TextInput
+          ref={inputRef}
           type="number"
           inputMode="numeric"
           min={min}
@@ -95,27 +114,18 @@ function NumericControl({
         {error ? <FormControl.Validation variant="error">{error}</FormControl.Validation> : null}
         <FormControl.Caption>{caption}</FormControl.Caption>
       </FormControl>
-      <ButtonGroup aria-label={`${label}预设`}>
-        {presets.map((preset) => (
-          <Button
-            key={preset.value}
-            size="small"
-            variant={value === preset.value ? 'primary' : 'default'}
-            onClick={() => onCommit(preset.value)}
-          >
-            {preset.label}
-          </Button>
+      <SegmentedControl
+        aria-label={`${label}预设`}
+        size="small"
+        variant={{ narrow: 'dropdown', regular: 'default' }}
+        onChange={(selectedIndex) => options[selectedIndex]?.onSelect()}
+      >
+        {options.map((option) => (
+          <SegmentedControl.Button key={option.label} selected={option.selected}>
+            {option.label}
+          </SegmentedControl.Button>
         ))}
-        {extraPreset ? (
-          <Button
-            size="small"
-            variant={extraPreset.selected ? 'primary' : 'default'}
-            onClick={extraPreset.onSelect}
-          >
-            {extraPreset.label}
-          </Button>
-        ) : null}
-      </ButtonGroup>
+      </SegmentedControl>
     </div>
   )
 }
@@ -209,14 +219,22 @@ export function ScenarioToolbar({
           min={320}
           max={1440}
           presets={[
-            { label: '375 px', value: 375 },
-            { label: '768 px', value: 768 },
+            {
+              label: '375 px',
+              selected: canvasWidth === 375,
+              onSelect: () => onCanvasWidthChange(375),
+            },
+            {
+              label: '768 px',
+              selected: canvasWidth === 768,
+              onSelect: () => onCanvasWidthChange(768),
+            },
+            {
+              label: '自适应',
+              selected: canvasWidth === null,
+              onSelect: () => onCanvasWidthChange(null),
+            },
           ]}
-          extraPreset={{
-            label: '自适应',
-            selected: canvasWidth === null,
-            onSelect: () => onCanvasWidthChange(null),
-          }}
           onCommit={onCanvasWidthChange}
         />
         <NumericControl
@@ -228,9 +246,9 @@ export function ScenarioToolbar({
           min={0}
           max={10_000}
           presets={[
-            { label: '即时', value: 0 },
-            { label: '800 ms', value: 800 },
-            { label: '3 s', value: 3000 },
+            { label: '即时', selected: delayMs === 0, onSelect: () => onDelayChange(0) },
+            { label: '800 ms', selected: delayMs === 800, onSelect: () => onDelayChange(800) },
+            { label: '3 s', selected: delayMs === 3000, onSelect: () => onDelayChange(3000) },
           ]}
           onCommit={onDelayChange}
         />
