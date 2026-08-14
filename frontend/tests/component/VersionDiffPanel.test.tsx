@@ -115,24 +115,26 @@ describe('VersionDiffPanel', () => {
     })
   })
 
-  it('超过一页时连续拉取所有页，较老版本的前序版本出现在基准选项里', async () => {
-    // 第一页返回 has_more=true，第二页返回 has_more=false。
-    // 当前版本 ver-5 在第二页，其前序版本 ver-1 也在第二页。
-    // 如果只取第一页，ver-1 不会出现在基准选项里，diff 无法发起。
+  it('查看 v5 时默认比较对象确实是跨页找到的前序版本 v4', async () => {
+    // 分页边界正好夹在当前版本 v5 与其真正前序 v4 之间：
+    // page 1 以 v5 收尾，page 2 以 v4 开头。
+    // 若实现退化成「只读第一页」，v4 不会出现在基准选项里，diff 会错误对比 v8。
     mockListVersions
       .mockResolvedValueOnce({
         ...makeVersionPage([
+          { id: 'ver-8', sequence: 8, label: 'v8' },
+          { id: 'ver-7', sequence: 7, label: 'v7' },
+          { id: 'ver-6', sequence: 6, label: 'v6' },
           { id: 'ver-5', sequence: 5, label: 'v5' },
-          { id: 'ver-4', sequence: 4, label: 'v4' },
         ]),
         page: 1,
         has_more: true,
       })
       .mockResolvedValueOnce({
         ...makeVersionPage([
+          { id: 'ver-4', sequence: 4, label: 'v4' },
           { id: 'ver-3', sequence: 3, label: 'v3' },
           { id: 'ver-2', sequence: 2, label: 'v2' },
-          { id: 'ver-1', sequence: 1, label: 'v1' },
         ]),
         page: 2,
         has_more: false,
@@ -145,14 +147,20 @@ describe('VersionDiffPanel', () => {
       </MemoryRouter>,
     )
 
-    // ver-1 只在第二页，能出现在基准下拉里才算跨页拉取成功
+    // 核心契约：当前版本 v5 的默认比较对象必须是跨页找到的 v4，
+    // 而不是第一页里 sequence 更大（更早）的 v8/v7/v6。
     await waitFor(() => {
-      expect(screen.getByText('new.py')).toBeInTheDocument()
+      expect(mockDiffVersions).toHaveBeenCalledWith('ver-5', 'ver-4')
     })
 
-    // 验证调用了两页
+    // 辅助断言：确实拉取了全部两页
     expect(mockListVersions).toHaveBeenCalledTimes(2)
     expect(mockListVersions).toHaveBeenNthCalledWith(1, 'proj-1', { page: 1, page_size: 100 })
     expect(mockListVersions).toHaveBeenNthCalledWith(2, 'proj-1', { page: 2, page_size: 100 })
+
+    // diff 结果渲染
+    await waitFor(() => {
+      expect(screen.getByText('new.py')).toBeInTheDocument()
+    })
   })
 })

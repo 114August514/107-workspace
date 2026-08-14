@@ -10,7 +10,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
 import type { PreflightResult, Run, RunConfiguration, Workspace } from '../../api/types'
@@ -52,6 +52,8 @@ export function RunFromVersionModal({
   const [error, setError] = useState<string[] | null>(null)
   const [loadingConfigs, setLoadingConfigs] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState('')
+  // 用于丢弃过期 Preflight 请求：只有最近一次请求能修改 preflight/error/checking
+  const preflightRequestId = useRef(0)
 
   // 加载运行方案列表
   useEffect(() => {
@@ -77,22 +79,27 @@ export function RunFromVersionModal({
   // Preflight：选中 configuration 后调用
   const runPreflight = useCallback(async () => {
     if (!selectedConfigId) return
+    // 递增序列号，标记这次是「最新」请求；旧请求返回时据此丢弃自己
+    const requestId = ++preflightRequestId.current
     setChecking(true)
     setError(null)
     // 立即清掉旧 Preflight，避免切换 config 时旧结果短暂残留
     setPreflight(null)
     try {
-      setPreflight(
-        await api.preflight(projectId, {
-          run_configuration_id: selectedConfigId,
-          project_version_id: versionId,
-        }),
-      )
+      const result = await api.preflight(projectId, {
+        run_configuration_id: selectedConfigId,
+        project_version_id: versionId,
+      })
+      if (requestId !== preflightRequestId.current) return
+      setPreflight(result)
     } catch (exc) {
+      if (requestId !== preflightRequestId.current) return
       setPreflight(null)
       setError(exc instanceof ApiError ? [exc.detail] : [(exc as Error).message])
     } finally {
-      setChecking(false)
+      if (requestId === preflightRequestId.current) {
+        setChecking(false)
+      }
     }
   }, [selectedConfigId, projectId, versionId])
 

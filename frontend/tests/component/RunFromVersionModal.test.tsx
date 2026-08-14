@@ -188,6 +188,61 @@ describe('RunFromVersionModal', () => {
     })
   })
 
+  it('旧 Preflight 慢返回不能覆盖新 Preflight 的结果（乱序竞态）', async () => {
+    // 两个 configuration：A（slow，最后才返回）和 B（fast，先返回）
+    mockListRunConfigurations.mockResolvedValue([
+      makeConfig('config-a', '方案 A'),
+      makeConfig('config-b', '方案 B'),
+    ])
+
+    let resolveAPreflight!: (value: PreflightResult) => void
+    const aPreflightPromise = new Promise<PreflightResult>((resolve) => {
+      resolveAPreflight = resolve
+    })
+
+    // A 先发请求但 pending；B 随后请求并立即返回 ok
+    mockPreflight
+      .mockReturnValueOnce(aPreflightPromise) // config A（slow，pending）
+      .mockResolvedValueOnce(makePreflight(true)) // config B（fast，ok）
+
+    renderModal()
+
+    // 等 configs 加载，A 被默认选中并触发 preflight（pending 中）
+    await waitFor(() => {
+      expect(mockPreflight).toHaveBeenCalledTimes(1)
+    })
+    // 提交按钮禁用（A 还在检查中）
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /提\s*交/ })).toBeDisabled()
+    })
+
+    // 切到方案 B（fast）：B 的 preflight 立即 ok，页面显示 B 的「提交前检查通过」
+    const configSelect = screen.getByRole('combobox', { name: '运行方案' })
+    fireEvent.mouseDown(configSelect)
+    const optionB = await waitFor(() => screen.getByText('方案 B'))
+    fireEvent.click(optionB)
+
+    await waitFor(() => {
+      expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /提\s*交/ })).not.toBeDisabled()
+
+    // 现在 A 的旧请求才 resolve（是 preflight(false)，如果覆盖 B 会引起错误提示）
+    await act(async () => {
+      resolveAPreflight(makePreflight(false))
+      await aPreflightPromise
+    })
+
+    // 关键断言：B 的结果不能被 A 覆盖
+    // 页面仍显示 B 的「提交前检查通过」，而不是 A 的失败提示
+    await waitFor(() => {
+      expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('缺少 Secret')).not.toBeInTheDocument()
+    // 提交状态仍由 B 决定（可用）
+    expect(screen.getByRole('button', { name: /提\s*交/ })).not.toBeDisabled()
+  })
+
   it('提交时 RunDraft 携带 project_version_id', async () => {
     mockListRunConfigurations.mockResolvedValue([makeConfig('config-a', '方案 A')])
     mockPreflight.mockResolvedValue(makePreflight(true))
