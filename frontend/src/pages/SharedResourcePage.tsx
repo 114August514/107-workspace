@@ -1,5 +1,5 @@
 import { PencilIcon, PlusIcon } from '@primer/octicons-react'
-import { Button, Label, PageHeader, Text } from '@primer/react'
+import { Breadcrumbs, Button, Label, PageHeader, Text } from '@primer/react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -48,26 +48,28 @@ export function SharedResourcePage() {
         <AsyncState loading={resource.loading} error={normalizeError(resource.error)}>
           {resource.data && (
             <PageHeader>
-              <PageHeader.ContextArea>
-                <PageHeader.ParentLink as={Link} to="/">
-                  首页
-                </PageHeader.ParentLink>
-                {workspace.data ? (
-                  <>
-                    <PageHeader.ParentLink as={Link} to={`/workspaces/${workspace.data.id}`}>
-                      {workspace.data.name}
-                    </PageHeader.ParentLink>
-                    <PageHeader.ParentLink
-                      as={Link}
-                      to={`/workspaces/${workspace.data.id}/shared-resources`}
-                    >
-                      共享资源
-                    </PageHeader.ParentLink>
-                  </>
-                ) : (
-                  <PageHeader.ParentLink>平台</PageHeader.ParentLink>
-                )}
-              </PageHeader.ContextArea>
+              <PageHeader.Breadcrumbs>
+                <Breadcrumbs>
+                  <Breadcrumbs.Item as={Link} to="/">
+                    首页
+                  </Breadcrumbs.Item>
+                  {workspace.data ? (
+                    <>
+                      <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                        {workspace.data.name}
+                      </Breadcrumbs.Item>
+                      <Breadcrumbs.Item
+                        as={Link}
+                        to={`/workspaces/${workspace.data.id}/shared-resources`}
+                      >
+                        共享资源
+                      </Breadcrumbs.Item>
+                    </>
+                  ) : (
+                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
+                  )}
+                </Breadcrumbs>
+              </PageHeader.Breadcrumbs>
               <PageHeader.TitleArea>
                 <PageHeader.Title as="h1">{resource.data.name}</PageHeader.Title>
                 {isPlatform ? (

@@ -1,4 +1,4 @@
-import { Banner, Dialog, PageHeader, Spinner, Text } from '@primer/react'
+import { Banner, Breadcrumbs, Dialog, PageHeader, Spinner, Text } from '@primer/react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -88,34 +88,36 @@ export function SharedResourceVersionPage() {
         <AsyncState loading={version.loading} error={normalizeError(version.error)}>
           {version.data && (
             <PageHeader>
-              <PageHeader.ContextArea>
-                <PageHeader.ParentLink as={Link} to="/">
-                  首页
-                </PageHeader.ParentLink>
-                {workspace.data ? (
-                  <>
-                    <PageHeader.ParentLink as={Link} to={`/workspaces/${workspace.data.id}`}>
-                      {workspace.data.name}
-                    </PageHeader.ParentLink>
-                    <PageHeader.ParentLink
-                      as={Link}
-                      to={`/workspaces/${workspace.data.id}/shared-resources`}
-                    >
-                      共享资源
-                    </PageHeader.ParentLink>
-                  </>
-                ) : (
-                  // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
-                  <PageHeader.ParentLink>平台</PageHeader.ParentLink>
-                )}
-                {resource.data ? (
-                  <PageHeader.ParentLink as={Link} to={`/shared-resources/${resource.data.id}`}>
-                    {resource.data.name}
-                  </PageHeader.ParentLink>
-                ) : (
-                  <PageHeader.ParentLink>共享资源</PageHeader.ParentLink>
-                )}
-              </PageHeader.ContextArea>
+              <PageHeader.Breadcrumbs>
+                <Breadcrumbs>
+                  <Breadcrumbs.Item as={Link} to="/">
+                    首页
+                  </Breadcrumbs.Item>
+                  {workspace.data ? (
+                    <>
+                      <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                        {workspace.data.name}
+                      </Breadcrumbs.Item>
+                      <Breadcrumbs.Item
+                        as={Link}
+                        to={`/workspaces/${workspace.data.id}/shared-resources`}
+                      >
+                        共享资源
+                      </Breadcrumbs.Item>
+                    </>
+                  ) : (
+                    // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
+                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
+                  )}
+                  {resource.data ? (
+                    <Breadcrumbs.Item as={Link} to={`/shared-resources/${resource.data.id}`}>
+                      {resource.data.name}
+                    </Breadcrumbs.Item>
+                  ) : (
+                    <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
+                  )}
+                </Breadcrumbs>
+              </PageHeader.Breadcrumbs>
               <PageHeader.TitleArea>
                 <PageHeader.Title as="h1">{version.data.label}</PageHeader.Title>
               </PageHeader.TitleArea>
