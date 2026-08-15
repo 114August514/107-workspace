@@ -45,13 +45,16 @@ export function AsyncState({ loading, error, empty, emptyText, children }: Props
         <Banner variant="critical">
           <Banner.Title>{error.message}</Banner.Title>
           <Banner.Description>
-            {problems.length > 0 && (
+            {/* 单条是“下一步”说明，直接成一行；多条才是需要逐条修正的问题列表 */}
+            {problems.length === 1 ? (
+              <div>{problems[0]}</div>
+            ) : problems.length > 1 ? (
               <ul style={{ margin: 0, paddingInlineStart: 20 }}>
                 {problems.map((problem) => (
                   <li key={problem}>{problem}</li>
                 ))}
               </ul>
-            )}
+            ) : null}
             {error.requestId && (
               <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
                 请求标识 {error.requestId}

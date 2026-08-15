@@ -124,7 +124,22 @@ describe('AsyncState', () => {
     expect(screen.getByText('无法发布这个版本。')).toBeInTheDocument()
     expect(screen.getByText('文件 list.txt 已存在')).toBeInTheDocument()
     expect(screen.getByText('说明过长')).toBeInTheDocument()
+    expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByText('请求标识 req_01K2ZQ')).toBeInTheDocument()
+  })
+
+  it('单条下一步说明不渲染为列表', () => {
+    render(
+      <AsyncState
+        loading={false}
+        error={{ message: '无法发布这个版本。', problems: ['请修正文件问题后重试。'] }}
+      >
+        内容
+      </AsyncState>,
+    )
+
+    expect(screen.getByText('请修正文件问题后重试。')).toBeInTheDocument()
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
   })
 
   it('空态显示说明，正常状态渲染内容', () => {

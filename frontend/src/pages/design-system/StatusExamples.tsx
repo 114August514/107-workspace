@@ -57,13 +57,13 @@ export function StatusGallery() {
 
       <Specimen
         title="错误"
-        description="共享 AsyncState 组件的错误态：问题逐条展示，请求标识次级保留。"
+        description="共享 AsyncState 组件的错误态：主要提示是问题 + 下一步，请求标识次级保留。"
       >
         <AsyncState
           loading={false}
           error={{
             message: '无法发布这个版本。',
-            problems: ['文件 list.txt 已存在', '说明过长'],
+            problems: ['请修正文件问题后重试。'],
             requestId: 'req_01K2ZQM6WD7T4AW8',
           }}
         >
