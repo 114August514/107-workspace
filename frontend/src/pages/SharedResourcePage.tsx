@@ -54,30 +54,30 @@ export function SharedResourcePage() {
                     首页
                   </Breadcrumbs.Item>
                   {workspace.data ? (
-                    <>
-                      <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
-                        {workspace.data.name}
-                      </Breadcrumbs.Item>
-                      <Breadcrumbs.Item
-                        as={Link}
-                        to={`/workspaces/${workspace.data.id}/shared-resources`}
-                      >
-                        共享资源
-                      </Breadcrumbs.Item>
-                    </>
+                    <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                      {workspace.data.name}
+                    </Breadcrumbs.Item>
                   ) : (
                     <Breadcrumbs.Item>平台</Breadcrumbs.Item>
                   )}
+                  <Breadcrumbs.Item
+                    as={Link}
+                    to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
+                  >
+                    共享资源
+                  </Breadcrumbs.Item>
                 </Breadcrumbs>
               </PageHeader.Breadcrumbs>
               <PageHeader.TitleArea>
                 <PageHeader.Title as="h1">{resource.data.name}</PageHeader.Title>
+              </PageHeader.TitleArea>
+              <PageHeader.TrailingVisual>
                 {isPlatform ? (
                   <Label variant="attention">平台资源</Label>
                 ) : (
                   <Label variant="done">空间资源</Label>
                 )}
-              </PageHeader.TitleArea>
+              </PageHeader.TrailingVisual>
               {resource.data.description ? (
                 <PageHeader.Description>{resource.data.description}</PageHeader.Description>
               ) : (

@@ -94,21 +94,19 @@ export function SharedResourceVersionPage() {
                     首页
                   </Breadcrumbs.Item>
                   {workspace.data ? (
-                    <>
-                      <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
-                        {workspace.data.name}
-                      </Breadcrumbs.Item>
-                      <Breadcrumbs.Item
-                        as={Link}
-                        to={`/workspaces/${workspace.data.id}/shared-resources`}
-                      >
-                        共享资源
-                      </Breadcrumbs.Item>
-                    </>
+                    <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                      {workspace.data.name}
+                    </Breadcrumbs.Item>
                   ) : (
                     // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
                     <Breadcrumbs.Item>平台</Breadcrumbs.Item>
                   )}
+                  <Breadcrumbs.Item
+                    as={Link}
+                    to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
+                  >
+                    共享资源
+                  </Breadcrumbs.Item>
                   {resource.data ? (
                     <Breadcrumbs.Item as={Link} to={`/shared-resources/${resource.data.id}`}>
                       {resource.data.name}
