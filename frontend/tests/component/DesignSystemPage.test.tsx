@@ -73,10 +73,14 @@ describe('DesignSystemPage', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
   })
 
-  it('返回产品入口指向产品首页', () => {
+  it('页头提供响应式返回入口与完整规范来源', () => {
     render(<DesignSystemPage />)
 
+    expect(screen.queryByText('Internal reference')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '返回产品' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: '107 Workspace' })).toHaveAttribute('href', '/')
+    expect(screen.getByText('docs/product/ui-copy.md')).toBeInTheDocument()
+    expect(screen.getByText('frontend/README.md')).toBeInTheDocument()
   })
 
   it('复制范例源码并反馈结果，2 秒后恢复可复制', async () => {

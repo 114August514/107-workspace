@@ -1,5 +1,5 @@
-import { BookIcon } from '@primer/octicons-react'
-import { Heading, Label, Link, PageHeader, Stack, Text } from '@primer/react'
+import { ArrowLeftIcon, BookIcon } from '@primer/octicons-react'
+import { Heading, IconButton, PageHeader, Stack, Text } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 
 import { PrimerRoot } from '../../primer/setup'
@@ -142,14 +142,18 @@ export function DesignSystemPage() {
         <header className={styles.header}>
           <div className={styles.shell}>
             <PageHeader as="div">
-              <PageHeader.ContextArea hidden={false}>
-                <Stack direction="horizontal" align="center" gap="condensed" wrap="wrap">
-                  <Label variant="accent">Internal reference</Label>
-                  <Link href="/" muted>
-                    返回产品
-                  </Link>
-                </Stack>
+              <PageHeader.ContextArea>
+                <PageHeader.ParentLink href="/">107 Workspace</PageHeader.ParentLink>
               </PageHeader.ContextArea>
+              <PageHeader.LeadingAction>
+                <IconButton
+                  as="a"
+                  href="/"
+                  icon={ArrowLeftIcon}
+                  variant="invisible"
+                  aria-label="返回产品"
+                />
+              </PageHeader.LeadingAction>
               <PageHeader.TitleArea>
                 <PageHeader.LeadingVisual>
                   <BookIcon />
@@ -157,12 +161,19 @@ export function DesignSystemPage() {
                 <PageHeader.Title as="h1">107 Primer UI Reference</PageHeader.Title>
               </PageHeader.TitleArea>
               <PageHeader.Description>
-                107 Workspace 实际采用的 Primer 状态、组合与文案基线，供迁移与 Review 对照。
+                <div className={styles.headerDescription}>
+                  <span>
+                    107 Workspace 实际采用的 Primer 状态、组合与文案基线，供迁移与 Review 对照。
+                  </span>
+                  <span className={styles.headerSource}>
+                    规范来源：<code>docs/product/ui-copy.md</code>{' '}
+                    <span className={styles.sourceItem}>
+                      <span aria-hidden="true">·</span> <code>frontend/README.md</code>
+                    </span>
+                  </span>
+                </div>
               </PageHeader.Description>
             </PageHeader>
-            <div className={styles.headerSource}>
-              权威规范 <code>docs/product/ui-copy.md</code>
-            </div>
           </div>
         </header>
 

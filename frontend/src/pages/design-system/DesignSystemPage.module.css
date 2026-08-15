@@ -22,11 +22,12 @@
   background: var(--bgColor-muted);
 }
 
-.headerSource {
-  display: flex;
+.headerDescription {
+  display: grid;
   gap: var(--base-size-4);
-  align-items: baseline;
-  margin-top: var(--base-size-8);
+}
+
+.headerSource {
   color: var(--fgColor-muted);
   font: var(--text-body-shorthand-small);
 }
@@ -34,6 +35,10 @@
 .headerSource code {
   overflow-wrap: anywhere;
   color: var(--fgColor-default);
+}
+
+.sourceItem {
+  white-space: nowrap;
 }
 
 .sectionHeading {
