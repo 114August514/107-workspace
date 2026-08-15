@@ -1,4 +1,4 @@
-import { Flash, Spinner, Text } from '@primer/react'
+import { Banner, Spinner, Text } from '@primer/react'
 import type { ReactNode } from 'react'
 
 interface Props {
@@ -42,23 +42,23 @@ export function AsyncState({ loading, error, empty, emptyText, children }: Props
     const problems = error.problems ?? []
     return (
       <Padded>
-        <Flash variant="danger">
-          {error.message}
-          {problems.length > 0 && (
-            <ul style={{ margin: 0, paddingInlineStart: 20, marginTop: 8 }}>
-              {problems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          )}
-          {error.requestId && (
-            <div style={{ marginTop: 8 }}>
+        <Banner variant="critical">
+          <Banner.Title>{error.message}</Banner.Title>
+          <Banner.Description>
+            {problems.length > 0 && (
+              <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                {problems.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            )}
+            {error.requestId && (
               <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
                 请求标识 {error.requestId}
               </Text>
-            </div>
-          )}
-        </Flash>
+            )}
+          </Banner.Description>
+        </Banner>
       </Padded>
     )
   }
