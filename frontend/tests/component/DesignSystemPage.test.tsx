@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { AsyncState } from '../../src/components/common/AsyncState'
 import { DesignSystemPage } from '../../src/pages/design-system/DesignSystemPage'
 import { EMPTY_RECIPE } from '../../src/pages/design-system/model'
 
 const writeText = vi.fn<(value: string) => Promise<void>>()
 
+// jsdom 没有 ResizeObserver，Primer Dialog 的 useOverflow 需要
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub)
   writeText.mockReset()
   writeText.mockResolvedValue()
   Object.defineProperty(navigator, 'clipboard', {
@@ -19,109 +28,104 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 describe('DesignSystemPage', () => {
-  it('展示六类状态和三个可复制组合范例', () => {
+  it('呈现为静态 Reference，不含任何 Playground 控制器', () => {
     render(<DesignSystemPage />)
 
-    expect(screen.getByRole('heading', { name: '107 交互参考台' })).toBeInTheDocument()
-    for (const label of ['加载中', '空态', '错误', '成功', '权限', '危险操作']) {
-      expect(screen.getByLabelText(`${label} 状态参考`)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '107 Primer UI Reference' })).toBeInTheDocument()
+    for (const section of ['Foundations', 'States', 'Patterns', 'Content']) {
+      expect(screen.getByRole('heading', { name: section })).toBeInTheDocument()
     }
-    expect(screen.getAllByRole('button', { name: /复制.+代码/ })).toHaveLength(3)
+    // 旧 Playground 的入口全部不存在
+    expect(screen.queryByText('场景控制台')).not.toBeInTheDocument()
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '恢复默认值' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/预设$/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/参考画布$/)).not.toBeInTheDocument()
   })
 
-  it('允许精确输入画布宽度，并拒绝越界值', () => {
+  it('六类状态无需任何操作即可直接查看', () => {
     render(<DesignSystemPage />)
 
-    const widthInput = screen.getByRole('spinbutton', { name: '画布宽度' })
-    expect(widthInput).toHaveValue(null)
-    expect(widthInput).toHaveAttribute('placeholder', '自适应')
-    fireEvent.change(widthInput, { target: { value: '411' } })
-    fireEvent.keyDown(widthInput, { key: 'Enter' })
-    expect(screen.getByLabelText('411 px 参考画布')).toBeInTheDocument()
-
-    fireEvent.change(widthInput, { target: { value: '200' } })
-    fireEvent.keyDown(widthInput, { key: 'Enter' })
-    expect(screen.getByText('请输入 320–1440 之间的整数')).toBeInTheDocument()
-    expect(screen.getByLabelText('411 px 参考画布')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '恢复默认值' }))
-    expect(screen.getByLabelText('自适应 参考画布')).toBeInTheDocument()
-    expect(widthInput).toHaveValue(null)
+    expect(screen.getByText('正在加载共享资源…')).toBeInTheDocument()
+    expect(screen.getAllByText('这里还没有共享资源。').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('文件预览失败。').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('版本已发布').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('无法发布这个版本。').length).toBeGreaterThan(0)
+    for (const name of ['加载中', '空态', '错误', '成功', '权限', '危险操作']) {
+      expect(screen.getByLabelText(`${name} 状态参考`)).toBeInTheDocument()
+    }
   })
 
-  it('宽度预设段与输入共享选中语义，自定义值选中「自定义」段', () => {
+  it('危险确认 Dialog 可打开与取消', async () => {
     render(<DesignSystemPage />)
 
-    const presets = screen.getByRole('list', { name: '画布宽度预设' })
-    const pressed = () => within(presets).getByRole('button', { pressed: true })
+    const trigger = screen.getAllByRole('button', { name: '删除 Project' })[0]
+    if (!trigger) throw new Error('缺少危险操作触发按钮')
+    fireEvent.click(trigger)
 
-    expect(pressed()).toHaveTextContent('自适应')
-
-    fireEvent.click(within(presets).getByRole('button', { name: '375 px' }))
-    expect(pressed()).toHaveTextContent('375 px')
-    expect(screen.getByLabelText('375 px 参考画布')).toBeInTheDocument()
-    expect(screen.getByRole('spinbutton', { name: '画布宽度' })).toHaveValue(375)
-
-    const widthInput = screen.getByRole('spinbutton', { name: '画布宽度' })
-    fireEvent.change(widthInput, { target: { value: '411' } })
-    fireEvent.keyDown(widthInput, { key: 'Enter' })
-    expect(pressed()).toHaveTextContent('自定义')
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveAccessibleName('删除 Project“mnist-train”？')
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
   })
 
-  it('点击「自定义」段聚焦输入且不改变当前值', () => {
+  it('返回产品入口指向产品首页', () => {
     render(<DesignSystemPage />)
 
-    const widthInput = screen.getByRole('spinbutton', { name: '画布宽度' })
-    const presets = screen.getByRole('list', { name: '画布宽度预设' })
-    fireEvent.click(within(presets).getByRole('button', { name: '自定义' }))
-
-    expect(widthInput).toHaveFocus()
-    expect(screen.getByLabelText('自适应 参考画布')).toBeInTheDocument()
-  })
-
-  it('权限不足时优先显示权限反馈', () => {
-    render(<DesignSystemPage />)
-
-    fireEvent.click(screen.getByRole('button', { name: '无访问权限' }))
-    const canvas = screen.getByLabelText('自适应 参考画布')
-    expect(within(canvas).getByText('无法查看这个共享资源。')).toBeInTheDocument()
-    expect(within(canvas).queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument()
-  })
-
-  it('按精确延迟执行重试状态转换', async () => {
-    vi.useFakeTimers()
-    render(<DesignSystemPage />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Error' }))
-    const delayInput = screen.getByRole('spinbutton', { name: '请求延迟' })
-    fireEvent.change(delayInput, { target: { value: '1250' } })
-    fireEvent.keyDown(delayInput, { key: 'Enter' })
-
-    const canvas = screen.getByLabelText('自适应 参考画布')
-    fireEvent.click(within(canvas).getByRole('button', { name: '重试' }))
-    expect(within(canvas).getByText('正在加载共享资源…')).toBeInTheDocument()
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1249)
-    })
-    expect(within(canvas).queryByText('版本已发布')).not.toBeInTheDocument()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-    expect(within(canvas).getByText('版本已发布')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '返回产品' })).toHaveAttribute('href', '/')
   })
 
   it('复制范例源码并反馈结果', async () => {
     render(<DesignSystemPage />)
 
-    const copyButton = screen.getByRole('button', { name: '复制能力感知空态代码' })
-    fireEvent.click(copyButton)
+    fireEvent.click(screen.getByRole('button', { name: '复制能力感知空态代码' }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(EMPTY_RECIPE))
     expect(screen.getByText('代码已复制')).toBeInTheDocument()
+  })
+})
+
+describe('AsyncState', () => {
+  it('加载中只呈现动作描述', () => {
+    render(<AsyncState loading>内容</AsyncState>)
+
+    expect(screen.getByText('加载中')).toBeInTheDocument()
+    expect(screen.queryByText('内容')).not.toBeInTheDocument()
+  })
+
+  it('错误逐条展示问题并次级保留请求标识', () => {
+    render(
+      <AsyncState
+        loading={false}
+        error={{
+          message: '无法发布这个版本。',
+          problems: ['文件 list.txt 已存在', '说明过长'],
+          requestId: 'req_01K2ZQ',
+        }}
+      >
+        内容
+      </AsyncState>,
+    )
+
+    expect(screen.getByText('无法发布这个版本。')).toBeInTheDocument()
+    expect(screen.getByText('文件 list.txt 已存在')).toBeInTheDocument()
+    expect(screen.getByText('说明过长')).toBeInTheDocument()
+    expect(screen.getByText('请求标识 req_01K2ZQ')).toBeInTheDocument()
+  })
+
+  it('空态显示说明，正常状态渲染内容', () => {
+    const { rerender } = render(
+      <AsyncState loading={false} empty emptyText="这里还没有共享资源。">
+        内容
+      </AsyncState>,
+    )
+    expect(screen.getByText('这里还没有共享资源。')).toBeInTheDocument()
+
+    rerender(<AsyncState loading={false}>内容</AsyncState>)
+    expect(screen.getByText('内容')).toBeInTheDocument()
   })
 })
