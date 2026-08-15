@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AsyncState } from '../../src/components/common/AsyncState'
@@ -79,13 +79,23 @@ describe('DesignSystemPage', () => {
     expect(screen.getByRole('link', { name: '返回产品' })).toHaveAttribute('href', '/')
   })
 
-  it('复制范例源码并反馈结果', async () => {
+  it('复制范例源码并反馈结果，2 秒后恢复可复制', async () => {
+    vi.useFakeTimers()
     render(<DesignSystemPage />)
 
     fireEvent.click(screen.getByRole('button', { name: '复制能力感知空态代码' }))
-
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(EMPTY_RECIPE))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(writeText).toHaveBeenCalledWith(EMPTY_RECIPE)
     expect(screen.getByText('代码已复制')).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100)
+    })
+    expect(screen.queryByText('代码已复制')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '复制能力感知空态代码' })).toBeInTheDocument()
+    vi.useRealTimers()
   })
 })
 

@@ -1,7 +1,7 @@
 import { CheckIcon, CopyIcon, FileDirectoryIcon } from '@primer/octicons-react'
 import { Banner, Button, ConfirmationDialog, Stack } from '@primer/react'
 import { Blankslate, Card, InlineMessage } from '@primer/react/experimental'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { DESTRUCTIVE_RECIPE, EMPTY_RECIPE, ERROR_RECIPE } from './model'
 import styles from './DesignSystemPage.module.css'
@@ -20,11 +20,25 @@ function Recipe({
   children: React.ReactNode
 }) {
   const [copyState, setCopyState] = useState<CopyState>('idle')
+  const resetTimer = useRef<number | null>(null)
+
+  useEffect(
+    () => () => {
+      if (resetTimer.current !== null) window.clearTimeout(resetTimer.current)
+    },
+    [],
+  )
 
   const copyCode = async () => {
     try {
       await navigator.clipboard.writeText(code)
       setCopyState('copied')
+      // 2 秒后恢复可复制状态，避免用户以为只能复制一次
+      if (resetTimer.current !== null) window.clearTimeout(resetTimer.current)
+      resetTimer.current = window.setTimeout(() => {
+        setCopyState('idle')
+        resetTimer.current = null
+      }, 2000)
     } catch {
       setCopyState('error')
     }
