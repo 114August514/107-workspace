@@ -53,31 +53,32 @@ export function SharedResourcePage() {
                   <Breadcrumbs.Item as={Link} to="/">
                     首页
                   </Breadcrumbs.Item>
-                  {workspace.data ? (
+                  {isPlatform ? (
+                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
+                  ) : workspace.data ? (
                     <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
                       {workspace.data.name}
                     </Breadcrumbs.Item>
-                  ) : (
-                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
-                  )}
+                  ) : null}
                   <Breadcrumbs.Item
                     as={Link}
                     to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
                   >
                     共享资源
                   </Breadcrumbs.Item>
+                  {/* 当前页：面包屑最末项，selected → 黑色不可点，前面自动有 / 分隔符。
+                      as="h1" 让它兼任页面标题，省掉独立标题行 */}
+                  <Breadcrumbs.Item as="h1" selected>
+                    {resource.data.name}
+                  </Breadcrumbs.Item>
+                  {/* 资源归属标签跟在当前页右边 */}
+                  {isPlatform ? (
+                    <Label variant="attention">平台资源</Label>
+                  ) : (
+                    <Label variant="done">空间资源</Label>
+                  )}
                 </Breadcrumbs>
               </PageHeader.Breadcrumbs>
-              <PageHeader.TitleArea>
-                <PageHeader.Title as="h1">{resource.data.name}</PageHeader.Title>
-              </PageHeader.TitleArea>
-              <PageHeader.TrailingVisual>
-                {isPlatform ? (
-                  <Label variant="attention">平台资源</Label>
-                ) : (
-                  <Label variant="done">空间资源</Label>
-                )}
-              </PageHeader.TrailingVisual>
               {resource.data.description ? (
                 <PageHeader.Description>{resource.data.description}</PageHeader.Description>
               ) : (

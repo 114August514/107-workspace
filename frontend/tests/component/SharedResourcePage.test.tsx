@@ -198,5 +198,11 @@ describe('SharedResourcePage 权限与空态', () => {
       'href',
       '/workspaces/ws_test/shared-resources',
     )
+    // 当前页「预训练权重」是面包屑最末项：黑色不可点（h1，aria-current=page），不是链接
+    const current = screen.getByRole('heading', { name: '预训练权重', level: 1 })
+    expect(current).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: '预训练权重' })).not.toBeInTheDocument()
+    // 归属标签跟在当前页右边
+    expect(screen.getByText('空间资源')).toBeInTheDocument()
   })
 })

@@ -72,6 +72,8 @@ export function SharedResourceVersionPage() {
     setPreviewError('')
   }
 
+  const isPlatform = resource.data?.is_platform_owned ?? false
+
   const meta = version.data
     ? [
         { label: '版本号', value: <PrimerMono>{`v${version.data.sequence}`}</PrimerMono> },
@@ -93,32 +95,32 @@ export function SharedResourceVersionPage() {
                   <Breadcrumbs.Item as={Link} to="/">
                     首页
                   </Breadcrumbs.Item>
-                  {workspace.data ? (
+                  {isPlatform ? (
+                    // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
+                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
+                  ) : workspace.data ? (
                     <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
                       {workspace.data.name}
                     </Breadcrumbs.Item>
-                  ) : (
-                    // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
-                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
-                  )}
+                  ) : null}
                   <Breadcrumbs.Item
                     as={Link}
                     to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
                   >
                     共享资源
                   </Breadcrumbs.Item>
-                  {resource.data ? (
+                  {resource.data && (
                     <Breadcrumbs.Item as={Link} to={`/shared-resources/${resource.data.id}`}>
                       {resource.data.name}
                     </Breadcrumbs.Item>
-                  ) : (
-                    <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
                   )}
+                  {/* 当前页：面包屑最末项，selected → 黑色不可点，前面自动有 / 分隔符。
+                      as="h1" 让它兼任页面标题，省掉独立标题行 */}
+                  <Breadcrumbs.Item as="h1" selected>
+                    {version.data.label}
+                  </Breadcrumbs.Item>
                 </Breadcrumbs>
               </PageHeader.Breadcrumbs>
-              <PageHeader.TitleArea>
-                <PageHeader.Title as="h1">{version.data.label}</PageHeader.Title>
-              </PageHeader.TitleArea>
               {version.data.description ? (
                 <PageHeader.Description>{version.data.description}</PageHeader.Description>
               ) : (

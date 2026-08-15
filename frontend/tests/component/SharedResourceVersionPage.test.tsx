@@ -180,5 +180,9 @@ describe('SharedResourceVersionPage 文件预览', () => {
       'href',
       '/shared-resources/res_test',
     )
+    // 当前页 v1 是面包屑最末项：黑色不可点（h1，aria-current=page），不是链接
+    const current = screen.getByRole('heading', { name: 'v1', level: 1 })
+    expect(current).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'v1' })).not.toBeInTheDocument()
   })
 })
