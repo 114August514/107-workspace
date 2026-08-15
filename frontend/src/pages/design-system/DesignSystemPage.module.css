@@ -38,23 +38,43 @@
 
 .sectionHeading {
   display: grid;
-  grid-template-columns: minmax(14rem, 0.75fr) minmax(18rem, 1.25fr);
-  gap: var(--base-size-24);
-  align-items: end;
+  gap: var(--base-size-4);
   margin-bottom: var(--base-size-16);
   padding-bottom: var(--base-size-12);
   border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
-.sectionHeading h2 {
+.sectionTitle {
   margin: 0;
-  font: var(--text-title-shorthand-medium);
 }
 
-.sectionHeading p {
-  margin: var(--base-size-4) 0 0;
+.sectionDescription {
+  margin: 0;
   color: var(--fgColor-muted);
-  font: var(--text-body-shorthand-medium);
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: var(--base-size-8);
+  color: var(--fgColor-muted);
+}
+
+/* 分类 eyebrow：复用 Card.Metadata 原生槽，重排到顶部并以 muted 小号呈现 */
+.eyebrowCard [class*='CardBody'] {
+  display: flex;
+  flex-direction: column;
+}
+
+.eyebrowCard [class*='CardMetadataContainer'] {
+  order: -1;
+  margin-bottom: var(--base-size-8);
+}
+
+.eyebrowCard [data-component='Card.Metadata'] {
+  padding-top: 0;
+  border-top: none;
+  color: var(--fgColor-muted);
+  font: var(--text-body-shorthand-small);
 }
 
 .statusGrid,
@@ -186,12 +206,7 @@
   }
 
   .statusGrid,
-  .formatGrid,
-  .sectionHeading {
+  .formatGrid {
     grid-template-columns: 1fr;
-  }
-
-  .sectionHeading {
-    gap: var(--base-size-4);
   }
 }

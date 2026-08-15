@@ -1,5 +1,5 @@
 import { BookIcon } from '@primer/octicons-react'
-import { Label, Link, PageHeader, Stack } from '@primer/react'
+import { Heading, Label, Link, PageHeader, Stack } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 
 import { PrimerRoot } from '../../primer/setup'
@@ -18,38 +18,50 @@ function SectionHeading({
 }) {
   return (
     <div className={styles.sectionHeading}>
-      <h2 id={id}>{title}</h2>
-      <p>{description}</p>
+      <Heading as="h2" variant="medium" id={id} className={styles.sectionTitle}>
+        {title}
+      </Heading>
+      <p className={styles.sectionDescription}>{description}</p>
     </div>
+  )
+}
+
+function EyebrowCard({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string
+  title: React.ReactNode
+  description: string
+}) {
+  return (
+    <Card padding="normal" className={styles.eyebrowCard}>
+      <Card.Metadata>{eyebrow}</Card.Metadata>
+      <Card.Heading as="h3">{title}</Card.Heading>
+      <Card.Description>{description}</Card.Description>
+    </Card>
   )
 }
 
 function Foundations() {
   return (
     <div className={styles.formatGrid}>
-      <Card padding="normal">
-        <Card.Metadata>语气</Card.Metadata>
-        <Card.Heading as="h3">简洁、中性、明确</Card.Heading>
-        <Card.Description>
-          从用户任务出发，主动语态和具体动词；不使用拟人化或娱乐化表达。
-        </Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>术语</Card.Metadata>
-        <Card.Heading as="h3">共享资源 / 资源版本</Card.Heading>
-        <Card.Description>
-          同一概念在所有页面使用同一写法；不把 API 类型名当用户术语。
-        </Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>Token</Card.Metadata>
-        <Card.Heading as="h3" className={styles.breakableText}>
-          <code>var(--fgColor-muted)</code>
-        </Card.Heading>
-        <Card.Description>
-          颜色、间距、圆角和字体使用 Primer Primitives，不复制 GitHub 色值。
-        </Card.Description>
-      </Card>
+      <EyebrowCard
+        eyebrow="语气"
+        title="简洁、中性、明确"
+        description="从用户任务出发，主动语态和具体动词；不使用拟人化或娱乐化表达。"
+      />
+      <EyebrowCard
+        eyebrow="术语"
+        title="共享资源 / 资源版本"
+        description="同一概念在所有页面使用同一写法；不把 API 类型名当用户术语。"
+      />
+      <EyebrowCard
+        eyebrow="Token"
+        title={<code>var(--fgColor-muted)</code>}
+        description="颜色、间距、圆角和字体使用 Primer Primitives，不复制 GitHub 色值。"
+      />
     </div>
   )
 }
@@ -57,38 +69,36 @@ function Foundations() {
 function ContentFormat() {
   return (
     <div className={styles.formatGrid}>
-      <Card padding="normal">
-        <Card.Metadata>标题</Card.Metadata>
-        <Card.Heading as="h3">发布资源版本</Card.Heading>
-        <Card.Description>使用对象或任务名称，末尾不加句号。</Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>按钮</Card.Metadata>
-        <Card.Heading as="h3">发布版本</Card.Heading>
-        <Card.Description>使用“动作 + 对象”，避免“确定”或“处理”。</Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>时间</Card.Metadata>
-        <Card.Heading as="h3">2026-08-14 15:40:12</Card.Heading>
-        <Card.Description>相对时间不能替代精确时间。</Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>容量</Card.Metadata>
-        <Card.Heading as="h3">2.4 GB</Card.Heading>
-        <Card.Description>按 1024 进位，数值与单位之间保留空格。</Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>请求标识</Card.Metadata>
-        <Card.Heading as="h3" className={styles.breakableText}>
-          <code>req_01K2ZQM6WD7T4AW8</code>
-        </Card.Heading>
-        <Card.Description>视觉可截断，复制值保留完整内容。</Card.Description>
-      </Card>
-      <Card padding="normal">
-        <Card.Metadata>版本</Card.Metadata>
-        <Card.Heading as="h3">v3</Card.Heading>
-        <Card.Description>使用后端提供的稳定标签，不自行发明 latest。</Card.Description>
-      </Card>
+      <EyebrowCard
+        eyebrow="标题"
+        title="发布资源版本"
+        description="使用对象或任务名称，末尾不加句号。"
+      />
+      <EyebrowCard
+        eyebrow="按钮"
+        title="发布版本"
+        description="使用“动作 + 对象”，避免“确定”或“处理”。"
+      />
+      <EyebrowCard
+        eyebrow="时间"
+        title="2026-08-14 15:40:12"
+        description="相对时间不能替代精确时间。"
+      />
+      <EyebrowCard
+        eyebrow="容量"
+        title="2.4 GB"
+        description="按 1024 进位，数值与单位之间保留空格。"
+      />
+      <EyebrowCard
+        eyebrow="请求标识"
+        title={<code className={styles.breakableText}>req_01K2ZQM6WD7T4AW8</code>}
+        description="视觉可截断，复制值保留完整内容。"
+      />
+      <EyebrowCard
+        eyebrow="版本"
+        title="v3"
+        description="使用后端提供的稳定标签，不自行发明 latest。"
+      />
     </div>
   )
 }
