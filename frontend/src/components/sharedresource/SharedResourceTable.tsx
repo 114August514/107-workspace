@@ -3,74 +3,40 @@ import { Link } from 'react-router-dom'
 
 import type { SharedResource } from '../../api/types'
 import { PrimerRelativeTime } from '../primer/PrimerMono'
+import styles from './sharedResource.module.css'
 
 interface Props {
   resources: SharedResource[]
 }
 
-/** 原生 table 替代 antd Table，列定义内联以避免 ColumnsType 依赖。 */
+/**
+ * 共享资源列表。原生 table 替代 antd Table，列定义内联，
+ * 长期视觉规则走 CSS Modules + Primer token，不复制 GitHub 色值。
+ *
+ * 空态由外层 AsyncState 负责（Blankslate + 能力感知 CTA），
+ * 表格自身只渲染有数据的行，避免空态出现两遍。
+ */
 export function SharedResourceTable({ resources }: Props) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+    <table className={styles.table}>
       <thead>
         <tr>
-          <th
-            style={{
-              textAlign: 'left',
-              padding: '8px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--fgColor-muted)',
-              borderBottom: '1px solid var(--borderColor-default)',
-              width: 240,
-            }}
-          >
+          <th className={styles.th} style={{ width: '15rem' }}>
             名称
           </th>
-          <th
-            style={{
-              textAlign: 'left',
-              padding: '8px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--fgColor-muted)',
-              borderBottom: '1px solid var(--borderColor-default)',
-            }}
-          >
-            说明
-          </th>
-          <th
-            style={{
-              textAlign: 'left',
-              padding: '8px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--fgColor-muted)',
-              borderBottom: '1px solid var(--borderColor-default)',
-              width: 110,
-            }}
-          >
+          <th className={styles.th}>说明</th>
+          <th className={styles.th} style={{ width: '7rem' }}>
             归属
           </th>
-          <th
-            style={{
-              textAlign: 'left',
-              padding: '8px 16px',
-              fontSize: 14,
-              fontWeight: 600,
-              color: 'var(--fgColor-muted)',
-              borderBottom: '1px solid var(--borderColor-default)',
-              width: 130,
-            }}
-          >
+          <th className={styles.th} style={{ width: '8.5rem' }}>
             创建时间
           </th>
         </tr>
       </thead>
       <tbody>
         {resources.map((resource) => (
-          <tr key={resource.id} style={{ borderBottom: '1px solid var(--borderColor-default)' }}>
-            <td style={{ padding: '8px 16px' }}>
+          <tr key={resource.id} className={styles.row}>
+            <td className={styles.td}>
               <Link
                 to={`/shared-resources/${resource.id}`}
                 style={{ fontWeight: 500, color: 'var(--fgColor-accent)' }}
@@ -78,32 +44,23 @@ export function SharedResourceTable({ resources }: Props) {
                 {resource.name}
               </Link>
             </td>
-            <td style={{ padding: '8px 16px' }}>
+            <td className={styles.td}>
               <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
                 {resource.description || '—'}
               </Text>
             </td>
-            <td style={{ padding: '8px 16px' }}>
+            <td className={styles.td}>
               {resource.is_platform_owned ? (
                 <Label variant="attention">平台</Label>
               ) : (
                 <Label variant="done">本空间</Label>
               )}
             </td>
-            <td style={{ padding: '8px 16px' }}>
+            <td className={styles.td}>
               <PrimerRelativeTime value={resource.created_at} />
             </td>
           </tr>
         ))}
-        {resources.length === 0 && (
-          <tr>
-            <td colSpan={4} style={{ padding: '32px 16px', textAlign: 'center' }}>
-              <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
-                暂无 Shared Resource
-              </Text>
-            </td>
-          </tr>
-        )}
       </tbody>
     </table>
   )

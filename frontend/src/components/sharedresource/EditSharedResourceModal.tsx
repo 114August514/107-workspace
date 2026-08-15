@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { api } from '../../api/client'
 import type { SharedResource } from '../../api/types'
+import styles from './formControls.module.css'
 
 interface Props {
   open: boolean
@@ -60,11 +61,11 @@ export function EditSharedResourceModal({ open, resource, onClose, onUpdated }: 
   return (
     <Dialog
       onClose={handleClose}
-      title="修改 Shared Resource"
+      title="修改共享资源"
       footerButtons={[
         { content: '取消', onClick: handleClose, disabled: submitting, buttonType: 'default' },
         {
-          content: submitting ? '保存中…' : '保存',
+          content: submitting ? '保存中…' : '保存修改',
           onClick: handleSubmit,
           buttonType: 'primary',
           disabled: submitting,
@@ -95,16 +96,7 @@ export function EditSharedResourceModal({ open, resource, onClose, onUpdated }: 
             onChange={(e) => setDescription(e.target.value)}
             maxLength={4096}
             rows={3}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              fontSize: 14,
-              lineHeight: 1.5,
-              border: '1px solid var(--borderColor-default)',
-              borderRadius: 6,
-              resize: 'vertical',
-              fontFamily: 'inherit',
-            }}
+            className={styles.textarea}
           />
         </FormControl>
       </div>

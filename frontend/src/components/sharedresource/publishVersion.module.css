@@ -1,0 +1,107 @@
+/* 发布版本对话框：拖拽上传区与说明文本的长期视觉规则。
+ * 取色走 Primer Primitives 功能 token。 */
+
+.dropArea {
+  display: grid;
+  gap: var(--base-size-4);
+  justify-items: center;
+  padding: var(--base-size-24) var(--base-size-16);
+  border: var(--borderWidth-thick) dashed var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.dropArea[data-dragging='true'] {
+  border-color: var(--fgColor-accent);
+  background: var(--bgColor-accent-muted);
+}
+
+.dropArea:focus-within {
+  border-color: var(--fgColor-accent);
+  outline: none;
+  box-shadow: inset 0 0 0 var(--borderWidth-thick) var(--borderColor-accent-emphasis);
+}
+
+.dropTitle {
+  margin: 0;
+  font-size: var(--text-body-size-medium);
+  color: var(--fgColor-default);
+}
+
+.dropHint {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  color: var(--fgColor-muted);
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fileList {
+  margin: var(--base-size-12) 0 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fileItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--base-size-4) 0;
+  font-size: var(--text-caption-size);
+}
+
+.fileName {
+  font-family: var(--fontStack-monospace);
+  overflow-wrap: anywhere;
+}
+
+.removeButton {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-large);
+  padding: 0 var(--base-size-4);
+  line-height: 1;
+}
+
+.removeButton:hover {
+  color: var(--fgColor-default);
+}
+
+.removeButton:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+  border-radius: var(--borderRadius-small);
+}
+
+.textarea {
+  width: 100%;
+  padding: var(--base-size-8) var(--base-size-12);
+  font-family: inherit;
+  font-size: var(--text-body-size-medium);
+  line-height: var(--base-text-lineHeight-normal);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  resize: vertical;
+}
+
+.textarea:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+}

@@ -1,6 +1,8 @@
 import { Heading } from '@primer/react'
 import type { ReactNode } from 'react'
 
+import styles from './PrimerListCard.module.css'
+
 interface Props {
   title?: ReactNode
   extra?: ReactNode
@@ -13,28 +15,13 @@ interface Props {
  * 装列表用的盒子（Primer 版）。
  *
  * body 内边距默认为 0，表头直接贴着卡片标题栏，共用底色读起来是一整块。
+ * 长期视觉规则在 PrimerListCard.module.css，取色走 Primer token。
  */
 export function PrimerListCard({ title, extra, padded = false, children }: Props) {
   return (
-    <div
-      style={{
-        border: '1px solid var(--borderColor-default, #d1d9e0)',
-        borderRadius: 6,
-        overflow: 'hidden',
-        backgroundColor: 'var(--bgColor-default, #fff)',
-      }}
-    >
+    <div className={styles.card}>
       {(title || extra) && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 16px',
-            backgroundColor: 'var(--bgColor-muted, #f6f8fa)',
-            borderBottom: '1px solid var(--borderColor-default, #d1d9e0)',
-          }}
-        >
+        <div className={styles.header}>
           {title && (
             <Heading as="h3" variant="small">
               {title}
@@ -43,7 +30,7 @@ export function PrimerListCard({ title, extra, padded = false, children }: Props
           {extra}
         </div>
       )}
-      <div style={padded ? { padding: 16 } : undefined}>{children}</div>
+      <div className={padded ? styles.body : undefined}>{children}</div>
     </div>
   )
 }

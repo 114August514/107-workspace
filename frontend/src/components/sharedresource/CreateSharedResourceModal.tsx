@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import type { SharedResource } from '../../api/types'
+import styles from './formControls.module.css'
 
 interface Props {
   open: boolean
@@ -58,11 +59,11 @@ export function CreateSharedResourceModal({ open, workspaceId, onClose, onCreate
   return (
     <Dialog
       onClose={handleClose}
-      title="创建 Shared Resource"
+      title="创建共享资源"
       footerButtons={[
         { content: '取消', onClick: handleClose, disabled: submitting, buttonType: 'default' },
         {
-          content: submitting ? '创建中…' : '创建',
+          content: submitting ? '创建中…' : '创建共享资源',
           onClick: handleSubmit,
           buttonType: 'primary',
           disabled: submitting,
@@ -95,16 +96,7 @@ export function CreateSharedResourceModal({ open, workspaceId, onClose, onCreate
             placeholder="（选填）"
             maxLength={4096}
             rows={3}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              fontSize: 14,
-              lineHeight: 1.5,
-              border: '1px solid var(--borderColor-default)',
-              borderRadius: 6,
-              resize: 'vertical',
-              fontFamily: 'inherit',
-            }}
+            className={styles.textarea}
           />
         </FormControl>
       </div>

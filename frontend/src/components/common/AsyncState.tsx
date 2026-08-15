@@ -12,8 +12,14 @@ interface Props {
   emptyText?: string
   /** 空态说明；下一步或后果。 */
   emptyDescription?: string
-  /** 空态主操作，如创建入口。 */
+  /**
+   * 空态主操作的内容（按钮文字或图标）。Blankslate.PrimaryAction 自己会渲染成
+   * Primer Button，所以这里传的是按钮内容，不要再套一层 <Button>，否则会
+   * button 套 button 产出非法 HTML。
+   */
   emptyAction?: ReactNode
+  /** 空态主操作的点击回调，透传给 PrimaryAction 渲染出的 Button。 */
+  onEmptyAction?: () => void
   children: ReactNode
 }
 
@@ -43,6 +49,7 @@ export function AsyncState({
   emptyText,
   emptyDescription,
   emptyAction,
+  onEmptyAction,
   children,
 }: Props) {
   if (loading) {
@@ -92,7 +99,11 @@ export function AsyncState({
           {emptyDescription ? (
             <Blankslate.Description>{emptyDescription}</Blankslate.Description>
           ) : null}
-          {emptyAction ? <Blankslate.PrimaryAction>{emptyAction}</Blankslate.PrimaryAction> : null}
+          {emptyAction ? (
+            <Blankslate.PrimaryAction onClick={onEmptyAction}>
+              {emptyAction}
+            </Blankslate.PrimaryAction>
+          ) : null}
         </Blankslate>
       </Padded>
     )

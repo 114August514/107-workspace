@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Button, Card, Tabs, Tag } from 'antd'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
@@ -24,6 +24,13 @@ import { SharedResourcePanel } from '../components/sharedresource/SharedResource
 
 export function WorkspacePage() {
   const { workspaceId = '' } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  // 深链路：/workspaces/:id/shared-resources 选中「共享资源」tab，其余落到默认。
+  // tab 切换时同步 URL，让刷新/收藏/复制链接保留当前 tab。
+  const activeTab = location.pathname.endsWith('/shared-resources')
+    ? 'shared-resources'
+    : 'projects'
   const workspace = useAsync<Workspace>(() => api.getWorkspace(workspaceId), [workspaceId])
   const [page, setPage] = useState(1)
   const projects = useAsync<ProjectPage>(
@@ -66,7 +73,13 @@ export function WorkspacePage() {
       </AsyncSection>
 
       <Tabs
-        defaultActiveKey="projects"
+        activeKey={activeTab}
+        onChange={(key) => {
+          // 只有共享资源 tab 有独立深链路；其余 tab 回到 Workspace 基础路由。
+          navigate(key === 'shared-resources' ? `shared-resources` : `.`, {
+            replace: true,
+          })
+        }}
         items={[
           {
             key: 'projects',

@@ -1,0 +1,92 @@
+/* Shared Resource 表面共用的表格与元数据布局。
+ *
+ * 原生 <table> 用不上 Primer 的 sx/Box，长期视觉规则收进这里，
+ * 取色全部走 Primer Primitives 功能 token，不复制 GitHub 色值。 */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  text-align: left;
+  padding: var(--base-size-8) var(--base-size-16);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
+  color: var(--fgColor-muted);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.td {
+  padding: var(--base-size-8) var(--base-size-16);
+  color: var(--fgColor-default);
+  vertical-align: top;
+}
+
+.row {
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+/* 版本详情页的键值元数据表：左列标签贴 muted 底，窄屏下不压行。 */
+.metaTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  overflow: hidden;
+}
+
+.metaLabel {
+  padding: var(--base-size-8) var(--base-size-16);
+  font-weight: var(--base-text-weight-semibold);
+  color: var(--fgColor-default);
+  background: var(--bgColor-muted);
+  width: 9rem;
+}
+
+.metaCell {
+  padding: var(--base-size-8) var(--base-size-16);
+  color: var(--fgColor-default);
+}
+
+.metaRow {
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.metaRow:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 48rem) {
+  /* 窄屏把固定列宽放开，避免标签列挤掉值列。 */
+  .metaLabel {
+    width: auto;
+  }
+}
+
+/* 版本内文件路径：点了是预览而不是导航，所以用 button 但视觉上像链接。
+ * 覆盖 default/hover/focus 状态，键盘焦点可见。 */
+.fileButton {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+  color: var(--fgColor-accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fileButton:hover {
+  text-decoration: underline;
+}
+
+.fileButton:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+  border-radius: var(--borderRadius-small);
+}

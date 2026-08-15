@@ -1,5 +1,5 @@
 import { PencilIcon, PlusIcon } from '@primer/octicons-react'
-import { Button, Label, Text } from '@primer/react'
+import { Button, Label, PageHeader, Text } from '@primer/react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -7,13 +7,15 @@ import { api } from '../api/client'
 import { can } from '../api/types'
 import type { SharedResourceDetail, SharedResourceVersion, Workspace } from '../api/types'
 import { useAsync } from '../api/useAsync'
-import { PrimerAsyncSection } from '../components/primer/PrimerAsyncSection'
+import { AsyncState } from '../components/common/AsyncState'
+import { normalizeError } from '../components/common/asyncStateError'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
 import { PrimerMono, PrimerRelativeTime } from '../components/primer/PrimerMono'
-import { PrimerPageHeader } from '../components/primer/PrimerPageHeader'
 import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
+import styles from '../components/sharedresource/sharedResource.module.css'
+import { PrimerRoot } from '../primer/setup'
 import { formatBytes } from '../utils/format'
 
 export function SharedResourcePage() {
@@ -38,37 +40,43 @@ export function SharedResourcePage() {
   const isPlatform = resource.data?.is_platform_owned ?? false
   const canManage = !isPlatform && can(workspace.data, 'shared_resource.manage')
   const canPublish = !isPlatform && can(workspace.data, 'shared_resource.version.create')
+  const versions = resource.data?.versions ?? []
 
   return (
-    <PrimerStack gap="large">
-      <PrimerAsyncSection loading={resource.loading} error={resource.error}>
-        {resource.data && (
-          <PrimerPageHeader
-            breadcrumb={[
-              { title: <Link to="/">首页</Link> },
-              workspace.data
-                ? {
-                    title: (
-                      <Link to={`/workspaces/${workspace.data.id}`}>{workspace.data.name}</Link>
-                    ),
-                  }
-                : { title: '平台' },
-              { title: resource.data.name },
-            ]}
-            title={resource.data.name}
-            tags={
-              isPlatform ? (
-                <Label variant="attention">平台资源</Label>
+    <PrimerRoot>
+      <PrimerStack gap="large">
+        <AsyncState loading={resource.loading} error={normalizeError(resource.error)}>
+          {resource.data && (
+            <PageHeader>
+              <PageHeader.ContextArea>
+                <PageHeader.ParentLink as={Link} to="/">
+                  首页
+                </PageHeader.ParentLink>
+                {workspace.data ? (
+                  <PageHeader.ParentLink as={Link} to={`/workspaces/${workspace.data.id}`}>
+                    {workspace.data.name}
+                  </PageHeader.ParentLink>
+                ) : (
+                  <PageHeader.ParentLink>平台</PageHeader.ParentLink>
+                )}
+              </PageHeader.ContextArea>
+              <PageHeader.TitleArea>
+                <PageHeader.Title as="h1">{resource.data.name}</PageHeader.Title>
+                {isPlatform ? (
+                  <Label variant="attention">平台资源</Label>
+                ) : (
+                  <Label variant="done">空间资源</Label>
+                )}
+              </PageHeader.TitleArea>
+              {resource.data.description ? (
+                <PageHeader.Description>{resource.data.description}</PageHeader.Description>
               ) : (
-                <Label variant="done">空间资源</Label>
-              )
-            }
-            description={resource.data.description || '这个 Shared Resource 还没有填写说明'}
-            actions={
-              <>
+                <PageHeader.Description>这个共享资源还没有填写说明。</PageHeader.Description>
+              )}
+              <PageHeader.Actions>
                 {canManage && (
                   <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
-                    修改
+                    修改共享资源
                   </Button>
                 )}
                 {canPublish && (
@@ -77,94 +85,80 @@ export function SharedResourcePage() {
                     leadingVisual={PlusIcon}
                     onClick={() => setPublishing(true)}
                   >
-                    发布新版本
+                    发布版本
                   </Button>
                 )}
-              </>
+              </PageHeader.Actions>
+            </PageHeader>
+          )}
+        </AsyncState>
+
+        <PrimerListCard title="版本">
+          <AsyncState
+            loading={resource.loading}
+            error={normalizeError(resource.error)}
+            empty={resource.data !== undefined && versions.length === 0}
+            emptyText="这个共享资源还没有已发布版本。"
+            emptyDescription={
+              canPublish ? '发布首个版本后，Project 才能引用这个共享资源。' : undefined
             }
-          />
-        )}
-      </PrimerAsyncSection>
-
-      <PrimerListCard title="版本">
-        <PrimerAsyncSection
-          loading={resource.loading}
-          error={resource.error}
-          empty={(resource.data?.versions ?? []).length === 0}
-          emptyText="还没有发布过版本。点击右上角「发布新版本」上传文件。"
-        >
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {(['版本', '说明', '文件数', '总大小', '发布时间'] as const).map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      textAlign: 'left',
-                      padding: '8px 16px',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: 'var(--fgColor-muted)',
-                      borderBottom: '1px solid var(--borderColor-default)',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(resource.data?.versions ?? []).map((version: SharedResourceVersion) => (
-                <tr
-                  key={version.id}
-                  style={{ borderBottom: '1px solid var(--borderColor-default)' }}
-                >
-                  <td style={{ padding: '8px 16px' }}>
-                    <Link
-                      to={`/shared-resource-versions/${version.id}`}
-                      style={{ fontWeight: 500 }}
-                    >
-                      {version.label}
-                    </Link>
-                  </td>
-                  <td style={{ padding: '8px 16px' }}>
-                    <Text size="small">{version.description}</Text>
-                  </td>
-                  <td style={{ padding: '8px 16px' }}>
-                    <PrimerMono>{String(version.file_count)}</PrimerMono>
-                  </td>
-                  <td style={{ padding: '8px 16px' }}>
-                    <Text size="small">{formatBytes(version.total_size)}</Text>
-                  </td>
-                  <td style={{ padding: '8px 16px' }}>
-                    <PrimerRelativeTime value={version.created_at} />
-                  </td>
+            emptyAction={canPublish ? '发布版本' : null}
+            onEmptyAction={canPublish ? () => setPublishing(true) : undefined}
+          >
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  {(['版本', '说明', '文件数', '总大小', '发布时间'] as const).map((h) => (
+                    <th key={h} className={styles.th}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </PrimerAsyncSection>
-      </PrimerListCard>
+              </thead>
+              <tbody>
+                {versions.map((version: SharedResourceVersion) => (
+                  <tr key={version.id} className={styles.row}>
+                    <td className={styles.td}>
+                      <Link
+                        to={`/shared-resource-versions/${version.id}`}
+                        style={{ fontWeight: 500 }}
+                      >
+                        {version.label}
+                      </Link>
+                    </td>
+                    <td className={styles.td}>
+                      <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                        {version.description || '—'}
+                      </Text>
+                    </td>
+                    <td className={styles.td}>
+                      <PrimerMono>{String(version.file_count)}</PrimerMono>
+                    </td>
+                    <td className={styles.td}>{formatBytes(version.total_size)}</td>
+                    <td className={styles.td}>
+                      <PrimerRelativeTime value={version.created_at} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </AsyncState>
+        </PrimerListCard>
 
-      {resource.data?.versions.length === 0 && !isPlatform && (
-        <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
-          资源创建后内容为空，需发布首个版本才能在 Run 中引用。
-        </Text>
-      )}
+        <EditSharedResourceModal
+          open={editing}
+          resource={resource.data}
+          onClose={() => setEditing(false)}
+          onUpdated={bump}
+        />
 
-      <EditSharedResourceModal
-        open={editing}
-        resource={resource.data}
-        onClose={() => setEditing(false)}
-        onUpdated={bump}
-      />
-
-      <PublishVersionModal
-        open={publishing}
-        resourceId={resourceId}
-        onClose={() => setPublishing(false)}
-        onPublished={() => bump()}
-      />
-    </PrimerStack>
+        <PublishVersionModal
+          open={publishing}
+          resourceId={resourceId}
+          onClose={() => setPublishing(false)}
+          onPublished={() => bump()}
+        />
+      </PrimerStack>
+    </PrimerRoot>
   )
 }
