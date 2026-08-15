@@ -1,4 +1,6 @@
+import { FileDirectoryIcon } from '@primer/octicons-react'
 import { Banner, Spinner, Text } from '@primer/react'
+import { Blankslate } from '@primer/react/experimental'
 import type { ReactNode } from 'react'
 
 interface Props {
@@ -6,7 +8,12 @@ interface Props {
   /** 已经归一化的错误展示数据；组件不依赖 API client，由调用方拆解错误对象。 */
   error?: { message: string; problems?: string[]; requestId?: string }
   empty?: boolean
+  /** 空态标题；说明缺什么。 */
   emptyText?: string
+  /** 空态说明；下一步或后果。 */
+  emptyDescription?: string
+  /** 空态主操作，如创建入口。 */
+  emptyAction?: ReactNode
   children: ReactNode
 }
 
@@ -29,7 +36,15 @@ function Padded({ children }: { children: ReactNode }) {
  * 与旧 Ant Design 的 components/common/AsyncSection 并存：
  * 未迁移页面继续用旧的，已迁移 Primer surface 用这个。
  */
-export function AsyncState({ loading, error, empty, emptyText, children }: Props) {
+export function AsyncState({
+  loading,
+  error,
+  empty,
+  emptyText,
+  emptyDescription,
+  emptyAction,
+  children,
+}: Props) {
   if (loading) {
     return (
       <Padded>
@@ -69,17 +84,16 @@ export function AsyncState({ loading, error, empty, emptyText, children }: Props
   if (empty) {
     return (
       <Padded>
-        <Text
-          size="small"
-          style={{
-            color: 'var(--fgColor-muted)',
-            display: 'block',
-            textAlign: 'center',
-            padding: '32px 0',
-          }}
-        >
-          {emptyText ?? '暂无数据'}
-        </Text>
+        <Blankslate narrow>
+          <Blankslate.Visual>
+            <FileDirectoryIcon size={24} />
+          </Blankslate.Visual>
+          <Blankslate.Heading>{emptyText ?? '暂无数据'}</Blankslate.Heading>
+          {emptyDescription ? (
+            <Blankslate.Description>{emptyDescription}</Blankslate.Description>
+          ) : null}
+          {emptyAction ? <Blankslate.PrimaryAction>{emptyAction}</Blankslate.PrimaryAction> : null}
+        </Blankslate>
       </Padded>
     )
   }

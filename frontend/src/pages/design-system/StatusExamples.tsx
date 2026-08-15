@@ -48,9 +48,15 @@ export function StatusGallery() {
 
       <Specimen
         title="空态"
-        description="共享 AsyncState 组件的空态；Blankslate 能力感知空态见 Patterns。"
+        description="共享 AsyncState 组件的空态；Blankslate 图标 + 标题 + 说明 + 主操作。"
       >
-        <AsyncState loading={false} empty emptyText="这里还没有共享资源。">
+        <AsyncState
+          loading={false}
+          empty
+          emptyText="这里还没有共享资源。"
+          emptyDescription="创建共享资源后，可以在多个 Project 中复用同一份版本化内容。"
+          emptyAction="创建共享资源"
+        >
           内容
         </AsyncState>
       </Specimen>
