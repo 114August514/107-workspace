@@ -5,7 +5,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourceVersionPage } from '../../src/pages/SharedResourceVersionPage'
-import type { SharedResourceDetail, SharedResourceVersionDetail } from '../../src/api/types'
+import type {
+  SharedResourceDetail,
+  SharedResourceVersionDetail,
+  Workspace,
+} from '../../src/api/types'
 
 /**
  * SharedResourceVersionPage 文件预览状态。
@@ -19,12 +23,14 @@ import type { SharedResourceDetail, SharedResourceVersionDetail } from '../../sr
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
 const mockReadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
+const mockGetWorkspace = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResourceVersion: mockGetSharedResourceVersion,
     getSharedResource: mockGetSharedResource,
     readSharedResourceVersionFile: mockReadSharedResourceVersionFile,
+    getWorkspace: mockGetWorkspace,
   },
 }))
 
@@ -57,6 +63,18 @@ const resource: SharedResourceDetail = {
   versions: [],
 }
 
+const workspace: Workspace = {
+  id: 'ws_test',
+  name: 'Test 空间',
+  description: '',
+  kind: 'collaborative',
+  owner_id: 'owner',
+  created_at: null,
+  default_environment_version_id: null,
+  capabilities: [],
+  role: 'admin',
+}
+
 function renderPage(versionId = 'ver_test') {
   return render(
     <MemoryRouter initialEntries={[`/shared-resource-versions/${versionId}`]}>
@@ -75,6 +93,7 @@ describe('SharedResourceVersionPage 文件预览', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     mockGetSharedResourceVersion.mockResolvedValue(version)
     mockGetSharedResource.mockResolvedValue(resource)
+    mockGetWorkspace.mockResolvedValue(workspace)
   })
 
   afterEach(() => {
@@ -142,5 +161,24 @@ describe('SharedResourceVersionPage 文件预览', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'train.py' })).not.toBeInTheDocument()
     })
+  })
+
+  it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
+    mockReadSharedResourceVersionFile.mockResolvedValue('content')
+    renderPage()
+
+    // 面包屑：首页 → Test 空间 → 共享资源 → 预训练权重 → v1
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Test 空间' })).toHaveAttribute(
+        'href',
+        '/workspaces/ws_test',
+      )
+    })
+    const sharedResourcesCrumb = screen.getByRole('link', { name: '共享资源' })
+    expect(sharedResourcesCrumb).toHaveAttribute('href', '/workspaces/ws_test/shared-resources')
+    expect(screen.getByRole('link', { name: '预训练权重' })).toHaveAttribute(
+      'href',
+      '/shared-resources/res_test',
+    )
   })
 })

@@ -53,9 +53,17 @@ export function SharedResourcePage() {
                   首页
                 </PageHeader.ParentLink>
                 {workspace.data ? (
-                  <PageHeader.ParentLink as={Link} to={`/workspaces/${workspace.data.id}`}>
-                    {workspace.data.name}
-                  </PageHeader.ParentLink>
+                  <>
+                    <PageHeader.ParentLink as={Link} to={`/workspaces/${workspace.data.id}`}>
+                      {workspace.data.name}
+                    </PageHeader.ParentLink>
+                    <PageHeader.ParentLink
+                      as={Link}
+                      to={`/workspaces/${workspace.data.id}/shared-resources`}
+                    >
+                      共享资源
+                    </PageHeader.ParentLink>
+                  </>
                 ) : (
                   <PageHeader.ParentLink>平台</PageHeader.ParentLink>
                 )}

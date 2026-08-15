@@ -180,4 +180,23 @@ describe('SharedResourcePage 权限与空态', () => {
     const link = await screen.findByRole('link', { name: 'v1' })
     expect(link).toHaveAttribute('href', '/shared-resource-versions/ver_1')
   })
+
+  it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
+    mockGetSharedResource.mockResolvedValue(makeResource())
+    mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+
+    renderPage()
+
+    // 面包屑：首页 → Test 空间 → 共享资源 → 预训练权重
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Test 空间' })).toHaveAttribute(
+        'href',
+        '/workspaces/ws_test',
+      )
+    })
+    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
+      'href',
+      '/workspaces/ws_test/shared-resources',
+    )
+  })
 })
