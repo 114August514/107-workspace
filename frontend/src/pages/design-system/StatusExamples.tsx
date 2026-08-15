@@ -133,7 +133,6 @@ function Specimen({
       aria-label={`${label} 状态参考`}
     >
       <div className={styles.cardContent}>
-        <Label>{label}</Label>
         <h3 className={styles.cardTitle}>{title}</h3>
         <p className={styles.cardDescription}>{description}</p>
         <div className={styles.specimenBody}>{children}</div>
@@ -147,7 +146,7 @@ export function StatusGallery() {
 
   return (
     <div className={styles.statusGrid}>
-      <Specimen label="Loading" title="描述正在发生的动作" description="避免没有上下文的“加载中”。">
+      <Specimen label="加载中" title="描述正在发生的动作" description="避免没有上下文的“加载中”。">
         <Stack gap="condensed" role="status">
           <Stack direction="horizontal" align="center" gap="condensed">
             <Spinner size="small" aria-label="正在加载共享资源" />
@@ -158,33 +157,25 @@ export function StatusGallery() {
       </Specimen>
 
       <Specimen
-        label="Empty"
+        label="空态"
         title="只提供可执行的下一步"
         description="CTA 与当前用户能力保持一致。"
       >
         <EmptyExample canCreate />
       </Specimen>
 
-      <Specimen label="Error" title="问题 + 下一步" description="请求标识保留为次级诊断信息。">
+      <Specimen label="错误" title="问题 + 下一步" description="请求标识保留为次级诊断信息。">
         <ErrorExample requestId="req_01K2ZQM6WD7T4AW8" onRetry={() => undefined} />
       </Specimen>
 
-      <Specimen
-        label="Success"
-        title="说明已经产生的结果"
-        description="不使用没有对象的“操作成功”。"
-      >
+      <Specimen label="成功" title="说明已经产生的结果" description="不使用没有对象的“操作成功”。">
         <Banner variant="success">
           <Banner.Title>版本已发布</Banner.Title>
           <Banner.Description>资源版本 v3 现在可以由 Project 引用。</Banner.Description>
         </Banner>
       </Specimen>
 
-      <Specimen
-        label="Permission"
-        title="不猜测未确认的原因"
-        description="无权限时不展示不可执行入口。"
-      >
+      <Specimen label="权限" title="不猜测未确认的原因" description="无权限时不展示不可执行入口。">
         <Banner variant="warning">
           <Banner.Title>无法发布这个版本。</Banner.Title>
           <Banner.Description>你当前没有发布共享资源版本的权限。</Banner.Description>
@@ -192,7 +183,7 @@ export function StatusGallery() {
       </Specimen>
 
       <Specimen
-        label="Destructive"
+        label="危险操作"
         title="明确对象与真实后果"
         description="危险操作使用 Primer 确认对话框。"
       >

@@ -2,10 +2,11 @@ import '@primer/primitives/dist/css/base/size/size.css'
 import '@primer/primitives/dist/css/base/typography/typography.css'
 import '@primer/primitives/dist/css/functional/size/border.css'
 import '@primer/primitives/dist/css/functional/size/radius.css'
+import '@primer/primitives/dist/css/functional/size/size.css'
 import '@primer/primitives/dist/css/functional/typography/typography.css'
 import '@primer/primitives/dist/css/functional/themes/light.css'
 
-import { BookIcon, MarkGithubIcon } from '@primer/octicons-react'
+import { BookIcon } from '@primer/octicons-react'
 import { Label, Link, PageHeader, Stack, ThemeProvider } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 import { useEffect, useRef, useState } from 'react'
@@ -99,7 +100,7 @@ export function DesignSystemPage() {
                   </Link>
                 </Stack>
               </PageHeader.ContextArea>
-              <PageHeader.TitleArea variant="large">
+              <PageHeader.TitleArea>
                 <PageHeader.LeadingVisual>
                   <BookIcon />
                 </PageHeader.LeadingVisual>
@@ -109,15 +110,18 @@ export function DesignSystemPage() {
                 用真实 Primer 组件校准产品文案、权限边界、异步反馈和响应式组合。
               </PageHeader.Description>
             </PageHeader>
-            <div className={styles.sourceLine}>
-              <MarkGithubIcon aria-hidden="true" />
-              <span>权威规范</span>
-              <code>docs/product/ui-copy.md</code>
+            <div className={styles.headerSource}>
+              权威规范 <code>docs/product/ui-copy.md</code>
             </div>
           </div>
         </header>
 
-        <Stack as="main" gap="spacious" className={`${styles.shell} ${styles.main}`}>
+        <Stack
+          as="main"
+          gap="spacious"
+          paddingBlock={{ narrow: 'normal', regular: 'spacious' }}
+          className={styles.shell}
+        >
           <ScenarioToolbar
             dataState={dataState}
             capability={capability}

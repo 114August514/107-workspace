@@ -27,10 +27,10 @@ describe('DesignSystemPage', () => {
     render(<DesignSystemPage />)
 
     expect(screen.getByRole('heading', { name: '107 交互参考台' })).toBeInTheDocument()
-    for (const state of ['Loading', 'Empty', 'Error', 'Success', 'Permission', 'Destructive']) {
-      expect(screen.getAllByText(state).length).toBeGreaterThan(0)
+    for (const label of ['加载中', '空态', '错误', '成功', '权限', '危险操作']) {
+      expect(screen.getByLabelText(`${label} 状态参考`)).toBeInTheDocument()
     }
-    expect(screen.getAllByRole('button', { name: '复制代码' })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: /复制.+代码/ })).toHaveLength(3)
   })
 
   it('允许精确输入画布宽度，并拒绝越界值', () => {
@@ -118,8 +118,7 @@ describe('DesignSystemPage', () => {
   it('复制范例源码并反馈结果', async () => {
     render(<DesignSystemPage />)
 
-    const copyButton = screen.getAllByRole('button', { name: '复制代码' })[0]
-    if (!copyButton) throw new Error('缺少组合范例复制按钮')
+    const copyButton = screen.getByRole('button', { name: '复制能力感知空态代码' })
     fireEvent.click(copyButton)
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(EMPTY_RECIPE))

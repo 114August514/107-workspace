@@ -19,26 +19,23 @@
 }
 
 .header {
-  padding-block: var(--base-size-48);
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  padding-block: var(--base-size-16) var(--base-size-24);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
   background: var(--bgColor-muted);
 }
 
-.sourceLine {
+.headerSource {
   display: flex;
-  gap: var(--base-size-8);
-  align-items: center;
-  margin-top: var(--base-size-16);
+  gap: var(--base-size-4);
+  align-items: baseline;
+  margin-top: var(--base-size-8);
   color: var(--fgColor-muted);
   font: var(--text-body-shorthand-small);
 }
 
-.sourceLine code {
+.headerSource code {
+  overflow-wrap: anywhere;
   color: var(--fgColor-default);
-}
-
-.main {
-  padding-block: var(--base-size-32) var(--base-size-80);
 }
 
 .toolbar {
@@ -224,17 +221,10 @@
   background: var(--bgColor-muted);
 }
 
-.codeHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.codeBlockWrap {
+  position: relative;
+  min-width: 0;
   margin-top: var(--base-size-16);
-  padding: var(--base-size-8) var(--base-size-12);
-  border-radius: var(--borderRadius-medium) var(--borderRadius-medium) 0 0;
-  background: var(--bgColor-inverse);
-  color: var(--fgColor-onEmphasis);
-  font: var(--text-caption-shorthand);
-  font-family: var(--fontStack-monospace);
 }
 
 .codeBlock {
@@ -242,11 +232,45 @@
   overflow: auto;
   margin: 0;
   padding: var(--base-size-16);
-  border-radius: 0 0 var(--borderRadius-medium) var(--borderRadius-medium);
-  background: var(--bgColor-inverse);
-  color: var(--fgColor-onEmphasis);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+  color: var(--fgColor-default);
   font: var(--text-codeBlock-shorthand);
   white-space: pre;
+}
+
+.copyButton {
+  position: absolute;
+  top: var(--base-size-8);
+  right: var(--base-size-8);
+  display: grid;
+  place-items: center;
+  width: var(--base-size-28);
+  height: var(--base-size-28);
+  padding: 0;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-default);
+  color: var(--fgColor-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.codeBlockWrap:hover .copyButton,
+.copyButton:focus-visible,
+.copyButton[data-copied='true'] {
+  opacity: 1;
+}
+
+.copyButton:hover {
+  color: var(--fgColor-default);
+  background: var(--bgColor-muted);
+}
+
+.copyButton[data-copied='true'] {
+  color: var(--fgColor-success);
 }
 
 .copyFeedback {
@@ -260,11 +284,7 @@
   }
 
   .header {
-    padding-block: var(--base-size-32);
-  }
-
-  .main {
-    padding-block: var(--base-size-24) var(--base-size-48);
+    padding-block: var(--base-size-20) var(--base-size-16);
   }
 
   .segmentedGrid,

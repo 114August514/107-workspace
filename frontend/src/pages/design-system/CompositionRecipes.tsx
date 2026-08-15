@@ -36,19 +36,20 @@ function Recipe({
         <h3 className={styles.cardTitle}>{title}</h3>
         <p className={styles.cardDescription}>{description}</p>
         <div className={styles.recipePreview}>{children}</div>
-        <div className={styles.codeHeader}>
-          <span>Primer React</span>
-          <Button
-            size="small"
-            leadingVisual={copyState === 'copied' ? CheckIcon : CopyIcon}
+        <div className={styles.codeBlockWrap}>
+          <pre className={styles.codeBlock} tabIndex={0}>
+            <code>{code}</code>
+          </pre>
+          <button
+            type="button"
+            className={styles.copyButton}
+            data-copied={copyState === 'copied'}
+            aria-label={copyState === 'copied' ? '已复制' : `复制${title}代码`}
             onClick={copyCode}
           >
-            {copyState === 'copied' ? '已复制' : '复制代码'}
-          </Button>
+            {copyState === 'copied' ? <CheckIcon /> : <CopyIcon />}
+          </button>
         </div>
-        <pre className={styles.codeBlock} tabIndex={0}>
-          <code>{code}</code>
-        </pre>
         <div className={styles.copyFeedback} aria-live="polite">
           {copyState === 'copied' ? (
             <InlineMessage variant="success">代码已复制</InlineMessage>
