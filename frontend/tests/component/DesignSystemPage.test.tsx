@@ -112,6 +112,7 @@ describe('AsyncState', () => {
   })
 
   it('错误逐条展示问题并次级保留请求标识', () => {
+    const onRetry = vi.fn()
     render(
       <AsyncState
         loading={false}
@@ -120,6 +121,7 @@ describe('AsyncState', () => {
           problems: ['文件 list.txt 已存在', '说明过长'],
           requestId: 'req_01K2ZQ',
         }}
+        onRetry={onRetry}
       >
         内容
       </AsyncState>,
@@ -130,6 +132,9 @@ describe('AsyncState', () => {
     expect(screen.getByText('说明过长')).toBeInTheDocument()
     expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByText('请求标识 req_01K2ZQ')).toBeInTheDocument()
+    const retry = screen.getByRole('button', { name: '重试' })
+    fireEvent.click(retry)
+    expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
   it('单条下一步说明不渲染为列表', () => {

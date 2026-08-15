@@ -74,6 +74,19 @@ export class ApiError extends Error {
 }
 
 /**
+ * 底层 fetch 无法建立连接时（后端未启动、代理失败、DNS/网络中断）
+ * 抛出的类型化错误。message 仅供内部调试，UI copy 由 toAsyncError 按上下文决定。
+ */
+export class NetworkError extends Error {
+  readonly code = 'network_unavailable'
+
+  constructor(cause: unknown) {
+    super('Network request failed', { cause })
+    this.name = 'NetworkError'
+  }
+}
+
+/**
  * 为一次提交意图生成幂等键。
  *
  * 重试同一次意图时要复用同一个键；用户真的想再跑一次时才换新键。
@@ -104,7 +117,21 @@ const identity: Middleware = {
   },
 }
 
-const http = createClient<paths>({ baseUrl: '' })
+/**
+ * 包装全局 fetch，把 fetch 层 reject 的异常统一转成 NetworkError。
+ * 收到响应（包括 4xx/5xx）时不进入 catch，交给 openapi-fetch 正常解析；
+ * 任何导致 fetch Promise reject 的底层错误（连接失败、DNS、CORS、中断等）
+ * 都会被捕获并带上原始 cause。
+ */
+const safeFetch: typeof fetch = async (input, init) => {
+  try {
+    return await globalThis.fetch(input, init)
+  } catch (cause) {
+    throw new NetworkError(cause)
+  }
+}
+
+const http = createClient<paths>({ baseUrl: '', fetch: safeFetch })
 http.use(identity)
 
 /** 把 openapi-fetch 的 `{ data, error }` 转成「成功返回值 / 抛 ApiError」。 */

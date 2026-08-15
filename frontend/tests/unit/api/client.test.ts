@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { toApiError } from '../../../src/api/client'
+import { ApiError, toApiError } from '../../../src/api/client'
+import { toAsyncError } from '../../../src/api/errors'
 
 /**
  * 错误信封的解析。
@@ -91,5 +92,58 @@ describe('toApiError', () => {
 
     expect(error.problems).toEqual([])
     expect(error.requestId).toBe('')
+  })
+})
+
+describe('toAsyncError', () => {
+  it('保留结构化 ApiError 的 message、problems 和 requestId', () => {
+    const error = new ApiError(
+      403,
+      'permission_denied',
+      '需要「创建 Project」权限',
+      ['你不是这个 Workspace 的成员'],
+      'req_abc',
+    )
+
+    expect(toAsyncError(error)).toEqual({
+      message: '需要「创建 Project」权限',
+      problems: ['你不是这个 Workspace 的成员'],
+      requestId: 'req_abc',
+    })
+  })
+})
+
+describe('fetch transport wrapper', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('把 fetch 网络失败归一化为 NetworkError 并保留 cause', async () => {
+    const cause = new TypeError('Failed to fetch')
+    const OriginalRequest = globalThis.Request
+    vi.stubGlobal(
+      'Request',
+      class extends OriginalRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')) {
+            super(new URL(input, 'http://localhost:5173'), init)
+          } else {
+            super(input, init)
+          }
+        }
+      },
+    )
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(cause))
+
+    // 清除模块缓存，使 client.ts 在 Request stub 生效后重新实例化 openapi-fetch。
+    vi.resetModules()
+    const { api, NetworkError } = await import('../../../src/api/client')
+
+    await expect(api.home()).rejects.toSatisfy((error: unknown) => {
+      if (!(error instanceof NetworkError)) return false
+      expect(error.code).toBe('network_unavailable')
+      expect(error.cause).toBe(cause)
+      return true
+    })
   })
 })
