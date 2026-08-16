@@ -98,7 +98,6 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
           <FormControl.Label>名称</FormControl.Label>
           <TextInput
             ref={nameInputRef}
-            autoFocus
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="例如：计算物理课题组"

@@ -209,6 +209,7 @@ function NotificationLine({
         </Link>
       ) : unread ? (
         <Button
+          className={styles.readAction}
           variant="invisible"
           size="small"
           aria-label={`将「${notification.title}」标为已读`}

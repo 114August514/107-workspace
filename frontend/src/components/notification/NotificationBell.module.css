@@ -28,14 +28,14 @@
   padding: 8px 0;
 }
 
-.item {
+.item,
+.itemUnread {
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 16px;
 }
 
-/* 未读的整条底色浅浅提一下。加粗一个字重不够明显，
-   一屏十几条时扫不出来哪些还没看。 */
 .itemUnread {
-  padding: 10px 16px;
   background: var(--bgColor-muted);
   cursor: pointer;
 }
@@ -71,8 +71,12 @@
   color: var(--fgColor-muted);
 }
 
-.itemUnread > button {
-  white-space: normal;
-  text-align: start;
+.readAction {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+  justify-content: flex-start;
 }
