@@ -42,8 +42,10 @@ export function HomePage({ username }: { username: string }) {
 
       <div className={styles.columns}>
         <div className={styles.main}>
-          <Card as="section" padding="normal" className={styles.card}>
-            <Card.Heading as="h2">我的 Workspace</Card.Heading>
+          {/* Card 一旦带 Card.Heading 这类 slot，@primer/react 38 的 Card 就只渲染 slot、
+              丢弃其余子元素（数据列表会整体消失），所以标题用普通子元素自己排。 */}
+          <Card as="section" padding="normal" className={styles.card} aria-label="我的 Workspace">
+            <h2 className={styles.cardTitle}>我的 Workspace</h2>
             <AsyncState
               loading={home.loading}
               loadingText="正在加载工作区…"
@@ -70,8 +72,13 @@ export function HomePage({ username }: { username: string }) {
             </AsyncState>
           </Card>
 
-          <Card as="section" padding="normal" className={styles.card}>
-            <Card.Heading as="h2">最近使用的 Project</Card.Heading>
+          <Card
+            as="section"
+            padding="normal"
+            className={styles.card}
+            aria-label="最近使用的 Project"
+          >
+            <h2 className={styles.cardTitle}>最近使用的 Project</h2>
             <AsyncState
               loading={home.loading}
               loadingText="正在加载项目…"
@@ -109,8 +116,8 @@ export function HomePage({ username }: { username: string }) {
             </AsyncState>
           </Card>
 
-          <Card as="section" padding="normal" className={styles.card}>
-            <Card.Heading as="h2">最近提交的 Run</Card.Heading>
+          <Card as="section" padding="normal" className={styles.card} aria-label="最近提交的 Run">
+            <h2 className={styles.cardTitle}>最近提交的 Run</h2>
             <AsyncState
               loading={home.loading}
               loadingText="正在加载 Run…"
@@ -265,9 +272,9 @@ function ComputePlanCatalog() {
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
 
   return (
-    <Card as="section" padding="normal" className={styles.card}>
-      <Card.Heading as="h2">算力方案目录</Card.Heading>
-      <Card.Description>提交 Run 时从中选择；实际可用以平台授权为准。</Card.Description>
+    <Card as="section" padding="normal" className={styles.card} aria-label="算力方案目录">
+      <h2 className={styles.cardTitle}>算力方案目录</h2>
+      <p className={styles.cardDescription}>提交 Run 时从中选择；实际可用以平台授权为准。</p>
       <AsyncState
         loading={plans.loading}
         loadingText="正在加载算力方案…"

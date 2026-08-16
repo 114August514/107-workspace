@@ -103,7 +103,8 @@ export function AsyncState({
           {emptyDescription ? (
             <Blankslate.Description>{emptyDescription}</Blankslate.Description>
           ) : null}
-          {emptyAction ? <Blankslate.PrimaryAction>{emptyAction}</Blankslate.PrimaryAction> : null}
+          {/* 调用方传进来的已经是完整的 Button；再套 Blankslate.PrimaryAction 会 button 套 button */}
+          {emptyAction}
         </Blankslate>
       </Padded>
     )
