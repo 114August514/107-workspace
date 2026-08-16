@@ -88,7 +88,12 @@ export function RunPage() {
 
   return (
     <Stack gap="large">
-      <AsyncSection loading={detail.loading} error={detail.error}>
+      <AsyncSection
+        loading={detail.loading}
+        error={detail.error}
+        onRetry={detail.reload}
+        errorTitle="无法加载这个 Run。"
+      >
         {detail.data && run && (
           <>
             <PageHeader
@@ -177,7 +182,12 @@ export function RunPage() {
                   label: '日志',
                   children: (
                     <Card>
-                      <AsyncSection loading={logs.loading} error={logs.error}>
+                      <AsyncSection
+                        loading={logs.loading}
+                        error={logs.error}
+                        onRetry={logs.reload}
+                        errorTitle="无法加载日志。"
+                      >
                         <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
                       </AsyncSection>
                     </Card>

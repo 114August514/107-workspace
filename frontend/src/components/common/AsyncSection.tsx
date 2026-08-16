@@ -1,11 +1,16 @@
-import { Alert, Empty, Skeleton, Typography } from 'antd'
+import { Alert, Button, Empty, Skeleton, Typography } from 'antd'
 import type { ReactNode } from 'react'
 
-import { ApiError } from '../../api/client'
+import { ApiError, NetworkError } from '../../api/client'
+import { toAsyncError } from '../../api/errors'
 
 interface Props {
   loading: boolean
   error: Error | undefined
+  /** 错误恢复回调；提供时在错误 Alert 上渲染「重试」主操作。 */
+  onRetry?: () => void
+  /** 网络错误或非结构化 http_error 的上下文主提示；未提供时使用默认 copy。 */
+  errorTitle?: string
   empty?: boolean
   emptyText?: string
   children: ReactNode
@@ -26,7 +31,15 @@ function Padded({ children }: { children: ReactNode }) {
   return <div style={{ padding: 16 }}>{children}</div>
 }
 
-export function AsyncSection({ loading, error, empty, emptyText, children }: Props) {
+export function AsyncSection({
+  loading,
+  error,
+  onRetry,
+  errorTitle,
+  empty,
+  emptyText,
+  children,
+}: Props) {
   if (loading) {
     return (
       <Padded>
@@ -36,14 +49,19 @@ export function AsyncSection({ loading, error, empty, emptyText, children }: Pro
   }
 
   if (error) {
-    const problems = error instanceof ApiError ? error.problems : []
-    const requestId = error instanceof ApiError ? error.requestId : ''
+    const view = toAsyncError(error)
+    if (!view) return null
+    const isUnstructured =
+      error instanceof NetworkError || (error instanceof ApiError && error.code === 'http_error')
+    const message = isUnstructured && errorTitle ? errorTitle : view.message
+    const problems = view.problems ?? []
+    const requestId = view.requestId ?? ''
     return (
       <Padded>
         <Alert
           type="error"
           showIcon
-          message={error.message}
+          message={message}
           description={
             problems.length > 0 || requestId ? (
               <>
@@ -61,6 +79,13 @@ export function AsyncSection({ loading, error, empty, emptyText, children }: Pro
                   </Typography.Text>
                 )}
               </>
+            ) : undefined
+          }
+          action={
+            onRetry ? (
+              <Button type="primary" onClick={onRetry}>
+                重试
+              </Button>
             ) : undefined
           }
         />
