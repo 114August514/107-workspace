@@ -96,15 +96,17 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
     }
   }
 
-  const markOne = async (notification: Notification) => {
-    if (notification.read_at) return
+  const markOne = async (notification: Notification): Promise<boolean> => {
+    if (notification.read_at) return true
     setMarkError(null)
     try {
       await api.markNotificationRead(notification.id)
       setToken((n) => n + 1)
       onChanged()
+      return true
     } catch (error) {
       setMarkError(toAsyncError(error as Error) ?? null)
+      return false
     }
   }
 
@@ -160,7 +162,7 @@ function NotificationLine({
   onNavigate,
 }: {
   notification: Notification
-  onRead: () => void
+  onRead: () => Promise<boolean>
   onNavigate: () => void
 }) {
   const path = notificationPath(notification)
@@ -191,9 +193,10 @@ function NotificationLine({
         <Link
           as={RouterLink}
           to={path}
-          onClick={() => {
-            onRead()
-            onNavigate()
+          onClick={async (event) => {
+            if (!unread) return
+            event.preventDefault()
+            if (await onRead()) onNavigate()
           }}
         >
           {title}

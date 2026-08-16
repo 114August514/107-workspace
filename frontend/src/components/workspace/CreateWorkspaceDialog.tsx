@@ -1,5 +1,5 @@
 import { Banner, Dialog, FormControl, Textarea, TextInput } from '@primer/react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { api } from '../../api/client'
 import type { AsyncErrorView } from '../../api/errors'
@@ -20,6 +20,7 @@ export function CreateWorkspaceDialog({ open, onClose, onCreated }: Props) {
 }
 
 function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
+  const nameInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
@@ -30,6 +31,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
     const trimmed = name.trim()
     if (!trimmed) {
       setNameError('请填写 Workspace 名称')
+      nameInputRef.current?.focus()
       return
     }
     setNameError(null)
@@ -58,7 +60,6 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
         {
           content: '创建',
           buttonType: 'primary',
-          autoFocus: true,
           loading: submitting,
           disabled: submitting,
           onClick: () => void submit(),
@@ -92,6 +93,8 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
         <FormControl required disabled={submitting} id="create-workspace-name">
           <FormControl.Label>名称</FormControl.Label>
           <TextInput
+            ref={nameInputRef}
+            autoFocus
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="例如：计算物理课题组"

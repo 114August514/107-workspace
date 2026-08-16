@@ -53,12 +53,15 @@
   color: var(--fgColor-muted);
 }
 
-.title {
+.title,
+.titleUnread,
+.itemBody {
   display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .titleUnread {
-  display: block;
   font-weight: 600;
 }
 
@@ -66,4 +69,10 @@
   margin-top: 2px;
   font-size: 12px;
   color: var(--fgColor-muted);
+}
+
+.itemUnread > button {
+  white-space: normal;
+  text-align: start;
+  width: 100%;
 }

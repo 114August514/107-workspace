@@ -22,6 +22,7 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
   const [error, setError] = useState<ApiError | Error>()
   const [tick, setTick] = useState(0)
   const alive = useRef(true)
+  const sequence = useRef(0)
   const loaderRef = useRef(loader)
   loaderRef.current = loader
 
@@ -33,18 +34,19 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
   }, [])
 
   useEffect(() => {
+    const request = ++sequence.current
     setLoading(true)
     setError(undefined)
     loaderRef
       .current()
       .then((result) => {
-        if (alive.current) setData(result)
+        if (alive.current && request === sequence.current) setData(result)
       })
       .catch((exc: Error) => {
-        if (alive.current) setError(exc)
+        if (alive.current && request === sequence.current) setError(exc)
       })
       .finally(() => {
-        if (alive.current) setLoading(false)
+        if (alive.current && request === sequence.current) setLoading(false)
       })
     // loader 通过 ref 传递，依赖只看调用方声明的 deps。
     // eslint-disable-next-line react-hooks/exhaustive-deps
