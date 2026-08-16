@@ -194,6 +194,11 @@ function WorkspaceItem({ workspace }: { workspace: Workspace }) {
  *
  * 放在首页而不是空间里：**被邀请的人还进不去那个空间**，
  * 空间列表只列已加入的，直接访问会 404，因为邀请尚未形成有效 Membership。
+ *
+ * 渲染成和其他栏目一致的紧凑行列表，而不是蓝色 Banner：
+ * 邀请是等待用户做决定的任务，主次操作并排（接受 primary、拒绝 default），
+ * 拒绝不是危险操作，不标红。契约里没有邀请人，文案只说加入哪个空间，
+ * 不暗示空间本身在邀请。
  */
 function Invitations({ username, onResponded }: { username: string; onResponded: () => void }) {
   const invitations = useAsync<Invitation[]>(() => api.listInvitations(), [username])
@@ -225,40 +230,48 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
   if (invitations.loading || items.length === 0) return null
 
   return (
-    <div className={styles.invitations}>
-      {items.map((invitation) => (
-        <Banner key={invitation.workspace_id} variant="info">
-          <Banner.Title>
-            {invitation.workspace_name} 邀请你以「{roleLabel(invitation.role)}」身份加入
-          </Banner.Title>
-          {invitation.workspace_description ? (
-            <Banner.Description>{invitation.workspace_description}</Banner.Description>
-          ) : null}
-          <Banner.PrimaryAction
-            disabled={pendingId !== null}
-            onClick={() => void respond(invitation, true)}
-          >
-            接受
-          </Banner.PrimaryAction>
-          <Banner.SecondaryAction
-            disabled={pendingId !== null}
-            onClick={() => void respond(invitation, false)}
-          >
-            拒绝
-          </Banner.SecondaryAction>
-        </Banner>
-      ))}
+    <Card as="section" padding="normal" className={styles.card} aria-label="待处理邀请">
+      <h2 className={styles.cardTitle}>待处理邀请</h2>
+      <ul className={styles.list}>
+        {items.map((invitation) => (
+          <li key={invitation.workspace_id} className={styles.invitationItem}>
+            <div className={styles.invitationMain}>
+              <div className={styles.invitationTitle}>{invitation.workspace_name}</div>
+              {/* 只有协作空间能发邀请（后端 invite_member 拒绝 personal），可以直接写死 */}
+              <div className={styles.invitationMeta}>协作空间 · {roleLabel(invitation.role)}</div>
+              {invitation.workspace_description ? (
+                <div className={styles.invitationMeta}>{invitation.workspace_description}</div>
+              ) : null}
+            </div>
+            <div className={styles.invitationActions}>
+              <Button
+                variant="primary"
+                disabled={pendingId !== null}
+                loading={pendingId === invitation.workspace_id}
+                onClick={() => void respond(invitation, true)}
+              >
+                接受邀请
+              </Button>
+              <Button disabled={pendingId !== null} onClick={() => void respond(invitation, false)}>
+                拒绝
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
       {respondError && (
-        <Banner variant="critical">
-          <Banner.Title>
-            处理「{respondError.name}」的邀请失败：{respondError.view.message}
-          </Banner.Title>
-          <Banner.Description>
-            {respondError.view.problems?.join(' ') ?? '请稍后重试。'}
-          </Banner.Description>
-        </Banner>
+        <div className={styles.invitationError}>
+          <Banner variant="critical">
+            <Banner.Title>
+              处理「{respondError.name}」的邀请失败：{respondError.view.message}
+            </Banner.Title>
+            <Banner.Description>
+              {respondError.view.problems?.join(' ') ?? '请稍后重试。'}
+            </Banner.Description>
+          </Banner>
+        </div>
       )}
-    </div>
+    </Card>
   )
 }
 

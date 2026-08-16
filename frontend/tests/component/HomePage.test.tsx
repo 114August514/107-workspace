@@ -1,13 +1,21 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../src/api/client'
-import type { Home } from '../../src/api/types'
+import type { Home, Invitation } from '../../src/api/types'
 import { HomePage } from '../../src/pages/HomePage'
 import { PrimerRoot } from '../../src/primer/setup'
+
+const invitation: Invitation = {
+  workspace_id: 'ws-inv',
+  workspace_name: 'test_invite',
+  workspace_description: '',
+  role: 'member',
+  invited_at: '2026-08-15T10:00:00Z',
+}
 
 const homeData: Home = {
   user: { id: 'u-1', username: 'student', display_name: '同学' },
@@ -132,5 +140,35 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
     expect(screen.getByText('还没有 Project')).toBeInTheDocument()
     expect(screen.getByText('还没有提交过 Run')).toBeInTheDocument()
     expect(screen.getByText('暂无算力方案')).toBeInTheDocument()
+  })
+})
+
+describe('HomePage 邀请区块', () => {
+  it('以紧凑行呈现：空间名 + 身份说明 + 并排的接受/拒绝，而不是通知式 Banner', async () => {
+    vi.spyOn(api, 'home').mockResolvedValue(homeData)
+    vi.spyOn(api, 'listInvitations').mockResolvedValue([invitation])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+
+    renderHome()
+
+    expect(await screen.findByText('待处理邀请')).toBeInTheDocument()
+    expect(screen.getByText('test_invite')).toBeInTheDocument()
+    expect(screen.getByText('协作空间 · 成员')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '接受邀请' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '拒绝' })).toBeInTheDocument()
+    expect(screen.queryByText(/邀请你以/)).not.toBeInTheDocument()
+  })
+
+  it('接受邀请调用 API 并在重载后从列表消失', async () => {
+    vi.spyOn(api, 'home').mockResolvedValue(homeData)
+    vi.spyOn(api, 'listInvitations').mockResolvedValueOnce([invitation]).mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+    const respond = vi.spyOn(api, 'respondToInvitation').mockResolvedValue(undefined)
+
+    renderHome()
+
+    fireEvent.click(await screen.findByRole('button', { name: '接受邀请' }))
+    await waitFor(() => expect(respond).toHaveBeenCalledWith('ws-inv', true))
+    await waitFor(() => expect(screen.queryByText('test_invite')).not.toBeInTheDocument())
   })
 })

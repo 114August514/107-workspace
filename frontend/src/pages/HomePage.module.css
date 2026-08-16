@@ -100,10 +100,43 @@
   color: var(--fgColor-muted);
 }
 
-.invitations {
+.invitationItem {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borderColor-muted);
+}
+
+.invitationItem:last-child {
+  border-bottom: none;
+}
+
+.invitationMain {
+  min-width: 0;
+}
+
+.invitationTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.invitationMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fgColor-muted);
+}
+
+/* 主操作 intrinsic 宽度并排；窄屏换行到标题下方，仍然并排 */
+.invitationActions {
+  display: flex;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.invitationError {
+  margin-top: 12px;
 }
 
 .planList {
@@ -145,5 +178,11 @@
 
   .itemDesc {
     white-space: normal;
+  }
+}
+
+@media (max-width: 544px) {
+  .invitationItem {
+    flex-wrap: wrap;
   }
 }
