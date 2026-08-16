@@ -2,7 +2,6 @@ import { ArrowLeftIcon, BookIcon } from '@primer/octicons-react'
 import { Heading, IconButton, PageHeader, Stack, Text } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 
-import { PrimerRoot } from '../../primer/setup'
 import { CompositionRecipes } from './CompositionRecipes'
 import { StatusGallery } from './StatusExamples'
 import styles from './DesignSystemPage.module.css'
@@ -137,89 +136,87 @@ function ContentFormat() {
 
 export function DesignSystemPage() {
   return (
-    <PrimerRoot>
-      <div className={styles.page}>
-        <header className={styles.header}>
-          <div className={styles.shell}>
-            <PageHeader as="div">
-              <PageHeader.ContextArea>
-                <PageHeader.ParentLink href="/">107 Workspace</PageHeader.ParentLink>
-              </PageHeader.ContextArea>
-              <PageHeader.LeadingAction>
-                <IconButton
-                  as="a"
-                  href="/"
-                  icon={ArrowLeftIcon}
-                  variant="invisible"
-                  aria-label="返回产品"
-                />
-              </PageHeader.LeadingAction>
-              <PageHeader.TitleArea>
-                <PageHeader.LeadingVisual>
-                  <BookIcon />
-                </PageHeader.LeadingVisual>
-                <PageHeader.Title as="h1">107 Primer UI Reference</PageHeader.Title>
-              </PageHeader.TitleArea>
-              <PageHeader.Description>
-                <div className={styles.headerDescription}>
-                  <span>
-                    107 Workspace 实际采用的 Primer 状态、组合与文案基线，供迁移与 Review 对照。
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.shell}>
+          <PageHeader as="div">
+            <PageHeader.ContextArea>
+              <PageHeader.ParentLink href="/">107 Workspace</PageHeader.ParentLink>
+            </PageHeader.ContextArea>
+            <PageHeader.LeadingAction>
+              <IconButton
+                as="a"
+                href="/"
+                icon={ArrowLeftIcon}
+                variant="invisible"
+                aria-label="返回产品"
+              />
+            </PageHeader.LeadingAction>
+            <PageHeader.TitleArea>
+              <PageHeader.LeadingVisual>
+                <BookIcon />
+              </PageHeader.LeadingVisual>
+              <PageHeader.Title as="h1">107 Primer UI Reference</PageHeader.Title>
+            </PageHeader.TitleArea>
+            <PageHeader.Description>
+              <div className={styles.headerDescription}>
+                <span>
+                  107 Workspace 实际采用的 Primer 状态、组合与文案基线，供迁移与 Review 对照。
+                </span>
+                <span className={styles.headerSource}>
+                  规范来源：<code>docs/product/ui-copy.md</code>{' '}
+                  <span className={styles.sourceItem}>
+                    <span aria-hidden="true">·</span> <code>frontend/README.md</code>
                   </span>
-                  <span className={styles.headerSource}>
-                    规范来源：<code>docs/product/ui-copy.md</code>{' '}
-                    <span className={styles.sourceItem}>
-                      <span aria-hidden="true">·</span> <code>frontend/README.md</code>
-                    </span>
-                  </span>
-                </div>
-              </PageHeader.Description>
-            </PageHeader>
-          </div>
-        </header>
+                </span>
+              </div>
+            </PageHeader.Description>
+          </PageHeader>
+        </div>
+      </header>
 
-        <Stack
-          as="main"
-          gap="spacious"
-          paddingBlock={{ narrow: 'normal', regular: 'spacious' }}
-          className={styles.shell}
-        >
-          <section aria-labelledby="foundations-heading">
-            <SectionHeading
-              id="foundations-heading"
-              title="Foundations"
-              description="语气、术语与 token 的使用边界，来自 docs/product/ui-copy.md 与 frontend/README.md。"
-            />
-            <Foundations />
-          </section>
+      <Stack
+        as="main"
+        gap="spacious"
+        paddingBlock={{ narrow: 'normal', regular: 'spacious' }}
+        className={styles.shell}
+      >
+        <section aria-labelledby="foundations-heading">
+          <SectionHeading
+            id="foundations-heading"
+            title="Foundations"
+            description="语气、术语与 token 的使用边界，来自 docs/product/ui-copy.md 与 frontend/README.md。"
+          />
+          <Foundations />
+        </section>
 
-          <section aria-labelledby="states-heading">
-            <SectionHeading
-              id="states-heading"
-              title="States"
-              description="六类稳定状态参考，使用固定、可重复的示例；文案遵循 ui-copy.md 第四章。"
-            />
-            <StatusGallery />
-          </section>
+        <section aria-labelledby="states-heading">
+          <SectionHeading
+            id="states-heading"
+            title="States"
+            description="六类稳定状态参考，使用固定、可重复的示例；文案遵循 ui-copy.md 第四章。"
+          />
+          <StatusGallery />
+        </section>
 
-          <section aria-labelledby="patterns-heading">
-            <SectionHeading
-              id="patterns-heading"
-              title="Patterns"
-              description="跨页面复用的 Primer 组合：能力感知空态、可恢复错误与危险确认。"
-            />
-            <CompositionRecipes />
-          </section>
+        <section aria-labelledby="patterns-heading">
+          <SectionHeading
+            id="patterns-heading"
+            title="Patterns"
+            description="跨页面复用的 Primer 组合：能力感知空态、可恢复错误与危险确认。"
+          />
+          <CompositionRecipes />
+        </section>
 
-          <section aria-labelledby="content-heading">
-            <SectionHeading
-              id="content-heading"
-              title="Content"
-              description="标题、按钮与时间、容量、ID、版本号的展示格式，来自 ui-copy.md 第三章与第五章。"
-            />
-            <ContentFormat />
-          </section>
-        </Stack>
-      </div>
-    </PrimerRoot>
+        <section aria-labelledby="content-heading">
+          <SectionHeading
+            id="content-heading"
+            title="Content"
+            description="标题、按钮与时间、容量、ID、版本号的展示格式，来自 ui-copy.md 第三章与第五章。"
+          />
+          <ContentFormat />
+        </section>
+      </Stack>
+    </div>
   )
 }

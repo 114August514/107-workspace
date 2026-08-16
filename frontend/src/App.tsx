@@ -10,6 +10,7 @@ import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
 import { WorkspacePage } from './pages/WorkspacePage'
+import { PrimerRoot } from './primer/setup'
 import { theme } from './theme'
 
 const USER_KEY = 'workspace107.devUser'
@@ -21,17 +22,19 @@ const DesignSystemPage = lazy(() =>
 
 export function App() {
   return (
-    <Routes>
-      <Route
-        path="/design-system"
-        element={
-          <Suspense fallback={<div role="status">正在加载交互参考台…</div>}>
-            <DesignSystemPage />
-          </Suspense>
-        }
-      />
-      <Route path="*" element={<ProductApp />} />
-    </Routes>
+    <PrimerRoot>
+      <Routes>
+        <Route
+          path="/design-system"
+          element={
+            <Suspense fallback={<div role="status">正在加载交互参考台…</div>}>
+              <DesignSystemPage />
+            </Suspense>
+          }
+        />
+        <Route path="*" element={<ProductApp />} />
+      </Routes>
+    </PrimerRoot>
   )
 }
 
