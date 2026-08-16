@@ -6,7 +6,8 @@
 
 .title {
   margin: 0;
-  font-size: 24px;
+  /* 沿用旧 PageHeader 的密度决定：扫的是下面的列表，不是标题 */
+  font-size: 20px;
   font-weight: 600;
 }
 
