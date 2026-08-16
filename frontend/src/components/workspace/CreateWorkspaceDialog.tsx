@@ -1,5 +1,5 @@
 import { Banner, Dialog, FormControl, Textarea, TextInput } from '@primer/react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { api } from '../../api/client'
 import type { AsyncErrorView } from '../../api/errors'
@@ -26,6 +26,10 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
   const [nameError, setNameError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<AsyncErrorView | null>(null)
+
+  useEffect(() => {
+    nameInputRef.current?.focus()
+  }, [])
 
   const submit = async () => {
     const trimmed = name.trim()

@@ -45,13 +45,19 @@ describe('CreateWorkspaceDialog', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('名称为空时就地报表单错误，不请求接口', async () => {
+  it('打开时名称输入框获得焦点', async () => {
+    renderDialog()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /名称/ })).toHaveFocus())
+  })
+
+  it('名称为空时就地报表单错误并将焦点留在名称输入框', async () => {
     const create = vi.spyOn(api, 'createWorkspace')
     renderDialog()
 
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
 
     expect(await screen.findByText('请填写 Workspace 名称')).toBeVisible()
+    expect(screen.getByRole('textbox', { name: /名称/ })).toHaveFocus()
     expect(create).not.toHaveBeenCalled()
   })
 
