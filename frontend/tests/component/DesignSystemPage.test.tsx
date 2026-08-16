@@ -132,6 +132,17 @@ describe('AsyncState', () => {
     expect(screen.queryByText('内容')).not.toBeInTheDocument()
   })
 
+  it('loadingText 渲染为可见加载文案', () => {
+    render(
+      <AsyncState loading loadingText="正在加载首页内容…">
+        内容
+      </AsyncState>,
+    )
+
+    expect(screen.getByText('正在加载首页内容…')).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent('正在加载首页内容…')
+  })
+
   it('错误逐条展示问题并次级保留请求标识', () => {
     const onRetry = vi.fn()
     render(

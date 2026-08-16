@@ -1,6 +1,6 @@
 import { TrashIcon } from '@primer/octicons-react'
-import { Banner, Button, ConfirmationDialog, Spinner, Stack } from '@primer/react'
-import { Card, SkeletonText } from '@primer/react/experimental'
+import { Banner, Button, ConfirmationDialog } from '@primer/react'
+import { Card } from '@primer/react/experimental'
 import { useState } from 'react'
 
 import { AsyncState } from '../../components/common/AsyncState'
@@ -36,14 +36,13 @@ export function StatusGallery() {
 
   return (
     <div className={styles.statusGrid}>
-      <Specimen title="加载中" description="描述正在发生的动作，避免没有上下文的“加载中”。">
-        <Stack gap="condensed" role="status">
-          <Stack direction="horizontal" align="center" gap="condensed">
-            <Spinner size="small" aria-label="正在加载共享资源" />
-            <strong>正在加载共享资源…</strong>
-          </Stack>
-          <SkeletonText lines={3} size="bodyMedium" />
-        </Stack>
+      <Specimen
+        title="加载中"
+        description="共享 AsyncState 组件的加载态：spinner 加动作描述，避免没有上下文的“加载中”。"
+      >
+        <AsyncState loading loadingText="正在加载共享资源…">
+          内容
+        </AsyncState>
       </Specimen>
 
       <Specimen
