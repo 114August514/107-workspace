@@ -19,3 +19,17 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
     }),
   })
 }
+
+// Primer 的 AnchoredOverlay / ActionMenu 定位要用 ResizeObserver，jsdom 不实现。
+if (typeof window !== 'undefined' && !window.ResizeObserver) {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(window, 'ResizeObserver', {
+    writable: true,
+    configurable: true,
+    value: ResizeObserverStub,
+  })
+}

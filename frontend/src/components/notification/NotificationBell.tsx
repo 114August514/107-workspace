@@ -44,6 +44,7 @@ export function NotificationBell({ username }: Props) {
   return (
     <AnchoredOverlay
       open={open}
+      onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
       renderAnchor={(props) => (
         <Button

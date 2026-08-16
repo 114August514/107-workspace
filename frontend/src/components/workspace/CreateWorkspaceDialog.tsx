@@ -89,7 +89,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
             )}
           </Banner>
         )}
-        <FormControl required disabled={submitting}>
+        <FormControl required disabled={submitting} id="create-workspace-name">
           <FormControl.Label>名称</FormControl.Label>
           <TextInput
             value={name}
@@ -102,7 +102,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
             <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
           )}
         </FormControl>
-        <FormControl disabled={submitting}>
+        <FormControl disabled={submitting} id="create-workspace-description">
           <FormControl.Label>说明</FormControl.Label>
           <Textarea
             value={description}
