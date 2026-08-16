@@ -22,8 +22,7 @@
 | 领域名称 | 界面名称 | 使用说明 |
 | :--- | :--- | :--- |
 | User | 用户 | 用户名、账号名保持原值，不翻译 |
-| User Group | User Group | 目标产品中的协作与 Ownership 边界，保留英文 |
-| Workspace | 不新增 | 旧实现和路由术语；新界面随产品语义迁移到 User Group |
+| Workspace | Workspace | 当前正式领域术语（见 docs/product/design.md）；Personal / Collaborative Workspace 在界面可分别称「个人空间」「协作空间」 |
 | Project | Project | 保留英文 |
 | Project Version | Project 版本；局部上下文可写“版本” | 不写“代码快照”，除非解释版本语义 |
 | Run Configuration | 运行方案 | 不向普通用户暴露内部配置对象名 |
