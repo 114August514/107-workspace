@@ -19,24 +19,24 @@
 同一概念在所有页面使用同一写法。代码、API 和诊断信息可以保留英文标识，普通用户文案
 优先使用下表中的界面名称。
 
-| 领域名称                | 界面名称                           | 使用说明                                            |
-| :---------------------- | :--------------------------------- | :-------------------------------------------------- |
-| User                    | 用户                               | 用户名、账号名保持原值，不翻译                      |
-| User Group              | User Group                         | 目标产品中的协作与 Ownership 边界，保留英文         |
-| Workspace               | 不新增                             | 旧实现和路由术语；新界面随产品语义迁移到 User Group |
-| Project                 | Project                            | 保留英文                                            |
-| Project Version         | Project 版本；局部上下文可写“版本” | 不写“代码快照”，除非解释版本语义                    |
-| Run Configuration       | 运行方案                           | 不向普通用户暴露内部配置对象名                      |
-| Run                     | Run                                | 保留英文                                            |
-| Run Snapshot            | 运行快照                           | 只在复现、审计等需要解释固定内容的表面出现          |
-| Environment             | 运行环境                           | 不简称“环境”，避免与部署环境混淆                    |
-| Environment Version     | 环境版本                           | 在运行环境详情内可简称“版本”                        |
-| Shared Resource         | 共享资源                           | 不显示 `SharedResource` 或简称 `SR`                 |
-| Shared Resource Version | 资源版本                           | 在共享资源详情内可简称“版本”                        |
-| Artifact                | 运行产物                           | 诊断或管理员表面可附带英文 `Artifact`               |
-| Input Binding           | 运行输入                           | 不显示 `InputBinding`                               |
-| Variable                | Variable                           | 保留产品正式英文名称                                |
-| Secret                  | Secret                             | 保留产品正式英文名称，不展示明文值                  |
+| 领域名称 | 界面名称 | 使用说明 |
+| :--- | :--- | :--- |
+| User | 用户 | 用户名、账号名保持原值，不翻译 |
+| User Group | User Group | 目标产品中的协作与 Ownership 边界，保留英文 |
+| Workspace | 不新增 | 旧实现和路由术语；新界面随产品语义迁移到 User Group |
+| Project | Project | 保留英文 |
+| Project Version | Project 版本；局部上下文可写“版本” | 不写“代码快照”，除非解释版本语义 |
+| Run Configuration | 运行方案 | 不向普通用户暴露内部配置对象名 |
+| Run | Run | 保留英文 |
+| Run Snapshot | 运行快照 | 只在复现、审计等需要解释固定内容的表面出现 |
+| Environment | 运行环境 | 不简称“环境”，避免与部署环境混淆 |
+| Environment Version | 环境版本 | 在运行环境详情内可简称“版本” |
+| Shared Resource | 共享资源 | 不显示 `SharedResource` 或简称 `SR` |
+| Shared Resource Version | 资源版本 | 在共享资源详情内可简称“版本” |
+| Artifact | 运行产物 | 诊断或管理员表面可附带英文 `Artifact` |
+| Input Binding | 运行输入 | 不显示 `InputBinding` |
+| Variable | Variable | 保留产品正式英文名称 |
+| Secret | Secret | 保留产品正式英文名称，不展示明文值 |
 
 规则：
 

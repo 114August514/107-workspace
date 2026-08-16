@@ -146,6 +146,47 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
   })
 })
 
+describe('HomePage 首页请求统一异步状态', () => {
+  it('首页请求 pending 时只显示一次统一 loading 文案', async () => {
+    let resolveHome!: (value: Home) => void
+    vi.spyOn(api, 'home').mockImplementation(
+      () =>
+        new Promise<Home>((resolve) => {
+          resolveHome = resolve
+        }),
+    )
+    vi.spyOn(api, 'listInvitations').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+
+    renderHome()
+
+    expect(screen.getAllByText('正在加载首页内容…')).toHaveLength(1)
+    expect(screen.queryByText('正在加载工作区…')).toBeNull()
+    expect(screen.queryByText('正在加载项目…')).toBeNull()
+    expect(screen.queryByText('正在加载 Run…')).toBeNull()
+    resolveHome(homeData)
+  })
+
+  it('首页首次失败只显示一份错误和重试，成功后恢复三卡内容', async () => {
+    const home = vi
+      .spyOn(api, 'home')
+      .mockRejectedValueOnce(new ApiError(500, 'internal_error', '首页加载失败。', []))
+      .mockResolvedValueOnce(homeData)
+    vi.spyOn(api, 'listInvitations').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+
+    renderHome()
+
+    expect(await screen.findAllByText('首页加载失败。')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: '重试' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => expect(home).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('计算物理课题组')).toBeInTheDocument()
+    expect(screen.getByText('LJ 流体模拟')).toBeInTheDocument()
+    expect(screen.getByText('首次基线运行')).toBeInTheDocument()
+  })
+})
+
 describe('HomePage 邀请区块', () => {
   it('以紧凑行呈现：空间名 + 身份说明 + 并排的接受/拒绝，而不是通知式 Banner', async () => {
     vi.spyOn(api, 'home').mockResolvedValue(homeData)
