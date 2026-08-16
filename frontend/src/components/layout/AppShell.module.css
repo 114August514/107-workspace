@@ -25,6 +25,10 @@
   color: var(--fgColor-default);
   text-decoration: none;
 }
+.brand:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
+  outline-offset: 2px;
+}
 
 .brand:hover {
   color: var(--fgColor-default);

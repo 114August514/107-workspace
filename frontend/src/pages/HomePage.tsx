@@ -42,113 +42,102 @@ export function HomePage({ username }: { username: string }) {
 
       <div className={styles.columns}>
         <div className={styles.main}>
-          {/* Card 一旦带 Card.Heading 这类 slot，@primer/react 38 的 Card 就只渲染 slot、
-              丢弃其余子元素（数据列表会整体消失），所以标题用普通子元素自己排。 */}
-          <Card as="section" padding="normal" className={styles.card} aria-label="我的 Workspace">
-            <h2 className={styles.cardTitle}>我的 Workspace</h2>
-            <AsyncState
-              loading={home.loading}
-              loadingText="正在加载工作区…"
-              error={toAsyncError(home.error)}
-              onRetry={home.reload}
-              empty={workspaces.length === 0}
-              emptyText="还没有 Workspace"
-              emptyDescription="从个人空间开始，或创建一个协作空间把课题组成员拉进来。"
-              emptyAction={
-                <Button
-                  variant="primary"
-                  leadingVisual={PlusIcon}
-                  onClick={() => setCreating(true)}
-                >
-                  创建协作空间
-                </Button>
-              }
-            >
-              <ul className={styles.list}>
-                {workspaces.map((workspace) => (
-                  <WorkspaceItem key={workspace.id} workspace={workspace} />
-                ))}
-              </ul>
-            </AsyncState>
-          </Card>
-
-          <Card
-            as="section"
-            padding="normal"
-            className={styles.card}
-            aria-label="最近使用的 Project"
+          <AsyncState
+            loading={home.loading}
+            loadingText="正在加载首页内容…"
+            error={toAsyncError(home.error)}
+            onRetry={home.reload}
           >
-            <h2 className={styles.cardTitle}>最近使用的 Project</h2>
-            <AsyncState
-              loading={home.loading}
-              loadingText="正在加载项目…"
-              error={toAsyncError(home.error)}
-              onRetry={home.reload}
-              empty={projects.length === 0}
-              emptyText="还没有 Project"
-              emptyDescription="进入一个 Workspace 创建第一个吧。"
+            <Card as="section" padding="normal" className={styles.card} aria-label="我的 Workspace">
+              <h2 className={styles.cardTitle}>我的 Workspace</h2>
+              <AsyncState
+                loading={false}
+                empty={workspaces.length === 0}
+                emptyText="还没有 Workspace"
+                emptyDescription="从个人空间开始，或创建一个协作空间把课题组成员拉进来。"
+                emptyAction={
+                  <Button
+                    variant="primary"
+                    leadingVisual={PlusIcon}
+                    onClick={() => setCreating(true)}
+                  >
+                    创建协作空间
+                  </Button>
+                }
+              >
+                <ul className={styles.list}>
+                  {workspaces.map((workspace) => (
+                    <WorkspaceItem key={workspace.id} workspace={workspace} />
+                  ))}
+                </ul>
+              </AsyncState>
+            </Card>
+            <Card
+              as="section"
+              padding="normal"
+              className={styles.card}
+              aria-label="最近使用的 Project"
             >
-              <ul className={styles.list}>
-                {projects.map((project) => (
-                  <li key={project.id} className={styles.item}>
-                    <div className={styles.itemMain}>
-                      <Link
-                        as={RouterLink}
-                        to={`/projects/${project.id}`}
-                        className={styles.itemTitle}
+              <h2 className={styles.cardTitle}>最近使用的 Project</h2>
+              <AsyncState
+                loading={false}
+                empty={projects.length === 0}
+                emptyText="还没有 Project"
+                emptyDescription="进入一个 Workspace 创建第一个吧。"
+              >
+                <ul className={styles.list}>
+                  {projects.map((project) => (
+                    <li key={project.id} className={styles.item}>
+                      <div className={styles.itemMain}>
+                        <Link
+                          as={RouterLink}
+                          to={`/projects/${project.id}`}
+                          className={styles.itemTitle}
+                        >
+                          {project.name}
+                        </Link>
+                        {project.description && (
+                          <span className={styles.itemDesc}>{project.description}</span>
+                        )}
+                      </div>
+                      <time
+                        className={styles.itemTime}
+                        dateTime={project.updated_at ?? undefined}
+                        title={formatTime(project.updated_at)}
                       >
-                        {project.name}
-                      </Link>
-                      {project.description && (
-                        <span className={styles.itemDesc}>{project.description}</span>
-                      )}
-                    </div>
-                    <time
-                      className={styles.itemTime}
-                      dateTime={project.created_at ?? undefined}
-                      title={formatTime(project.created_at)}
-                    >
-                      {formatRelative(project.created_at)}
-                    </time>
-                  </li>
-                ))}
-              </ul>
-            </AsyncState>
-          </Card>
-
-          <Card as="section" padding="normal" className={styles.card} aria-label="最近提交的 Run">
-            <h2 className={styles.cardTitle}>最近提交的 Run</h2>
-            <AsyncState
-              loading={home.loading}
-              loadingText="正在加载 Run…"
-              error={toAsyncError(home.error)}
-              onRetry={home.reload}
-              empty={runs.length === 0}
-              emptyText="还没有提交过 Run"
-            >
-              <ul className={styles.list}>
-                {runs.map((run) => (
-                  <li key={run.id} className={styles.item}>
-                    <div className={styles.itemMain}>
-                      <Link as={RouterLink} to={`/runs/${run.id}`} className={styles.itemTitle}>
-                        {run.name}
-                      </Link>
-                      <span className={styles.itemDesc}>{runStatusLabel(run.status)}</span>
-                    </div>
-                    <time
-                      className={styles.itemTime}
-                      dateTime={run.created_at ?? undefined}
-                      title={formatTime(run.created_at)}
-                    >
-                      {formatRelative(run.created_at)}
-                    </time>
-                  </li>
-                ))}
-              </ul>
-            </AsyncState>
-          </Card>
+                        {formatRelative(project.updated_at)}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              </AsyncState>
+            </Card>
+            <Card as="section" padding="normal" className={styles.card} aria-label="最近提交的 Run">
+              <h2 className={styles.cardTitle}>最近提交的 Run</h2>
+              <AsyncState loading={false} empty={runs.length === 0} emptyText="还没有提交过 Run">
+                <ul className={styles.list}>
+                  {runs.map((run) => (
+                    <li key={run.id} className={styles.item}>
+                      <div className={styles.itemMain}>
+                        <Link as={RouterLink} to={`/runs/${run.id}`} className={styles.itemTitle}>
+                          {run.name}
+                        </Link>
+                        <span className={styles.itemDesc}>{runStatusLabel(run.status)}</span>
+                      </div>
+                      <time
+                        className={styles.itemTime}
+                        dateTime={run.created_at ?? undefined}
+                        title={formatTime(run.created_at)}
+                      >
+                        {formatRelative(run.created_at)}
+                      </time>
+                    </li>
+                  ))}
+                </ul>
+              </AsyncState>
+            </Card>
+          </AsyncState>
         </div>
-
         <aside className={styles.side}>
           <ComputePlanCatalog />
           <p className={styles.clusterNote}>当前暂不提供节点、分区和队列的实时状态。</p>

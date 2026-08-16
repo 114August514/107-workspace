@@ -76,7 +76,8 @@
 
 .itemTitle {
   font-weight: 500;
-  flex-shrink: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .itemDesc {
@@ -96,6 +97,8 @@
 }
 
 .itemTime {
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--fgColor-muted);
 }

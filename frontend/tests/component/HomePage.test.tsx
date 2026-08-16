@@ -40,7 +40,7 @@ const homeData: Home = {
       status: 'active',
       created_by: 'u-1',
       created_at: '2026-08-15T10:00:00Z',
-      updated_at: null,
+      updated_at: '2026-08-16T10:00:00Z',
       default_run_configuration_id: null,
       environment_version_id: null,
     },
@@ -118,6 +118,9 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
       expect(screen.getByText('计算物理课题组')).toBeInTheDocument()
     })
     expect(screen.getByText('LJ 流体模拟')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('region', { name: '最近使用的 Project' })).getByRole('time'),
+    ).toHaveAttribute('datetime', '2026-08-16T10:00:00Z')
     expect(screen.getByText('首次基线运行')).toBeInTheDocument()
     expect(screen.getByText('cpu-basic')).toBeInTheDocument()
   })

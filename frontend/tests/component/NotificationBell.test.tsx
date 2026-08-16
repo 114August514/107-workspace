@@ -73,6 +73,28 @@ describe('NotificationBell 未读数轮询契约', () => {
       expect(screen.getByRole('button', { name: '通知' })).toBeTruthy()
     })
   })
+
+  it('全部标为已读触发刷新后，旧的未读请求不能恢复徽标', async () => {
+    let resolveFirst!: (count: number) => void
+    let calls = 0
+    vi.spyOn(api, 'unreadCount').mockImplementation(() => {
+      calls += 1
+      if (calls === 1)
+        return new Promise<number>((resolve) => {
+          resolveFirst = resolve
+        })
+      return Promise.resolve(0)
+    })
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
+    vi.spyOn(api, 'markAllNotificationsRead').mockResolvedValue(undefined)
+
+    renderBell()
+    fireEvent.click(screen.getByRole('button', { name: '通知' }))
+    fireEvent.click(await screen.findByRole('button', { name: '全部标为已读' }))
+    await waitFor(() => expect(calls).toBeGreaterThan(1))
+    await act(async () => resolveFirst(3))
+    expect(screen.queryByRole('button', { name: '通知，3 条未读' })).toBeNull()
+  })
 })
 
 describe('NotificationBell 通知浮层', () => {

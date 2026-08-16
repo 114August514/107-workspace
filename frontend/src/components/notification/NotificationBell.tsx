@@ -1,6 +1,6 @@
 import { BellIcon } from '@primer/octicons-react'
 import { AnchoredOverlay, Banner, Button, CounterLabel, Label, Link, Text } from '@primer/react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 
 import { api } from '../../api/client'
@@ -24,10 +24,13 @@ interface Props {
 export function NotificationBell({ username }: Props) {
   const [open, setOpen] = useState(false)
   const [unread, setUnread] = useState(0)
+  const requestSequence = useRef(0)
 
   const refreshCount = useCallback(async () => {
+    const sequence = ++requestSequence.current
     try {
-      setUnread(await api.unreadCount())
+      const count = await api.unreadCount()
+      if (sequence === requestSequence.current) setUnread(count)
     } catch {
       // 未读数拉不到不值得打扰用户：铃铛上少个数字而已，
       // 弹一个报错反而更烦人。
