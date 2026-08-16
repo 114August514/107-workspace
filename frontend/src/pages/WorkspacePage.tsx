@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
-import type { ActivityPage, ProjectPage, Workspace } from '../api/types'
+import type { ActivityPage, LegacyWorkspaceContext, ProjectPage, UserGroup } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
@@ -13,48 +13,49 @@ import { RoleTag } from '../components/common/RoleTag'
 import { ListCard } from '../components/layout/ListCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
-import { tablePagination } from '../utils/pagination'
 import { CreateProjectModal } from '../components/project/CreateProjectModal'
 import { ProjectTable } from '../components/project/ProjectTable'
 import { DefaultEnvironmentPicker } from '../components/workspace/DefaultEnvironmentPicker'
 import { EntitlementPanel } from '../components/workspace/EntitlementPanel'
 import { MemberPanel } from '../components/workspace/MemberPanel'
 import { VariablePanel } from '../components/workspace/VariablePanel'
+import { tablePagination } from '../utils/pagination'
 
+/** Legacy Ant Design surface consuming the User Group contract; #21 owns its visual migration. */
 export function WorkspacePage() {
-  const { workspaceId = '' } = useParams()
-  const workspace = useAsync<Workspace>(() => api.getWorkspace(workspaceId), [workspaceId])
+  const { userGroupId = '' } = useParams()
+  const userGroup = useAsync<UserGroup>(() => api.getUserGroup(userGroupId), [userGroupId])
+  const legacyContext = useAsync<LegacyWorkspaceContext>(
+    () => api.getLegacyWorkspaceContext(userGroupId),
+    [userGroupId],
+  )
   const [page, setPage] = useState(1)
   const projects = useAsync<ProjectPage>(
-    () => api.listProjects(workspaceId, { page }),
-    [workspaceId, page],
+    () => api.listProjects(userGroupId, { page }),
+    [userGroupId, page],
+  )
+  const activities = useAsync<ActivityPage>(
+    () => api.listWorkspaceActivities(userGroupId, { page_size: 20 }),
+    [userGroupId],
   )
   const [creating, setCreating] = useState(false)
-  const activities = useAsync<ActivityPage>(
-    () => api.listWorkspaceActivities(workspaceId, { page_size: 20 }),
-    [workspaceId],
-  )
 
   return (
     <Stack gap="large">
-      <AsyncSection loading={workspace.loading} error={workspace.error}>
-        {workspace.data && (
+      <AsyncSection loading={userGroup.loading} error={userGroup.error}>
+        {userGroup.data && (
           <PageHeader
-            breadcrumb={[{ title: <Link to="/">首页</Link> }, { title: workspace.data.name }]}
-            title={workspace.data.name}
+            breadcrumb={[{ title: <Link to="/">首页</Link> }, { title: userGroup.data.name }]}
+            title={userGroup.data.name}
             tags={
               <>
-                {workspace.data.kind === 'personal' ? (
-                  <Tag>个人空间</Tag>
-                ) : (
-                  <Tag color="blue">协作空间</Tag>
-                )}
-                {workspace.data.role && <RoleTag role={workspace.data.role} />}
+                <Tag color="blue">User Group</Tag>
+                <RoleTag role={userGroup.data.role} />
               </>
             }
-            description={workspace.data.description || '这个 Workspace 还没有填写说明'}
+            description={userGroup.data.description || '这个 User Group 还没有填写说明'}
             actions={
-              can(workspace.data, 'project.create') && (
+              can(userGroup.data, 'project.create') && (
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
                   创建 Project
                 </Button>
@@ -76,7 +77,7 @@ export function WorkspacePage() {
                   loading={projects.loading}
                   error={projects.error}
                   empty={projects.data?.total === 0}
-                  emptyText="这个 Workspace 还没有 Project"
+                  emptyText="这个 User Group 还没有 Project"
                 >
                   <ProjectTable
                     projects={projects.data?.items ?? []}
@@ -91,10 +92,10 @@ export function WorkspacePage() {
             label: '默认环境',
             children: (
               <Card>
-                {workspace.data && (
+                {legacyContext.data && (
                   <DefaultEnvironmentPicker
-                    workspace={workspace.data}
-                    onChanged={workspace.reload}
+                    workspace={legacyContext.data}
+                    onChanged={legacyContext.reload}
                   />
                 )}
               </Card>
@@ -103,12 +104,12 @@ export function WorkspacePage() {
           {
             key: 'members',
             label: '成员',
-            children: <Card>{workspace.data && <MemberPanel workspace={workspace.data} />}</Card>,
+            children: <Card>{userGroup.data && <MemberPanel workspace={userGroup.data} />}</Card>,
           },
           {
             key: 'config',
             label: '变量与 Secret',
-            children: <Card>{workspace.data && <VariablePanel workspace={workspace.data} />}</Card>,
+            children: <Card>{userGroup.data && <VariablePanel workspace={userGroup.data} />}</Card>,
           },
           {
             key: 'activities',
@@ -119,7 +120,7 @@ export function WorkspacePage() {
                   page={activities.data}
                   loading={activities.loading}
                   error={activities.error}
-                  emptyText="这个 Workspace 还没有活动记录"
+                  emptyText="这个 User Group 还没有活动记录"
                 />
               </ListCard>
             ),
@@ -129,7 +130,7 @@ export function WorkspacePage() {
             label: '资源权益',
             children: (
               <Card>
-                <EntitlementPanel workspaceId={workspaceId} />
+                <EntitlementPanel workspaceId={userGroupId} />
               </Card>
             ),
           },
@@ -138,7 +139,7 @@ export function WorkspacePage() {
 
       <CreateProjectModal
         open={creating}
-        workspaceId={workspaceId}
+        workspaceId={userGroupId}
         onClose={() => setCreating(false)}
         onCreated={() => projects.reload()}
       />

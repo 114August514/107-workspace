@@ -55,7 +55,7 @@ function ProductApp() {
           <Routes>
             {/* key=username：切换身份后重新挂载，避免看到上一个人的数据 */}
             <Route path="/" element={<HomePage key={username} username={username} />} />
-            <Route path="/workspaces/:workspaceId" element={<WorkspacePage key={username} />} />
+            <Route path="/user-groups/:userGroupId" element={<WorkspacePage key={username} />} />
             <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
             <Route path="/runs/:runId" element={<RunPage key={username} />} />
             <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />

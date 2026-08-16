@@ -3,12 +3,12 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { Environment, Workspace } from '../../api/types'
+import type { Environment, LegacyWorkspaceContext } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { AsyncSection } from '../common/AsyncSection'
 
 interface Props {
-  workspace: Workspace
+  workspace: LegacyWorkspaceContext
   onChanged: () => void
 }
 
@@ -24,7 +24,7 @@ export function DefaultEnvironmentPicker({ workspace, onChanged }: Props) {
     workspace.default_environment_version_id ?? undefined,
   )
   const [saving, setSaving] = useState(false)
-  const canUpdate = can(workspace, 'workspace.update')
+  const canUpdate = can(workspace, 'user_group.update')
 
   const options = (environments.data ?? []).map((environment) => ({
     label: environment.name,
@@ -39,7 +39,7 @@ export function DefaultEnvironmentPicker({ workspace, onChanged }: Props) {
     if (!selected) return
     setSaving(true)
     try {
-      await api.updateWorkspace(workspace.id, { default_environment_version_id: selected })
+      await api.setLegacyDefaultEnvironment(workspace.id, selected)
       message.success('已更新默认运行环境')
       onChanged()
     } catch (error) {

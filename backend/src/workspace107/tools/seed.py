@@ -188,21 +188,25 @@ async def seed_catalog(session: AsyncSession) -> None:
 async def seed_demo(session: AsyncSession, context) -> str:
     """创建演示用户、Project、文件、版本和运行方案，返回 Project ID。"""
     services = build_services(context, session)
-    user = await services.workspaces.ensure_user(DEMO_USER, "演示同学")
-    workspace = await services.workspaces.personal_workspace(user.id)
+    user = await services.identity.ensure_user(DEMO_USER, "演示同学")
+    groups = await services.user_groups.list_for_user(user.id)
+    if groups:
+        workspace_id = groups[0].user_group.id
+    else:
+        workspace_id = (
+            await services.user_groups.create(user.id, "演示 User Group", "本地演示数据")
+        ).user_group.id
 
     # 幂等：已经载入过就直接返回，不重复创建
-    existing = await services.projects.list_for_workspace(user.id, workspace.id, PageRequest())
+    existing = await services.projects.list_for_workspace(user.id, workspace_id, PageRequest())
     for project in existing.items:
         if project.name == DEMO_PROJECT:
             return project.id
 
-    await services.workspaces.update(
-        user.id, workspace.id, default_environment_version_id="ev_python_312"
-    )
+    await services.legacy_workspaces.set_default_environment(user.id, workspace_id, "ev_python_312")
 
     project = await services.projects.create(
-        user.id, workspace.id, DEMO_PROJECT, "跑通核心闭环的演示项目"
+        user.id, workspace_id, DEMO_PROJECT, "跑通核心闭环的演示项目"
     )
     await services.projects.write_file(user.id, project.id, "train.py", DEMO_SCRIPT.encode("utf-8"))
     await services.projects.write_file(
@@ -210,7 +214,7 @@ async def seed_demo(session: AsyncSession, context) -> str:
     )
     await services.projects.save_version(user.id, project.id, "初始版本")
 
-    await services.workspaces.set_variable(user.id, workspace.id, "EPOCHS", "5")
+    await services.legacy_workspaces.set_variable(user.id, workspace_id, "EPOCHS", "5")
     await services.run_configurations.create(
         user.id,
         project.id,

@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { Project, ProjectVersion, Workspace } from '../../api/types'
+import type { Project, ProjectVersion, UserGroup } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 
 interface Props {
@@ -17,14 +17,14 @@ interface Props {
 /**
  * 从一个确定版本派生新 Project。
  *
- * 目标空间列表只列**能建 Project 的**空间。列出全部再让用户撞 403，
+ * 目标 User Group 列表只列**能建 Project 的**项。列出全部再让用户撞 403，
  * 等于把「你有没有权限」这个问题推给用户去试——而他试之前根本没法知道。
  */
 export function ForkModal({ open, version, sourceProjectName, onClose, onForked }: Props) {
   const [form] = Form.useForm<{ target_workspace_id: string; name: string; description: string }>()
-  const workspaces = useAsync<Workspace[]>(() => api.listWorkspaces(), [open])
+  const userGroups = useAsync<UserGroup[]>(() => api.listUserGroups(), [open])
 
-  const writable = (workspaces.data ?? []).filter((w) => can(w, 'project.create'))
+  const writable = (userGroups.data ?? []).filter((group) => can(group, 'project.create'))
 
   useEffect(() => {
     if (open) {
@@ -69,15 +69,15 @@ export function ForkModal({ open, version, sourceProjectName, onClose, onForked 
       <Form form={form} layout="vertical">
         <Form.Item
           name="target_workspace_id"
-          label="创建到哪个 Workspace"
-          rules={[{ required: true, message: '请选择目标 Workspace' }]}
+          label="创建到哪个 User Group"
+          rules={[{ required: true, message: '请选择目标 User Group' }]}
         >
           <Select
-            loading={workspaces.loading}
-            placeholder="选择一个你能建 Project 的空间"
-            options={writable.map((w) => ({
-              value: w.id,
-              label: `${w.name}（${w.kind === 'personal' ? '个人' : '协作'}）`,
+            loading={userGroups.loading}
+            placeholder="选择一个你能建 Project 的 User Group"
+            options={writable.map((group) => ({
+              value: group.id,
+              label: group.name,
             }))}
           />
         </Form.Item>

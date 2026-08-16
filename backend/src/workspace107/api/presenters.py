@@ -7,12 +7,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..application.workspace_service import (
-    EntitlementView,
-    InvitationView,
-    MemberView,
-    WorkspaceView,
-)
+from ..application.user_group_service import InvitationView, MemberView, UserGroupView
+from ..application.workspace_service import EntitlementView, LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
 from ..domain.models import (
     Activity,
@@ -57,18 +53,30 @@ def user_out(user: User) -> s.UserOut:
     )
 
 
-def workspace_out(view: WorkspaceView) -> s.WorkspaceOut:
+def user_group_out(view: UserGroupView) -> s.UserGroupOut:
+    group = view.user_group
+    return s.UserGroupOut(
+        id=group.id,
+        name=group.name,
+        description=group.description,
+        created_by_id=group.created_by_id,
+        created_at=group.created_at,
+        role=view.role,
+        capabilities=sorted(view.capabilities),
+    )
+
+
+def legacy_workspace_context_out(
+    view: LegacyWorkspaceView,
+) -> s.LegacyWorkspaceContextOut:
     workspace = view.workspace
-    return s.WorkspaceOut(
+    return s.LegacyWorkspaceContextOut(
         id=workspace.id,
         kind=workspace.kind,
         name=workspace.name,
-        description=workspace.description,
         owner_id=workspace.owner_id,
         default_environment_version_id=workspace.default_environment_version_id,
-        created_at=workspace.created_at,
         role=view.role,
-        # 排序只是为了让契约输出稳定，diff 才看得清
         capabilities=sorted(view.capabilities),
     )
 
@@ -346,9 +354,9 @@ def fork_source_out(relation: ForkRelation) -> s.ForkSourceOut:
 
 def invitation_out(view: InvitationView) -> s.InvitationOut:
     return s.InvitationOut(
-        workspace_id=view.workspace.id,
-        workspace_name=view.workspace.name,
-        workspace_description=view.workspace.description,
+        user_group_id=view.user_group.id,
+        user_group_name=view.user_group.name,
+        user_group_description=view.user_group.description,
         role=view.membership.role,
         invited_at=view.membership.created_at,
     )

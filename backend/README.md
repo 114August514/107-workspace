@@ -85,11 +85,14 @@ cp ../.env.example .env
 
 ## 开发模式下的身份
 
-`WORKSPACE107_AUTH_MODE=dev` 时用 `X-User` 请求头识别用户，
-首次出现会自动建号并准备 Personal Workspace：
+`WORKSPACE107_AUTH_MODE=dev` 时用 `X-User` 请求头识别用户。首次出现只会建立
+User 身份，不会隐式创建 Personal Workspace：
 
 ```bash
 curl -H 'X-User: student' http://127.0.0.1:8000/api/v1/me
+curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
+  -d '{"name":"计算物理课题组","description":""}' \
+  http://127.0.0.1:8000/api/v1/user-groups
 ```
 
 接入学校统一身份认证后只需替换 `api/deps.py` 中的 `get_current_user`。

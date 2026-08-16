@@ -112,7 +112,7 @@ class ActivityService:
 
     **没有单独的「查看活动」能力。** 活动回答的是「这个空间里发生了什么」，
     能看见这个空间的人就该看得见——包括 Viewer，他们本来就是来观摩的。
-    所以直接复用 ``WORKSPACE_VIEW`` / ``PROJECT_VIEW``；能力矩阵定义在
+    所以复用 ``USER_GROUP_VIEW`` / ``PROJECT_VIEW``；能力矩阵定义在
     :mod:`workspace107.domain.capabilities`，并由单元测试完整锁定。
     """
 
@@ -123,7 +123,7 @@ class ActivityService:
     async def list_for_workspace(
         self, user_id: str, workspace_id: str, page: PageRequest
     ) -> Page[Activity]:
-        await self._guard.workspace(user_id, workspace_id, needs=Capability.WORKSPACE_VIEW)
+        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.USER_GROUP_VIEW)
         return await self._repos.activities.list_for_workspace(workspace_id, page)
 
     async def list_for_project(

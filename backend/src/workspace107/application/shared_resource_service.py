@@ -94,7 +94,9 @@ class SharedResourceService:
         return await self._repos.shared_resources.list_platform()
 
     async def list_for_workspace(self, user_id: str, workspace_id: str) -> list[SharedResource]:
-        await self._guard.workspace(user_id, workspace_id, needs=Capability.SHARED_RESOURCE_VIEW)
+        await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.SHARED_RESOURCE_VIEW
+        )
         return await self._repos.shared_resources.list_for_workspace(workspace_id)
 
     async def get(self, user_id: str, resource_id: str) -> SharedResourceAccess:
@@ -119,7 +121,9 @@ class SharedResourceService:
         name: str,
         description: str = "",
     ) -> SharedResource:
-        await self._guard.workspace(user_id, workspace_id, needs=Capability.SHARED_RESOURCE_MANAGE)
+        await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.SHARED_RESOURCE_MANAGE
+        )
         name = name.strip()
         if not name:
             raise ValidationFailed("Shared Resource 名称不能为空")

@@ -16,15 +16,15 @@ from ..domain.enums import (
     ArtifactStatus,
     ChangeKind,
     InputSourceType,
+    LegacyWorkspaceKind,
     LogStream,
+    MembershipRole,
     MembershipStatus,
     NotificationType,
     ProjectStatus,
     RunEventType,
     RunStatus,
     TargetType,
-    WorkspaceKind,
-    WorkspaceRole,
 )
 
 
@@ -47,7 +47,7 @@ class PageOut[T](Model):
     has_more: bool
 
 
-# -- 身份与空间 -------------------------------------------------------------
+# -- Identity and User Group governance --------------------------------------
 
 
 class UserOut(Model):
@@ -57,28 +57,39 @@ class UserOut(Model):
     email: str | None = None
 
 
-class WorkspaceOut(Model):
+class UserGroupOut(Model):
     id: str
-    kind: WorkspaceKind
     name: str
     description: str
-    owner_id: str
-    default_environment_version_id: str | None
+    created_by_id: str | None
     created_at: datetime | None
-    role: WorkspaceRole | None = None
+    role: MembershipRole
     capabilities: list[Capability] = Field(default_factory=list)
-    """当前用户在这个空间里能做什么。前端据此决定显不显示入口，
-    但真正的拦截在后端——前端权限是体验，后端权限才是边界。"""
 
 
-class WorkspaceCreateIn(Model):
+class UserGroupCreateIn(Model):
     name: str = Field(min_length=1, max_length=128)
     description: str = ""
 
 
-class WorkspaceUpdateIn(Model):
-    name: str | None = None
+class UserGroupUpdateIn(Model):
+    name: str | None = Field(default=None, min_length=1, max_length=128)
     description: str | None = None
+
+
+class LegacyWorkspaceContextOut(Model):
+    """Deprecated context for child domains still keyed by workspace_id."""
+
+    id: str
+    kind: LegacyWorkspaceKind
+    name: str
+    owner_id: str
+    default_environment_version_id: str | None
+    role: MembershipRole
+    capabilities: list[Capability] = Field(default_factory=list)
+
+
+class LegacyWorkspaceUpdateIn(Model):
     default_environment_version_id: str | None = None
 
 
@@ -86,17 +97,17 @@ class MemberOut(Model):
     user_id: str
     username: str
     display_name: str
-    role: WorkspaceRole
+    role: MembershipRole
     status: MembershipStatus
 
 
 class MemberInviteIn(Model):
     username: str
-    role: WorkspaceRole = WorkspaceRole.MEMBER
+    role: MembershipRole = MembershipRole.MEMBER
 
 
 class MemberRoleUpdateIn(Model):
-    role: WorkspaceRole
+    role: MembershipRole
 
 
 class InvitationResponseIn(Model):
@@ -501,7 +512,7 @@ class SyncOut(Model):
 
 class HomeOut(Model):
     user: UserOut
-    workspaces: list[WorkspaceOut]
+    user_groups: list[UserGroupOut]
     recent_projects: list[ProjectOut]
     recent_runs: list[RunOut]
 
@@ -588,12 +599,12 @@ class ForkSourceOut(Model):
 
 
 class InvitationOut(Model):
-    """一条待处理的邀请。只够用来做决定，不暴露空间内容。"""
+    """A pending User Group invitation without group-owned private content."""
 
-    workspace_id: str
-    workspace_name: str
-    workspace_description: str
-    role: WorkspaceRole
+    user_group_id: str
+    user_group_name: str
+    user_group_description: str
+    role: MembershipRole
     invited_at: datetime | None
 
 

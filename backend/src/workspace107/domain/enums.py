@@ -8,20 +8,15 @@ from __future__ import annotations
 from enum import StrEnum
 
 
-class WorkspaceKind(StrEnum):
-    """Workspace 的基础归属类型。"""
+class LegacyWorkspaceKind(StrEnum):
+    """Private compatibility discriminator for unmigrated child-domain rows."""
 
     PERSONAL = "personal"
     COLLABORATIVE = "collaborative"
 
 
-class WorkspaceRole(StrEnum):
-    """成员在 Workspace 中的角色。
-
-    角色本身不携带权限语义——它只是一组能力的命名集合，
-    具体能做什么见 :mod:`workspace107.domain.capabilities`。
-    判断权限时永远问「有没有这个能力」，不要问「是不是某个角色」。
-    """
+class MembershipRole(StrEnum):
+    """A User's role in one exact User Group."""
 
     OWNER = "owner"
     ADMIN = "admin"
@@ -143,6 +138,8 @@ class ActivityAction(StrEnum):
 
     WORKSPACE_CREATED = "workspace_created"
     WORKSPACE_UPDATED = "workspace_updated"
+    USER_GROUP_CREATED = "user_group_created"
+    USER_GROUP_UPDATED = "user_group_updated"
     MEMBER_INVITED = "member_invited"
     MEMBER_JOINED = "member_joined"
     MEMBER_LEFT = "member_left"
@@ -170,6 +167,7 @@ class TargetType(StrEnum):
     """
 
     WORKSPACE = "workspace"
+    USER_GROUP = "user_group"
     MEMBER = "member"
     PROJECT = "project"
     PROJECT_VERSION = "project_version"
@@ -187,6 +185,7 @@ class NotificationType(StrEnum):
     """
 
     WORKSPACE_INVITED = "workspace_invited"
+    USER_GROUP_INVITED = "user_group_invited"
     MEMBER_REMOVED = "member_removed"
     ROLE_CHANGED = "role_changed"
     OWNERSHIP_RECEIVED = "ownership_received"

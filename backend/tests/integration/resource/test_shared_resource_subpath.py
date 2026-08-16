@@ -19,7 +19,12 @@ import sys
 import httpx
 import pytest
 
-from tests.helpers import create_project_with_version, use_default_environment, wait_for_run
+from tests.helpers import (
+    create_project_with_version,
+    ensure_user_group,
+    use_default_environment,
+    wait_for_run,
+)
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32",
@@ -29,16 +34,15 @@ pytestmark = pytest.mark.skipif(
 ALICE = {"X-User": "alice"}
 
 
-async def _personal_workspace(client: httpx.AsyncClient) -> str:
-    home = (await client.get("/api/v1/me", headers=ALICE)).json()
-    return str(next(w for w in home["workspaces"] if w["kind"] == "personal")["id"])
+async def _user_group(client: httpx.AsyncClient) -> str:
+    return await ensure_user_group(client, headers=ALICE)
 
 
 async def _create_resource_with_version(
     client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情。"""
-    workspace_id = await _personal_workspace(client)
+    workspace_id = await _user_group(client)
     resource = (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",

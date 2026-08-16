@@ -2,12 +2,12 @@ import { Form, Input, Modal, message } from 'antd'
 import { useState } from 'react'
 
 import { api } from '../../api/client'
-import type { Workspace } from '../../api/types'
+import type { UserGroup } from '../../api/types'
 
 interface Props {
   open: boolean
   onClose: () => void
-  onCreated: (workspace: Workspace) => void
+  onCreated: (userGroup: UserGroup) => void
 }
 
 interface FormValues {
@@ -23,10 +23,10 @@ export function CreateWorkspaceModal({ open, onClose, onCreated }: Props) {
     const values = await form.validateFields()
     setSubmitting(true)
     try {
-      const workspace = await api.createWorkspace(values.name, values.description ?? '')
-      message.success(`已创建协作空间「${workspace.name}」`)
+      const userGroup = await api.createUserGroup(values.name, values.description ?? '')
+      message.success(`已创建 User Group「${userGroup.name}」`)
       form.resetFields()
-      onCreated(workspace)
+      onCreated(userGroup)
       onClose()
     } catch (error) {
       message.error((error as Error).message)
@@ -38,7 +38,7 @@ export function CreateWorkspaceModal({ open, onClose, onCreated }: Props) {
   return (
     <Modal
       open={open}
-      title="创建协作空间"
+      title="创建 User Group"
       okText="创建"
       cancelText="取消"
       confirmLoading={submitting}
@@ -50,12 +50,12 @@ export function CreateWorkspaceModal({ open, onClose, onCreated }: Props) {
         <Form.Item
           name="name"
           label="名称"
-          rules={[{ required: true, message: '请填写 Workspace 名称' }]}
+          rules={[{ required: true, message: '请填写 User Group 名称' }]}
         >
           <Input placeholder="例如：计算物理课题组" maxLength={128} />
         </Form.Item>
         <Form.Item name="description" label="说明">
-          <Input.TextArea rows={3} placeholder="这个空间用来做什么" maxLength={500} />
+          <Input.TextArea rows={3} placeholder="这个 User Group 用来做什么" maxLength={500} />
         </Form.Item>
       </Form>
     </Modal>

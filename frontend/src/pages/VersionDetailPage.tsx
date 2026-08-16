@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
-import type { Project, ProjectVersionDetail, Workspace } from '../api/types'
+import type { Project, ProjectVersionDetail, LegacyWorkspaceContext } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncSection } from '../components/common/AsyncSection'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -26,8 +26,9 @@ export function VersionDetailPage() {
     async () => (version.data ? api.getProject(version.data.project_id) : undefined),
     [version.data?.project_id],
   )
-  const workspace = useAsync<Workspace | undefined>(
-    async () => (project.data ? api.getWorkspace(project.data.workspace_id) : undefined),
+  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
+    async () =>
+      project.data ? api.getLegacyWorkspaceContext(project.data.workspace_id) : undefined,
     [project.data?.workspace_id],
   )
 
@@ -53,11 +54,12 @@ export function VersionDetailPage() {
             breadcrumb={[
               { title: <Link to="/">首页</Link> },
               {
-                title: workspace.data ? (
-                  <Link to={`/workspaces/${workspace.data.id}`}>{workspace.data.name}</Link>
-                ) : (
-                  'Workspace'
-                ),
+                title:
+                  workspace.data?.kind === 'collaborative' ? (
+                    <Link to={`/user-groups/${workspace.data.id}`}>{workspace.data.name}</Link>
+                  ) : (
+                    (workspace.data?.name ?? '个人数据')
+                  ),
               },
               {
                 title: project.data ? (

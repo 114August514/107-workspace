@@ -10,7 +10,7 @@ import type {
   Project,
   RunConfiguration,
   RunPage,
-  Workspace,
+  LegacyWorkspaceContext,
 } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
@@ -37,8 +37,9 @@ export function ProjectPage() {
   const bump = () => setToken((value) => value + 1)
 
   const project = useAsync<Project>(() => api.getProject(projectId), [projectId, token])
-  const workspace = useAsync<Workspace | undefined>(
-    async () => (project.data ? api.getWorkspace(project.data.workspace_id) : undefined),
+  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
+    async () =>
+      project.data ? api.getLegacyWorkspaceContext(project.data.workspace_id) : undefined,
     [project.data?.workspace_id],
   )
   const [runPage, setRunPage] = useState(1)
@@ -62,11 +63,12 @@ export function ProjectPage() {
             breadcrumb={[
               { title: <Link to="/">首页</Link> },
               {
-                title: workspace.data ? (
-                  <Link to={`/workspaces/${workspace.data.id}`}>{workspace.data.name}</Link>
-                ) : (
-                  'Workspace'
-                ),
+                title:
+                  workspace.data?.kind === 'collaborative' ? (
+                    <Link to={`/user-groups/${workspace.data.id}`}>{workspace.data.name}</Link>
+                  ) : (
+                    (workspace.data?.name ?? '个人数据')
+                  ),
               },
               { title: project.data.name },
             ]}

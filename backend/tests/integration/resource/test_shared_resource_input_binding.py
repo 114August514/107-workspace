@@ -19,7 +19,12 @@ import sys
 import httpx
 import pytest
 
-from tests.helpers import create_project_with_version, use_default_environment, wait_for_run
+from tests.helpers import (
+    create_project_with_version,
+    ensure_user_group,
+    use_default_environment,
+    wait_for_run,
+)
 
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32",
@@ -48,16 +53,15 @@ def _norm_path(p: str) -> str:
     return p.replace(os.sep, "/")
 
 
-async def _personal_workspace(client: httpx.AsyncClient) -> str:
-    home = (await client.get("/api/v1/me", headers=ALICE)).json()
-    return str(next(w for w in home["workspaces"] if w["kind"] == "personal")["id"])
+async def _user_group(client: httpx.AsyncClient) -> str:
+    return await ensure_user_group(client, headers=ALICE)
 
 
 async def _create_resource_with_version(
     client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情（含 files）。"""
-    workspace_id = await _personal_workspace(client)
+    workspace_id = await _user_group(client)
     resource = (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",
@@ -271,20 +275,18 @@ async def test_引用不存在的_version_会挡在提交前(client: httpx.Async
 async def test_跨_workspace_引用_shared_resource_被挡在提交前(
     client: httpx.AsyncClient,
 ) -> None:
-    """Bob 看不到 Alice 的 Personal Workspace 资源，引用时按不存在处理。"""
+    """Bob cannot resolve an asset owned by Alice's exact User Group."""
     await use_default_environment(client, headers=ALICE)
     version = await _create_resource_with_version(
         client, name="Alice 私有", files=[("a.txt", b"x")]
     )
-    # Bob 在自己的 Personal Workspace 里建项目，引用 Alice 的资源版本
     bob_headers = {"X-User": "bob"}
+    bob_ws = await ensure_user_group(client, headers=bob_headers)
     await client.patch(
-        "/api/v1/workspaces/" + (await _personal_workspace(client)).replace("alice", "bob"),
+        f"/api/v1/workspaces/{bob_ws}",
         json={"default_environment_version_id": "ev_python_312"},
         headers=bob_headers,
     )
-    bob_home = (await client.get("/api/v1/me", headers=bob_headers)).json()
-    bob_ws = next(w for w in bob_home["workspaces"] if w["kind"] == "personal")["id"]
     project = (
         await client.post(
             f"/api/v1/workspaces/{bob_ws}/projects",
