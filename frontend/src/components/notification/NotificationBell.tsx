@@ -1,7 +1,7 @@
 import { BellIcon } from '@primer/octicons-react'
 import { AnchoredOverlay, Banner, Button, CounterLabel, Label, Link, Text } from '@primer/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import type { AsyncErrorView } from '../../api/errors'
@@ -155,7 +155,6 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
     </div>
   )
 }
-
 function NotificationLine({
   notification,
   onRead,
@@ -165,6 +164,7 @@ function NotificationLine({
   onRead: () => Promise<boolean>
   onNavigate: () => void
 }) {
+  const navigate = useNavigate()
   const path = notificationPath(notification)
   const unread = !notification.read_at
 
@@ -194,9 +194,15 @@ function NotificationLine({
           as={RouterLink}
           to={path}
           onClick={async (event) => {
-            if (!unread) return
+            if (!unread) {
+              onNavigate()
+              return
+            }
             event.preventDefault()
-            if (await onRead()) onNavigate()
+            if (await onRead()) {
+              onNavigate()
+              navigate(path)
+            }
           }}
         >
           {title}

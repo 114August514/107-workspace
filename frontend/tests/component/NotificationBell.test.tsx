@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 
 import { api, ApiError } from '../../src/api/client'
 import type { Notification, NotificationPage } from '../../src/api/types'
@@ -28,12 +28,17 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
 function makePage(items: Notification[]): NotificationPage {
   return { items, total: items.length, page: 1, page_size: 30, has_more: false }
 }
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.pathname}</output>
+}
 
 function renderBell(username = 'student') {
   return render(
     <MemoryRouter>
       <PrimerRoot>
         <NotificationBell username={username} />
+        <LocationProbe />
       </PrimerRoot>
     </MemoryRouter>,
   )
@@ -126,6 +131,31 @@ describe('NotificationBell 通知浮层', () => {
     fireEvent.click(screen.getByRole('link', { name: /首次运行/ }))
     await waitFor(() => expect(markOne).toHaveBeenCalledWith('n-1'))
     await waitFor(() => expect(unread.mock.calls.length).toBeGreaterThan(1))
+  })
+
+  it('linked unread success navigates and closes the overlay', async () => {
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
+    vi.spyOn(api, 'markNotificationRead').mockResolvedValue(undefined)
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
+    fireEvent.click(await screen.findByRole('link', { name: /首次运行/ }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/runs/run-1'))
+    expect(screen.queryByText('通知')).toBeNull()
+  })
+
+  it('linked unread failure keeps location and overlay error visible', async () => {
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
+    vi.spyOn(api, 'markNotificationRead').mockRejectedValue(
+      new ApiError(500, 'internal_error', '标记已读失败。', [], 'req-44'),
+    )
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
+    fireEvent.click(await screen.findByRole('link', { name: /首次运行/ }))
+    expect(await screen.findByText('标记已读失败。')).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent('/')
+    expect(screen.getByText('通知')).toBeVisible()
   })
 
   it('标记已读失败在浮层内显示错误，不再弹全局提示', async () => {
