@@ -101,24 +101,53 @@ describe('NotificationBell 通知浮层', () => {
     fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
     await screen.findByText('Run「首次运行」已成功')
 
-    fireEvent.click(screen.getByRole('listitem'))
+    fireEvent.click(screen.getByRole('link', { name: /首次运行/ }))
     await waitFor(() => expect(markOne).toHaveBeenCalledWith('n-1'))
     await waitFor(() => expect(unread.mock.calls.length).toBeGreaterThan(1))
   })
 
   it('标记已读失败在浮层内显示错误，不再弹全局提示', async () => {
     vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
-    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(
+      makePage([makeNotification({ target_id: null, target_type: null })]),
+    )
     vi.spyOn(api, 'markNotificationRead').mockRejectedValue(
       new ApiError(500, 'internal_error', '标记已读失败。', [], 'req-42'),
     )
 
     renderBell()
     fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
-    await screen.findByText('Run「首次运行」已成功')
+    fireEvent.click(
+      await screen.findByRole('button', { name: '将「Run「首次运行」已成功」标为已读' }),
+    )
 
-    fireEvent.click(screen.getByRole('listitem'))
     expect(await screen.findByText('标记已读失败。')).toBeVisible()
+  })
+
+  it('无目标未读通知提供语义化标记操作，已读通知保持静态', async () => {
+    const unread = makeNotification({ target_id: null, target_type: null })
+    const read = makeNotification({
+      id: 'n-2',
+      title: '你已被移出 Workspace',
+      target_id: null,
+      target_type: null,
+      read_at: '2026-08-15T09:00:00Z',
+    })
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([unread, read]))
+    const markOne = vi.spyOn(api, 'markNotificationRead').mockResolvedValue(undefined)
+
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
+
+    const markButton = await screen.findByRole('button', {
+      name: '将「Run「首次运行」已成功」标为已读',
+    })
+    expect(markButton).toBeVisible()
+    expect(screen.queryByRole('button', { name: '将「你已被移出 Workspace」标为已读' })).toBeNull()
+
+    fireEvent.click(markButton)
+    await waitFor(() => expect(markOne).toHaveBeenCalledWith('n-1'))
   })
 
   it('全部标为已读失败同样就地显示', async () => {

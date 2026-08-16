@@ -170,7 +170,7 @@ function NotificationLine({
   )
 
   return (
-    <li className={unread ? styles.itemUnread : styles.item} onClick={onRead}>
+    <li className={unread ? styles.itemUnread : styles.item}>
       <div className={styles.itemMeta}>
         <Label size="small" variant={notificationVariant(notification.type)}>
           {notificationLabel(notification.type)}
@@ -185,9 +185,25 @@ function NotificationLine({
         </time>
       </div>
       {path ? (
-        <Link as={RouterLink} to={path} onClick={onNavigate}>
+        <Link
+          as={RouterLink}
+          to={path}
+          onClick={() => {
+            onRead()
+            onNavigate()
+          }}
+        >
           {title}
         </Link>
+      ) : unread ? (
+        <Button
+          variant="invisible"
+          size="small"
+          aria-label={`将「${notification.title}」标为已读`}
+          onClick={onRead}
+        >
+          {title}
+        </Button>
       ) : (
         title
       )}

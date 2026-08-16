@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '../../src/api/client'
+import { api, ApiError } from '../../src/api/client'
 import type { Home, Invitation } from '../../src/api/types'
 import { HomePage } from '../../src/pages/HomePage'
 import { PrimerRoot } from '../../src/primer/setup'
@@ -170,5 +170,35 @@ describe('HomePage 邀请区块', () => {
     fireEvent.click(await screen.findByRole('button', { name: '接受邀请' }))
     await waitFor(() => expect(respond).toHaveBeenCalledWith('ws-inv', true))
     await waitFor(() => expect(screen.queryByText('test_invite')).not.toBeInTheDocument())
+  })
+
+  it('加载邀请时提供可访问的可见反馈', () => {
+    vi.spyOn(api, 'home').mockResolvedValue(homeData)
+    vi.spyOn(api, 'listInvitations').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+
+    renderHome()
+
+    const invitations = screen.getByRole('region', { name: '待处理邀请' })
+    expect(within(invitations).getByRole('status')).toHaveTextContent('正在加载邀请…')
+  })
+
+  it('首次加载邀请失败时就地显示错误并可重试，成功空数据后隐藏区块', async () => {
+    vi.spyOn(api, 'home').mockResolvedValue(homeData)
+    const invitations = vi
+      .spyOn(api, 'listInvitations')
+      .mockRejectedValueOnce(
+        new ApiError(503, 'service_unavailable', '邀请加载失败。', [], 'req-invitations'),
+      )
+      .mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+
+    renderHome()
+
+    expect(await screen.findByText('邀请加载失败。')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+
+    await waitFor(() => expect(invitations).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('region', { name: '待处理邀请' })).toBeNull())
   })
 })

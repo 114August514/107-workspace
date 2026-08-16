@@ -227,50 +227,60 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
   }
 
   const items = invitations.data ?? []
-  if (invitations.loading || items.length === 0) return null
+  if (!invitations.loading && !invitations.error && items.length === 0) return null
 
   return (
     <Card as="section" padding="normal" className={styles.card} aria-label="待处理邀请">
       <h2 className={styles.cardTitle}>待处理邀请</h2>
-      <ul className={styles.list}>
-        {items.map((invitation) => (
-          <li key={invitation.workspace_id} className={styles.invitationItem}>
-            <div className={styles.invitationMain}>
-              <div className={styles.invitationTitle}>{invitation.workspace_name}</div>
-              {/* 只有协作空间能发邀请（后端 invite_member 拒绝 personal），可以直接写死 */}
-              <div className={styles.invitationMeta}>协作空间 · {roleLabel(invitation.role)}</div>
-              {invitation.workspace_description ? (
-                <div className={styles.invitationMeta}>{invitation.workspace_description}</div>
-              ) : null}
-            </div>
-            <div className={styles.invitationActions}>
-              <Button
-                variant="primary"
-                disabled={pendingId !== null}
-                loading={pendingId === invitation.workspace_id}
-                onClick={() => void respond(invitation, true)}
-              >
-                接受邀请
-              </Button>
-              <Button disabled={pendingId !== null} onClick={() => void respond(invitation, false)}>
-                拒绝
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      {respondError && (
-        <div className={styles.invitationError}>
-          <Banner variant="critical">
-            <Banner.Title>
-              处理「{respondError.name}」的邀请失败：{respondError.view.message}
-            </Banner.Title>
-            <Banner.Description>
-              {respondError.view.problems?.join(' ') ?? '请稍后重试。'}
-            </Banner.Description>
-          </Banner>
-        </div>
-      )}
+      <AsyncState
+        loading={invitations.loading}
+        loadingText="正在加载邀请…"
+        error={toAsyncError(invitations.error)}
+        onRetry={invitations.reload}
+      >
+        <ul className={styles.list}>
+          {items.map((invitation) => (
+            <li key={invitation.workspace_id} className={styles.invitationItem}>
+              <div className={styles.invitationMain}>
+                <div className={styles.invitationTitle}>{invitation.workspace_name}</div>
+                {/* 只有协作空间能发邀请（后端 invite_member 拒绝 personal），可以直接写死 */}
+                <div className={styles.invitationMeta}>协作空间 · {roleLabel(invitation.role)}</div>
+                {invitation.workspace_description ? (
+                  <div className={styles.invitationMeta}>{invitation.workspace_description}</div>
+                ) : null}
+              </div>
+              <div className={styles.invitationActions}>
+                <Button
+                  variant="primary"
+                  disabled={pendingId !== null}
+                  loading={pendingId === invitation.workspace_id}
+                  onClick={() => void respond(invitation, true)}
+                >
+                  接受邀请
+                </Button>
+                <Button
+                  disabled={pendingId !== null}
+                  onClick={() => void respond(invitation, false)}
+                >
+                  拒绝
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {respondError && (
+          <div className={styles.invitationError}>
+            <Banner variant="critical">
+              <Banner.Title>
+                处理「{respondError.name}」的邀请失败：{respondError.view.message}
+              </Banner.Title>
+              <Banner.Description>
+                {respondError.view.problems?.join(' ') ?? '请稍后重试。'}
+              </Banner.Description>
+            </Banner>
+          </div>
+        )}
+      </AsyncState>
     </Card>
   )
 }
