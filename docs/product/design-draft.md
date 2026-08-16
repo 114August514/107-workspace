@@ -502,9 +502,1574 @@ Workspace 决定可使用的算力权益，Project 保存默认资源配置，Ru
     └── [Future] 根据权益和负载推荐执行集群
 ```
 
-### 2.8 Run 生命周期与
-[…1566ln elided…]
- 的变化只影响对应 User 在该 Workspace 中的成员身份和操作权限，不改变 Workspace 已有对象、资源资格及其他 Membership。
+### 2.8 Run 生命周期与计算执行
+
+Run 是 Project 的一次不可变执行记录。平台在创建 Run 时固定代码快照、运行配置、环境、共享资源和算力请求，并将任务提交给底层调度系统执行。
+
+```text
+Run 生命周期与计算执行
+│
+├── A. Run 创建与提交
+│   ├── [Core] 从 Project 发起 Run
+│   ├── [Core] 选择或使用 Project 默认运行方案
+│   ├── [Core] 查看并调整本次 Run 的工作目录和执行命令
+│   ├── [Core] 确认本次 Run 的代码快照和完整执行配置
+│   ├── [Core] 执行提交前检查并查看阻止提交的问题
+│   └── [Core] 提交 Run
+│       │
+│       ├── [V1] 设置 Run 名称和备注
+│       └── [V1] 查看生成的调度请求和作业脚本
+│
+├── B. Run 状态与任务控制
+│   ├── [Core] 查看 Run 当前状态和执行时间线
+│   ├── [Core] 查看排队时长和运行时长
+│   ├── [Core] 查看等待、失败、超时或终止原因
+│   ├── [Core] 取消等待中或运行中的 Run
+│   └── [Core] 查看 Run 最终结果
+│       │
+│       └── [V1] 查看底层调度任务信息和详细状态
+│
+├── C. 重新运行与派生执行
+│   ├── [Core] 使用相同代码快照和配置重新运行
+│   ├── [Core] 基于历史 Run 调整配置后创建新 Run
+│   ├── [Core] 从提交失败或运行失败的 Run 重新尝试
+│   └── [Core] 查看新 Run 与来源 Run 的关系
+│       │
+│       ├── [V2] 配置自动重试条件和次数
+│       └── [Future] 从检查点继续运行
+│
+├── D. Run 历史与执行快照
+│   ├── [Core] 查看 Project 的 Run 历史
+│   ├── [Core] 查看 Run 状态、来源和关键时间
+│   ├── [Core] 查看执行配置摘要
+│   ├── [Core] 从 Run 进入对应的 Project 版本
+│   │
+│   ├── [V1] 搜索和筛选 Run
+│   ├── [V1] 为 Run 添加标签和备注
+│   └── [V2] 比较不同 Run 的执行配置
+│
+└── E. 批量与关联执行
+    ├── [V2] 使用多组参数批量创建 Run
+    ├── [V2] 配置 Run 之间的依赖关系
+    └── [Future] 编排多阶段计算流程
+```
+
+#### Run 创建时固定的内容
+
+```text
+Run Snapshot
+├── 来源 Project
+├── Project Version
+├── 来源运行方案
+├── 工作目录
+├── 最终执行命令
+├── 环境版本
+├── Shared Resource Version 与访问位置
+├── CPU、内存、GPU、节点数和时限
+├── Account、Partition、QoS 等最终调度配置
+└── 创建人与创建时间
+```
+
+### 2.9 日志、运行产物与复现
+
+本节负责呈现 Run 执行过程中产生的信息和结果，并保存足以解释、比较和复现该 Run 的证据。
+
+```text
+日志、运行产物与复现
+│
+├── A. 运行日志
+│   ├── [Core] 查看 Run 的实时输出
+│   ├── [Core] 分别查看标准输出和标准错误
+│   ├── [Core] 查看平台产生的执行事件和错误信息
+│   ├── [Core] 在 Run 结束后查看完整日志
+│   ├── [Core] 下载 Run 日志
+│   │
+│   ├── [V1] 搜索和筛选日志内容
+│   ├── [V1] 从日志错误进入相关排障信息
+│   ├── [V1] 查看日志是否被截断或不完整
+│   └── [V2] 自动识别常见错误并提供诊断建议
+│
+├── B. Artifact 收集与查看
+│   ├── [Core] 为运行方案配置需要收集的输出路径
+│   ├── [Core] 在 Run 结束后收集指定输出为 Artifact
+│   ├── [Core] 查看 Run 产生的 Artifact
+│   ├── [Core] 查看 Artifact 基本信息和目录结构
+│   ├── [Core] 下载单个 Artifact 文件
+│   ├── [Core] 下载完整 Artifact
+│   │
+│   ├── [V1] 预览文本、图片、表格和常见结果文件
+│   ├── [V1] 从仍被保留的 Run 工作目录创建新的 Artifact 快照
+│   ├── [V1] 为 Artifact 设置名称和说明
+│   ├── [V1] 导出多个 Artifact
+│   └── [V2] 比较不同 Run 的 Artifact
+│
+├── C. 结果复用与发布
+│   ├── [V1] 将 Artifact 复制到 Project
+│   ├── [V1] 将 Artifact 用作新 Run 的输入
+│   ├── [V1] 从 Artifact 发起共享资源发布
+│   │
+│   ├── [V2] 生成 Artifact 的临时分享入口
+│   └── [V2] 查看 Artifact 的引用和使用情况
+│
+├── D. 指标与结果比较
+│   ├── [V1] 查看 Run 上报的结构化指标
+│   ├── [V1] 查看指标随执行过程的变化
+│   ├── [V1] 查看 Run 的关键结果摘要
+│   │
+│   ├── [V2] 比较多个 Run 的指标
+│   ├── [V2] 比较不同代码、环境和算力配置下的结果
+│   └── [Future] 创建实验分析看板
+│
+└── E. 复现信息
+    ├── [Core] 查看 Run 的完整执行快照
+    ├── [Core] 查看 Run 使用的代码、命令和工作目录
+    ├── [Core] 查看 Run 使用的环境和共享资源版本
+    ├── [Core] 查看 Run 使用的算力与调度配置
+    ├── [Core] 查看 Run 的退出状态和关键执行信息
+    │
+    ├── [V1] 导出 Run 复现清单
+    ├── [V1] 查看复现所需依赖当前是否仍然可用
+    └── [Future] 导出可移植的完整复现包
+```
+
+### 2.10 通知与活动
+
+本节负责把与用户相关的重要变化及时呈现出来，并提供面向协作的近期活动记录。
+
+> 注意：
+>
+> ```text
+> 通知
+> → 面向特定用户，需要用户关注或处理
+>
+> 活动
+> → 面向 Workspace 或 Project，说明最近发生了什么
+> ```
+>
+
+```text
+通知与活动
+│
+├── A. 通知中心
+│   ├── [Core] 查看与当前用户相关的通知
+│   ├── [Core] 查看未读通知数量
+│   ├── [Core] 查看通知类型、时间和来源对象
+│   ├── [Core] 从通知进入对应的 Run、Project、Workspace 或资源
+│   ├── [Core] 将通知标记为已读或未读
+│   └── [Core] 批量标记通知为已读
+│       │
+│       ├── [V1] 按类型和时间筛选通知
+│       ├── [V1] 搜索通知
+│       └── [V1] 归档或删除历史通知
+│
+├── B. 重要事件通知
+│   ├── [Core] 接收自己发起的 Run 结束或异常通知
+│   ├── [Core] 接收 Workspace 成员和权限变更通知
+│   ├── [Core] 接收影响当前 Project 的环境或共享资源不可用通知
+│   ├── [Core] 接收平台维护和服务异常通知
+│   │
+│   ├── [V1] 接收 Run 开始运行通知
+│   ├── [V1] 接收共享资源版本弃用、归档或授权撤销通知
+│   ├── [V1] 接收环境版本弃用或可用性变化通知
+│   ├── [V1] 接收配额接近上限和生命周期提醒
+│   └── [V2] 订阅指定 Project、Run 或资源的变化
+│
+├── C. 通知偏好与送达
+│   ├── [Core] 在平台内接收通知
+│   ├── [Core] 按通知类别启用或关闭非强制通知
+│   ├── [Core] 查看不可关闭的重要系统通知
+│   │
+│   ├── [V1] 通过邮件接收重要通知
+│   ├── [V1] 分别配置站内和邮件通知偏好
+│   ├── [V1] 设置免打扰时段
+│   ├── [V1] 接收每日或每周通知摘要
+│   ├── [V2] 按 Workspace 或 Project 配置通知偏好
+│   └── [Future] 接入更多外部消息渠道
+│
+└── D. Workspace 与 Project 活动
+    ├── [Core] 查看 Workspace 的近期活动
+    ├── [Core] 查看 Project 的近期活动
+    ├── [Core] 查看活动的操作者、时间、对象和动作
+    ├── [Core] 从活动记录进入对应对象
+    │
+    ├── [V1] 按成员、对象类型和时间筛选活动
+    ├── [V1] 查看与自己相关的活动
+    ├── [V1] 查看 Project 派生、版本和运行方案变更活动
+    ├── [V1] 查看环境、共享资源和成员权限变更活动
+    └── [V2] 订阅指定对象的活动更新
+```
+
+### 2.11 垂直场景 Profile
+
+为 Workspace 启用和配置可复用的垂直场景能力，并通过 Course Profile 等具体实现，将平台基础能力编排为完整业务工作流。
+
+```text
+垂直场景 Profile
+│
+├── A. Profile 发现与启用
+│   ├── [V1] 浏览平台支持的垂直场景 Profile
+│   ├── [V1] 查看 Profile 提供的角色、能力和适用范围
+│   ├── [V1] 查看启用 Profile 所需的 Workspace 条件
+│   ├── [V1] 为符合条件的 Workspace 启用 Profile
+│   ├── [V1] 完成 Profile 的初始化配置
+│   ├── [V1] 停用 Profile 并查看对场景对象的影响
+│   │   └── [V2] 迁移或导出停用前的 Profile 配置
+│   │
+│   └── [V1] 查看 Workspace 当前启用的 Profile 和状态
+│       │
+│       ├── [V2] 查看 Profile 版本和更新说明
+│       ├── [V2] 升级 Workspace 使用的 Profile
+│       └── [Future] 组合多个兼容的 Profile
+│
+├── B. Profile 配置与复用
+│   ├── [V1] 配置场景名称、说明和生命周期信息
+│   ├── [V1] 配置场景角色及其基础权限范围
+│   ├── [V1] 配置场景提供、推荐或授权使用的环境、资源和算力规则
+│   ├── [V1] 配置场景工作流的默认规则
+│   ├── [V1] 查看和修改当前 Workspace 的 Profile 配置
+│   ├── [V1] 基于已有 Workspace 的 Profile 配置创建新 Workspace
+│   └── [V1] 选择需要复用和排除的场景配置
+│       │
+│       ├── [V2] 保存可重复使用的 Profile 配置预设
+│       ├── [V2] 比较两个 Workspace 的 Profile 配置
+│       └── [V2] 查看 Profile 配置变更历史
+│
+├── C. Profile 场景体验
+│   ├── [V1] 根据场景角色展示对应的工作入口
+│   ├── [V1] 查看与当前用户相关的场景任务和状态
+│   ├── [V1] 按 Profile 工作流执行场景操作
+│   ├── [V1] 从场景对象进入当前用户有权访问的 Project、Run 或资源
+│   ├── [V1] 查看 Workspace 的场景生命周期状态
+│   └── [V1] 接收 Profile 产生的场景通知
+│
+└── D. Course Profile
+    ├── [V1] 配置课程信息以及教师、助教和学生角色
+    ├── [V1] 创建和发布 Assignment
+    ├── [V1] 使用确定的 Project Version 作为 Assignment 起始内容
+    ├── [V1] 配置 Assignment 的说明、时间和提交要求
+    ├── [V1] 配置 Assignment 推荐使用的环境、共享资源和算力方案
+    ├── [V1] 学生查看可参与的 Assignment
+    ├── [V1] 学生将 Assignment 起始内容 Fork 到 Personal Workspace
+    ├── [V1] 学生在 Personal Workspace 中独立编辑 Project 和创建 Run
+    ├── [V1] 查看 Assignment 的开始、提交和截止状态
+    ├── [V1] 学生显式提交确定的 Project Version 快照
+    ├── [V1] 保留和查看多次 Submission 记录
+    ├── [V1] 教师和助教查看及管理 Submission 快照
+    └── [V1] 关闭、归档和复用课程配置
+        │
+        ├── [V2] 提交选定的 Artifact 或 Run 结果摘要
+        ├── [V2] 对 Submission 提供反馈
+        ├── [V2] 对 Submission 快照发起受信任的自动评测
+        ├── [V2] 学生分组与分组作业
+        ├── [V2] 个别延期、宽限期和迟交规则
+        └── [Future] 与外部教学和成绩系统集成
+```
+
+### 2.12 Workspace 使用与治理
+
+面向 Workspace 管理员，负责查看和治理归属于当前 Workspace 的对象、存储和资源使用，以及当前 Workspace 明确提供或承担的额度。
+
+```text
+Workspace 使用与治理
+│
+├── A. Workspace 使用概览
+│   ├── [Core] 查看归属于当前 Workspace 的主要数据和资源使用量
+│   ├── [Core] 查看当前 Workspace 的额度上限和剩余量
+│   ├── [Core] 查看当前操作受到的配额、并发或容量限制
+│   ├── [Core] 查看因额度或限制无法完成操作的原因
+│   ├── [Core] 查看 Project、Run、日志、Artifact 和共享资源的主要占用
+│   │
+│   ├── [V1] 按 Project、资源类型和时间查看使用量
+│   ├── [V1] 查看使用趋势和额度预警
+│   └── [V2] 为 Project 或成员设置 Workspace 内部使用预算
+│
+├── B. Workspace 数据保留与清理
+│   ├── [Core] 查看当前 Workspace 中数据的保留和到期状态
+│   ├── [Core] 清理不再需要的 Run 日志和 Artifact
+│   ├── [Core] 查看即将到期或被自动清理的数据
+│   ├── [Core] 将重要 Run 或 Artifact 标记为保留
+│   ├── [Core] 删除或清理前查看关联对象和影响范围
+│   │
+│   ├── [V1] 批量清理历史日志和 Artifact
+│   ├── [V1] 配置 Workspace 的数据保留策略
+│   ├── [V1] 查看自动清理结果
+│   └── [V2] 为特定对象设置长期保留或清理豁免
+│
+├── C. Workspace 凭据与外部访问
+│   ├── [V1] 创建和管理 Workspace 凭据
+│   ├── [V1] 将凭据授权给指定 Project 或运行方案
+│   ├── [V1] 在 Run 中引用凭据而不展示明文
+│   ├── [V1] 更新、轮换和撤销凭据
+│   ├── [V1] 查看凭据被哪些 Project 或运行方案引用
+│   ├── [V1] 查看凭据失效或即将过期状态
+│   └── [V2] 配置网络和外部服务访问策略
+│
+├── D. Workspace 授权额度使用
+│   ├── [V1] 查看由当前 Workspace 提供或承担的算力额度使用情况
+│   ├── [V1] 查看额度被哪些 Project、成员或场景消耗
+│   ├── [V1] 查看额度剩余量和有效期限
+│   ├── [V1] 查看因授权额度耗尽而受影响的操作
+│   └── [V2] 配置成员、Project 或场景的内部额度上限
+│
+└── E. Workspace 管理审计
+    ├── [V1] 查看当前 Workspace 内的关键管理操作
+    ├── [V1] 查看操作人、时间、对象、动作和结果
+    ├── [V1] 查看成员、角色、权限和资源授权变更
+    ├── [V1] 查看对象删除、恢复、保留和清理记录
+    ├── [V1] 查看 Run 取消、强制终止和管理员干预记录
+    └── [V1] 按操作人、对象、动作和时间筛选审计记录
+        │
+        └── [V2] 导出审计记录和治理报告
+```
+
+### 2.13 平台管理与运维
+
+面向平台管理员，负责管理整个 107 平台的用户与 Workspace、计算集群、平台级资源目录、全局策略以及运行故障。
+
+> 平台管理员需要管理：
+>
+> ```text
+> 平台
+> ├── 用户与 Workspace 状态
+> ├── 集群和调度资源
+> ├── 平台环境与公共资源
+> ├── 全局配额和生命周期策略
+> └── 服务健康、故障与审计
+> ```
+
+```text
+平台管理与运维
+│
+├── A. 平台运行概览
+│   ├── [V1] 查看平台、集群和关键服务的运行状态
+│   ├── [V1] 查看节点、CPU、内存、GPU 和存储容量概览
+│   ├── [V1] 查看运行中、排队中和异常任务数量
+│   ├── [V1] 查看各分区的资源使用率、排队压力和可用状态
+│   ├── [V1] 查看当前告警、故障和维护事件
+│   │
+│   ├── [V2] 查看资源使用趋势、历史峰值和服务质量
+│   └── [Future] 查看容量预测和扩容建议
+│
+├── B. 集群与调度资源管理
+│   ├── [V1] 查看和管理平台接入的计算集群
+│   ├── [V1] 查看节点、分区及其资源和运行状态
+│   ├── [V1] 将集群、分区或节点设为维护、停用或恢复可用
+│   ├── [V1] 控制集群或分区是否接收新的 Run
+│   ├── [V1] 管理平台算力规格及其底层调度映射
+│   ├── [V1] 管理 Account、Partition 和 QoS 的合法组合
+│   │
+│   ├── [V2] 管理资源预约、专用算力池和特殊硬件
+│   └── [Future] 管理多集群路由和跨集群调度
+│
+├── C. 全局任务运维
+│   ├── [V1] 查看和筛选全平台 Run 与底层调度任务
+│   ├── [V1] 查看 Run 与调度 Job 的对应关系
+│   ├── [V1] 查看任务请求、实际分配、排队原因和异常状态
+│   ├── [V1] 查看长时间排队、长时间运行和异常占用任务
+│   ├── [V1] 取消或终止需要管理员干预的任务
+│   ├── [V1] 记录管理员干预原因和执行结果
+│   │
+│   ├── [V2] 批量处置异常或积压任务
+│   └── [V2] 对符合条件的任务执行挂起、恢复或重新排队
+│
+├── D. 用户与 Workspace 支持
+│   ├── [V1] 搜索和查看平台用户及 Workspace
+│   ├── [V1] 查看用户和 Workspace 的状态、权益及主要用量
+│   ├── [V1] 停用和恢复异常用户或 Workspace
+│   ├── [V1] 处理 Workspace 所有权和访问异常
+│   ├── [V1] 配置 Workspace 的算力、存储和并发额度
+│   ├── [V1] 查看用户或 Workspace 无法提交 Run 的平台侧原因
+│   ├── [V1] 审批用户申请的资源权益
+│   │
+│   └── [V2] 批量处理用户、Workspace 和资源权益
+│
+├── E. 平台资源与全局策略
+│   ├── [V1] 管理平台提供的运行环境及其版本
+│   ├── [V1] 管理平台公共共享资源
+│   ├── [V1] 管理 Project 模板和垂直场景 Profile 目录
+│   ├── [V1] 审核和处置公共发布内容
+│   ├── [V1] 配置平台默认额度、资源上限和保留策略
+│   ├── [V1] 配置公开发布、外部导入和访问安全规则
+│   ├── [V1] 查看策略或资源变更的影响范围
+│   ├── [V1] 查看认证、Slurm、存储、Git、通知和监控等平台集成状态
+│   │
+│   ├── [V2] 管理策略例外、服务等级和资源保障
+│   ├── [V2] 管理 Profile 版本、兼容性和升级范围
+│   └── [Future] 管理跨组织和跨集群公共资源目录
+│
+└── F. 告警、故障与平台审计
+    ├── [V1] 查看和处理平台告警
+    ├── [V1] 创建并跟踪平台故障事件
+    ├── [V1] 查看故障影响的集群、Workspace 和 Run
+    ├── [V1] 发布、更新和撤回维护或故障公告
+    ├── [V1] 查看平台管理员的关键操作记录
+    ├── [V1] 搜索和筛选管理员操作及干预记录
+    │
+    ├── [V2] 导出平台运维和审计记录
+    └── [Future] 生成自动化故障复盘和容量治理报告
+```
+
+---
+
+## 三. 领域模型与产品规则
+
+### 3.0 本章目的
+
+本章用于定义 107 Workspace 的领域语言、核心对象、对象关系、业务不变量、关键工作流和权限边界。
+
+产品能力章节回答：
+
+```text
+用户可以做什么
+```
+
+本章回答：
+
+```text
+这些操作作用于什么对象
+对象归属于谁
+对象之间是什么关系
+操作需要满足什么条件
+操作完成后产生什么结果
+权限、状态和生命周期如何变化
+```
+
+本章暂不规定：
+
+```text
+数据库表结构
+ORM Entity
+REST API 路径
+Repository 接口
+服务拆分方式
+消息中间件
+具体文件系统布局
+```
+
+这些内容在技术设计阶段确定。
+
+---
+
+### 3.1 统一领域语言
+
+同一概念在产品文档、代码、接口和数据库中应使用一致名称。
+
+#### 3.1.1 身份与空间
+
+| 名称 | 定义 |
+| :---- | :-- |
+| User | 使用平台的自然人身份 |
+| Workspace | 成员、权限、Project、资源权益和治理规则的归属边界 |
+| Personal Workspace | 默认由单个用户拥有和管理的 Workspace |
+| Collaborative Workspace | 由多个成员按照角色共同使用的 Workspace |
+| Membership | User 在 Workspace 中的身份 (决定了在本 Workspace 能做的操作) |
+| Workspace Asset Grant | 某个 Workspace 获得使用其他 Workspace 或平台资产的权限 |
+
+`Membership` 的结构入下：
+
+```text
+Membership
+├── User
+├── Workspace
+├── Role
+└── Status
+```
+
+Profile 不改变 Workspace 的基础归属和权限边界。Course Profile 及课程专用领域对象尚未进入正式设计，统一记录在 `docs/product/deferred.md`。
+
+#### 3.1.2 Project 与版本
+
+| 中文名称 | 英文名称 | 定义 |
+| :----- | :---- | :--- |
+| Project | Project | Workspace 下可编辑、可版本化、可运行的计算项目 |
+| Project 当前状态 | Project Working State | Project 当前可编辑的文件和目录状态 |
+| Project 版本 | Project Version | Project 在某个时刻正式保存的不可变内容快照 |
+| 分支 | Project Branch | 指向某个 Project Version 的可变开发引用 |
+| 运行方案 | Run Configuration | Project 下可编辑、可命名、可复用的执行配置 |
+| 派生关系 | Fork Relation | 新 Project 与来源 Project Version 之间的来源记录 |
+| 模板 | Template | 对可复用 Project Version 的可发现目录入口 |
+| 模板修订 | Template Revision | Template 在某次发布时形成的不可变模板内容版本，用于创建新的 Project |
+
+#### 3.1.3 运行环境、内容资源与输入
+
+| 中文名称 | 英文名称 | 定义 |
+| :--- | :--- | :--- |
+| 运行环境 | Environment | 可被多个 Project 选择和复用的独立运行基础 |
+| 环境版本 | Environment Version | 某个 Environment 已发布的不可变版本 |
+| 共享资源 | Shared Resource | 独立于 Project 存在，可版本化、授权和长期管理的内容资源 |
+| 共享资源版本 | Shared Resource Version | Shared Resource 已发布的不可变内容版本 |
+| Artifact | Artifact | 某次 Run 产生并被保存的不可变结果 |
+| 确定内容 | Content Version | 具有稳定内容身份、不会原地变化的文件、文件集合或目录快照 |
+| 输入绑定 | Input Binding | 将一份确定内容绑定到 Run 中指定访问路径的关系 |
+| 输入访问路径 | Input Access Path | 确定内容在 Run 执行环境中暴露的文件或目录路径 |
+
+运行环境与输入内容承担不同职责：
+
+```text
+Environment Version
+→ 决定代码在什么软件和系统基础上运行
+
+Input Binding
+→ 决定 Run 可以读取哪些确定内容，以及通过什么路径读取
+```
+
+Shared Resource Version 和 Artifact 虽然具有不同的业务语义，但都可以向 Run 提供确定内容：
+
+```text
+Shared Resource Version
+└── 提供被正式版本化和授权管理的确定内容
+
+Artifact
+└── 提供某次 Run 产生的确定结果内容
+
+Shared Resource Version ──┐
+                          ├── 提供 Content Version
+Artifact ─────────────────┘
+                                  ↓
+                            Input Binding
+
+Content Version 是对不可变文件或目录内容的统一抽象，不一定对应用户可直接管理的独立对象。
+```
+
+Input Binding 不需要针对不同来源设计不同结构。它统一引用一份确定内容，并指定该内容在 Run 中的访问路径：
+
+```text
+Input Binding
+├── Source Content Version
+├── 可选 Source Subpath
+└── Input Access Path
+```
+
+例如：
+
+```text
+Input Binding
+├── Source Content Version: dataset-v2
+├── Source Subpath: train/
+└── Input Access Path: /inputs/train
+```
+
+含义是：
+
+```text
+dataset-v2 中的 train/
+        ↓
+在 Run 中暴露为 /inputs/train
+```
+
+Input Binding 可以存在于两个位置：
+
+```text
+Run Configuration
+→ 保存可编辑、可复用的输入配置
+
+Run Snapshot
+→ 保存创建 Run 时已经解析和固定的不可变输入记录
+```
+
+创建 Run 时，平台必须将 Run Configuration 中的 Input Binding 解析为当前有权使用的确定内容，并固定到 Run Snapshot 中。后续来源对象的授权或可用状态发生变化，不得改变已经形成的 Run Snapshot。
+
+所有通过 Input Binding 提供的内容仅能以只读方式供 Run 使用：
+
+```text
+确定内容
+→ 只读提供给 Run
+
+需要修改
+→ 复制到 Run 工作目录或 Project 后再修改
+```
+
+#### 3.1.4 配置变量、Secret 与环境变量
+
+| 中文名称 | 英文名称 | 定义 |
+| :---- | :------ | :--- |
+| 配置变量 | Variable | 由 Workspace 管理、可直接查看和引用的非敏感键值配置 |
+| Secret | Secret | 由 Workspace 安全保存、用于存储 Token、密码和密钥等敏感信息的键值配置 |
+| 环境变量 | Environment Variable | 由 Run Configuration 定义，并在 Run 执行时提供给用户程序的键值配置 |
+
+Variable 和 Secret 属于 Workspace，环境变量属于 Run Configuration，并在 Run 执行时生效：
+
+```text
+Workspace
+├── Variables
+│   ├── LOG_LEVEL = INFO
+│   └── MODEL_NAME = resnet50
+│
+└── Secrets
+    ├── HF_TOKEN
+    └── WANDB_API_KEY
+
+Project
+└── Run Configuration
+    └── Environment Variables
+```
+
+Variables 用于保存非敏感配置，Secrets 用于保存密码、Token 和密钥等敏感信息。Secret 只有在 Run Configuration 中被明确引用时，才会提供给对应的 Run。
+
+Run Configuration 使用与 GitHub Actions 类似的表达式引用 Variable 和 Secret：
+
+```yaml
+env:
+  LOG_LEVEL: ${{ vars.LOG_LEVEL }}
+  BATCH_SIZE: "32"
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+```
+
+其中：
+
+```text
+Literal Value
+→ 直接保存在 Run Configuration 中
+
+${{ vars.LOG_LEVEL }}
+→ 引用 Workspace Variable
+
+${{ secrets.HF_TOKEN }}
+→ 引用 Workspace Secret
+
+env
+→ 指定最终提供给程序的环境变量名称
+```
+
+因此，Variable 或 Secret 的名称不必与最终的环境变量名称相同：
+
+```yaml
+env:
+  TOKEN: ${{ secrets.HF_TOKEN }}
+```
+
+运行时等价于：
+
+```bash
+TOKEN=<HF_TOKEN 对应的秘密值>
+```
+
+用户程序只需要按照普通环境变量读取：
+
+```python
+import os
+
+token = os.environ["TOKEN"]
+```
+
+创建 Run 时：
+
+```text
+普通值和 Variable
+→ 解析后固定到 Run Snapshot
+
+Secret
+→ Run Snapshot 只保存引用表达式
+→ 不保存 Secret 明文
+→ 执行 Run 时由平台安全提供
+```
+
+Variable 和 Secret 应遵守以下规则：
+
+```text
+1. 非敏感配置使用 Variables，敏感信息使用 Secrets。
+2. Project 文件和 Run Configuration 不得保存 Secret 明文。
+3. Secret 必须在 Run Configuration 中显式引用后才能被 Run 使用。
+4. Run Snapshot、日志和页面不得展示 Secret 明文。
+5. 创建 Run 时，平台必须检查引用的 Variable 和 Secret 是否存在且可用。
+6. Fork 或使用模板时，可以复制引用表达式，但不能复制源 Workspace 的 Secret。
+7. 目标 Workspace 缺少相应 Variable 或 Secret 时，Run Configuration 应显示为未解析状态。
+```
+
+最终领域关系就是：
+
+```text
+Workspace
+├── Variable
+└── Secret
+
+Run Configuration
+└── Environment Variables
+    ├── Literal Value
+    ├── ${{ vars.NAME }}
+    └── ${{ secrets.NAME }}
+        ↓ 创建 Run
+
+Run Snapshot
+└── 已固定的环境变量配置
+```
+
+#### 3.1.5 算力、权益与调度
+
+| 中文名称 | 英文名称 | 定义 |
+| :------ | :----- | :--- |
+| 算力方案 | Compute Plan | 平台面向用户提供的命名资源与运行限制组合 |
+| 资源权益 | Resource Entitlement | Workspace 获得的算力方案使用资格及其有效期限 |
+| 权益申请 | Entitlement Request | Workspace 请求开通、调整或延长资源权益的申请记录 |
+| 算力请求 | Compute Request | Run Configuration 为一次运行声明的具体资源需求 |
+| 已解析调度配置 | Resolved Scheduler Configuration | 创建 Run 时解析并固定的最终调度与资源参数 |
+| 资源使用记录 | Resource Usage Record | Run 执行产生的资源分配、运行时长、运行状态及可观测使用情况 |
+
+权益申请审核通过后，形成或更新 Workspace 的资源权益：
+
+```text
+Entitlement Request
+        ↓ 审核通过
+Resource Entitlement
+        ↓
+Workspace 可以使用相应的 Compute Plan
+```
+
+Run Configuration 选择算力方案，并声明本次运行的具体资源需求：
+
+```text
+Run Configuration
+├── Compute Plan
+└── Compute Request
+    ├── CPU
+    ├── Memory
+    ├── GPU
+    └── Time Limit
+```
+
+创建 Run 时，平台根据资源权益、算力方案、算力请求和调度映射，生成最终调度配置：
+
+```text
+Resource Entitlement
+        +
+Compute Plan
+        +
+Compute Request
+        ↓ 平台解析
+Resolved Scheduler Configuration
+        ↓
+提交并执行 Run
+        ↓
+Resource Usage Record
+```
+
+各概念分别回答：
+
+```text
+Resource Entitlement
+→ Workspace 有权使用哪些算力方案
+
+Compute Plan
+→ 平台向用户提供什么算力方案
+
+Compute Request
+→ 本次运行具体需要多少资源
+
+Resolved Scheduler Configuration
+→ 本次 Run 最终使用什么调度与资源参数
+
+Resource Usage Record
+→ 本次 Run 实际分配了什么资源、运行了多久
+```
+
+应遵守以下规则：
+
+```text
+1. Workspace 只能使用其 Resource Entitlement 允许的 Compute Plan。
+
+2. Compute Request 必须符合所选 Compute Plan 的资源范围和运行限制。
+
+3. Resolved Scheduler Configuration 在创建 Run 时固定到 Run Snapshot；
+   后续权益、算力方案或映射规则变化不得改变已有 Run。
+
+4. Resource Usage Record 用于运行详情、故障定位和平台运维。
+
+5. Entitlement Request 是申请记录；
+   只有审核通过后形成的 Resource Entitlement 才代表有效使用资格。
+```
+
+底层实现不在本章涉及。
+
+#### 3.1.6 Run 与执行过程
+
+| 中文名称 | 英文名称 | 定义 |
+| :------ | :----- | :--- |
+| Run | Run | Project 基于确定版本和运行配置创建的一次独立执行实例 |
+| Run 快照 | Run Snapshot | Run 创建时固定、用于执行和复现的不可变配置记录 |
+| 调度任务 | Scheduler Job | Run 提交后由底层调度系统创建和执行的任务 |
+| 日志 | Log | Run 执行过程中产生的标准输出、标准错误和平台执行事件 |
+| Artifact 收集规则 | Artifact Collection Rule | 指定 Run 执行结束后，将哪些输出文件或目录保存为 Artifact 的配置 |
+| 指标 | Metric | Run 可选上报的结构化数值结果或时间序列，用于结果展示和运行对比 |
+
+Run Configuration 是 Project 下可编辑、可复用的运行方案，包括：
+
+```text
+Run Configuration
+├── Working Directory
+├── Command
+├── Environment
+├── Input Binding
+├── Environment Variables
+├── Compute Plan
+├── Compute Request
+└── Artifact Collection Rules
+```
+
+创建 Run 时，平台将当前 Project Version 与 Run Configuration 中的配置解析为确定内容，并生成 Run Snapshot：
+
+```text
+Project Version
+        +
+Run Configuration
+        +
+创建时校验与解析结果
+        ↓
+Run Snapshot
+        ↓
+Run
+```
+
+Run Configuration 与 Run Snapshot 包含相近的配置内容，但承担不同职责：
+
+```text
+Run Configuration
+→ 描述以后准备怎样运行
+→ 可以编辑和复用
+
+Run Snapshot
+→ 记录本次 Run 实际按照什么配置运行
+→ 创建后不可修改
+```
+
+创建 Run 时，各项配置均固定成不变量，于是：
+
+```text
+Run Snapshot
+=
+Project Version
++
+已解析并固定的 Run Configuration
++
+Resolved Scheduler Configuration
+```
+
+Run 可以保留对来源 Run Configuration 的引用，但该引用不作为执行依据：
+
+```text
+Run
+├── Source Run Configuration
+│   └── 用于来源追踪和配置复用
+│
+└── Run Snapshot
+    └── 用于实际执行、历史查看和复现
+```
+
+Run 创建后，包含来源信息、不可变执行快照和可变化的执行信息：
+
+```text
+Run
+├── 来源信息
+│   ├── Project
+│   ├── Source Run Configuration
+│   ├── Created By
+│   └── Created At
+│
+├── Run Snapshot
+│   └── 创建后不可修改
+│
+└── Execution Information
+    ├── Status
+    ├── Scheduler Job Reference
+    ├── Submitted At
+    ├── Started At
+    ├── Finished At
+    └── Exit Information
+```
+
+平台先创建 Run 并固定 Run Snapshot，再向底层调度系统提交任务：
+
+```text
+创建 Run
+→ 固定 Run Snapshot
+→ 提交调度任务
+→ 关联 Scheduler Job
+→ 更新 Run 执行状态
+```
+
+Run 执行过程中可以关联或产生：
+
+```text
+Run
+├── Scheduler Job
+├── Log
+├── Artifact
+├── Resource Usage Record
+└── Metric（可选）
+```
+
+其中，Artifact 和 Resource Usage Record 沿用前文定义。
+
+Metric 可以表示单个结果值，也可以表示随执行过程变化的时间序列，主要用于：
+
+```text
+结果可视化
+训练曲线展示
+不同 Run 之间的结果比较
+最佳 Run 筛选
+```
+
+Metric 与 Resource Usage Record 承担不同职责：
+
+```text
+Metric
+→ 用户程序产生的业务或实验结果
+→ 例如 accuracy、loss、score
+
+Resource Usage Record
+→ 平台采集的执行和资源使用信息
+→ 例如运行时长、CPU、内存和 GPU 使用情况
+```
+
+应遵守以下规则：
+
+```text
+1. Run Configuration 可以编辑和复用，
+   但修改不得影响已经创建的 Run。
+
+2. 创建 Run 时，平台必须将执行所需的可变引用
+   解析为确定版本、确定内容或确定配置。
+
+3. 每个 Run 必须拥有独立的 Run Snapshot；
+   执行时不得重新读取当前 Run Configuration。
+
+4. Run Snapshot 创建后不得修改。
+
+5. Run Snapshot 不得保存 Secret 明文；
+   Secret 只固定引用关系，并在执行时由平台安全提供。
+
+6. 平台先创建 Run 并固定 Run Snapshot，
+   再向底层调度系统提交任务；
+   提交成功后，Run 才关联对应的 Scheduler Job。
+
+7. Run 状态、执行时间和调度任务信息
+   可以随执行过程更新。
+
+8. Log、Metric、Artifact 和 Resource Usage Record
+   均由 Run 执行产生，不属于 Run Snapshot。
+
+9. Metric 是可选结果，并非每个 Run 都必须上报。
+
+10. 用户重新运行时必须创建新的 Run 和 Run Snapshot，
+    不能修改或重新启动原有 Run。
+```
+
+核心关系可以概括为：
+
+```text
+Run Configuration
+→ 可编辑、可复用的运行方案
+
+Run Snapshot
+→ 本次执行不可变的配置事实
+
+Run
+→ 一次独立执行及其完整生命周期记录
+```
+
+#### 3.1.7 Profile 与场景扩展
+
+| 中文名称 | 英文名称 | 定义 |
+| :------ | :----- | :--- |
+| Profile | Profile | 将平台基础能力、默认配置和工作流组合为特定使用场景的扩展定义 |
+| Profile 版本 | Profile Version | 某个 Profile 已发布的不可变版本 |
+| Profile 实例 | Profile Instance | 某个 Workspace 启用确定 Profile Version 后形成的场景配置 |
+
+Profile 是建立在平台基础领域模型之上的场景扩展机制：
+
+```text
+Profile
+├── 组合平台基础能力
+├── 提供场景工作流
+├── 提供默认配置
+├── 提供场景导航与界面
+└── 可以引入场景专属对象
+```
+
+Workspace 启用 Profile 时，应形成对应的 Profile Instance：
+
+```text
+Workspace
+└── Profile Instance
+    └── Profile Version
+```
+
+Profile 与 Workspace 类型是不同概念：
+
+```text
+Workspace
+→ 成员、权限、资源和对象的归属边界
+
+Profile
+→ Workspace 中启用的场景能力和工作流
+```
+
+Profile 必须遵守以下规则：
+
+```text
+1. Profile Instance 必须属于一个 Workspace。
+
+2. Profile Instance 必须引用确定的 Profile Version。
+
+3. Profile Version 发布后不得原地修改；
+   Profile 发生变化时应发布新版本。
+
+4. Profile 可以组合基础能力并引入场景专属对象，
+   但不能改变 Workspace、Project、Run 等基础对象的归属关系。
+
+5. Profile 不能绕过平台既有的权限、版本不可变性和执行隔离规则。
+
+6. Profile Version 更新后，不应静默改变已有 Profile Instance；
+   是否升级应由平台按照明确规则处理。
+```
+
+---
+
+### 3.2 核心对象关系
+
+平台中的对象关系主要分为两类：
+
+```text
+领域对象之间主要存在：
+
+归属关系
+→ 表示对象位于哪个管理和生命周期边界内。
+
+引用关系
+→ 表示对象使用或指向另一个对象，
+  不改变被引用对象的归属。
+
+关系对象
+→ 用于记录两个或多个对象之间具有独立业务语义的关系，
+  如 Membership、Fork Relation 和 Workspace Asset Grant 关系。
+```
+
+#### 3.2.1 对象归属关系
+
+主要对象归属如下：
+
+```text
+Platform
+├── Compute Plan
+├── Environment *
+│   └── Environment Version
+└── Shared Resource *
+    └── Shared Resource Version
+
+Workspace
+├── Project
+│   ├── Project Working State
+│   ├── Project Version
+│   ├── Project Branch
+│   ├── Run Configuration
+│   └── Run
+│       ├── Run Snapshot
+│       ├── Log
+│       ├── Artifact
+│       ├── Metric
+│       └── Resource Usage Record
+│
+├── Template
+│   └── Template Revision
+├── Profile
+│   └── Profile Version
+├── Environment *
+│   └── Environment Version
+├── Shared Resource *
+│   └── Shared Resource Version
+├── Variable
+├── Secret
+├── Resource Entitlement
+├── Entitlement Request
+└── Profile Instance
+```
+
+其中：
+
+```text
+* Environment 和 Shared Resource
+  可以由 Platform 持有，也可以由某个 Workspace 持有。
+
+Project、Template、Profile
+→ 属于 Workspace。
+
+Project Working State、Project Version、
+Project Branch、Run Configuration
+→ 属于对应 Project。
+
+Run
+→ 属于对应 Project。
+
+Run Snapshot、Log、Artifact、Metric、
+Resource Usage Record
+→ 属于对应 Run。
+
+Template Revision、Profile Version、
+Environment Version、Shared Resource Version
+→ 属于各自的上级对象。
+
+Variable、Secret、Resource Entitlement、
+Entitlement Request、Profile Instance
+→ 属于 Workspace。
+
+Compute Plan
+→ 由 Platform 管理。
+```
+
+本图仅展示主要领域对象的归属关系，配置项、值对象和对象间引用关系不在本图中展开。
+
+---
+
+#### 3.2.2 对象引用关系
+
+主要引用关系如下：
+
+```text
+Project Branch
+└── Project Version
+
+Run Configuration
+├── Environment
+├── Compute Plan
+├── Input Binding
+│   ├── Shared Resource Version
+│   └── Artifact
+└── Environment Variable
+    ├── Variable
+    └── Secret
+
+Run
+└── Source Run Configuration（可选）
+
+Run Snapshot
+├── Project Version
+├── Environment Version
+├── Compute Plan
+└── Input Binding
+    ├── Shared Resource Version
+    └── Artifact
+
+Resource Entitlement
+└── Compute Plan
+
+Profile Instance
+└── Profile Version（来源引用）
+```
+
+其中：
+
+```text
+Project Branch
+→ 指向 Project Version，Branch 可变化，Version 不变。
+
+Run Configuration
+→ 保存可编辑、可复用的运行配置与资源引用。
+
+Run Snapshot
+→ 固定本次执行使用的确定版本、输入和配置；
+  Run 执行以 Run Snapshot 为准。
+
+Project Version
+→ 提供 Run 自身的项目内容。
+
+Input Binding
+→ 提供额外输入内容，可引用 Shared Resource Version 或 Artifact。
+
+Resource Entitlement
+→ 表示 Workspace 获得某个 Compute Plan 的使用资格。
+
+Profile Instance
+→ 引用确定的 Profile Version。
+```
+
+---
+
+#### 3.2.3 关系总览
+
+图例：
+
+```text
+├──   归属关系
+──▶   引用关系
+··▶   可选引用关系
+*     可以由 Platform 或 Workspace 持有
+```
+
+```text
+User
+   ╲
+    Membership
+   ╱
+Workspace
+│
+├── Project
+│   ├── Project Working State
+│   ├── Project Version ◀──── Project Branch
+│   │
+│   ├── Run Configuration
+│   │   ├──▶ Environment
+│   │   ├──▶ Compute Plan
+│   │   ├── Input Binding ──▶ Shared Resource Version / Artifact
+│   │   └── Environment Variable ──▶ Variable / Secret
+│   │
+│   └── Run
+│       ├··▶ Source Run Configuration
+│       │
+│       ├── Run Snapshot
+│       │   ├──▶ Project Version
+│       │   ├──▶ Environment Version
+│       │   ├──▶ Compute Plan
+│       │   └── Input Binding ──▶ Shared Resource Version / Artifact
+│       │
+│       ├── Log
+│       ├── Artifact
+│       ├── Metric
+│       └── Resource Usage Record
+│
+├── Template
+│   └── Template Revision
+│
+├── Profile
+│   └── Profile Version
+│
+├── Profile Instance ──────────────▶ Profile Version
+│
+├── Environment *
+│   └── Environment Version
+│
+├── Shared Resource *
+│   └── Shared Resource Version
+│
+├── Variable
+├── Secret
+│
+├── Resource Entitlement ─────────▶ Compute Plan
+│
+└── Entitlement Request
+
+
+Platform
+├── Compute Plan
+├── Environment *
+│   └── Environment Version
+└── Shared Resource *
+    └── Shared Resource Version
+
+
+Source Project Version
+        ╲
+     Fork Relation
+        ╱
+Target Project
+
+
+Workspace
+        ╲
+ Workspace Asset Grant
+        ╱
+Environment / Shared Resource
+```
+
+这里有几个关键语义：
+
+```text
+Membership
+→ 连接 User 与 Workspace，表示 User 在 Workspace 的身份。
+  User 是身份主体，Workspace 是主要的成员、权限和业务对象治理边界。
+  User 通过 Membership 与 Workspace 建立成员关系。
+
+Project Version
+→ 提供 Run 自身的项目内容。
+
+Input Binding
+→ 提供额外输入内容，
+  来源为 Shared Resource Version 或 Artifact。
+
+Run Configuration
+→ 保存可编辑、可复用的引用和配置。
+
+Run Snapshot
+→ 固定本次执行实际使用的确定版本、输入和配置。
+
+Profile Instance
+→ 属于启用它的 Workspace，
+  引用确定的 Profile Version。
+
+Resource Entitlement
+→ 使 Workspace 获得 Compute Plan 的使用资格。
+
+Workspace Asset Grant
+→ 使 Workspace 获得其他 Workspace 或 Platform
+  所持 Environment / Shared Resource 的使用资格。
+
+Environment、Shared Resource
+→ 可以由 Platform 或 Workspace 持有。
+
+Fork Relation
+→ 记录新 Project 从哪个 Project Version 派生。
+```
+
+本图用于概括核心领域对象的主要归属和引用关系，不表示数据库表结构、外键关系或具体实现依赖。
+
+---
+
+### 3.3 核心产品规则
+
+#### 3.3.0 规则标识与演进规范
+
+核心产品规则使用 `GR-xxx` 作为稳定标识，其中 `GR` 表示 Global Rule。
+
+规则编号按类别划分：
+
+```text
+GR-1xx  Workspace 与权限边界
+GR-2xx  版本、快照与历史一致性
+GR-3xx  Run 与执行
+GR-4xx  资源使用与跨 Workspace
+GR-5xx  派生、复用与扩展
+
+GR-6xx ~ GR-9xx
+→ 保留给未来新增规则类别
+```
+
+同一区间内按顺序分配编号。规则编号用于标识规则本身，不表示其在文档中的排列顺序。
+
+每条规则应具有唯一编号、简短名称和一个可判定的核心约束，并在必要时明确适用对象、条件和结果。
+
+规则具有以下生命周期状态：
+
+```text
+Draft
+→ 尚未形成正式基线，可以修改、删除、合并、拆分或重新编号。
+
+Active
+→ 已纳入正式规范基线，作为当前产品设计、实现和测试的有效约束。
+
+Superseded
+→ 已被其他规则替代，不再作为当前有效规则。
+
+Retired
+→ 对应约束已退出产品模型，不再适用。
+```
+
+规则完成必要评审并随正式规范版本形成基线后，由 `Draft` 转为 `Active`。
+
+规则进入 `Active` 后，其编号不得复用，也不得因文档结构调整而重新编号。规则演进遵循以下原则：
+
+1. 措辞修正、补充说明或消除歧义，且不改变核心业务约束时，保留原编号。
+2. 同一业务约束随产品演进发生调整时，可以保留原编号，并通过规范版本、变更记录和 Git 历史保存其演进过程。
+3. 规则被拆分、合并、职责发生根本变化或被新的规则体系取代时，应创建新的规则编号，并将原规则标记为 `Superseded`。
+4. 对应约束不再适用时，将规则标记为 `Retired`；`Superseded` 和 `Retired` 的编号均不得复用。
+
+是否仍属于同一条规则，以其约束的核心业务问题是否保持一致为判断依据。
+
+引用当前规则时使用规则编号，如 `GR-303`；引用某一历史版本的规则时，应同时注明对应的规范版本。
+
+#### 3.3.1 Workspace 与权限边界
+
+##### **GR-101 — Workspace 对象归属**
+
+Project、Template、Profile、Variable、Secret、Resource Entitlement、Entitlement Request 和 Profile Instance 必须且只能属于一个 Workspace。
+
+##### **GR-102 — Membership 操作边界**
+
+User 必须通过有效 Membership，才能以 Workspace 成员身份操作该 Workspace 内的对象。
+
+##### **GR-103 — Membership Role 权限**
+
+User 在 Workspace 中可执行的操作必须受其 Membership Role 约束。
+
+##### **GR-104 — Collaborative Workspace 所有权**
+
+Collaborative Workspace 必须始终具有唯一的有效 Owner；Owner 转移完成前不得移除或退出原 Owner。
+
+##### **GR-105 — 权限与资源资格分离**
+
+当 User 在 Workspace 中执行涉及外部资产或 Compute Plan 的操作时，平台必须分别校验：
+
+- User 是否具有有效 Membership，且其 Membership Role 是否允许执行该操作；
+- Workspace 使用外部 Environment 或 Shared Resource 时，是否具有对应的有效 Workspace Asset Grant；
+- Workspace 使用 Compute Plan 时，是否具有对应的有效 Resource Entitlement。
+
+任一项校验通过，不得视为其他校验同时通过。
+
+##### **GR-106 — 平台管理权限与 Workspace 数据权限分离**
+
+Platform 级管理权限只能授予对应的平台管理操作，不得仅因具有 Platform 管理角色而自动获得 Workspace 私有内容的读取权限或 Secret 明文访问权限。
+
+---
+
+#### 3.3.2 版本、快照与历史一致性
+
+##### **GR-201 — 版本内容不可变**
+
+Project Version、Environment Version、Shared Resource Version、Template Revision 和 Profile Version 创建后，其已版本化内容不得原地修改；内容发生变化时必须形成新的 Version 或 Revision。
+
+##### **GR-202 — Run Snapshot 不可变**
+
+Run Snapshot 创建后不得修改；Run 创建之后发生的配置变化不得回写已有 Run Snapshot。
+
+##### **GR-203 — Artifact 内容不可变**
+
+Artifact 创建后，其内容不得原地修改；需要保存不同内容时必须形成新的 Artifact。
+
+##### **GR-204 — 历史对象不受后续修改影响**
+
+对 Project Working State、Run Configuration、Environment、Shared Resource、Template 或 Profile 的后续修改，只能影响之后创建的版本、配置或 Run，不得改变已经形成的 Version、Revision、Run Snapshot 或 Artifact。
+
+##### **GR-205 — 确定引用不得漂移**
+
+Run Snapshot 中需要固定的对象引用必须指向确定的 Version 或 Artifact；引用一经形成，不得因 `current`、`latest`、默认版本或上级对象更新而自动改变目标。
+
+Secret 等明确采用运行时解析机制的引用不受本规则约束。
+
+##### **GR-206 — 不可变性与生命周期独立**
+
+Project Version、Run Snapshot、Artifact 等不可变对象在其存在期间不得原地修改；不可变性不表示永久保留。
+
+当其所属的 Project、Run 等上级对象被删除时，可以随所属生命周期一并删除；已经通过发布、派生等操作形成的独立对象不受源对象删除影响。
+
+---
+
+#### 3.3.3 Run 与执行规则
+
+##### **GR-301 — Run 归属**
+
+每个 Run 必须且只能属于一个 Project。
+
+##### **GR-302 — Run Snapshot 生成**
+
+创建 Run 时，平台必须生成独立的 Run Snapshot，并在其中固定本次执行使用的 Project Version、执行配置及相关资源版本。
+
+若 Run 基于 Run Configuration 创建，其内容必须在创建 Run 时解析并固化到 Run Snapshot。
+
+##### **GR-303 — Run 执行配置依据**
+
+Run 的执行必须以其 Run Snapshot 为唯一配置依据；创建 Run 后发生的 Project、Run Configuration 或相关资源变化不得改变本次执行配置。
+
+##### **GR-304 — Secret 执行规则**
+
+Run Snapshot 不得保存 Secret 明文；需要使用 Secret 时，只能保存其引用，并由平台在执行时按当前有效授权安全提供对应值。
+
+##### **GR-305 — 执行结果与执行快照分离**
+
+Run Snapshot 只能记录执行开始前已确定的输入和配置；Log、Artifact、Metric 和 Resource Usage Record 等执行过程中或执行完成后产生的信息不得作为 Run Snapshot 的组成部分。
+
+##### **GR-306 — Run 执行唯一性**
+
+每个 Run 只能表示一次逻辑执行。用户对已有 Run 发起重新执行时，平台必须创建新的 Run 和新的 Run Snapshot，不得复用原 Run 表示新的执行。
+
+---
+
+#### 3.3.4 资源使用与跨 Workspace 规则
+
+##### **GR-401 — Environment 与 Shared Resource 使用资格**
+
+Workspace 可以使用自身持有的 Environment 和 Shared Resource；使用 Platform 或其他 Workspace 持有的 Environment 或 Shared Resource 时，必须具有对应的有效 Workspace Asset Grant。
+
+##### **GR-402 — 资源授权与版本固定分离**
+
+Workspace Asset Grant 作用于顶层 Environment 或 Shared Resource；创建 Run 时，必须在 Run Snapshot 中固定本次实际使用的 Environment Version 或 Shared Resource Version。
+
+##### **GR-403 — Input Binding 内容确定性**
+
+Input Binding 必须引用确定的输入内容，其来源只能是 Shared Resource Version 或 Artifact。
+
+##### **GR-404 — 输入源只读**
+
+通过 Input Binding 提供的输入不得被 Run 原地修改；运行过程中需要产生或修改的内容必须写入本次 Run 的可写空间，并按需要形成 Artifact。
+
+##### **GR-405 — Artifact Workspace 边界**
+
+Artifact 可以直接作为同一 Workspace 中后续 Run 的 Input Binding 来源；Artifact 不得直接跨 Workspace 作为输入使用。
+
+需要跨 Workspace 使用 Artifact 内容时，必须先将其发布为 Shared Resource，并按照 Shared Resource 的授权规则使用。
+
+##### **GR-406 — Compute Plan 使用资格**
+
+Workspace 只能使用其有效 Resource Entitlement 所允许的 Compute Plan。
+
+##### **GR-407 — Secret 跨 Workspace 隔离**
+
+Secret 的值和访问权限不得因 Fork、Template 或其他跨 Workspace 的派生、复用行为而自动复制或继承到目标 Workspace。
+
+配置中对 Secret 的引用表达式可以被复制，但必须在目标 Workspace 中重新解析并满足其自身的 Secret 和权限条件。
+
+##### **GR-408 — Ownership 变更后的授权失效**
+
+Environment 或 Shared Resource 的 Ownership 发生变化后，基于原 Owner 建立的 Workspace Asset Grant 不再有效；后续使用资格必须由新的 Owner 重新授权。
+
+---
+
+#### 3.3.5 派生、复用与扩展规则
+
+##### **GR-501 — Fork 来源与追踪**
+
+Fork 必须从确定的 Project Version 创建新的 Project，并记录 Source Project Version 与目标 Project 之间的 Fork Relation。
+
+##### **GR-502 — Fork 后独立**
+
+Fork 完成后，目标 Project 具有独立生命周期；源 Project 与目标 Project 的后续修改或删除不得相互影响。
+
+##### **GR-503 — Fork 权限与历史隔离**
+
+Fork 可以复制 Project 内容、Run Configuration 以及可复用的资源引用，但不得复制或继承源 Workspace 的 Membership、Resource Entitlement、Secret 值及其访问权限，也不得复制源 Project 的 Run 历史和执行结果。
+
+被复制的资源引用不得使目标 Workspace 自动继承源 Workspace 的使用资格，实际使用时必须按照目标 Workspace 的权限与资源资格重新校验。
+
+##### **GR-504 — Template 创建独立性**
+
+通过 Template Revision 创建 Project 后，目标 Project 必须独立存在，不得依赖 Template Revision 的后续状态或更新。
+
+Template 发布新的 Revision 不得改变已经创建的 Project。
+
+##### **GR-505 — Profile Instance 版本固定**
+
+Profile Instance 必须基于确定的 Profile Version 创建，并固化其生效定义；源 Profile 或 Profile Version 的后续变化和删除不得改变已有 Profile Instance。
+
+##### **GR-506 — Profile 显式升级**
+
+已有 Profile Instance 切换到其他 Profile Version 时，必须通过明确的升级操作完成，不得因 Profile 默认版本或最新版本变化而静默升级。
+
+##### **GR-507 — Profile 扩展边界**
+
+Profile 可以组合平台基础能力、默认配置和场景工作流，但其扩展不得改变或绕过 Workspace 的归属与权限边界、版本不可变规则以及 Run Snapshot 的执行语义。
+
+---
+
+### 3.4 核心领域操作
+
+#### 3.4.1 Workspace 生命周期与治理操作
+
+##### 开通 Personal Workspace
+
+当 User 符合 Personal Workspace 使用资格且当前不存在有效 Personal Workspace 时，平台为其开通一个 Personal Workspace。
+
+同一 User 同一时刻最多存在一个有效 Personal Workspace。Personal Workspace 在其有效期间仅供对应 User 使用，不支持其他 User 加入或 Owner 转移。
+
+Personal Workspace 使用资格独立于 User 的平台访问资格和 Collaborative Workspace Membership。
+
+##### 创建 Collaborative Workspace
+
+具有创建权限的 User 可以创建 Collaborative Workspace。
+
+创建时必须建立创建者的 Membership，并确定唯一 Owner。
+
+Collaborative Workspace 具有独立生命周期，不依赖创建者的 Personal Workspace。
+
+##### 删除 Workspace
+
+Personal Workspace 在对应 User 失去使用资格后结束正常使用，并可以按照平台规则删除；Collaborative Workspace 可以由具有相应权限的主体显式删除。
+
+Workspace 删除时，仍归属于该 Workspace 的对象随其生命周期结束；已经转移，或已经通过派生、实例化等操作形成独立生命周期的对象不受影响。
+
+Workspace 删除不得删除 User 身份，也不得影响 User 在其他 Workspace 中独立存在的 Membership。
+
+##### 管理 Membership
+
+Collaborative Workspace 支持建立 Membership、变更 Role、退出和移除成员。
+
+Membership 的变化只影响对应 User 在该 Workspace 中的成员身份和操作权限，不改变 Workspace 已有对象、资源资格及其他 Membership。
 
 Membership 管理不得破坏 Collaborative Workspace 唯一有效 Owner 的约束；Owner 变更必须通过 Owner 转移操作完成。
 
@@ -1233,8 +2798,3 @@ Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式�
 Gallery、Official Asset / Official Library、Course Profile、Shareable Asset 等暂不进入当前 Roadmap，继续作为延后设计事项管理。
 
 Competition V1 之后，再根据真实投产需求规划部署、监控、备份恢复、数据迁移、安全和长期运维等生产化能力。
-
-
-Wall time: 0.03 seconds
-
-[Showing lines 1-617 and 2184-2799 of 2799; 1,566 middle lines (53.8KB) elided. Read artifact://1500 for full output]
