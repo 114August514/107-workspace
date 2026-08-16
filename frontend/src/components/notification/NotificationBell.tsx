@@ -1,15 +1,17 @@
-import { BellOutlined } from '@ant-design/icons'
-import { Badge, Button, Drawer, List, Space, Tag, Typography, message } from 'antd'
+import { BellIcon } from '@primer/octicons-react'
+import { AnchoredOverlay, Banner, Button, CounterLabel, Label, Link, Text } from '@primer/react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router-dom'
 
 import { api } from '../../api/client'
+import type { AsyncErrorView } from '../../api/errors'
+import { toAsyncError } from '../../api/errors'
 import type { Notification, NotificationPage } from '../../api/types'
 import { useAsync, usePolling } from '../../api/useAsync'
-import { colors } from '../../theme'
-import { AsyncSection } from '../common/AsyncSection'
-import { RelativeTime } from '../common/Mono'
-import { notificationColor, notificationLabel, notificationPath } from './notificationTypes'
+import { formatRelative, formatTime } from '../../utils/format'
+import { AsyncState } from '../common/AsyncState'
+import { notificationLabel, notificationPath, notificationVariant } from './notificationTypes'
+import styles from './NotificationBell.module.css'
 
 /** 未读数的轮询间隔。和 Run 状态轮询共用同一套 usePolling。 */
 const POLL_INTERVAL_MS = 30_000
@@ -40,70 +42,65 @@ export function NotificationBell({ username }: Props) {
   usePolling(() => void refreshCount(), POLL_INTERVAL_MS, true)
 
   return (
-    <>
-      <Badge
-        count={unread}
-        size="small"
-        offset={[-2, 2]}
-        // 顶栏是深色，默认的 colorError 在上面对比度只有 2.74:1。
-        // 见 theme.ts 里 badgeOnDark 的说明。
-        style={{
-          backgroundColor: colors.badgeOnDark,
-          color: colors.badgeOnDarkText,
-          boxShadow: 'none',
-          fontWeight: 600,
-        }}
-      >
+    <AnchoredOverlay
+      open={open}
+      onClose={() => setOpen(false)}
+      renderAnchor={(props) => (
         <Button
-          type="text"
-          aria-label="通知"
-          icon={<BellOutlined style={{ color: colors.onDarkMuted, fontSize: 16 }} />}
-          onClick={() => setOpen(true)}
+          variant="invisible"
+          leadingVisual={BellIcon}
+          trailingVisual={unread > 0 ? <CounterLabel>{unread}</CounterLabel> : undefined}
+          aria-label={unread > 0 ? `通知，${unread} 条未读` : '通知'}
+          {...props}
         />
-      </Badge>
-      <NotificationDrawer
-        open={open}
+      )}
+    >
+      {/* 浮层内容只在展开时挂载，所以列表的加载状态每次打开都会重新走一遍 */}
+      <NotificationPanel
         username={username}
         onClose={() => setOpen(false)}
         onChanged={refreshCount}
       />
-    </>
+    </AnchoredOverlay>
   )
 }
 
-interface DrawerProps {
-  open: boolean
+interface PanelProps {
   username: string
   onClose: () => void
   onChanged: () => void
 }
 
-function NotificationDrawer({ open, username, onClose, onChanged }: DrawerProps) {
+function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
   // token 用来在标记已读之后重新拉列表
   const [token, setToken] = useState(0)
+  // 标记已读失败就地显示在浮层里——顶栏操作不该再弹全局 toast
+  const [markError, setMarkError] = useState<AsyncErrorView | null>(null)
   const notifications = useAsync<NotificationPage>(
     () => api.listNotifications({ page_size: 30 }),
-    [username, token, open],
+    [username, token],
   )
 
   const markAll = async () => {
+    setMarkError(null)
     try {
       await api.markAllNotificationsRead()
       setToken((n) => n + 1)
       onChanged()
     } catch (error) {
-      message.error((error as Error).message)
+      setMarkError(toAsyncError(error as Error) ?? null)
     }
   }
 
   const markOne = async (notification: Notification) => {
     if (notification.read_at) return
+    setMarkError(null)
     try {
       await api.markNotificationRead(notification.id)
       setToken((n) => n + 1)
       onChanged()
     } catch (error) {
-      message.error((error as Error).message)
+      setMarkError(toAsyncError(error as Error) ?? null)
     }
   }
 
@@ -111,37 +108,45 @@ function NotificationDrawer({ open, username, onClose, onChanged }: DrawerProps)
   const hasUnread = items.some((n) => !n.read_at)
 
   return (
-    <Drawer
-      title="通知"
-      open={open}
-      onClose={onClose}
-      width={420}
-      extra={
-        hasUnread && (
-          <Button size="small" onClick={markAll}>
+    <div className={styles.panel}>
+      <div className={styles.panelHeader}>
+        <Text weight="semibold">通知</Text>
+        {hasUnread && (
+          <Button variant="invisible" size="small" onClick={markAll}>
             全部标为已读
           </Button>
-        )
-      }
-    >
-      <AsyncSection
-        loading={notifications.loading}
-        error={notifications.error}
-        empty={items.length === 0}
-        emptyText="还没有通知"
-      >
-        <List
-          dataSource={items}
-          renderItem={(notification) => (
-            <NotificationLine
-              notification={notification}
-              onRead={() => markOne(notification)}
-              onNavigate={onClose}
-            />
-          )}
-        />
-      </AsyncSection>
-    </Drawer>
+        )}
+      </div>
+      {markError && (
+        <div className={styles.panelBanner}>
+          <Banner variant="critical">
+            <Banner.Title>{markError.message}</Banner.Title>
+          </Banner>
+        </div>
+      )}
+      <div className={styles.panelBody}>
+        <AsyncState
+          loading={notifications.loading}
+          loadingText="正在加载通知…"
+          error={toAsyncError(notifications.error)}
+          onRetry={notifications.reload}
+          empty={items.length === 0}
+          emptyText="还没有通知"
+          emptyDescription="收到协作邀请、Run 结束时，这里会出现提醒。"
+        >
+          <ul className={styles.list}>
+            {items.map((notification) => (
+              <NotificationLine
+                key={notification.id}
+                notification={notification}
+                onRead={() => markOne(notification)}
+                onNavigate={onClose}
+              />
+            ))}
+          </ul>
+        </AsyncState>
+      </div>
+    </div>
   )
 }
 
@@ -157,40 +162,35 @@ function NotificationLine({
   const path = notificationPath(notification)
   const unread = !notification.read_at
 
-  const title = <Typography.Text strong={unread}>{notification.title}</Typography.Text>
+  const title = unread ? (
+    <span className={styles.titleUnread}>{notification.title}</span>
+  ) : (
+    <span className={styles.title}>{notification.title}</span>
+  )
 
   return (
-    <List.Item
-      onClick={onRead}
-      style={{
-        cursor: unread ? 'pointer' : 'default',
-        // 未读的整条底色浅浅提一下。加粗一个字重不够明显，
-        // 一屏十几条时扫不出来哪些还没看。
-        background: unread ? colors.subtle : undefined,
-        paddingInline: 12,
-      }}
-    >
-      <Space direction="vertical" size={2} style={{ width: '100%' }}>
-        <Space size={8} align="center" wrap>
-          <Tag color={notificationColor(notification.type)}>
-            {notificationLabel(notification.type)}
-          </Tag>
-          {notification.mandatory && <Tag>重要</Tag>}
-          <RelativeTime value={notification.created_at} />
-        </Space>
-        {path ? (
-          <Link to={path} onClick={onNavigate}>
-            {title}
-          </Link>
-        ) : (
-          title
-        )}
-        {notification.body && (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {notification.body}
-          </Typography.Text>
-        )}
-      </Space>
-    </List.Item>
+    <li className={unread ? styles.itemUnread : styles.item} onClick={onRead}>
+      <div className={styles.itemMeta}>
+        <Label size="small" variant={notificationVariant(notification.type)}>
+          {notificationLabel(notification.type)}
+        </Label>
+        {notification.mandatory && <Label size="small">重要</Label>}
+        <time
+          className={styles.itemTime}
+          dateTime={notification.created_at}
+          title={formatTime(notification.created_at)}
+        >
+          {formatRelative(notification.created_at)}
+        </time>
+      </div>
+      {path ? (
+        <Link as={RouterLink} to={path} onClick={onNavigate}>
+          {title}
+        </Link>
+      ) : (
+        title
+      )}
+      {notification.body && <div className={styles.itemBody}>{notification.body}</div>}
+    </li>
   )
 }
