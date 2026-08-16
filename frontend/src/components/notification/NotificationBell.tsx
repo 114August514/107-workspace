@@ -215,7 +215,7 @@ function NotificationLine({
           aria-label={`将「${notification.title}」标为已读`}
           onClick={onRead}
         >
-          {title}
+          <span className={styles.readActionLabel}>{title}</span>
         </Button>
       ) : (
         title

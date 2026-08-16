@@ -72,6 +72,8 @@
 }
 
 .readAction {
+  display: inline-flex;
+  align-items: flex-start;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -79,4 +81,19 @@
   overflow-wrap: anywhere;
   text-align: start;
   justify-content: flex-start;
+}
+
+.readActionLabel {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.readAction > span {
+  inline-size: auto;
+  max-inline-size: 100%;
+  white-space: normal;
 }
