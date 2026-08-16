@@ -21,8 +21,8 @@ import { MemberPanel } from '../components/workspace/MemberPanel'
 import { VariablePanel } from '../components/workspace/VariablePanel'
 import { tablePagination } from '../utils/pagination'
 
-/** Legacy Ant Design surface consuming the User Group contract; #21 owns its visual migration. */
-export function WorkspacePage() {
+/** User Group governance surface; #21 owns the visual-system migration. */
+export function UserGroupPage() {
   const { userGroupId = '' } = useParams()
   const userGroup = useAsync<UserGroup>(() => api.getUserGroup(userGroupId), [userGroupId])
   const legacyContext = useAsync<LegacyWorkspaceContext>(

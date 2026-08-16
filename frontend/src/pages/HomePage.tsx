@@ -11,9 +11,9 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { ProjectTable } from '../components/project/ProjectTable'
 import { RunTable } from '../components/run/RunTable'
-import { CreateWorkspaceModal } from '../components/workspace/CreateWorkspaceModal'
+import { CreateUserGroupModal } from '../components/workspace/CreateUserGroupModal'
 import { InvitationList } from '../components/workspace/InvitationList'
-import { WorkspaceTable } from '../components/workspace/WorkspaceTable'
+import { UserGroupTable } from '../components/workspace/UserGroupTable'
 
 /** 个人首页：我的 User Group、最近的 Project 和最近发起的 Run。 */
 export function HomePage({ username }: { username: string }) {
@@ -42,7 +42,7 @@ export function HomePage({ username }: { username: string }) {
           error={home.error}
           empty={(home.data?.user_groups ?? []).length === 0}
         >
-          <WorkspaceTable userGroups={home.data?.user_groups ?? []} />
+          <UserGroupTable userGroups={home.data?.user_groups ?? []} />
         </AsyncSection>
       </ListCard>
 
@@ -68,7 +68,7 @@ export function HomePage({ username }: { username: string }) {
         </AsyncSection>
       </ListCard>
 
-      <CreateWorkspaceModal
+      <CreateUserGroupModal
         open={creating}
         onClose={() => setCreating(false)}
         onCreated={() => home.reload()}

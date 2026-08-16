@@ -15,7 +15,7 @@ interface FormValues {
   description: string
 }
 
-export function CreateWorkspaceModal({ open, onClose, onCreated }: Props) {
+export function CreateUserGroupModal({ open, onClose, onCreated }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [submitting, setSubmitting] = useState(false)
 

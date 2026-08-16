@@ -9,7 +9,7 @@ import { HomePage } from './pages/HomePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
-import { WorkspacePage } from './pages/WorkspacePage'
+import { UserGroupPage } from './pages/UserGroupPage'
 import { theme } from './theme'
 
 const USER_KEY = 'workspace107.devUser'
@@ -55,7 +55,7 @@ function ProductApp() {
           <Routes>
             {/* key=username：切换身份后重新挂载，避免看到上一个人的数据 */}
             <Route path="/" element={<HomePage key={username} username={username} />} />
-            <Route path="/user-groups/:userGroupId" element={<WorkspacePage key={username} />} />
+            <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
             <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
             <Route path="/runs/:runId" element={<RunPage key={username} />} />
             <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />

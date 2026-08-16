@@ -33,7 +33,7 @@ const columns: ColumnsType<UserGroup> = [
   },
 ]
 
-export function WorkspaceTable({ userGroups }: { userGroups: UserGroup[] }) {
+export function UserGroupTable({ userGroups }: { userGroups: UserGroup[] }) {
   return (
     <Table rowKey="id" size="small" dataSource={userGroups} columns={columns} pagination={false} />
   )
