@@ -10,10 +10,9 @@
 }
 
 .headerInner {
-  max-width: 1280px;
-  margin: 0 auto;
-  /* 16px 上下 + 32px 按钮高 = 64px，对齐旧 antd Header 的默认高度 */
-  padding: 16px 32px;
+  /* 16px 上下 + 32px 按钮高 = 64px，对齐旧 antd Header 的默认高度；
+     通栏 + 固定 50px 内边距也是旧版行为，品牌贴近左缘 */
+  padding: 16px 50px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -52,9 +51,7 @@
 }
 
 .footerInner {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px 32px;
+  padding: 24px 50px;
   font-size: 12px;
   color: var(--fgColor-muted);
 }
