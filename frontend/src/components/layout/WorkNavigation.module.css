@@ -1,0 +1,41 @@
+.navigation {
+  min-width: 0;
+}
+
+.item > a {
+  min-height: 44px;
+  align-content: center;
+  align-items: center;
+}
+
+.itemContent {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.itemText {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemMeta,
+.empty {
+  color: var(--fgColor-muted);
+  font-size: 12px;
+}
+
+.itemMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 6px 8px;
+  list-style: none;
+}

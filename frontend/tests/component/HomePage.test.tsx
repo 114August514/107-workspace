@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api, ApiError } from '../../src/api/client'
 import type { Home, Invitation } from '../../src/api/types'
+import { useAsync } from '../../src/api/useAsync'
 import { HomePage } from '../../src/pages/HomePage'
 import { PrimerRoot } from '../../src/primer/setup'
 
@@ -69,11 +70,16 @@ const homeData: Home = {
   ],
 }
 
+function HomeHarness() {
+  const home = useAsync<Home>(() => api.home(), ['student'])
+  return <HomePage username="student" home={home} />
+}
+
 function renderHome() {
   return render(
     <PrimerRoot>
       <MemoryRouter>
-        <HomePage username="student" />
+        <HomeHarness />
       </MemoryRouter>
     </PrimerRoot>,
   )
@@ -90,7 +96,7 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
    * 只要出现 Card.Heading 这类 slot，其余子元素会被整个丢弃，
    * 首页三个卡片一度只剩标题。守的是「栏目里看得到数据」这个行为。
    */
-  it('数据返回后三个栏目和算力目录都渲染条目', async () => {
+  it('数据返回后最近 Run 和算力目录都渲染条目', async () => {
     vi.spyOn(api, 'home').mockResolvedValue(homeData)
     vi.spyOn(api, 'listInvitations').mockResolvedValue([])
     vi.spyOn(api, 'computePlans').mockResolvedValue([
@@ -114,15 +120,22 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
 
     renderHome()
 
-    await waitFor(() => {
-      expect(screen.getByText('计算物理课题组')).toBeInTheDocument()
-    })
-    expect(screen.getByText('LJ 流体模拟')).toBeInTheDocument()
-    expect(
-      within(screen.getByRole('region', { name: '最近使用的 Project' })).getByRole('time'),
-    ).toHaveAttribute('datetime', '2026-08-16T10:00:00Z')
-    expect(screen.getByText('首次基线运行')).toBeInTheDocument()
-    expect(screen.getByText('cpu-basic')).toBeInTheDocument()
+    expect(await screen.findByText('首次基线运行')).toBeInTheDocument()
+    expect(await screen.findByText('cpu-basic')).toBeInTheDocument()
+  })
+
+  it('HomePage 正文不自行渲染导航或重复的 Workspace、Project 卡片', async () => {
+    vi.spyOn(api, 'home').mockResolvedValue(homeData)
+    vi.spyOn(api, 'listInvitations').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
+
+    renderHome()
+
+    expect(await screen.findByRole('region', { name: '最近提交的 Run' })).toBeVisible()
+    expect(screen.queryByRole('complementary', { name: '首页工作入口' })).toBeNull()
+    expect(screen.queryByRole('navigation', { name: '工作入口' })).toBeNull()
+    expect(screen.queryByRole('region', { name: '我的 Workspace' })).toBeNull()
+    expect(screen.queryByRole('region', { name: '最近使用的 Project' })).toBeNull()
   })
 
   it('没有数据时栏目显示空态说明，而不是只剩标题', async () => {
@@ -137,12 +150,8 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
 
     renderHome()
 
-    await waitFor(() => {
-      expect(screen.getByText('还没有 Workspace')).toBeInTheDocument()
-    })
-    expect(screen.getByText('还没有 Project')).toBeInTheDocument()
-    expect(screen.getByText('还没有提交过 Run')).toBeInTheDocument()
-    expect(screen.getByText('暂无算力方案')).toBeInTheDocument()
+    expect(await screen.findByText('还没有提交过 Run')).toBeInTheDocument()
+    expect(await screen.findByText('暂无算力方案')).toBeInTheDocument()
   })
 })
 
@@ -167,7 +176,7 @@ describe('HomePage 首页请求统一异步状态', () => {
     resolveHome(homeData)
   })
 
-  it('首页首次失败只显示一份错误和重试，成功后恢复三卡内容', async () => {
+  it('首页首次失败只显示一份错误和重试，成功后恢复首页内容', async () => {
     const home = vi
       .spyOn(api, 'home')
       .mockRejectedValueOnce(new ApiError(500, 'internal_error', '首页加载失败。', []))
@@ -181,9 +190,8 @@ describe('HomePage 首页请求统一异步状态', () => {
     expect(screen.getAllByRole('button', { name: '重试' })).toHaveLength(1)
     fireEvent.click(screen.getByRole('button', { name: '重试' }))
     await waitFor(() => expect(home).toHaveBeenCalledTimes(2))
-    expect(await screen.findByText('计算物理课题组')).toBeInTheDocument()
-    expect(screen.getByText('LJ 流体模拟')).toBeInTheDocument()
-    expect(screen.getByText('首次基线运行')).toBeInTheDocument()
+    expect(await screen.findByText('首次基线运行')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: '工作入口' })).toBeNull()
   })
 })
 
@@ -196,7 +204,7 @@ describe('HomePage 邀请区块', () => {
     renderHome()
 
     expect(await screen.findByText('待处理邀请')).toBeInTheDocument()
-    expect(screen.getByText('test_invite')).toBeInTheDocument()
+    expect(await screen.findByText('test_invite')).toBeInTheDocument()
     expect(screen.getByText('协作空间 · 成员')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '接受邀请' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '拒绝' })).toBeInTheDocument()
@@ -216,14 +224,14 @@ describe('HomePage 邀请区块', () => {
     await waitFor(() => expect(screen.queryByText('test_invite')).not.toBeInTheDocument())
   })
 
-  it('加载邀请时提供可访问的可见反馈', () => {
+  it('加载邀请时提供可访问的可见反馈', async () => {
     vi.spyOn(api, 'home').mockResolvedValue(homeData)
     vi.spyOn(api, 'listInvitations').mockResolvedValue([])
     vi.spyOn(api, 'computePlans').mockResolvedValue([])
 
     renderHome()
 
-    const invitations = screen.getByRole('region', { name: '待处理邀请' })
+    const invitations = await screen.findByRole('region', { name: '待处理邀请' })
     expect(within(invitations).getByRole('status')).toHaveTextContent('正在加载邀请…')
   })
 

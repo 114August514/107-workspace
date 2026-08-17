@@ -1,9 +1,11 @@
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { getCurrentUser, setCurrentUser } from './api/client'
+import { api, getCurrentUser, setCurrentUser } from './api/client'
+import type { Home } from './api/types'
+import { useAsync } from './api/useAsync'
 import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
 import { ProjectPage } from './pages/ProjectPage'
@@ -54,18 +56,42 @@ function ProductApp() {
   return (
     <ConfigProvider locale={zhCN} theme={theme}>
       <AntdApp>
-        <AppShell username={username} onUsernameChange={changeUser}>
-          <Routes>
-            {/* key=username：切换身份后重新挂载，避免看到上一个人的数据 */}
-            <Route path="/" element={<HomePage key={username} username={username} />} />
-            <Route path="/workspaces/:workspaceId" element={<WorkspacePage key={username} />} />
-            <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
-            <Route path="/runs/:runId" element={<RunPage key={username} />} />
-            <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppShell>
+        <ProductSession key={username} username={username} onUsernameChange={changeUser} />
       </AntdApp>
     </ConfigProvider>
+  )
+}
+
+function ProductSession({
+  username,
+  onUsernameChange,
+}: {
+  username: string
+  onUsernameChange: (username: string) => void
+}) {
+  const homeRequest = useRef<Promise<Home> | null>(null)
+  const loadHome = () => {
+    if (homeRequest.current) return homeRequest.current
+    const request = api.home()
+    homeRequest.current = request
+    const clear = () => {
+      if (homeRequest.current === request) homeRequest.current = null
+    }
+    void request.then(clear, clear)
+    return request
+  }
+  const home = useAsync<Home>(loadHome, [username])
+
+  return (
+    <AppShell username={username} onUsernameChange={onUsernameChange} home={home}>
+      <Routes>
+        <Route path="/" element={<HomePage username={username} home={home} />} />
+        <Route path="/workspaces/:workspaceId" element={<WorkspacePage />} />
+        <Route path="/projects/:projectId" element={<ProjectPage />} />
+        <Route path="/runs/:runId" element={<RunPage />} />
+        <Route path="/versions/:versionId" element={<VersionDetailPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppShell>
   )
 }

@@ -1,3 +1,8 @@
+:global(:root) {
+  --workspace-drawer-width: 320px;
+  --workspace-sidebar-width: 240px;
+}
+
 .shell {
   min-height: 100vh;
   display: flex;
@@ -10,20 +15,33 @@
 }
 
 .headerInner {
-  /* 16px 上下 + 32px 按钮高 = 64px，对齐旧 antd Header 的默认高度；
-     通栏 + 固定 50px 内边距也是旧版行为，品牌贴近左缘 */
-  padding: 16px 50px;
+  min-height: 56px;
+  padding: 12px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  box-sizing: border-box;
+}
+
+.headerStart {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  gap: 8px;
 }
 
 .brand {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fgColor-default);
   font-size: 16px;
   font-weight: 600;
-  color: var(--fgColor-default);
   text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .brand:focus-visible {
   outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
@@ -36,17 +54,47 @@
 
 .actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
 }
 
-.content {
+.body {
+  display: flex;
   flex: 1;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.persistentSidebar {
+  width: var(--workspace-sidebar-width);
+  min-width: 0;
+  padding: 24px 16px;
+  border-right: 1px solid var(--borderColor-muted);
+  box-sizing: border-box;
+  flex: 0 0 var(--workspace-sidebar-width);
+}
+
+.content {
+  min-width: 0;
+  flex: 1;
+}
+
+.centeredContent {
   width: 100%;
   max-width: 1280px;
-  margin: 0 auto;
+  margin-inline: auto;
   padding: 24px 32px;
   box-sizing: border-box;
+}
+
+.navigationDrawer {
+  max-width: calc(100vw - 40px);
+}
+
+.navigationDrawer [data-component='Dialog.CloseButton'] {
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .footer {
@@ -60,14 +108,33 @@
   color: var(--fgColor-muted);
 }
 
+@media (max-width: 767px) {
+  .persistentSidebar {
+    display: none;
+  }
+}
+
 @media (max-width: 544px) {
-  .headerInner,
-  .content,
+  .headerInner {
+    padding-inline: 8px;
+    gap: 8px;
+  }
+
+  .centeredContent,
   .footerInner {
     padding-inline: 16px;
   }
 
-  /* 窄屏只留加号图标；aria-label 保证按钮仍有可读名称 */
+  .actions {
+    gap: 4px;
+  }
+
+  .createButton {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+  }
+
   .createLabel {
     display: none;
   }
