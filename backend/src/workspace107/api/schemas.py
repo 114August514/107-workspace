@@ -10,7 +10,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..domain.capabilities import Capability
+from ..domain.capabilities import Capability, UserGroupCapability
 from ..domain.enums import (
     ActivityAction,
     ArtifactStatus,
@@ -64,7 +64,7 @@ class UserGroupOut(Model):
     created_by_id: str | None
     created_at: datetime | None
     role: MembershipRole
-    capabilities: list[Capability] = Field(default_factory=list)
+    capabilities: list[UserGroupCapability] = Field(default_factory=list)
 
 
 class UserGroupCreateIn(Model):
@@ -513,6 +513,7 @@ class SyncOut(Model):
 class HomeOut(Model):
     user: UserOut
     user_groups: list[UserGroupOut]
+    personal_resource_context_id: str | None
     recent_projects: list[ProjectOut]
     recent_runs: list[RunOut]
 

@@ -1558,6 +1558,8 @@ export interface components {
         };
         /** HomeOut */
         HomeOut: {
+            /** Personal Resource Context Id */
+            personal_resource_context_id: string | null;
             /** Recent Projects */
             recent_projects: components["schemas"]["ProjectOut"][];
             /** Recent Runs */
@@ -2334,6 +2336,12 @@ export interface components {
             /** Unread */
             unread: number;
         };
+        /**
+         * UserGroupCapability
+         * @description Stable public capabilities for User Group and Membership governance.
+         * @enum {string}
+         */
+        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer";
         /** UserGroupCreateIn */
         UserGroupCreateIn: {
             /**
@@ -2347,7 +2355,7 @@ export interface components {
         /** UserGroupOut */
         UserGroupOut: {
             /** Capabilities */
-            capabilities?: components["schemas"]["Capability"][];
+            capabilities?: components["schemas"]["UserGroupCapability"][];
             /** Created At */
             created_at: string | null;
             /** Created By Id */

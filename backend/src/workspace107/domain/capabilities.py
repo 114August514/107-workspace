@@ -7,6 +7,42 @@ from enum import StrEnum
 from .enums import MembershipRole
 
 
+class UserGroupCapability(StrEnum):
+    """Stable public capabilities for User Group and Membership governance."""
+
+    USER_GROUP_VIEW = "user_group.view"
+    USER_GROUP_UPDATE = "user_group.update"
+    MEMBER_VIEW = "member.view"
+    MEMBER_MANAGE = "member.manage"
+    OWNERSHIP_TRANSFER = "ownership.transfer"
+
+
+_USER_GROUP_VIEW: frozenset[UserGroupCapability] = frozenset(
+    {
+        UserGroupCapability.USER_GROUP_VIEW,
+        UserGroupCapability.MEMBER_VIEW,
+    }
+)
+
+_USER_GROUP_ADMINISTER: frozenset[UserGroupCapability] = _USER_GROUP_VIEW | {
+    UserGroupCapability.USER_GROUP_UPDATE,
+    UserGroupCapability.MEMBER_MANAGE,
+}
+
+USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability]] = {
+    MembershipRole.OWNER: _USER_GROUP_ADMINISTER | {UserGroupCapability.OWNERSHIP_TRANSFER},
+    MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
+    MembershipRole.MEMBER: _USER_GROUP_VIEW,
+    MembershipRole.VIEWER: _USER_GROUP_VIEW,
+}
+
+
+def user_group_capabilities_of(
+    role: MembershipRole,
+) -> frozenset[UserGroupCapability]:
+    return USER_GROUP_ROLE_CAPABILITIES[role]
+
+
 class Capability(StrEnum):
     """一个具体的操作许可。
 
@@ -116,10 +152,20 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.SHARED_RESOURCE_VERSION_CREATE: "上传 Shared Resource 版本",
 }
 
+USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {
+    UserGroupCapability.USER_GROUP_VIEW: "查看 User Group",
+    UserGroupCapability.USER_GROUP_UPDATE: "修改 User Group 设置",
+    UserGroupCapability.MEMBER_VIEW: "查看成员",
+    UserGroupCapability.MEMBER_MANAGE: "管理成员",
+    UserGroupCapability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
+}
+
 
 def capabilities_of(role: MembershipRole) -> frozenset[Capability]:
     return ROLE_CAPABILITIES[role]
 
 
-def describe(capability: Capability) -> str:
+def describe(capability: Capability | UserGroupCapability) -> str:
+    if isinstance(capability, UserGroupCapability):
+        return USER_GROUP_CAPABILITY_LABELS.get(capability, capability.value)
     return CAPABILITY_LABELS.get(capability, capability.value)

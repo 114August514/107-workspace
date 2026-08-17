@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..domain.capabilities import Capability, capabilities_of, describe
+from ..domain.capabilities import (
+    Capability,
+    UserGroupCapability,
+    capabilities_of,
+    describe,
+    user_group_capabilities_of,
+)
 from ..domain.enums import MembershipRole
 from ..domain.errors import ObjectNotFound, PermissionDenied
 from ..domain.models import (
@@ -24,13 +30,13 @@ class UserGroupAccess:
     role: MembershipRole
 
     @property
-    def capabilities(self) -> frozenset[Capability]:
-        return capabilities_of(self.role)
+    def capabilities(self) -> frozenset[UserGroupCapability]:
+        return user_group_capabilities_of(self.role)
 
-    def can(self, capability: Capability) -> bool:
+    def can(self, capability: UserGroupCapability) -> bool:
         return capability in self.capabilities
 
-    def require(self, capability: Capability) -> None:
+    def require(self, capability: UserGroupCapability) -> None:
         if not self.can(capability):
             raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
 
@@ -126,7 +132,11 @@ class AccessGuard:
         self._repos = repos
 
     async def user_group(
-        self, user_id: str, user_group_id: str, *, needs: Capability | None = None
+        self,
+        user_id: str,
+        user_group_id: str,
+        *,
+        needs: UserGroupCapability | None = None,
     ) -> UserGroupAccess:
         user_group = await self._repos.user_groups.get_for_active_member(user_group_id, user_id)
         if user_group is None:

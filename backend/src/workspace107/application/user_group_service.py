@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..domain import ids
-from ..domain.capabilities import Capability, capabilities_of
+from ..domain.capabilities import UserGroupCapability, user_group_capabilities_of
 from ..domain.enums import (
     ActivityAction,
     LegacyWorkspaceKind,
@@ -31,7 +31,7 @@ def _reject_owner_role(role: MembershipRole) -> None:
 class UserGroupView:
     user_group: UserGroup
     role: MembershipRole
-    capabilities: frozenset[Capability]
+    capabilities: frozenset[UserGroupCapability]
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +66,7 @@ class UserGroupService:
         user_id: str,
         user_group_id: str,
         *,
-        needs: Capability | None = None,
+        needs: UserGroupCapability | None = None,
     ) -> UserGroupAccess:
         """Use one lock order: UserGroup row, authenticated discovery, Membership state."""
         if await self._repos.user_groups.get_for_update(user_group_id) is None:
@@ -139,7 +139,7 @@ class UserGroupService:
         return UserGroupView(
             user_group=group,
             role=MembershipRole.OWNER,
-            capabilities=capabilities_of(MembershipRole.OWNER),
+            capabilities=user_group_capabilities_of(MembershipRole.OWNER),
         )
 
     async def update(
@@ -151,7 +151,7 @@ class UserGroupService:
         description: str | None = None,
     ) -> UserGroup:
         access = await self._guard.user_group(
-            user_id, user_group_id, needs=Capability.USER_GROUP_UPDATE
+            user_id, user_group_id, needs=UserGroupCapability.USER_GROUP_UPDATE
         )
         group = access.user_group
         if name is not None:
@@ -187,7 +187,7 @@ class UserGroupService:
         return result
 
     async def list_members(self, user_id: str, user_group_id: str) -> list[MemberView]:
-        await self._guard.user_group(user_id, user_group_id, needs=Capability.MEMBER_VIEW)
+        await self._guard.user_group(user_id, user_group_id, needs=UserGroupCapability.MEMBER_VIEW)
         result: list[MemberView] = []
         for membership in await self._repos.memberships.list_for_user_group(user_group_id):
             user = await self._repos.users.get(membership.user_id)
@@ -203,7 +203,7 @@ class UserGroupService:
         role: MembershipRole,
     ) -> Membership:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=Capability.MEMBER_MANAGE
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_MANAGE
         )
         _reject_owner_role(role)
         invitee = await self._repos.users.get_by_username(username)
@@ -266,7 +266,7 @@ class UserGroupService:
 
     async def remove_member(self, user_id: str, user_group_id: str, target_user_id: str) -> None:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=Capability.MEMBER_MANAGE
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_MANAGE
         )
         owner = await self._repos.memberships.get_active_owner(user_group_id)
         if owner is not None and owner.user_id == target_user_id:
@@ -299,7 +299,7 @@ class UserGroupService:
         role: MembershipRole,
     ) -> Membership:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=Capability.MEMBER_MANAGE
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_MANAGE
         )
         _reject_owner_role(role)
         owner = await self._repos.memberships.get_active_owner(user_group_id)
@@ -348,7 +348,7 @@ class UserGroupService:
         self, user_id: str, user_group_id: str, target_user_id: str
     ) -> None:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=Capability.OWNERSHIP_TRANSFER
+            user_id, user_group_id, needs=UserGroupCapability.OWNERSHIP_TRANSFER
         )
         group = access.user_group
         current = await self._repos.memberships.get(user_group_id, user_id)

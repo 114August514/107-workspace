@@ -709,6 +709,17 @@
       },
       "HomeOut": {
         "properties": {
+          "personal_resource_context_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Personal Resource Context Id"
+          },
           "recent_projects": {
             "items": {
               "$ref": "#/components/schemas/ProjectOut"
@@ -737,6 +748,7 @@
         "required": [
           "user",
           "user_groups",
+          "personal_resource_context_id",
           "recent_projects",
           "recent_runs"
         ],
@@ -2810,6 +2822,18 @@
         "title": "UnreadCountOut",
         "type": "object"
       },
+      "UserGroupCapability": {
+        "description": "Stable public capabilities for User Group and Membership governance.",
+        "enum": [
+          "user_group.view",
+          "user_group.update",
+          "member.view",
+          "member.manage",
+          "ownership.transfer"
+        ],
+        "title": "UserGroupCapability",
+        "type": "string"
+      },
       "UserGroupCreateIn": {
         "properties": {
           "description": {
@@ -2834,7 +2858,7 @@
         "properties": {
           "capabilities": {
             "items": {
-              "$ref": "#/components/schemas/Capability"
+              "$ref": "#/components/schemas/UserGroupCapability"
             },
             "title": "Capabilities",
             "type": "array"
