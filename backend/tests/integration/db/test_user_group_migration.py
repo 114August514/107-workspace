@@ -58,6 +58,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "INSERT INTO memberships "
         "(id, workspace_id, user_id, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         [
+            ("mbr_personal", "ws_personal", "usr_alice", "owner", "active", now),
             ("mbr_alice", "ws_collab", "usr_alice", "member", "left", now),
             ("mbr_bob", "ws_collab", "usr_bob", "owner", "active", now),
         ],
@@ -91,6 +92,10 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
         ("prj_personal", "ws_personal")
     ]
+    assert _rows(
+        connection,
+        "SELECT id, workspace_id, user_id, role, status FROM legacy_personal_memberships",
+    ) == [("mbr_personal", "ws_personal", "usr_alice", "owner", "active")]
 
     connection.execute("UPDATE user_groups SET name='Renamed Lab' WHERE id='ws_collab'")
     connection.execute(
@@ -105,7 +110,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "(id, kind, name, description, owner_id, "
         "default_environment_version_id, created_at) "
         "VALUES ('grp_new', 'collaborative', 'New Group', '', "
-        "'usr_carol', NULL, ?)",
+        "'usr_bob', NULL, ?)",
         (now,),
     )
     connection.execute(
@@ -116,9 +121,10 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     )
     connection.execute(
         "INSERT INTO memberships "
-        "(id, user_group_id, user_id, role, status, created_at) "
-        "VALUES ('mbr_carol', 'grp_new', 'usr_carol', 'owner', 'active', ?)",
-        (now,),
+        "(id, user_group_id, user_id, role, status, created_at) VALUES "
+        "('mbr_new_carol', 'grp_new', 'usr_carol', 'admin', 'active', ?), "
+        "('mbr_new_bob', 'grp_new', 'usr_bob', 'owner', 'active', ?)",
+        (now, now),
     )
     connection.commit()
     connection.close()
@@ -128,7 +134,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     assert _rows(
         connection,
         "SELECT id, name, owner_id FROM workspaces WHERE kind='collaborative' ORDER BY id",
-    ) == [("grp_new", "New Group", "usr_carol"), ("ws_collab", "Renamed Lab", "usr_bob")]
+    ) == [("grp_new", "New Group", "usr_bob"), ("ws_collab", "Renamed Lab", "usr_bob")]
     assert _rows(connection, "SELECT id, name FROM workspaces WHERE kind='personal'") == [
         ("ws_personal", "Alice personal")
     ]
@@ -137,9 +143,11 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "SELECT workspace_id, user_id, role, status FROM memberships "
         "ORDER BY workspace_id, user_id",
     ) == [
-        ("grp_new", "usr_carol", "owner", "active"),
+        ("grp_new", "usr_bob", "owner", "active"),
+        ("grp_new", "usr_carol", "admin", "active"),
         ("ws_collab", "usr_alice", "admin", "active"),
         ("ws_collab", "usr_bob", "owner", "active"),
+        ("ws_personal", "usr_alice", "owner", "active"),
     ]
     assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
         ("prj_personal", "ws_personal")
@@ -155,4 +163,12 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
         ("prj_personal", "ws_personal")
     ]
+    assert _rows(
+        connection,
+        "SELECT created_by_id FROM user_groups WHERE id='grp_new'",
+    ) == [("usr_carol",)]
+    assert _rows(
+        connection,
+        "SELECT id, workspace_id, user_id, role, status FROM legacy_personal_memberships",
+    ) == [("mbr_personal", "ws_personal", "usr_alice", "owner", "active")]
     connection.close()

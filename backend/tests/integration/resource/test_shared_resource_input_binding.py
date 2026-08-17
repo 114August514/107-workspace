@@ -18,10 +18,12 @@ import sys
 
 import httpx
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import (
     create_project_with_version,
     ensure_user_group,
+    grant_test_entitlement,
     use_default_environment,
     wait_for_run,
 )
@@ -136,9 +138,12 @@ async def _run_with_input(
 # -- 闭环主路径 --------------------------------------------------------------
 
 
-async def test_shared_resource_version_可以作为_run_输入(client: httpx.AsyncClient) -> None:
+async def test_shared_resource_version_可以作为_run_输入(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
     """最关键的闭环：上传文件 → 引用 → Run 真的读到。"""
-    await use_default_environment(client, headers=ALICE)
+    workspace_id = await use_default_environment(client, headers=ALICE)
+    await grant_test_entitlement(session, workspace_id)
     version = await _create_resource_with_version(
         client, name="预训练权重", files=[("weights.txt", b"model-params")]
     )
@@ -168,9 +173,12 @@ async def test_shared_resource_version_可以作为_run_输入(client: httpx.Asy
     assert binding["access_path"] == "/inputs/dataset"
 
 
-async def test_shared_resource_输入以只读方式提供(client: httpx.AsyncClient) -> None:
+async def test_shared_resource_输入以只读方式提供(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
     """GR-404：输入只读，Run 不得原地修改。"""
-    await use_default_environment(client, headers=ALICE)
+    workspace_id = await use_default_environment(client, headers=ALICE)
+    await grant_test_entitlement(session, workspace_id)
     version = await _create_resource_with_version(
         client, name="只读验证", files=[("weights.txt", b"original")]
     )
@@ -195,9 +203,12 @@ async def test_shared_resource_输入以只读方式提供(client: httpx.AsyncCl
     assert "写成功了" not in stdout["content"]
 
 
-async def test_shared_resource_支持多文件和子目录(client: httpx.AsyncClient) -> None:
+async def test_shared_resource_支持多文件和子目录(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
     """版本里多文件 + 子目录结构，物化到 inputs 后保持原相对路径。"""
-    await use_default_environment(client, headers=ALICE)
+    workspace_id = await use_default_environment(client, headers=ALICE)
+    await grant_test_entitlement(session, workspace_id)
     version = await _create_resource_with_version(
         client,
         name="多文件资源",
@@ -236,8 +247,11 @@ for p in sorted(root.rglob("*")):
 # -- 错误路径 ---------------------------------------------------------------
 
 
-async def test_引用不存在的_version_会挡在提交前(client: httpx.AsyncClient) -> None:
-    await use_default_environment(client, headers=ALICE)
+async def test_引用不存在的_version_会挡在提交前(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    workspace_id = await use_default_environment(client, headers=ALICE)
+    await grant_test_entitlement(session, workspace_id)
     project = await create_project_with_version(
         client, name="错误输入", files={"main.py": "pass"}, headers=ALICE
     )
@@ -273,15 +287,17 @@ async def test_引用不存在的_version_会挡在提交前(client: httpx.Async
 
 
 async def test_跨_workspace_引用_shared_resource_被挡在提交前(
-    client: httpx.AsyncClient,
+    client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """Bob cannot resolve an asset owned by Alice's exact User Group."""
-    await use_default_environment(client, headers=ALICE)
+    alice_workspace_id = await use_default_environment(client, headers=ALICE)
+    await grant_test_entitlement(session, alice_workspace_id)
     version = await _create_resource_with_version(
         client, name="Alice 私有", files=[("a.txt", b"x")]
     )
     bob_headers = {"X-User": "bob"}
     bob_ws = await ensure_user_group(client, headers=bob_headers)
+    await grant_test_entitlement(session, bob_ws)
     await client.patch(
         f"/api/v1/workspaces/{bob_ws}",
         json={"default_environment_version_id": "ev_python_312"},

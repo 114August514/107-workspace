@@ -128,7 +128,7 @@ class AccessGuard:
     async def user_group(
         self, user_id: str, user_group_id: str, *, needs: Capability | None = None
     ) -> UserGroupAccess:
-        user_group = await self._repos.user_groups.get(user_group_id)
+        user_group = await self._repos.user_groups.get_for_active_member(user_group_id, user_id)
         if user_group is None:
             raise ObjectNotFound("User Group", user_group_id)
         membership = await self._repos.memberships.get(user_group_id, user_id)

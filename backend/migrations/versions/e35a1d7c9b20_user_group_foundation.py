@@ -1,5 +1,11 @@
 """Establish User Group identity and governance persistence.
 
+``legacy_personal_memberships`` exists only at this revision to keep Personal
+Workspace Membership rows reversible. ``user_group_migration_provenance``
+survives downgrade so a later upgrade can restore known ``created_by_id``.
+Both may be deleted only by a dedicated migration after the e35 rollback
+window and Personal Workspace compatibility are explicitly retired.
+
 Revision ID: e35a1d7c9b20
 Revises: a3f7c2e91b84
 Create Date: 2026-08-17
@@ -26,8 +32,52 @@ def _migration_membership_id(user_group_id: str, user_id: str) -> str:
     return f"mbr_{digest}"
 
 
+def _ensure_provenance_table(bind: sa.Connection) -> None:
+    if sa.inspect(bind).has_table("user_group_migration_provenance"):
+        return
+    op.create_table(
+        "user_group_migration_provenance",
+        sa.Column("user_group_id", _ID, nullable=False),
+        sa.Column("created_by_id", _ID, nullable=True),
+        sa.PrimaryKeyConstraint("user_group_id"),
+    )
+
+
+def _remember_creator(bind: sa.Connection, user_group_id: str, created_by_id: str | None) -> None:
+    existing = bind.execute(
+        sa.text(
+            "SELECT user_group_id FROM user_group_migration_provenance "
+            "WHERE user_group_id = :user_group_id"
+        ),
+        {"user_group_id": user_group_id},
+    ).first()
+    if existing is None:
+        bind.execute(
+            sa.text(
+                "INSERT INTO user_group_migration_provenance "
+                "(user_group_id, created_by_id) VALUES (:user_group_id, :created_by_id)"
+            ),
+            {"user_group_id": user_group_id, "created_by_id": created_by_id},
+        )
+    else:
+        bind.execute(
+            sa.text(
+                "UPDATE user_group_migration_provenance SET created_by_id = :created_by_id "
+                "WHERE user_group_id = :user_group_id"
+            ),
+            {"user_group_id": user_group_id, "created_by_id": created_by_id},
+        )
+
+
 def upgrade() -> None:
     bind = op.get_bind()
+    _ensure_provenance_table(bind)
+    known_creators = {
+        row["user_group_id"]: row["created_by_id"]
+        for row in bind.execute(
+            sa.text("SELECT user_group_id, created_by_id FROM user_group_migration_provenance")
+        ).mappings()
+    }
     op.create_table(
         "user_groups",
         sa.Column("id", _ID, nullable=False),
@@ -63,14 +113,17 @@ def upgrade() -> None:
         )
     ).mappings()
     for group in groups:
+        created_by_id = known_creators.get(group["id"])
         bind.execute(
             sa.text(
                 "INSERT INTO user_groups "
                 "(id, name, description, created_by_id, created_at) "
-                "VALUES (:id, :name, :description, NULL, :created_at)"
+                "VALUES (:id, :name, :description, :created_by_id, :created_at)"
             ),
-            dict(group),
+            {**dict(group), "created_by_id": created_by_id},
         )
+        if group["id"] not in known_creators:
+            _remember_creator(bind, group["id"], None)
         old_memberships = list(
             bind.execute(
                 sa.text(
@@ -120,6 +173,26 @@ def upgrade() -> None:
                 },
             )
 
+    op.create_table(
+        "legacy_personal_memberships",
+        sa.Column("id", _ID, nullable=False),
+        sa.Column("workspace_id", _ID, nullable=False),
+        sa.Column("user_id", _ID, nullable=False),
+        sa.Column("role", sa.String(length=32), nullable=False),
+        sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("workspace_id", "user_id", name="uq_legacy_personal_membership"),
+    )
+    bind.execute(
+        sa.text(
+            "INSERT INTO legacy_personal_memberships "
+            "(id, workspace_id, user_id, role, status, created_at) "
+            "SELECT m.id, m.workspace_id, m.user_id, m.role, m.status, m.created_at "
+            "FROM memberships AS m JOIN workspaces AS w ON w.id = m.workspace_id "
+            "WHERE w.kind = 'personal'"
+        )
+    )
     op.drop_table("memberships")
     op.rename_table("memberships_new", "memberships")
     op.create_index("ix_user_group_memberships_user_group_id", "memberships", ["user_group_id"])
@@ -136,6 +209,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    _ensure_provenance_table(bind)
     op.create_table(
         "memberships_old",
         sa.Column("id", _ID, nullable=False),
@@ -156,6 +230,7 @@ def downgrade() -> None:
         ).mappings()
     )
     for group in groups:
+        _remember_creator(bind, group["id"], group["created_by_id"])
         owner = bind.execute(
             sa.text(
                 "SELECT user_id FROM memberships WHERE user_group_id = :group_id "
@@ -194,9 +269,18 @@ def downgrade() -> None:
             "SELECT id, user_group_id, user_id, role, status, created_at FROM memberships"
         )
     )
+    bind.execute(
+        sa.text(
+            "INSERT INTO memberships_old "
+            "(id, workspace_id, user_id, role, status, created_at) "
+            "SELECT id, workspace_id, user_id, role, status, created_at "
+            "FROM legacy_personal_memberships"
+        )
+    )
     op.drop_table("memberships")
     op.drop_index("ix_user_groups_created_by_id", table_name="user_groups")
     op.drop_table("user_groups")
     op.rename_table("memberships_old", "memberships")
     op.create_index("ix_memberships_workspace_id", "memberships", ["workspace_id"])
     op.create_index("ix_memberships_user_id", "memberships", ["user_id"])
+    op.drop_table("legacy_personal_memberships")

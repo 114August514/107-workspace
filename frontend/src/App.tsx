@@ -6,6 +6,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { getCurrentUser, setCurrentUser } from './api/client'
 import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
+import { LegacyWorkspacePage } from './pages/LegacyWorkspacePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
@@ -52,17 +53,24 @@ function ProductApp() {
     <ConfigProvider locale={zhCN} theme={theme}>
       <AntdApp>
         <AppShell username={username} onUsernameChange={changeUser}>
-          <Routes>
-            {/* key=username：切换身份后重新挂载，避免看到上一个人的数据 */}
-            <Route path="/" element={<HomePage key={username} username={username} />} />
-            <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
-            <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
-            <Route path="/runs/:runId" element={<RunPage key={username} />} />
-            <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <ProductRoutes username={username} />
         </AppShell>
       </AntdApp>
     </ConfigProvider>
+  )
+}
+
+export function ProductRoutes({ username }: { username: string }) {
+  return (
+    <Routes>
+      {/* key=username：切换身份后重新挂载，避免看到上一个人的数据 */}
+      <Route path="/" element={<HomePage key={username} username={username} />} />
+      <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
+      <Route path="/workspaces/:workspaceId" element={<LegacyWorkspacePage key={username} />} />
+      <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
+      <Route path="/runs/:runId" element={<RunPage key={username} />} />
+      <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

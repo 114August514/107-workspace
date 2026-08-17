@@ -2,7 +2,8 @@
 
 可变对象与不可变版本必须分离（GR-201、GR-202、GR-203）：
 
-    可变：  Workspace、Project、ProjectFile、RunConfiguration、Environment
+    可变：  UserGroup、Membership、LegacyWorkspace（兼容）、Project、ProjectFile、
+            RunConfiguration、Environment
     不可变：ProjectVersion、EnvironmentVersion、RunSnapshot、Artifact 内容
 
 Project Version、Environment Version 和 Run Snapshot 在代码及仓储层都不可变；

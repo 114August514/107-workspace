@@ -228,7 +228,32 @@ class UserGroupRepositoryImpl:
         return _to_user_group(row) if row else None
 
     async def get_for_update(self, user_group_id: str) -> UserGroup | None:
+        # PostgreSQL locks this exact UserGroup row. SQLite ignores FOR UPDATE,
+        # so acquire its transaction-wide write lock with an exact-row no-op
+        # update before reading any Membership state.
+        if self._session.bind and self._session.bind.dialect.name == "sqlite":
+            await self._session.execute(
+                update(t.UserGroupRow)
+                .where(t.UserGroupRow.id == user_group_id)
+                .values(id=t.UserGroupRow.id)
+            )
         stmt = select(t.UserGroupRow).where(t.UserGroupRow.id == user_group_id).with_for_update()
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_user_group(row) if row else None
+
+    async def get_for_active_member(self, user_group_id: str, user_id: str) -> UserGroup | None:
+        stmt = (
+            select(t.UserGroupRow)
+            .join(
+                t.MembershipRow,
+                t.MembershipRow.user_group_id == t.UserGroupRow.id,
+            )
+            .where(
+                t.UserGroupRow.id == user_group_id,
+                t.MembershipRow.user_id == user_id,
+                t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+            )
+        )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_user_group(row) if row else None
 

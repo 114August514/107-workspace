@@ -120,6 +120,11 @@ uv run alembic downgrade -1                       # 回退一步
 
 迁移文件必须提交。
 
+`e35a1d7c9b20` 在升级状态保留私有表 `legacy_personal_memberships`，以便回退时
+恢复旧 Personal Workspace Membership；`user_group_migration_provenance` 跨回退保留
+已知的 `created_by_id`，供再次升级恢复。它们不是业务查询模型。只有在明确结束
+`e35a1d7c9b20` 回退窗口并移除 Personal Workspace 兼容后，才能用独立迁移删除。
+
 ## 测试
 
 ```bash

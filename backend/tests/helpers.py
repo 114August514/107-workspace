@@ -6,6 +6,11 @@ import asyncio
 from typing import Any
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from workspace107.domain import ids
+from workspace107.domain.compute import ResourceEntitlement
+from workspace107.infrastructure.db.repositories import SqlRepositories
 
 RUN_WAIT_TIMEOUT = 30.0
 TERMINAL = {"succeeded", "failed", "cancelled", "submit_failed"}
@@ -49,6 +54,21 @@ async def ensure_user_group(
     )
     response.raise_for_status()
     return str(response.json()["id"])
+
+
+async def grant_test_entitlement(
+    session: AsyncSession, workspace_id: str, compute_plan_id: str = "plan_cpu_quick"
+) -> None:
+    """Seed only the entitlement required by a test; UserGroup creation grants none."""
+    await SqlRepositories(session).entitlements.add(
+        ResourceEntitlement(
+            id=ids.new_id(ids.ENTITLEMENT),
+            workspace_id=workspace_id,
+            compute_plan_id=compute_plan_id,
+            max_concurrent_runs=2,
+        )
+    )
+    await session.commit()
 
 
 async def create_project_with_version(

@@ -20,20 +20,20 @@ import { RoleTag } from '../common/RoleTag'
 const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const satisfies readonly MembershipRole[]
 
 interface Props {
-  workspace: UserGroup
+  userGroup: UserGroup
 }
 
-export function MemberPanel({ workspace }: Props) {
-  const members = useAsync<Member[]>(() => api.listMembers(workspace.id), [workspace.id])
+export function MemberPanel({ userGroup }: Props) {
+  const members = useAsync<Member[]>(() => api.listMembers(userGroup.id), [userGroup.id])
   const [form] = Form.useForm<{ username: string; role: MembershipRole }>()
   const [inviting, setInviting] = useState(false)
-  const canManage = can(workspace, 'member.manage')
+  const canManage = can(userGroup, 'member.manage')
 
   const invite = async () => {
     const values = await form.validateFields()
     setInviting(true)
     try {
-      await api.inviteMember(workspace.id, values.username, values.role ?? 'member')
+      await api.inviteMember(userGroup.id, values.username, values.role ?? 'member')
       message.success(`已向 ${values.username} 发送邀请`)
       form.resetFields()
       members.reload()
@@ -46,7 +46,7 @@ export function MemberPanel({ workspace }: Props) {
 
   const remove = async (member: Member) => {
     try {
-      await api.removeMember(workspace.id, member.user_id)
+      await api.removeMember(userGroup.id, member.user_id)
       message.success(`已移除 ${member.username}`)
       members.reload()
     } catch (error) {
@@ -56,7 +56,7 @@ export function MemberPanel({ workspace }: Props) {
 
   const changeRole = async (member: Member, role: MembershipRole) => {
     try {
-      await api.changeMemberRole(workspace.id, member.user_id, role)
+      await api.changeMemberRole(userGroup.id, member.user_id, role)
       message.success(`${member.username} 的角色已改为 ${roleLabel(role)}`)
       members.reload()
     } catch (error) {
@@ -106,7 +106,7 @@ export function MemberPanel({ workspace }: Props) {
         member.role === 'owner' ? null : (
           <Popconfirm
             title={`移除 ${member.username}？`}
-            description="移除后该成员立刻失去这个空间的全部访问权。"
+            description="移除后该成员立刻失去这个 User Group 的访问权。"
             okText="移除"
             cancelText="取消"
             onConfirm={() => remove(member)}

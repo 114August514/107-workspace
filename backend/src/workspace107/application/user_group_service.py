@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of
-from ..domain.compute import ResourceEntitlement
 from ..domain.enums import (
     ActivityAction,
     LegacyWorkspaceKind,
@@ -18,7 +17,7 @@ from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied, Val
 from ..domain.models import LegacyWorkspace, Membership, User, UserGroup
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
-from .access import AccessGuard
+from .access import AccessGuard, UserGroupAccess
 from .activity import ActivityRecorder
 from .notifier import Notifier
 
@@ -61,6 +60,18 @@ class UserGroupService:
         self._clock = clock
         self._activity = activity
         self._notifier = notifier
+
+    async def _lock_and_authorize_mutation(
+        self,
+        user_id: str,
+        user_group_id: str,
+        *,
+        needs: Capability | None = None,
+    ) -> UserGroupAccess:
+        """Use one lock order: UserGroup row, authenticated discovery, Membership state."""
+        if await self._repos.user_groups.get_for_update(user_group_id) is None:
+            raise ObjectNotFound("User Group", user_group_id)
+        return await self._guard.user_group(user_id, user_group_id, needs=needs)
 
     async def list_for_user(self, user_id: str) -> list[UserGroupView]:
         result: list[UserGroupView] = []
@@ -107,17 +118,6 @@ class UserGroupService:
                 created_at=now,
             )
         )
-        # #38 has not migrated Run qualification yet. Keep the old local/demo loop
-        # executable on this private anchor; this is not User Group ownership semantics.
-        for plan in await self._repos.compute_plans.list_all():
-            await self._repos.entitlements.add(
-                ResourceEntitlement(
-                    id=ids.new_id(ids.ENTITLEMENT),
-                    workspace_id=group.id,
-                    compute_plan_id=plan.id,
-                    max_concurrent_runs=2,
-                )
-            )
         await self._repos.memberships.add(
             Membership(
                 id=ids.new_id(ids.MEMBERSHIP),
@@ -202,7 +202,7 @@ class UserGroupService:
         username: str,
         role: MembershipRole,
     ) -> Membership:
-        access = await self._guard.user_group(
+        access = await self._lock_and_authorize_mutation(
             user_id, user_group_id, needs=Capability.MEMBER_MANAGE
         )
         _reject_owner_role(role)
@@ -248,6 +248,8 @@ class UserGroupService:
     async def respond_to_invitation(
         self, user_id: str, user_group_id: str, *, accept: bool
     ) -> Membership:
+        if await self._repos.user_groups.get_for_update(user_group_id) is None:
+            raise ObjectNotFound("User Group 邀请", user_group_id)
         membership = await self._repos.memberships.get(user_group_id, user_id)
         if membership is None or membership.status is not MembershipStatus.INVITED:
             raise ObjectNotFound("User Group 邀请", user_group_id)
@@ -263,7 +265,7 @@ class UserGroupService:
         return membership
 
     async def remove_member(self, user_id: str, user_group_id: str, target_user_id: str) -> None:
-        access = await self._guard.user_group(
+        access = await self._lock_and_authorize_mutation(
             user_id, user_group_id, needs=Capability.MEMBER_MANAGE
         )
         owner = await self._repos.memberships.get_active_owner(user_group_id)
@@ -296,7 +298,7 @@ class UserGroupService:
         target_user_id: str,
         role: MembershipRole,
     ) -> Membership:
-        access = await self._guard.user_group(
+        access = await self._lock_and_authorize_mutation(
             user_id, user_group_id, needs=Capability.MEMBER_MANAGE
         )
         _reject_owner_role(role)
@@ -326,7 +328,7 @@ class UserGroupService:
         return membership
 
     async def leave(self, user_id: str, user_group_id: str) -> None:
-        await self._guard.user_group(user_id, user_group_id)
+        await self._lock_and_authorize_mutation(user_id, user_group_id)
         owner = await self._repos.memberships.get_active_owner(user_group_id)
         if owner is not None and owner.user_id == user_id:
             raise PermissionDenied("Owner 不能直接退出，请先转让 User Group 所有权")
@@ -345,10 +347,10 @@ class UserGroupService:
     async def transfer_ownership(
         self, user_id: str, user_group_id: str, target_user_id: str
     ) -> None:
-        await self._guard.user_group(user_id, user_group_id, needs=Capability.OWNERSHIP_TRANSFER)
-        group = await self._repos.user_groups.get_for_update(user_group_id)
-        if group is None:  # pragma: no cover - guard already established it
-            raise ObjectNotFound("User Group", user_group_id)
+        access = await self._lock_and_authorize_mutation(
+            user_id, user_group_id, needs=Capability.OWNERSHIP_TRANSFER
+        )
+        group = access.user_group
         current = await self._repos.memberships.get(user_group_id, user_id)
         if current is None or not current.is_active or current.role is not MembershipRole.OWNER:
             raise PermissionDenied("只有当前 User Group Owner 可以转让所有权")
