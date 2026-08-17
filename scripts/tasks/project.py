@@ -267,7 +267,15 @@ def demo(*, smoke: bool = False) -> None:
             }
         )
         backend_uv("run", "alembic", "upgrade", "head", env=environment, quiet=smoke)
-        backend_uv("run", "python", "-m", "workspace107.tools.seed", env=environment, quiet=smoke)
+        backend_uv(
+            "run",
+            "python",
+            "-m",
+            "workspace107.tools.seed",
+            "--demo",
+            env=environment,
+            quiet=smoke,
+        )
 
         command = [
             _backend_python_executable(),
@@ -293,7 +301,7 @@ def demo(*, smoke: bool = False) -> None:
             )
             try:
                 _wait_until_ready(f"{base_url}/health", process, server_log)
-                _exercise_core_run(ApiClient(base_url), verbose=not smoke)
+                _exercise_core_run(ApiClient(base_url, user="student"), verbose=not smoke)
             finally:
                 _stop_processes([process])
 
@@ -308,9 +316,9 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         if verbose:
             print(f"\n{label}")
 
-    say("1. Resolve personal Workspace")
+    say("1. Resolve explicit User Group")
     home = client.request("GET", "/me")
-    workspace_id = home["workspaces"][0]["id"]
+    workspace_id = home["user_groups"][0]["id"]
     client.request(
         "PATCH",
         f"/workspaces/{workspace_id}",

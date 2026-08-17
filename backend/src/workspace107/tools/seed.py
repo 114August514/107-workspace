@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..api.deps import build_services
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
+from ..domain import ids
 from ..domain.pagination import PageRequest
 from ..infrastructure.db import tables as t
 from ..main import build_context
@@ -196,6 +197,27 @@ async def seed_demo(session: AsyncSession, context) -> str:
         workspace_id = (
             await services.user_groups.create(user.id, "演示 User Group", "本地演示数据")
         ).user_group.id
+    entitlement = (
+        await session.execute(
+            select(t.ResourceEntitlementRow).where(
+                t.ResourceEntitlementRow.workspace_id == workspace_id,
+                t.ResourceEntitlementRow.compute_plan_id == "plan_cpu_quick",
+            )
+        )
+    ).scalar_one_or_none()
+    if entitlement is None:
+        # Demo data explicitly opts into the still-legacy Run qualification model.
+        # Creating a real User Group grants no Workspace-scoped entitlement.
+        session.add(
+            t.ResourceEntitlementRow(
+                id=ids.new_id(ids.ENTITLEMENT),
+                workspace_id=workspace_id,
+                compute_plan_id="plan_cpu_quick",
+                max_concurrent_runs=2,
+                expires_at=None,
+            )
+        )
+        await session.flush()
 
     # 幂等：已经载入过就直接返回，不重复创建
     existing = await services.projects.list_for_workspace(user.id, workspace_id, PageRequest())
