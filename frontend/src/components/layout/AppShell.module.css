@@ -1,9 +1,7 @@
-:global(:root) {
-  --workspace-drawer-width: 320px;
-  --workspace-sidebar-width: 240px;
-}
-
 .shell {
+  /* @primer/react 38.35.1 PageLayout/usePaneWidth 的 small 默认宽度。 */
+  --app-shell-sidebar-width: 256px;
+
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -67,29 +65,16 @@
 }
 
 .persistentSidebar {
-  width: var(--workspace-sidebar-width);
-  min-width: 0;
-  padding: 24px 16px;
-  border-right: 1px solid var(--borderColor-muted);
+  flex: 0 0 var(--app-shell-sidebar-width);
+  padding: var(--base-size-24) var(--base-size-16);
+  border-right: var(--borderWidth-thin) solid var(--borderColor-default);
+  background: var(--bgColor-default);
   box-sizing: border-box;
-  flex: 0 0 var(--workspace-sidebar-width);
 }
 
-.content {
-  min-width: 0;
+.main {
   flex: 1;
-}
-
-.centeredContent {
-  width: 100%;
-  max-width: 1280px;
-  margin-inline: auto;
-  padding: 24px 32px;
-  box-sizing: border-box;
-}
-
-.navigationDrawer {
-  max-width: calc(100vw - 40px);
+  min-width: 0;
 }
 
 .navigationDrawer [data-component='Dialog.CloseButton'] {
@@ -108,19 +93,17 @@
   color: var(--fgColor-muted);
 }
 
-@media (max-width: 767px) {
+/* Primer PageLayout narrow 边界：小于 48rem。 */
+@media (max-width: calc(48rem - 0.02px)) {
   .persistentSidebar {
     display: none;
   }
-}
 
-@media (max-width: 544px) {
   .headerInner {
     padding-inline: 8px;
     gap: 8px;
   }
 
-  .centeredContent,
   .footerInner {
     padding-inline: 16px;
   }

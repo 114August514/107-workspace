@@ -1,5 +1,5 @@
 import { PlusIcon, ThreeBarsIcon } from '@primer/octicons-react'
-import { Button, Dialog, IconButton } from '@primer/react'
+import { Button, Dialog, IconButton, PageLayout } from '@primer/react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -8,6 +8,7 @@ import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateWorkspaceDialog } from '../workspace/CreateWorkspaceDialog'
+import { appShellCopy } from './copy'
 import { UserSwitcher } from './UserSwitcher'
 import { WorkNavigation } from './WorkNavigation'
 import styles from './AppShell.module.css'
@@ -41,13 +42,13 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
               ref={navigationButtonRef}
               icon={ThreeBarsIcon}
               variant="default"
-              aria-label="打开导航"
+              aria-label={appShellCopy.openNavigation}
               aria-expanded={navigationOpen}
               aria-controls={navigationId}
               onClick={() => setNavigationOpen(true)}
             />
             <RouterLink to="/" className={styles.brand}>
-              107 Workspace
+              {appShellCopy.brand}
             </RouterLink>
           </div>
           <div className={styles.actions}>
@@ -55,10 +56,10 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
               className={styles.createButton}
               variant="default"
               leadingVisual={PlusIcon}
-              aria-label="创建协作空间"
+              aria-label={appShellCopy.createWorkspace}
               onClick={() => setCreateOpen(true)}
             >
-              <span className={styles.createLabel}>创建协作空间</span>
+              <span className={styles.createLabel}>{appShellCopy.createWorkspace}</span>
             </Button>
             {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
                 避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
@@ -70,24 +71,28 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
 
       <div className={styles.body}>
         {location.pathname === '/' ? (
-          <aside className={styles.persistentSidebar} aria-label="首页工作入口">
+          <aside className={styles.persistentSidebar} aria-label={appShellCopy.sidebarLabel}>
             {home.data ? <WorkNavigation home={home.data} /> : null}
           </aside>
         ) : null}
-        <main className={styles.content}>
-          <div className={styles.centeredContent}>{children}</div>
+        <main className={styles.main}>
+          <PageLayout containerWidth="full" padding="none" rowGap="none" columnGap="none">
+            <PageLayout.Content as="div" width="xlarge" padding="normal">
+              {children}
+            </PageLayout.Content>
+          </PageLayout>
         </main>
       </div>
 
       <footer className={styles.footer}>
-        <div className={styles.footerInner}>GPU 型号、分区、QoS 和配额等信息以平台页面为准。</div>
+        <div className={styles.footerInner}>{appShellCopy.footer}</div>
       </footer>
 
       {navigationOpen ? (
         <Dialog
-          title="107 Workspace"
+          title={appShellCopy.drawerTitle}
           position="left"
-          width="var(--workspace-drawer-width)"
+          width="medium"
           height="large"
           className={styles.navigationDrawer}
           initialFocusRef={homeLinkRef}
@@ -97,7 +102,7 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
           <div id={navigationId}>
             <AsyncState
               loading={home.loading}
-              loadingText="正在加载工作入口…"
+              loadingText={appShellCopy.navigationLoading}
               error={toNavigationError(home.error)}
               onRetry={home.reload}
             >
@@ -125,7 +130,7 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
 function toNavigationError(error: Error | undefined) {
   if (!error) return undefined
   return {
-    message: '工作入口加载失败。',
-    problems: ['请检查网络连接后重试。'],
+    message: appShellCopy.navigationError,
+    problems: [appShellCopy.navigationErrorNextStep],
   }
 }

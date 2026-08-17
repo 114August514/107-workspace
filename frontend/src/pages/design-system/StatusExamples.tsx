@@ -51,6 +51,7 @@ export function StatusGallery() {
       >
         <AsyncState
           loading={false}
+          loadingText="正在加载共享资源…"
           empty
           emptyText="这里还没有共享资源。"
           emptyDescription="创建共享资源后，可以在多个 Project 中复用同一份版本化内容。"
@@ -66,6 +67,7 @@ export function StatusGallery() {
       >
         <AsyncState
           loading={false}
+          loadingText="正在加载共享资源…"
           error={{
             message: '无法发布这个版本。',
             problems: ['请修正文件问题后重试。'],

@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 interface Props {
   loading: boolean
   /** 加载中的可见文案，描述正在发生的动作，例如「正在加载首页内容…」。 */
-  loadingText?: string
+  loadingText: string
   /** 已经归一化的错误展示数据；组件不依赖 API client，由调用方拆解错误对象。 */
   error?: { message: string; problems?: string[]; requestId?: string }
   /** 可恢复错误的重试回调；提供时错误态会渲染「重试」主操作。 */
@@ -52,12 +52,11 @@ export function AsyncState({
   children,
 }: Props) {
   if (loading) {
-    const text = loadingText ?? '加载中'
     return (
       <Padded>
         <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Spinner size="small" />
-          <Text as="span">{text}</Text>
+          <Text as="span">{loadingText}</Text>
         </div>
       </Padded>
     )

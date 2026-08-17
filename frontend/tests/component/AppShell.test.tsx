@@ -74,28 +74,37 @@ afterEach(() => {
 })
 
 describe('AppShell 壳层', () => {
-  it('非首页路由只有紧凑 utility header，导航未打开时不存在', () => {
+  it('非首页 Body 仅直接包含 main，Primer Content 在 main 内负责正文居中', () => {
     renderShell('student', readyHome(), '/projects/p-1')
-    const header = screen.getByRole('banner')
-    expect(within(header).getByRole('button', { name: '打开导航' })).toBeVisible()
-    expect(within(header).getByRole('link', { name: '107 Workspace' })).toHaveAttribute('href', '/')
-    expect(within(header).getByRole('button', { name: '创建协作空间' })).toBeVisible()
-    expect(within(header).getByRole('button', { name: /^通知/ })).toBeVisible()
-    expect(within(header).getByRole('button', { name: '切换身份，当前 student' })).toBeVisible()
-    expect(screen.queryByRole('navigation', { name: '工作入口' })).toBeNull()
-    expect(screen.getByText('页面内容')).toBeVisible()
-    expect(screen.getByText('GPU 型号、分区、QoS 和配额等信息以平台页面为准。')).toBeVisible()
+    const body = screen.getByRole('banner').nextElementSibling
+    const main = screen.getByRole('main')
+    const layout = main.querySelector('[data-component="PageLayout"]')
+    const centeredContent = main.querySelector<HTMLElement>('[data-component="PageLayout.Content"]')
+
+    expect(body?.firstElementChild).toBe(main)
+    expect(main.parentElement).toBe(body)
+    expect(screen.queryByRole('complementary', { name: '首页工作入口' })).toBeNull()
+    expect(layout?.querySelector('[data-component="PageLayout.Sidebar"]')).toBeNull()
+    expect(centeredContent).toHaveProperty('tagName', 'DIV')
+    expect(centeredContent?.firstElementChild).toHaveAttribute('data-width', 'xlarge')
+    expect(main).toContainElement(screen.getByText('页面内容'))
   })
 
-  it('首页 sidebar 与 main 是 Body 的直接兄弟，正文容器只位于 main 内', () => {
+  it('首页 Body 直接 stretch persistent sidebar 与 main，Primer 只负责正文居中', () => {
     renderShell('student')
-
+    const body = screen.getByRole('banner').nextElementSibling
     const sidebar = screen.getByRole('complementary', { name: '首页工作入口' })
     const main = screen.getByRole('main')
-    expect(sidebar.parentElement).toBe(main.parentElement)
-    expect(sidebar.parentElement?.firstElementChild).toBe(sidebar)
-    expect(main.firstElementChild).toContainElement(screen.getByText('页面内容'))
-    expect(sidebar).not.toContainElement(main.firstElementChild as HTMLElement)
+    const centeredContent = main.querySelector<HTMLElement>('[data-component="PageLayout.Content"]')
+
+    expect(sidebar.parentElement).toBe(body)
+    expect(sidebar.nextElementSibling).toBe(main)
+    expect(main.parentElement).toBe(body)
+    expect(within(sidebar).getByRole('navigation', { name: '工作入口' })).toBeVisible()
+    expect(centeredContent).toHaveProperty('tagName', 'DIV')
+    expect(centeredContent?.firstElementChild).toHaveAttribute('data-width', 'xlarge')
+    expect(main).toContainElement(screen.getByText('页面内容'))
+    expect(screen.getAllByRole('main')).toHaveLength(1)
   })
 
   it('header 菜单打开 overlay 工作导航，并通过真实链接导航后关闭', async () => {

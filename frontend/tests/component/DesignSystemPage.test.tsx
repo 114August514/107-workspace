@@ -126,9 +126,14 @@ describe('DesignSystemPage', () => {
 
 describe('AsyncState', () => {
   it('加载中只呈现动作描述', () => {
-    render(<AsyncState loading>内容</AsyncState>)
+    render(
+      <AsyncState loading loadingText="正在加载共享资源…">
+        内容
+      </AsyncState>,
+    )
 
-    expect(screen.getByText('加载中')).toBeInTheDocument()
+    expect(screen.getByText('正在加载共享资源…')).toBeInTheDocument()
+    expect(screen.queryByText('加载中')).not.toBeInTheDocument()
     expect(screen.queryByText('内容')).not.toBeInTheDocument()
   })
 
@@ -148,6 +153,7 @@ describe('AsyncState', () => {
     render(
       <AsyncState
         loading={false}
+        loadingText="正在加载共享资源…"
         error={{
           message: '无法发布这个版本。',
           problems: ['文件 list.txt 已存在', '说明过长'],
@@ -173,6 +179,7 @@ describe('AsyncState', () => {
     render(
       <AsyncState
         loading={false}
+        loadingText="正在加载共享资源…"
         error={{ message: '无法发布这个版本。', problems: ['请修正文件问题后重试。'] }}
       >
         内容
@@ -185,13 +192,22 @@ describe('AsyncState', () => {
 
   it('空态显示说明，正常状态渲染内容', () => {
     const { rerender } = render(
-      <AsyncState loading={false} empty emptyText="这里还没有共享资源。">
+      <AsyncState
+        loading={false}
+        loadingText="正在加载共享资源…"
+        empty
+        emptyText="这里还没有共享资源。"
+      >
         内容
       </AsyncState>,
     )
     expect(screen.getByText('这里还没有共享资源。')).toBeInTheDocument()
 
-    rerender(<AsyncState loading={false}>内容</AsyncState>)
+    rerender(
+      <AsyncState loading={false} loadingText="正在加载共享资源…">
+        内容
+      </AsyncState>,
+    )
     expect(screen.getByText('内容')).toBeInTheDocument()
   })
 })

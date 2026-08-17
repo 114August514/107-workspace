@@ -13,6 +13,7 @@ import { AsyncState } from '../components/common/AsyncState'
 import { describeComputeRequest, formatRelative, formatTime } from '../utils/format'
 import { roleLabel } from '../utils/roles'
 import { runStatusLabel } from '../utils/runStatus'
+import { homeCopy, homeTitle, invitationFailureTitle, invitationKind } from './homeCopy'
 import styles from './HomePage.module.css'
 
 interface Props {
@@ -28,15 +29,13 @@ export function HomePage({ username, home }: Props) {
   return (
     <div className={styles.page}>
       <header>
-        <h1 className={styles.title}>{user ? `${user.display_name}，欢迎回来` : '首页'}</h1>
-        <p className={styles.subtitle}>
-          从这里进入 Project，配置运行方案，提交计算作业——不需要自己写 sbatch。
-        </p>
+        <h1 className={styles.title}>{homeTitle(user?.display_name)}</h1>
+        <p className={styles.subtitle}>{homeCopy.subtitle}</p>
       </header>
 
       <AsyncState
         loading={home.loading}
-        loadingText="正在加载首页内容…"
+        loadingText={homeCopy.loading}
         error={toAsyncError(home.error)}
         onRetry={home.reload}
       >
@@ -48,10 +47,15 @@ export function HomePage({ username, home }: Props) {
                 as="section"
                 padding="normal"
                 className={styles.card}
-                aria-label="最近提交的 Run"
+                aria-label={homeCopy.recentRuns.title}
               >
-                <h2 className={styles.cardTitle}>最近提交的 Run</h2>
-                <AsyncState loading={false} empty={runs.length === 0} emptyText="还没有提交过 Run">
+                <h2 className={styles.cardTitle}>{homeCopy.recentRuns.title}</h2>
+                <AsyncState
+                  loading={false}
+                  loadingText={homeCopy.loading}
+                  empty={runs.length === 0}
+                  emptyText={homeCopy.recentRuns.empty}
+                >
                   <ul className={styles.list}>
                     {runs.map((run) => (
                       <li key={run.id} className={styles.item}>
@@ -76,7 +80,7 @@ export function HomePage({ username, home }: Props) {
             </div>
             <aside className={styles.side}>
               <ComputePlanCatalog />
-              <p className={styles.clusterNote}>当前暂不提供节点、分区和队列的实时状态。</p>
+              <p className={styles.clusterNote}>{homeCopy.compute.realtimeUnavailable}</p>
             </aside>
           </div>
         ) : null}
@@ -108,7 +112,7 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
     } catch (error) {
       setRespondError({
         name: invitation.workspace_name,
-        view: toAsyncError(error as Error) ?? { message: '请求失败。' },
+        view: toAsyncError(error as Error) ?? { message: homeCopy.invitations.fallbackError },
       })
     } finally {
       setPendingId(null)
@@ -119,11 +123,16 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
   if (!invitations.loading && !invitations.error && items.length === 0) return null
 
   return (
-    <Card as="section" padding="normal" className={styles.card} aria-label="待处理邀请">
-      <h2 className={styles.cardTitle}>待处理邀请</h2>
+    <Card
+      as="section"
+      padding="normal"
+      className={styles.card}
+      aria-label={homeCopy.invitations.title}
+    >
+      <h2 className={styles.cardTitle}>{homeCopy.invitations.title}</h2>
       <AsyncState
         loading={invitations.loading}
-        loadingText="正在加载邀请…"
+        loadingText={homeCopy.invitations.loading}
         error={toAsyncError(invitations.error)}
         onRetry={invitations.reload}
       >
@@ -132,7 +141,9 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
             <li key={invitation.workspace_id} className={styles.invitationItem}>
               <div className={styles.invitationMain}>
                 <div className={styles.invitationTitle}>{invitation.workspace_name}</div>
-                <div className={styles.invitationMeta}>协作空间 · {roleLabel(invitation.role)}</div>
+                <div className={styles.invitationMeta}>
+                  {invitationKind(roleLabel(invitation.role))}
+                </div>
                 {invitation.workspace_description ? (
                   <div className={styles.invitationMeta}>{invitation.workspace_description}</div>
                 ) : null}
@@ -144,13 +155,13 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
                   loading={pendingId === invitation.workspace_id}
                   onClick={() => void respond(invitation, true)}
                 >
-                  接受邀请
+                  {homeCopy.invitations.accept}
                 </Button>
                 <Button
                   disabled={pendingId !== null}
                   onClick={() => void respond(invitation, false)}
                 >
-                  拒绝
+                  {homeCopy.invitations.reject}
                 </Button>
               </div>
             </li>
@@ -160,10 +171,10 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
           <div className={styles.invitationError}>
             <Banner variant="critical">
               <Banner.Title>
-                处理「{respondError.name}」的邀请失败：{respondError.view.message}
+                {invitationFailureTitle(respondError.name, respondError.view.message)}
               </Banner.Title>
               <Banner.Description>
-                {respondError.view.problems?.join(' ') ?? '请稍后重试。'}
+                {respondError.view.problems?.join(' ') ?? homeCopy.invitations.fallbackNextStep}
               </Banner.Description>
             </Banner>
           </div>
@@ -178,16 +189,16 @@ function ComputePlanCatalog() {
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
 
   return (
-    <Card as="section" padding="normal" className={styles.card} aria-label="算力方案目录">
-      <h2 className={styles.cardTitle}>算力方案目录</h2>
-      <p className={styles.cardDescription}>提交 Run 时从中选择；实际可用以平台授权为准。</p>
+    <Card as="section" padding="normal" className={styles.card} aria-label={homeCopy.compute.title}>
+      <h2 className={styles.cardTitle}>{homeCopy.compute.title}</h2>
+      <p className={styles.cardDescription}>{homeCopy.compute.description}</p>
       <AsyncState
         loading={plans.loading}
-        loadingText="正在加载算力方案…"
+        loadingText={homeCopy.compute.loading}
         error={toAsyncError(plans.error)}
         onRetry={plans.reload}
         empty={(plans.data ?? []).length === 0}
-        emptyText="暂无算力方案"
+        emptyText={homeCopy.compute.empty}
       >
         <ul className={styles.planList}>
           {(plans.data ?? []).map((plan) => (

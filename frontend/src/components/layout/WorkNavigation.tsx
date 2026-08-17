@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 
 import type { Home } from '../../api/types'
+import { workNavigationCopy } from './copy'
 import styles from './WorkNavigation.module.css'
 
 interface Props {
@@ -23,8 +24,8 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
   const workspaceNames = new Map(home.workspaces.map((workspace) => [workspace.id, workspace.name]))
 
   return (
-    <NavList aria-label="工作入口" className={styles.navigation}>
-      <NavList.Heading>工作入口</NavList.Heading>
+    <NavList aria-label={workNavigationCopy.ariaLabel} className={styles.navigation}>
+      <NavList.Heading>{workNavigationCopy.heading}</NavList.Heading>
       <NavList.Item
         className={styles.item}
         as={RouterLink}
@@ -36,11 +37,11 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
         <NavList.LeadingVisual>
           <HomeIcon />
         </NavList.LeadingVisual>
-        <span className={styles.itemText}>首页</span>
+        <span className={styles.itemText}>{workNavigationCopy.home}</span>
       </NavList.Item>
-      <NavList.Group title="空间">
+      <NavList.Group title={workNavigationCopy.workspaceGroup}>
         {home.workspaces.length === 0 ? (
-          <li className={styles.empty}>还没有可进入的空间</li>
+          <li className={styles.empty}>{workNavigationCopy.workspaceEmpty}</li>
         ) : (
           home.workspaces.map((workspace) => (
             <NavList.Item
@@ -61,9 +62,9 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
           ))
         )}
       </NavList.Group>
-      <NavList.Group title="最近使用的 Project">
+      <NavList.Group title={workNavigationCopy.recentProjectsGroup}>
         {home.recent_projects.length === 0 ? (
-          <li className={styles.empty}>还没有最近使用的 Project</li>
+          <li className={styles.empty}>{workNavigationCopy.recentProjectsEmpty}</li>
         ) : (
           home.recent_projects.map((project) => (
             <NavList.Item
