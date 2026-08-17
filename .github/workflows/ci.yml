@@ -69,6 +69,42 @@ jobs:
           uv run --no-project python scripts/workspace.py migrate-down
           uv run --no-project python scripts/workspace.py migrate
 
+  postgres-behavior:
+    name: postgres-migration-and-owner-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: workspace107_ci
+          POSTGRES_USER: workspace107
+          POSTGRES_PASSWORD: ci-throwaway-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U workspace107 -d workspace107_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.UV_PYTHON }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Run PostgreSQL migration and owner race evidence
+        env:
+          WORKSPACE107_TEST_POSTGRESQL_URL: postgresql+asyncpg://workspace107:ci-throwaway-password@127.0.0.1:5432/workspace107_ci
+        run: |
+          uv run --no-project python scripts/workspace.py setup backend
+          test -n "$WORKSPACE107_TEST_POSTGRESQL_URL"
+          cd backend
+          uv run pytest -q tests/integration/postgres/test_user_group_postgres.py
+
   windows-check:
     name: windows-canonical-check-and-smoke
     runs-on: windows-latest
