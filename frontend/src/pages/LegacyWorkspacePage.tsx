@@ -1,5 +1,5 @@
 import { PlusOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Tabs, Tag } from 'antd'
+import { Button, Card, Tabs, Tag } from 'antd'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -40,29 +40,34 @@ export function LegacyWorkspacePage() {
 
   return (
     <Stack gap="large">
-      <Alert
-        type="warning"
-        showIcon
-        message="旧 Workspace 下游兼容视图"
-        description="此入口只保留尚未迁移的 Project、配置、环境、权益与活动访问；User Group 治理请使用 User Group 页面。"
-      />
-
       <AsyncSection loading={workspace.loading} error={workspace.error}>
         {workspace.data && (
           <PageHeader
-            breadcrumb={[{ title: <Link to="/">首页</Link> }, { title: workspace.data.name }]}
-            title={workspace.data.name}
+            breadcrumb={[
+              { title: <Link to="/">首页</Link> },
+              {
+                title: workspace.data.kind === 'personal' ? '个人资源' : workspace.data.name,
+              },
+            ]}
+            title={workspace.data.kind === 'personal' ? '个人资源' : workspace.data.name}
             tags={
               <>
-                <Tag>Workspace 兼容</Tag>
+                <Tag color={workspace.data.kind === 'personal' ? undefined : 'blue'}>
+                  {workspace.data.kind === 'personal' ? '个人资源' : 'User Group'}
+                </Tag>
                 <RoleTag role={workspace.data.role} />
               </>
             }
-            description="尚未迁移的 Workspace 下游数据入口"
+            description={
+              workspace.data.kind === 'personal'
+                ? '查看已有的个人 Project、运行环境与配置'
+                : '查看这个 User Group 的 Project、运行环境与配置'
+            }
             actions={
+              workspace.data.kind === 'collaborative' &&
               can(workspace.data, 'project.create') && (
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-                  创建 Workspace Project
+                  创建 Project
                 </Button>
               )
             }
@@ -75,14 +80,14 @@ export function LegacyWorkspacePage() {
         items={[
           {
             key: 'projects',
-            label: 'Workspace Project（兼容）',
+            label: 'Project',
             children: (
               <ListCard>
                 <AsyncSection
                   loading={projects.loading}
                   error={projects.error}
                   empty={projects.data?.total === 0}
-                  emptyText="这个旧 Workspace 还没有 Project"
+                  emptyText="还没有 Project"
                 >
                   <ProjectTable
                     projects={projects.data?.items ?? []}
@@ -94,7 +99,7 @@ export function LegacyWorkspacePage() {
           },
           {
             key: 'environment',
-            label: 'Workspace 默认环境（兼容）',
+            label: '默认运行环境',
             children: (
               <Card>
                 {workspace.data && (
@@ -108,26 +113,26 @@ export function LegacyWorkspacePage() {
           },
           {
             key: 'config',
-            label: 'Workspace 变量与 Secret（兼容）',
+            label: 'Variable 与 Secret',
             children: <Card>{workspace.data && <VariablePanel workspace={workspace.data} />}</Card>,
           },
           {
             key: 'activities',
-            label: 'Workspace 活动（兼容）',
+            label: '活动',
             children: (
               <ListCard padded>
                 <ActivityFeed
                   page={activities.data}
                   loading={activities.loading}
                   error={activities.error}
-                  emptyText="这个旧 Workspace 还没有活动记录"
+                  emptyText="还没有活动记录"
                 />
               </ListCard>
             ),
           },
           {
             key: 'entitlements',
-            label: 'Workspace 资源权益（兼容）',
+            label: '可用算力',
             children: (
               <Card>
                 <EntitlementPanel workspaceId={workspaceId} />

@@ -22,9 +22,18 @@ interface Props {
  */
 export function ForkModal({ open, version, sourceProjectName, onClose, onForked }: Props) {
   const [form] = Form.useForm<{ target_workspace_id: string; name: string; description: string }>()
-  const userGroups = useAsync<UserGroup[]>(() => api.listUserGroups(), [open])
-
-  const writable = (userGroups.data ?? []).filter((group) => can(group, 'project.create'))
+  const writableGroups = useAsync<UserGroup[]>(async () => {
+    const groups = await api.listUserGroups()
+    const contexts = await Promise.all(
+      groups.map(async (group) => ({
+        group,
+        context: await api.getLegacyWorkspaceContext(group.id),
+      })),
+    )
+    return contexts
+      .filter(({ context }) => can(context, 'project.create'))
+      .map(({ group }) => group)
+  }, [open])
 
   useEffect(() => {
     if (open) {
@@ -64,8 +73,16 @@ export function ForkModal({ open, version, sourceProjectName, onClose, onForked 
         showIcon
         style={{ marginBottom: 16 }}
         message="复制的是内容和运行方案，不是权限"
-        description="资源权益、成员权限、Secret 的值和 Run 历史都不会跟过去。运行方案里的 Secret 引用会一起复制，但需要你在目标空间配置同名 Secret 才能跑起来。"
+        description="资源权益、成员权限、Secret 的值和 Run 历史都不会跟过去。运行方案里的 Secret 引用会一起复制，但需要你在目标 User Group 配置同名 Secret 才能跑起来。"
       />
+      {writableGroups.error && (
+        <Alert
+          type="error"
+          showIcon
+          message="无法加载可创建 Project 的 User Group"
+          description={writableGroups.error.message}
+        />
+      )}
       <Form form={form} layout="vertical">
         <Form.Item
           name="target_workspace_id"
@@ -73,9 +90,10 @@ export function ForkModal({ open, version, sourceProjectName, onClose, onForked 
           rules={[{ required: true, message: '请选择目标 User Group' }]}
         >
           <Select
-            loading={userGroups.loading}
+            loading={writableGroups.loading}
+            disabled={Boolean(writableGroups.error)}
             placeholder="选择一个你能建 Project 的 User Group"
-            options={writable.map((group) => ({
+            options={(writableGroups.data ?? []).map((group) => ({
               value: group.id,
               label: group.name,
             }))}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -41,6 +41,7 @@ describe('UserGroupPage governance boundary', () => {
       kind: 'collaborative',
       owner_id: 'usr_alice',
       default_environment_version_id: null,
+      capabilities: ['user_group.view', 'project.view', 'project.create'],
     } as LegacyWorkspaceContext)
     vi.spyOn(api, 'listProjects').mockResolvedValue({
       items: [],
@@ -56,6 +57,8 @@ describe('UserGroupPage governance boundary', () => {
       total: 0,
       has_more: false,
     } as ActivityPage)
+    vi.spyOn(api, 'listEntitlements').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -63,7 +66,7 @@ describe('UserGroupPage governance boundary', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows governance and keeps legacy downstream scopes off the User Group surface', async () => {
+  it('shows governance with a normal resource entry and no implementation wording', async () => {
     render(
       <MemoryRouter initialEntries={['/user-groups/grp_lab']}>
         <Routes>
@@ -75,22 +78,53 @@ describe('UserGroupPage governance boundary', () => {
     await screen.findByRole('heading', { name: 'Research Lab' })
 
     expect(screen.getAllByText('成员').length).toBeGreaterThan(0)
-    expect(screen.queryByText('Project')).not.toBeInTheDocument()
-    expect(screen.queryByText('默认环境')).not.toBeInTheDocument()
-    expect(screen.queryByText('变量与 Secret')).not.toBeInTheDocument()
-    expect(screen.queryByText('近期活动')).not.toBeInTheDocument()
-    expect(screen.queryByText('资源权益')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看 Project 与配置' })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容/)
   })
 
-  it('routes a persisted Workspace target to the bounded compatibility page', async () => {
+  it('renders a collaborative resource context with normal product labels', async () => {
     render(
       <MemoryRouter initialEntries={['/workspaces/grp_lab']}>
         <ProductRoutes username="alice" />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('旧 Workspace 下游兼容视图')).toBeInTheDocument()
-    expect(screen.getByText('Workspace Project（兼容）')).toBeInTheDocument()
-    expect(screen.queryByText('我的 User Group')).not.toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Research Lab' })
+    expect(screen.getByText('User Group')).toBeInTheDocument()
+    expect(screen.getByText('Project')).toBeInTheDocument()
+    expect(screen.getByText('默认运行环境')).toBeInTheDocument()
+    expect(screen.getByText('Variable 与 Secret')).toBeInTheDocument()
+    expect(screen.getByText('活动')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: '可用算力' }))
+    expect(screen.getByText('这里显示当前可用于这些 Project 的算力方案')).toBeInTheDocument()
+    expect(
+      screen.getByText('算力方案由平台分配；如果当前没有可用方案，相关 Project 就无法提交 Run。'),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('当前没有可用的算力方案')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /创建 Project/ })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容|迁移/)
+  })
+
+  it('keeps existing personal data accessible without a create Project action', async () => {
+    vi.mocked(api.getLegacyWorkspaceContext).mockResolvedValueOnce({
+      id: 'ws_personal_alice',
+      name: 'Alice personal data',
+      kind: 'personal',
+      owner_id: 'usr_alice',
+      default_environment_version_id: null,
+      role: 'owner',
+      capabilities: ['project.view', 'project.create'],
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/workspaces/ws_personal_alice']}>
+        <ProductRoutes username="alice" />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('heading', { name: '个人资源' })
+    expect(screen.getByText('Project')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /创建 Project/ })).not.toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容/)
   })
 })

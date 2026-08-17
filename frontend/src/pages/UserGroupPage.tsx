@@ -31,7 +31,7 @@ export function UserGroupPage() {
             description={userGroup.data.description || '这个 User Group 还没有填写说明'}
             actions={
               <Link to={`/workspaces/${userGroupId}`}>
-                <Button>旧 Workspace 兼容视图</Button>
+                <Button>查看 Project 与配置</Button>
               </Link>
             }
           />

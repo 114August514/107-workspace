@@ -44,11 +44,8 @@ class LegacyWorkspaceService:
             capabilities=access.capabilities,
         )
 
-    async def personal_workspace(self, user_id: str) -> LegacyWorkspace:
-        workspace = await self._repos.legacy_workspaces.get_personal(user_id)
-        if workspace is None:
-            raise ObjectNotFound("Personal Workspace")
-        return workspace
+    async def find_personal(self, user_id: str) -> LegacyWorkspace | None:
+        return await self._repos.legacy_workspaces.get_personal(user_id)
 
     async def set_default_environment(
         self, user_id: str, workspace_id: str, environment_version_id: str | None

@@ -1,6 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { api } from '../api/client'
 import type { Home } from '../api/types'
@@ -35,6 +36,14 @@ export function HomePage({ username }: { username: string }) {
       {/* 邀请排在空间列表前面：它是需要用户做决定的事，
           而下面几块只是「已经有什么」。没有邀请时整块不渲染。 */}
       <InvitationList username={username} onResponded={() => home.reload()} />
+
+      {home.data?.personal_resource_context_id && (
+        <ListCard title="个人资源" padded>
+          <Link to={`/workspaces/${home.data.personal_resource_context_id}`}>
+            <Button>查看个人资源</Button>
+          </Link>
+        </ListCard>
+      )}
 
       <ListCard title="我的 User Group">
         <AsyncSection

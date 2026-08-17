@@ -6,6 +6,8 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from workspace107.domain.enums import LegacyWorkspaceKind
+from workspace107.domain.models import LegacyWorkspace
 from workspace107.infrastructure.db.repositories import SqlRepositories
 
 ALICE = {"X-User": "alice"}
@@ -71,13 +73,100 @@ async def _assert_exactly_one_active_owner(client: httpx.AsyncClient, group_id: 
 
 
 @pytest.mark.asyncio
-async def test_new_user_does_not_create_personal_workspace(client: httpx.AsyncClient) -> None:
+async def test_new_user_does_not_create_personal_workspace(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
     response = await client.get("/api/v1/me", headers=ALICE)
 
     assert response.status_code == 200
     body = response.json()
     assert body["user_groups"] == []
+    assert body["personal_resource_context_id"] is None
     assert "workspaces" not in body
+
+    repos = SqlRepositories(session)
+    alice = await repos.users.get_by_username("alice")
+    assert alice is not None
+    assert await repos.legacy_workspaces.get_personal(alice.id) is None
+
+
+@pytest.mark.asyncio
+async def test_home_discovers_existing_personal_resources_only_for_the_owner(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    await client.get("/api/v1/me", headers=ALICE)
+    await client.get("/api/v1/me", headers=BOB)
+    repos = SqlRepositories(session)
+    alice = await repos.users.get_by_username("alice")
+    assert alice is not None
+    await repos.legacy_workspaces.add(
+        LegacyWorkspace(
+            id="ws_personal_alice",
+            kind=LegacyWorkspaceKind.PERSONAL,
+            name="Alice personal data",
+            owner_id=alice.id,
+        )
+    )
+    await session.commit()
+
+    home = (await client.get("/api/v1/me", headers=ALICE)).json()
+    assert home["personal_resource_context_id"] == "ws_personal_alice"
+    assert (
+        await client.get("/api/v1/workspaces/ws_personal_alice", headers=BOB)
+    ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_user_group_capabilities_are_governance_only_for_every_role(
+    client: httpx.AsyncClient,
+) -> None:
+    for headers in (BOB, CAROL, DAVE):
+        await client.get("/api/v1/me", headers=headers)
+
+    group = await _create_group(client, ALICE, "Capability Lab")
+    group_id = str(group["id"])
+    expected = {
+        "owner": [
+            "member.manage",
+            "member.view",
+            "ownership.transfer",
+            "user_group.update",
+            "user_group.view",
+        ],
+        "admin": [
+            "member.manage",
+            "member.view",
+            "user_group.update",
+            "user_group.view",
+        ],
+        "member": ["member.view", "user_group.view"],
+        "viewer": ["member.view", "user_group.view"],
+    }
+    assert group["capabilities"] == expected["owner"]
+
+    for username, role, headers in (
+        ("bob", "admin", BOB),
+        ("carol", "member", CAROL),
+        ("dave", "viewer", DAVE),
+    ):
+        assert (await _invite(client, group_id, username, role=role)).status_code == 201
+        assert (
+            await client.post(
+                f"/api/v1/user-groups/{group_id}/invitation",
+                json={"accept": True},
+                headers=headers,
+            )
+        ).status_code == 204
+
+    for role, headers in (
+        ("owner", ALICE),
+        ("admin", BOB),
+        ("member", CAROL),
+        ("viewer", DAVE),
+    ):
+        visible = (await client.get(f"/api/v1/user-groups/{group_id}", headers=headers)).json()
+        assert visible["role"] == role
+        assert visible["capabilities"] == expected[role]
 
 
 @pytest.mark.asyncio
