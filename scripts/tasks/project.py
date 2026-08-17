@@ -36,6 +36,7 @@ from .common import (
 )
 
 TERMINAL_RUN_STATUSES = {"succeeded", "failed", "cancelled", "submit_failed"}
+DEMO_USER_GROUP_ID = "grp_demo"
 JOURNAL_FIELD = re.compile(r"^-\s*([^:：]+)[:：]\s*(.*)$")
 COMPOSE_FILE = REPO_ROOT / "deploy" / "compose.yaml"
 
@@ -316,9 +317,14 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         if verbose:
             print(f"\n{label}")
 
-    say("1. Resolve explicit User Group")
+    say("1. Resolve explicit demo User Group")
     home = client.request("GET", "/me")
-    workspace_id = home["user_groups"][0]["id"]
+    demo_group = next(
+        (group for group in home["user_groups"] if group["id"] == DEMO_USER_GROUP_ID), None
+    )
+    if demo_group is None:
+        raise TaskError(f"Demo User Group {DEMO_USER_GROUP_ID!r} is not visible to the demo user")
+    workspace_id = demo_group["id"]
     client.request(
         "PATCH",
         f"/workspaces/{workspace_id}",

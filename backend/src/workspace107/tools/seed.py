@@ -22,12 +22,15 @@ from ..api.deps import build_services
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
 from ..domain import ids
+from ..domain.enums import LegacyWorkspaceKind, MembershipRole, MembershipStatus
 from ..domain.pagination import PageRequest
 from ..infrastructure.db import tables as t
 from ..main import build_context
 
 DEMO_USER = "student"
 DEMO_PROJECT = "第一个训练任务"
+DEMO_USER_GROUP_ID = "grp_demo"
+DEMO_OWNER_MEMBERSHIP_ID = "mbr_demo_owner"
 
 DEMO_SCRIPT = '''"""演示训练脚本。
 
@@ -190,17 +193,51 @@ async def seed_demo(session: AsyncSession, context) -> str:
     """创建演示用户、Project、文件、版本和运行方案，返回 Project ID。"""
     services = build_services(context, session)
     user = await services.identity.ensure_user(DEMO_USER, "演示同学")
-    groups = await services.user_groups.list_for_user(user.id)
-    if groups:
-        workspace_id = groups[0].user_group.id
-    else:
-        workspace_id = (
-            await services.user_groups.create(user.id, "演示 User Group", "本地演示数据")
-        ).user_group.id
+    now = context.clock.now()
+
+    group = await session.get(t.UserGroupRow, DEMO_USER_GROUP_ID)
+    if group is None:
+        group = t.UserGroupRow(
+            id=DEMO_USER_GROUP_ID,
+            name="演示 User Group",
+            description="本地演示数据",
+            created_by_id=user.id,
+            created_at=now,
+        )
+        session.add(group)
+
+    anchor = await session.get(t.LegacyWorkspaceRow, DEMO_USER_GROUP_ID)
+    if anchor is None:
+        anchor = t.LegacyWorkspaceRow(
+            id=DEMO_USER_GROUP_ID,
+            kind=LegacyWorkspaceKind.COLLABORATIVE.value,
+            name=group.name,
+            description=group.description,
+            owner_id=user.id,
+            default_environment_version_id=None,
+            created_at=now,
+        )
+        session.add(anchor)
+    await session.flush()
+
+    membership = await session.get(t.MembershipRow, DEMO_OWNER_MEMBERSHIP_ID)
+    if membership is None:
+        session.add(
+            t.MembershipRow(
+                id=DEMO_OWNER_MEMBERSHIP_ID,
+                user_group_id=DEMO_USER_GROUP_ID,
+                user_id=user.id,
+                role=MembershipRole.OWNER.value,
+                status=MembershipStatus.ACTIVE.value,
+                created_at=now,
+            )
+        )
+        await session.flush()
+
     entitlement = (
         await session.execute(
             select(t.ResourceEntitlementRow).where(
-                t.ResourceEntitlementRow.workspace_id == workspace_id,
+                t.ResourceEntitlementRow.workspace_id == DEMO_USER_GROUP_ID,
                 t.ResourceEntitlementRow.compute_plan_id == "plan_cpu_quick",
             )
         )
@@ -211,7 +248,7 @@ async def seed_demo(session: AsyncSession, context) -> str:
         session.add(
             t.ResourceEntitlementRow(
                 id=ids.new_id(ids.ENTITLEMENT),
-                workspace_id=workspace_id,
+                workspace_id=DEMO_USER_GROUP_ID,
                 compute_plan_id="plan_cpu_quick",
                 max_concurrent_runs=2,
                 expires_at=None,
@@ -220,15 +257,19 @@ async def seed_demo(session: AsyncSession, context) -> str:
         await session.flush()
 
     # 幂等：已经载入过就直接返回，不重复创建
-    existing = await services.projects.list_for_workspace(user.id, workspace_id, PageRequest())
+    existing = await services.projects.list_for_workspace(
+        user.id, DEMO_USER_GROUP_ID, PageRequest()
+    )
     for project in existing.items:
         if project.name == DEMO_PROJECT:
             return project.id
 
-    await services.legacy_workspaces.set_default_environment(user.id, workspace_id, "ev_python_312")
+    await services.legacy_workspaces.set_default_environment(
+        user.id, DEMO_USER_GROUP_ID, "ev_python_312"
+    )
 
     project = await services.projects.create(
-        user.id, workspace_id, DEMO_PROJECT, "跑通核心闭环的演示项目"
+        user.id, DEMO_USER_GROUP_ID, DEMO_PROJECT, "跑通核心闭环的演示项目"
     )
     await services.projects.write_file(user.id, project.id, "train.py", DEMO_SCRIPT.encode("utf-8"))
     await services.projects.write_file(
@@ -236,7 +277,7 @@ async def seed_demo(session: AsyncSession, context) -> str:
     )
     await services.projects.save_version(user.id, project.id, "初始版本")
 
-    await services.legacy_workspaces.set_variable(user.id, workspace_id, "EPOCHS", "5")
+    await services.legacy_workspaces.set_variable(user.id, DEMO_USER_GROUP_ID, "EPOCHS", "5")
     await services.run_configurations.create(
         user.id,
         project.id,
