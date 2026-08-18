@@ -27,7 +27,7 @@ interface Props {
  * 不垫一下的话骨架屏和空状态会直接贴着卡片边框。
  */
 function Padded({ children }: { children: ReactNode }) {
-  return <div style={{ padding: 16 }}>{children}</div>
+  return <div style={{ padding: 'var(--base-size-16)' }}>{children}</div>
 }
 
 /**
@@ -54,7 +54,10 @@ export function AsyncState({
   if (loading) {
     return (
       <Padded>
-        <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          role="status"
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--base-size-8)' }}
+        >
           <Spinner size="small" />
           <Text as="span">{loadingText}</Text>
         </div>

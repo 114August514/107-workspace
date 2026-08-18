@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { defaultPaneWidth } from '@primer/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -97,9 +98,13 @@ describe('AppShell 壳层', () => {
     const main = screen.getByRole('main')
     const centeredContent = main.querySelector<HTMLElement>('[data-component="PageLayout.Content"]')
 
+    const shell = body?.parentElement
     expect(sidebar.parentElement).toBe(body)
     expect(sidebar.nextElementSibling).toBe(main)
     expect(main.parentElement).toBe(body)
+    expect(shell?.style.getPropertyValue('--app-shell-sidebar-width')).toBe(
+      `${defaultPaneWidth.medium}px`,
+    )
     expect(within(sidebar).getByRole('navigation', { name: '工作入口' })).toBeVisible()
     expect(centeredContent).toHaveProperty('tagName', 'DIV')
     expect(centeredContent?.firstElementChild).toHaveAttribute('data-width', 'xlarge')

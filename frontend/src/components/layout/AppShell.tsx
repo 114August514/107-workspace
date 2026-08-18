@@ -1,6 +1,6 @@
 import { PlusIcon, ThreeBarsIcon } from '@primer/octicons-react'
-import { Button, Dialog, IconButton, PageLayout } from '@primer/react'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { Button, defaultPaneWidth, Dialog, IconButton, PageLayout } from '@primer/react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 
 import type { Home } from '../../api/types'
@@ -20,6 +20,12 @@ interface Props {
   children: ReactNode
 }
 
+type AppShellStyle = CSSProperties & { '--app-shell-sidebar-width': string }
+
+const appShellStyle: AppShellStyle = {
+  '--app-shell-sidebar-width': `${defaultPaneWidth.medium}px`,
+}
+
 export function AppShell({ username, onUsernameChange, home, children }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -34,7 +40,7 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
   }, [location.pathname, username])
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} style={appShellStyle}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <div className={styles.headerStart}>

@@ -1,7 +1,4 @@
 .shell {
-  /* @primer/react 38.35.1 PageLayout/usePaneWidth 的 small 默认宽度。 */
-  --app-shell-sidebar-width: 256px;
-
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -9,16 +6,16 @@
 
 .header {
   background: var(--bgColor-muted);
-  border-bottom: 1px solid var(--borderColor-default);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
 }
 
 .headerInner {
   min-height: 56px;
-  padding: 12px 24px;
+  padding: var(--base-size-12) var(--base-size-24);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--base-size-16);
   box-sizing: border-box;
 }
 
@@ -28,15 +25,15 @@
   align-items: center;
   min-width: 0;
   overflow: hidden;
-  gap: 8px;
+  gap: var(--base-size-8);
 }
 
 .brand {
   min-width: 0;
   overflow: hidden;
   color: var(--fgColor-default);
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--text-title-size-small);
+  font-weight: var(--text-title-weight-small);
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -54,7 +51,7 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
+  gap: var(--base-size-8);
 }
 
 .body {
@@ -64,6 +61,7 @@
   align-items: stretch;
 }
 
+/* AppShell 从 Primer 的 defaultPaneWidth.medium 注入此本地语义变量。 */
 .persistentSidebar {
   flex: 0 0 var(--app-shell-sidebar-width);
   padding: var(--base-size-24) var(--base-size-16);
@@ -83,13 +81,13 @@
 }
 
 .footer {
-  margin-top: 24px;
-  border-top: 1px solid var(--borderColor-default);
+  margin-top: var(--base-size-24);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-default);
 }
 
 .footerInner {
-  padding: 24px 50px;
-  font-size: 12px;
+  padding: var(--base-size-24) 50px;
+  font-size: var(--text-body-size-small);
   color: var(--fgColor-muted);
 }
 
@@ -100,21 +98,21 @@
   }
 
   .headerInner {
-    padding-inline: 8px;
-    gap: 8px;
+    padding-inline: var(--base-size-8);
+    gap: var(--base-size-8);
   }
 
   .footerInner {
-    padding-inline: 16px;
+    padding-inline: var(--base-size-16);
   }
 
   .actions {
-    gap: 4px;
+    gap: var(--base-size-4);
   }
 
   .createButton {
-    width: 32px;
-    min-width: 32px;
+    width: var(--control-medium-size);
+    min-width: var(--control-medium-size);
     padding-inline: 0;
   }
 

@@ -26,7 +26,7 @@
 .itemMeta,
 .empty {
   color: var(--fgColor-muted);
-  font-size: 12px;
+  font-size: var(--text-body-size-small);
 }
 
 .itemMeta {
@@ -36,6 +36,6 @@
 }
 
 .empty {
-  padding: 6px 8px;
+  padding: var(--base-size-6) var(--base-size-8);
   list-style: none;
 }
