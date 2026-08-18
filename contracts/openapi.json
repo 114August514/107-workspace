@@ -7428,7 +7428,7 @@
     },
     "/api/v1/shared-resource-versions/{version_id}/files/content": {
       "get": {
-        "description": "按可见性校验后返回版本内指定文件的内容。\n\n用 ``text/plain`` 直返字节，前端拿到字符串即可预览或下载；\n二进制文件建议通过下载而非本接口读取。",
+        "description": "按可见性校验后返回版本内指定文件的内容。\n\n用 ``text/plain`` 直返字节，前端拿到字符串即可预览或下载；\n二进制文件请改走 ``files/download``，经本接口会被损坏。",
         "operationId": "read_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_content_get",
         "parameters": [
           {
@@ -7541,6 +7541,125 @@
           }
         },
         "summary": "读取 Shared Resource 版本中的文件",
+        "tags": [
+          "shared-resource"
+        ]
+      }
+    },
+    "/api/v1/shared-resource-versions/{version_id}/files/download": {
+      "get": {
+        "description": "按可见性校验后返回版本内指定文件的原始字节。\n\n按扩展名推断 MIME 并以 ``inline`` 返回：图片等浏览器能直接渲染的类型\n供前端内联预览，其余类型前端仍按不可预览处理。``files/content`` 走\n``text/plain`` 直出，二进制文件经它会损坏，只能由本接口取原始字节。",
+        "operationId": "download_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "版本内的相对路径",
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "description": "版本内的相对路径",
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/octet-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "下载 Shared Resource 版本中的文件",
         "tags": [
           "shared-resource"
         ]

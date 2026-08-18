@@ -187,7 +187,7 @@ describe('SharedResourcePage 权限与空态', () => {
 
     renderPage()
 
-    // 面包屑：首页 → Test 空间 → 共享资源 → 预训练权重
+    // 面包屑：首页 → Test 空间 → 共享资源（当前页不在面包屑里）
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Test 空间' })).toHaveAttribute(
         'href',
@@ -198,11 +198,11 @@ describe('SharedResourcePage 权限与空态', () => {
       'href',
       '/workspaces/ws_test/shared-resources',
     )
-    // 当前页「预训练权重」是面包屑最末项：黑色不可点（h1，aria-current=page），不是链接
+    // 当前页「预训练权重」由 TitleArea 呈现为 h1 标题，不是链接
     const current = screen.getByRole('heading', { name: '预训练权重', level: 1 })
-    expect(current).toHaveAttribute('aria-current', 'page')
+    expect(current).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '预训练权重' })).not.toBeInTheDocument()
-    // 归属标签跟在当前页右边
+    // 归属标签跟在标题旁
     expect(screen.getByText('空间资源')).toBeInTheDocument()
   })
 })

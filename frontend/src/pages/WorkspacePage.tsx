@@ -1,6 +1,6 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Button, Card, Tabs, Tag } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
@@ -26,11 +26,19 @@ export function WorkspacePage() {
   const { workspaceId = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  // 深链路：/workspaces/:id/shared-resources 选中「共享资源」tab，其余落到默认。
-  // tab 切换时同步 URL，让刷新/收藏/复制链接保留当前 tab。
-  const activeTab = location.pathname.endsWith('/shared-resources')
-    ? 'shared-resources'
-    : 'projects'
+  // 深链路：/workspaces/:id/shared-resources 初始选中「共享资源」tab，其余落到默认。
+  // 其余 tab 没有独立路由，选中态必须由本地 state 持有——activeKey 只从 URL 推导的话，
+  // 点击无路由的 tab 导航回基础路由后 activeKey 永远停在 projects，tab 像点不动。
+  const [selectedTab, setSelectedTab] = useState(() =>
+    location.pathname.endsWith('/shared-resources') ? 'shared-resources' : 'projects',
+  )
+  // 空间之间跳转时按新 URL 重新推导选中 tab，避免沿用上一个空间的选中态。
+  useEffect(() => {
+    setSelectedTab(
+      location.pathname.endsWith('/shared-resources') ? 'shared-resources' : 'projects',
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId])
   const workspace = useAsync<Workspace>(() => api.getWorkspace(workspaceId), [workspaceId])
   const [page, setPage] = useState(1)
   const projects = useAsync<ProjectPage>(
@@ -73,8 +81,9 @@ export function WorkspacePage() {
       </AsyncSection>
 
       <Tabs
-        activeKey={activeTab}
+        activeKey={selectedTab}
         onChange={(key) => {
+          setSelectedTab(key)
           // 只有共享资源 tab 有独立深链路；其余 tab 回到 Workspace 基础路由。
           navigate(key === 'shared-resources' ? `shared-resources` : `.`, {
             replace: true,

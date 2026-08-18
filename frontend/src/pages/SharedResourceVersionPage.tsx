@@ -1,4 +1,5 @@
-import { Banner, Breadcrumbs, Dialog, PageHeader, Spinner, Text } from '@primer/react'
+import { TagIcon } from '@primer/octicons-react'
+import { Banner, Breadcrumbs, Dialog, Spinner, Text } from '@primer/react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -15,6 +16,7 @@ import { normalizeError } from '../components/common/asyncStateError'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
 import { PrimerMono } from '../components/primer/PrimerMono'
 import { PrimerStack } from '../components/primer/PrimerStack'
+import { previewKind } from '../components/sharedresource/previewKind'
 import styles from '../components/sharedresource/sharedResource.module.css'
 import { PrimerRoot } from '../primer/setup'
 import { formatBytes, formatTime } from '../utils/format'
@@ -40,8 +42,11 @@ export function SharedResourceVersionPage() {
 
   // 文件预览：点击即挂载 Dialog，再在内部走加载/成功/失败切换。
   // 不能只在请求成功后才挂载 Dialog——那样 loading 基本看不见，失败时 Dialog 干脆不出现。
+  // 按扩展名分流：文本走 text/plain 接口；图片和判不了的类型取原始字节
+  //（content 接口会把二进制损坏），图片内联渲染，判不了的提供下载。
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [previewContent, setPreviewContent] = useState('')
+  const [previewUrl, setPreviewUrl] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
 
@@ -50,29 +55,52 @@ export function SharedResourceVersionPage() {
     let alive = true
     setPreviewLoading(true)
     setPreviewError('')
-    api
-      .readSharedResourceVersionFile(versionId, selectedPath)
-      .then((content) => {
-        if (alive) setPreviewContent(content)
-      })
-      .catch((err: Error) => {
-        if (alive) setPreviewError(err.message)
-      })
-      .finally(() => {
-        if (alive) setPreviewLoading(false)
-      })
+    if (previewKind(selectedPath) === 'text') {
+      api
+        .readSharedResourceVersionFile(versionId, selectedPath)
+        .then((content) => {
+          if (alive) setPreviewContent(content)
+        })
+        .catch((err: Error) => {
+          if (alive) setPreviewError(err.message)
+        })
+        .finally(() => {
+          if (alive) setPreviewLoading(false)
+        })
+    } else {
+      api
+        .downloadSharedResourceVersionFile(versionId, selectedPath)
+        .then((blob) => {
+          if (alive) setPreviewUrl(URL.createObjectURL(blob))
+        })
+        .catch((err: Error) => {
+          if (alive) setPreviewError(err.message)
+        })
+        .finally(() => {
+          if (alive) setPreviewLoading(false)
+        })
+    }
     return () => {
       alive = false
     }
   }, [versionId, selectedPath])
 
+  // object URL 用完即回收，换文件/关 Dialog 都不留泄漏。
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
   const closePreview = () => {
     setSelectedPath(null)
     setPreviewContent('')
+    setPreviewUrl('')
     setPreviewError('')
   }
 
   const isPlatform = resource.data?.is_platform_owned ?? false
+  const kind = selectedPath !== null ? previewKind(selectedPath) : 'text'
 
   const meta = version.data
     ? [
@@ -89,44 +117,40 @@ export function SharedResourceVersionPage() {
       <PrimerStack gap="large">
         <AsyncState loading={version.loading} error={normalizeError(version.error)}>
           {version.data && (
-            <PageHeader>
-              <PageHeader.Breadcrumbs>
-                <Breadcrumbs>
-                  <Breadcrumbs.Item as={Link} to="/">
-                    首页
+            <header className={styles.header}>
+              {/* 与资源详情页同一页头式样：面包屑一行，标题（图标 + h1）换行。 */}
+              <Breadcrumbs>
+                <Breadcrumbs.Item as={Link} to="/">
+                  首页
+                </Breadcrumbs.Item>
+                {isPlatform ? (
+                  // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
+                  <Breadcrumbs.Item>平台</Breadcrumbs.Item>
+                ) : workspace.data ? (
+                  <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                    {workspace.data.name}
                   </Breadcrumbs.Item>
-                  {isPlatform ? (
-                    // 平台资源没有所属工作区，面包屑这一段就只显示「平台」。
-                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
-                  ) : workspace.data ? (
-                    <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
-                      {workspace.data.name}
-                    </Breadcrumbs.Item>
-                  ) : null}
-                  <Breadcrumbs.Item
-                    as={Link}
-                    to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
-                  >
-                    共享资源
+                ) : null}
+                <Breadcrumbs.Item
+                  as={Link}
+                  to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
+                >
+                  共享资源
+                </Breadcrumbs.Item>
+                {resource.data && (
+                  <Breadcrumbs.Item as={Link} to={`/shared-resources/${resource.data.id}`}>
+                    {resource.data.name}
                   </Breadcrumbs.Item>
-                  {resource.data && (
-                    <Breadcrumbs.Item as={Link} to={`/shared-resources/${resource.data.id}`}>
-                      {resource.data.name}
-                    </Breadcrumbs.Item>
-                  )}
-                  {/* 当前页：面包屑最末项，selected → 黑色不可点，前面自动有 / 分隔符。
-                      as="h1" 让它兼任页面标题，省掉独立标题行 */}
-                  <Breadcrumbs.Item as="h1" selected>
-                    {version.data.label}
-                  </Breadcrumbs.Item>
-                </Breadcrumbs>
-              </PageHeader.Breadcrumbs>
-              {version.data.description ? (
-                <PageHeader.Description>{version.data.description}</PageHeader.Description>
-              ) : (
-                <PageHeader.Description>这个版本没有填写说明。</PageHeader.Description>
-              )}
-            </PageHeader>
+                )}
+              </Breadcrumbs>
+              <div className={styles.titleRow}>
+                <TagIcon className={styles.titleIcon} size={24} />
+                <h1 className={styles.title}>{version.data.label}</h1>
+              </div>
+              <Text as="p" className={styles.headerDescription}>
+                {version.data.description || '这个版本没有填写说明。'}
+              </Text>
+            </header>
           )}
         </AsyncState>
 
@@ -155,9 +179,7 @@ export function SharedResourceVersionPage() {
               <thead>
                 <tr>
                   <th className={styles.th}>路径</th>
-                  <th className={styles.th} style={{ width: '7rem' }}>
-                    大小
-                  </th>
+                  <th className={`${styles.th} ${styles.colSize}`}>大小</th>
                 </tr>
               </thead>
               <tbody>
@@ -173,7 +195,7 @@ export function SharedResourceVersionPage() {
                       </button>
                     </td>
                     <td className={styles.td}>
-                      <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                      <Text size="small" className={styles.desc}>
                         {formatBytes(file.size)}
                       </Text>
                     </td>
@@ -191,14 +213,11 @@ export function SharedResourceVersionPage() {
             width="large"
             footerButtons={[{ content: '关闭', onClick: closePreview, buttonType: 'default' }]}
           >
-            <Text
-              size="small"
-              style={{ display: 'block', color: 'var(--fgColor-muted)', marginBottom: 12 }}
-            >
+            <Text size="small" className={styles.previewNote}>
               版本内容不可变，这是版本发布时存下的快照，只能查看，不能修改。
             </Text>
             {previewLoading ? (
-              <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div role="status" className={styles.previewLoading}>
                 <Spinner size="small" srText="正在读取文件" />
                 <Text size="small">正在读取文件…</Text>
               </div>
@@ -207,18 +226,32 @@ export function SharedResourceVersionPage() {
                 <Banner.Title>文件预览失败。</Banner.Title>
                 <Banner.Description>{previewError}</Banner.Description>
               </Banner>
+            ) : kind === 'image' ? (
+              <img
+                src={previewUrl}
+                alt={selectedPath}
+                className={styles.previewImage}
+                onError={() => setPreviewError('图片加载失败。')}
+              />
+            ) : kind === 'text' ? (
+              <pre className={styles.previewCode}>{previewContent}</pre>
             ) : (
-              <pre
-                style={{
-                  fontFamily: 'var(--fontStack-monospace)',
-                  fontSize: '0.8125rem',
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {previewContent}
-              </pre>
+              // 判不了的类型不硬猜内容，像 GitHub 一样明说不可预览，给出下载出路。
+              <div className={styles.previewUnknown}>
+                <Text>暂时无法预览这个文件。</Text>
+                <Text size="small" className={styles.desc}>
+                  平台支持内联预览文本和图片，其它类型可以下载后查看。
+                </Text>
+                {previewUrl && (
+                  <a
+                    className={styles.previewDownload}
+                    href={previewUrl}
+                    download={selectedPath.split('/').pop()}
+                  >
+                    下载文件
+                  </a>
+                )}
+              </div>
             )}
           </Dialog>
         )}

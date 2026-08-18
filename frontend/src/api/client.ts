@@ -626,6 +626,20 @@ export const api = {
       }),
     ),
 
+  /**
+   * 按原始字节取版本内单个文件（图片预览走它）。
+   *
+   * `files/content` 以 text/plain 直出，二进制经它会被损坏；这里用
+   * `parseAs: 'blob'` 拿原始字节，调用方再建 object URL 渲染或下载。
+   */
+  downloadSharedResourceVersionFile: async (versionId: string, path: string): Promise<Blob> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resource-versions/{version_id}/files/download', {
+        params: { path: { version_id: versionId }, query: { path } },
+        parseAs: 'blob',
+      }),
+    ),
+
   // -- Fork --------------------------------------------------------------
   forkVersion: async (
     versionId: string,

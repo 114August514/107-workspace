@@ -1,4 +1,4 @@
-import { Dialog, Flash, FormControl, TextInput } from '@primer/react'
+import { Dialog, Flash, FormControl, Stack, TextInput } from '@primer/react'
 import { useEffect, useState } from 'react'
 
 import { api } from '../../api/client'
@@ -72,7 +72,7 @@ export function EditSharedResourceModal({ open, resource, onClose, onUpdated }: 
         },
       ]}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Stack direction="vertical" gap="normal">
         {feedback && <Flash variant={feedback.variant}>{feedback.text}</Flash>}
         <FormControl required>
           <FormControl.Label>名称</FormControl.Label>
@@ -99,7 +99,7 @@ export function EditSharedResourceModal({ open, resource, onClose, onUpdated }: 
             className={styles.textarea}
           />
         </FormControl>
-      </div>
+      </Stack>
     </Dialog>
   )
 }

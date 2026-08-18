@@ -23,6 +23,7 @@ import type {
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
 const mockReadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
+const mockDownloadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
 const mockGetWorkspace = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
@@ -30,6 +31,7 @@ vi.mock('../../src/api/client', () => ({
     getSharedResourceVersion: mockGetSharedResourceVersion,
     getSharedResource: mockGetSharedResource,
     readSharedResourceVersionFile: mockReadSharedResourceVersionFile,
+    downloadSharedResourceVersionFile: mockDownloadSharedResourceVersionFile,
     getWorkspace: mockGetWorkspace,
   },
 }))
@@ -163,11 +165,54 @@ describe('SharedResourceVersionPage 文件预览', () => {
     })
   })
 
+  it('图片文件内联渲染，取原始字节而不走文本接口', async () => {
+    mockGetSharedResourceVersion.mockResolvedValue({
+      ...version,
+      files: [{ path: 'logo.png', content_hash: 'abc', size: 10 }],
+    })
+    mockDownloadSharedResourceVersionFile.mockResolvedValue(
+      new Blob(['png'], { type: 'image/png' }),
+    )
+    // jsdom 没实现 object URL，直接赋值补桩（属性本来不存在，spyOn 会抛错）。
+    const urlStub = URL as unknown as { createObjectURL: () => string; revokeObjectURL: () => void }
+    urlStub.createObjectURL = () => 'blob:preview'
+    urlStub.revokeObjectURL = () => {}
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'logo.png' }))
+    const img = await screen.findByRole('img', { name: 'logo.png' })
+    expect(img).toHaveAttribute('src', 'blob:preview')
+    expect(mockDownloadSharedResourceVersionFile).toHaveBeenCalledWith('ver_test', 'logo.png')
+    // 图片绝不能走 text/plain 接口——二进制经它会被损坏。
+    expect(mockReadSharedResourceVersionFile).not.toHaveBeenCalled()
+  })
+
+  it('判不了类型的文件显示「暂时无法预览」并提供下载', async () => {
+    mockGetSharedResourceVersion.mockResolvedValue({
+      ...version,
+      files: [{ path: 'weights.bin', content_hash: 'abc', size: 10 }],
+    })
+    mockDownloadSharedResourceVersionFile.mockResolvedValue(new Blob(['bytes']))
+    const urlStub = URL as unknown as { createObjectURL: () => string; revokeObjectURL: () => void }
+    urlStub.createObjectURL = () => 'blob:preview'
+    urlStub.revokeObjectURL = () => {}
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'weights.bin' }))
+    expect(await screen.findByText('暂时无法预览这个文件。')).toBeInTheDocument()
+    const download = screen.getByRole('link', { name: '下载文件' })
+    expect(download).toHaveAttribute('href', 'blob:preview')
+    expect(download).toHaveAttribute('download', 'weights.bin')
+    expect(mockReadSharedResourceVersionFile).not.toHaveBeenCalled()
+  })
+
   it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
     mockReadSharedResourceVersionFile.mockResolvedValue('content')
     renderPage()
 
-    // 面包屑：首页 → Test 空间 → 共享资源 → 预训练权重 → v1
+    // 面包屑：首页 → Test 空间 → 共享资源 → 预训练权重（v1 由 TitleArea 呈现）
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Test 空间' })).toHaveAttribute(
         'href',
@@ -180,9 +225,9 @@ describe('SharedResourceVersionPage 文件预览', () => {
       'href',
       '/shared-resources/res_test',
     )
-    // 当前页 v1 是面包屑最末项：黑色不可点（h1，aria-current=page），不是链接
+    // 当前页 v1 由 TitleArea 呈现为 h1 标题，不是链接
     const current = screen.getByRole('heading', { name: 'v1', level: 1 })
-    expect(current).toHaveAttribute('aria-current', 'page')
+    expect(current).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'v1' })).not.toBeInTheDocument()
   })
 })

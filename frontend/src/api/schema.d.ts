@@ -725,9 +725,33 @@ export interface paths {
          * @description 按可见性校验后返回版本内指定文件的内容。
          *
          *     用 ``text/plain`` 直返字节，前端拿到字符串即可预览或下载；
-         *     二进制文件建议通过下载而非本接口读取。
+         *     二进制文件请改走 ``files/download``，经本接口会被损坏。
          */
         get: operations["read_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shared-resource-versions/{version_id}/files/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载 Shared Resource 版本中的文件
+         * @description 按可见性校验后返回版本内指定文件的原始字节。
+         *
+         *     按扩展名推断 MIME 并以 ``inline`` 返回：图片等浏览器能直接渲染的类型
+         *     供前端内联预览，其余类型前端仍按不可预览处理。``files/content`` 走
+         *     ``text/plain`` 直出，二进制文件经它会损坏，只能由本接口取原始字节。
+         */
+        get: operations["download_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5602,6 +5626,88 @@ export interface operations {
                 };
                 content: {
                     "text/plain": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    download_shared_resource_version_file_api_v1_shared_resource_versions__version_id__files_download_get: {
+        parameters: {
+            query: {
+                /** @description 版本内的相对路径 */
+                path: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
                 };
             };
         };

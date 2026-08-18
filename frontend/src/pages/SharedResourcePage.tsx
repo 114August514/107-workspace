@@ -1,5 +1,5 @@
-import { PencilIcon, PlusIcon } from '@primer/octicons-react'
-import { Breadcrumbs, Button, Label, PageHeader, Text } from '@primer/react'
+import { PackageIcon, PencilIcon, PlusIcon } from '@primer/octicons-react'
+import { Breadcrumbs, Button, Label, Text } from '@primer/react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -47,60 +47,56 @@ export function SharedResourcePage() {
       <PrimerStack gap="large">
         <AsyncState loading={resource.loading} error={normalizeError(resource.error)}>
           {resource.data && (
-            <PageHeader>
-              <PageHeader.Breadcrumbs>
-                <Breadcrumbs>
-                  <Breadcrumbs.Item as={Link} to="/">
-                    首页
+            <header className={styles.header}>
+              {/* GitHub 仓库头式样：面包屑独占一行，标题（图标 + h1 + 归属标签）
+                  换到第二行，操作按钮放在标题行右侧。 */}
+              <Breadcrumbs>
+                <Breadcrumbs.Item as={Link} to="/">
+                  首页
+                </Breadcrumbs.Item>
+                {isPlatform ? (
+                  <Breadcrumbs.Item>平台</Breadcrumbs.Item>
+                ) : workspace.data ? (
+                  <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                    {workspace.data.name}
                   </Breadcrumbs.Item>
-                  {isPlatform ? (
-                    <Breadcrumbs.Item>平台</Breadcrumbs.Item>
-                  ) : workspace.data ? (
-                    <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
-                      {workspace.data.name}
-                    </Breadcrumbs.Item>
-                  ) : null}
-                  <Breadcrumbs.Item
-                    as={Link}
-                    to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
-                  >
-                    共享资源
-                  </Breadcrumbs.Item>
-                  {/* 当前页：面包屑最末项，selected → 黑色不可点，前面自动有 / 分隔符。
-                      as="h1" 让它兼任页面标题，省掉独立标题行 */}
-                  <Breadcrumbs.Item as="h1" selected>
-                    {resource.data.name}
-                  </Breadcrumbs.Item>
-                  {/* 资源归属标签跟在当前页右边 */}
-                  {isPlatform ? (
-                    <Label variant="attention">平台资源</Label>
-                  ) : (
-                    <Label variant="done">空间资源</Label>
+                ) : null}
+                <Breadcrumbs.Item
+                  as={Link}
+                  to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
+                >
+                  共享资源
+                </Breadcrumbs.Item>
+              </Breadcrumbs>
+              <div className={styles.titleRow}>
+                <PackageIcon className={styles.titleIcon} size={24} />
+                <h1 className={styles.title}>{resource.data.name}</h1>
+                {isPlatform ? (
+                  <Label variant="attention">平台资源</Label>
+                ) : (
+                  <Label variant="done">空间资源</Label>
+                )}
+                <div className={styles.actions}>
+                  {canManage && (
+                    <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
+                      修改共享资源
+                    </Button>
                   )}
-                </Breadcrumbs>
-              </PageHeader.Breadcrumbs>
-              {resource.data.description ? (
-                <PageHeader.Description>{resource.data.description}</PageHeader.Description>
-              ) : (
-                <PageHeader.Description>这个共享资源还没有填写说明。</PageHeader.Description>
-              )}
-              <PageHeader.Actions>
-                {canManage && (
-                  <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
-                    修改共享资源
-                  </Button>
-                )}
-                {canPublish && (
-                  <Button
-                    variant="primary"
-                    leadingVisual={PlusIcon}
-                    onClick={() => setPublishing(true)}
-                  >
-                    发布版本
-                  </Button>
-                )}
-              </PageHeader.Actions>
-            </PageHeader>
+                  {canPublish && (
+                    <Button
+                      variant="primary"
+                      leadingVisual={PlusIcon}
+                      onClick={() => setPublishing(true)}
+                    >
+                      发布版本
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <Text as="p" className={styles.headerDescription}>
+                {resource.data.description || '这个共享资源还没有填写说明。'}
+              </Text>
+            </header>
           )}
         </AsyncState>
 
@@ -132,13 +128,13 @@ export function SharedResourcePage() {
                     <td className={styles.td}>
                       <Link
                         to={`/shared-resource-versions/${version.id}`}
-                        style={{ fontWeight: 500 }}
+                        className={styles.nameLink}
                       >
                         {version.label}
                       </Link>
                     </td>
                     <td className={styles.td}>
-                      <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
+                      <Text size="small" className={styles.desc}>
                         {version.description || '—'}
                       </Text>
                     </td>

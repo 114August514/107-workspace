@@ -21,31 +21,22 @@ export function SharedResourceTable({ resources }: Props) {
     <table className={styles.table}>
       <thead>
         <tr>
-          <th className={styles.th} style={{ width: '15rem' }}>
-            名称
-          </th>
+          <th className={`${styles.th} ${styles.colName}`}>名称</th>
           <th className={styles.th}>说明</th>
-          <th className={styles.th} style={{ width: '7rem' }}>
-            归属
-          </th>
-          <th className={styles.th} style={{ width: '8.5rem' }}>
-            创建时间
-          </th>
+          <th className={`${styles.th} ${styles.colOwner}`}>归属</th>
+          <th className={`${styles.th} ${styles.colCreated}`}>创建时间</th>
         </tr>
       </thead>
       <tbody>
         {resources.map((resource) => (
           <tr key={resource.id} className={styles.row}>
             <td className={styles.td}>
-              <Link
-                to={`/shared-resources/${resource.id}`}
-                style={{ fontWeight: 500, color: 'var(--fgColor-accent)' }}
-              >
+              <Link to={`/shared-resources/${resource.id}`} className={styles.nameLink}>
                 {resource.name}
               </Link>
             </td>
             <td className={styles.td}>
-              <Text size="small" style={{ color: 'var(--fgColor-muted)' }}>
+              <Text size="small" className={styles.desc}>
                 {resource.description || '—'}
               </Text>
             </td>
