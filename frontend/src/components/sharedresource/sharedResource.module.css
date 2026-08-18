@@ -236,8 +236,8 @@
  * 窄屏堆叠，版本列表排在详情上方。 */
 .splitLayout {
   display: grid;
-  grid-template-columns: 16rem minmax(0, 1fr);
-  gap: var(--base-size-24);
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: var(--base-size-16);
   align-items: start;
 }
 
