@@ -109,11 +109,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    # 本地开发时前端跑在 5173 端口。生产部署由反向代理同源提供，不需要放开 CORS。
+    # 本地开发时前端跑在 5174 端口。生产部署由反向代理同源提供，不需要放开 CORS。
     if resolved.env == "local":
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+            allow_origins=["http://127.0.0.1:5174", "http://localhost:5174"],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
