@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { api, ApiError } from '../../src/api/client'
-import type { LogChunk, RunDetail, Workspace } from '../../src/api/types'
+import type { LogChunk, RunDetail, LegacyWorkspaceContext } from '../../src/api/types'
 import { RunPage } from '../../src/pages/RunPage'
 
 const runDetailFixture = (): RunDetail => ({
@@ -72,15 +72,13 @@ const runDetailFixture = (): RunDetail => ({
   },
 })
 
-const workspaceFixture = (): Workspace => ({
+const workspaceFixture = (): LegacyWorkspaceContext => ({
   id: 'workspace-1',
   name: 'test-workspace',
   kind: 'personal',
   role: 'owner',
-  description: '',
   capabilities: ['run.submit', 'run.cancel'],
   default_environment_version_id: null,
-  created_at: '2026-08-15T08:00:00Z',
   owner_id: 'student',
 })
 
@@ -118,7 +116,7 @@ describe('RunPage backend unavailable', () => {
     })
 
     vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
-    vi.spyOn(api, 'getWorkspace').mockResolvedValue(workspaceFixture())
+    vi.spyOn(api, 'getLegacyWorkspaceContext').mockResolvedValue(workspaceFixture())
 
     render(
       <Wrapper>

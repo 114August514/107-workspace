@@ -41,7 +41,7 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class WorkspaceRow(Base):
+class LegacyWorkspaceRow(Base):
     __tablename__ = "workspaces"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
@@ -68,17 +68,38 @@ class WorkspaceRow(Base):
     )
 
 
+class UserGroupRow(Base):
+    __tablename__ = "user_groups"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("users.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class MembershipRow(Base):
     __tablename__ = "memberships"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
+    user_group_id: Mapped[str] = mapped_column(ID, ForeignKey("user_groups.id"), index=True)
     user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), index=True)
     role: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_membership"),)
+    __table_args__ = (
+        UniqueConstraint("user_group_id", "user_id", name="uq_user_group_membership"),
+        Index(
+            "uq_membership_active_owner",
+            "user_group_id",
+            unique=True,
+            sqlite_where=text("role = 'owner' AND status = 'active'"),
+            postgresql_where=text("role = 'owner' AND status = 'active'"),
+        ),
+    )
 
 
 class WorkspaceVariableRow(Base):

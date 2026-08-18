@@ -33,7 +33,7 @@ src/
 │   ├── project/        文件浏览与编辑、版本历史
 │   ├── runconfig/      运行方案列表与表单
 │   └── run/            提交弹窗、Run 列表、事件时间线、日志、产物、复现快照
-├── pages/              HomePage / WorkspacePage / ProjectPage / RunPage
+├── pages/              HomePage / UserGroupPage / ProjectPage / RunPage
 └── utils/format.ts     展示格式化
 
 tests/

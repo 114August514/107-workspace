@@ -4,7 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RunFromVersionModal } from '../../src/components/run/RunFromVersionModal'
-import type { PreflightResult, Run, RunConfiguration, Workspace } from '../../src/api/types'
+import type {
+  PreflightResult,
+  Run,
+  RunConfiguration,
+  LegacyWorkspaceContext,
+} from '../../src/api/types'
 
 /**
  * RunFromVersionModal 行为测试。
@@ -85,20 +90,18 @@ function makeRun(): Run {
   }
 }
 
-const workspace: Workspace = {
+const workspace: LegacyWorkspaceContext = {
   id: 'ws-1',
   name: 'Test Workspace',
-  description: '',
   kind: 'collaborative',
   owner_id: 'owner',
-  created_at: null,
   default_environment_version_id: null,
   capabilities: [
-    'workspace.view',
+    'user_group.view',
     'project.view',
     'run.view',
     'run.submit',
-  ] as Workspace['capabilities'],
+  ] as LegacyWorkspaceContext['capabilities'],
   role: 'member',
 }
 

@@ -1,20 +1,46 @@
-"""角色能力模型。
-
-权限判断写成 ``role is WorkspaceRole.OWNER`` 的话，每加一个角色就要把所有判断点
-翻一遍，而且很容易漏——漏掉的那处就是一个越权。所以判断的对象是**能力**，
-角色只是能力的一个命名集合。
-
-设计稿（§2.2 C、GR-103）规定操作受 Membership Role 约束，但没有给出完整
-能力矩阵。下面这张表是当前仓库的授权策略，并由单元测试逐项锁定。
-
-判断权限时永远问「有没有这个能力」，不要问「是不是某个角色」。
-"""
+"""Membership roles map to server-authoritative capabilities."""
 
 from __future__ import annotations
 
 from enum import StrEnum
 
-from .enums import WorkspaceRole
+from .enums import MembershipRole
+
+
+class UserGroupCapability(StrEnum):
+    """Stable public capabilities for User Group and Membership governance."""
+
+    USER_GROUP_VIEW = "user_group.view"
+    USER_GROUP_UPDATE = "user_group.update"
+    MEMBER_VIEW = "member.view"
+    MEMBER_MANAGE = "member.manage"
+    OWNERSHIP_TRANSFER = "ownership.transfer"
+
+
+_USER_GROUP_VIEW: frozenset[UserGroupCapability] = frozenset(
+    {
+        UserGroupCapability.USER_GROUP_VIEW,
+        UserGroupCapability.MEMBER_VIEW,
+    }
+)
+
+_USER_GROUP_ADMINISTER: frozenset[UserGroupCapability] = _USER_GROUP_VIEW | {
+    UserGroupCapability.USER_GROUP_UPDATE,
+    UserGroupCapability.MEMBER_MANAGE,
+}
+
+USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability]] = {
+    MembershipRole.OWNER: _USER_GROUP_ADMINISTER | {UserGroupCapability.OWNERSHIP_TRANSFER},
+    MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
+    MembershipRole.MEMBER: _USER_GROUP_VIEW,
+    MembershipRole.VIEWER: _USER_GROUP_VIEW,
+}
+
+
+def user_group_capabilities_of(
+    role: MembershipRole,
+) -> frozenset[UserGroupCapability]:
+    return USER_GROUP_ROLE_CAPABILITIES[role]
 
 
 class Capability(StrEnum):
@@ -23,9 +49,9 @@ class Capability(StrEnum):
     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
     """
 
-    # -- Workspace 本身 --------------------------------------------------
-    WORKSPACE_VIEW = "workspace.view"
-    WORKSPACE_UPDATE = "workspace.update"
+    # -- User Group governance ------------------------------------------
+    USER_GROUP_VIEW = "user_group.view"
+    USER_GROUP_UPDATE = "user_group.update"
 
     # -- 成员 ------------------------------------------------------------
     MEMBER_VIEW = "member.view"
@@ -66,7 +92,7 @@ class Capability(StrEnum):
 
 _VIEW_ONLY: frozenset[Capability] = frozenset(
     {
-        Capability.WORKSPACE_VIEW,
+        Capability.USER_GROUP_VIEW,
         Capability.MEMBER_VIEW,
         Capability.CONFIG_VIEW,
         Capability.ENTITLEMENT_VIEW,
@@ -90,26 +116,26 @@ _CONTRIBUTE: frozenset[Capability] = _VIEW_ONLY | {
 
 # 管空间需要的能力：改设置、管人、管配置。
 _ADMINISTER: frozenset[Capability] = _CONTRIBUTE | {
-    Capability.WORKSPACE_UPDATE,
+    Capability.USER_GROUP_UPDATE,
     Capability.MEMBER_MANAGE,
     Capability.CONFIG_MANAGE,
 }
 
-ROLE_CAPABILITIES: dict[WorkspaceRole, frozenset[Capability]] = {
+ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
     # Owner 比 Admin 只多一样：转让所有权。这件事不可逆，只能由所有者本人做。
-    WorkspaceRole.OWNER: _ADMINISTER | {Capability.OWNERSHIP_TRANSFER},
-    WorkspaceRole.ADMIN: _ADMINISTER,
-    WorkspaceRole.MEMBER: _CONTRIBUTE,
-    WorkspaceRole.VIEWER: _VIEW_ONLY,
+    MembershipRole.OWNER: _ADMINISTER | {Capability.OWNERSHIP_TRANSFER},
+    MembershipRole.ADMIN: _ADMINISTER,
+    MembershipRole.MEMBER: _CONTRIBUTE,
+    MembershipRole.VIEWER: _VIEW_ONLY,
 }
 
 # 面向用户的说明，用在权限不足的错误信息里。
 CAPABILITY_LABELS: dict[Capability, str] = {
-    Capability.WORKSPACE_VIEW: "查看空间",
-    Capability.WORKSPACE_UPDATE: "修改空间设置",
+    Capability.USER_GROUP_VIEW: "查看 User Group",
+    Capability.USER_GROUP_UPDATE: "修改 User Group 设置",
     Capability.MEMBER_VIEW: "查看成员",
     Capability.MEMBER_MANAGE: "管理成员",
-    Capability.OWNERSHIP_TRANSFER: "转让空间所有权",
+    Capability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
     Capability.CONFIG_VIEW: "查看配置",
     Capability.CONFIG_MANAGE: "管理配置变量与 Secret",
     Capability.ENTITLEMENT_VIEW: "查看资源权益",
@@ -126,10 +152,20 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.SHARED_RESOURCE_VERSION_CREATE: "上传 Shared Resource 版本",
 }
 
+USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {
+    UserGroupCapability.USER_GROUP_VIEW: "查看 User Group",
+    UserGroupCapability.USER_GROUP_UPDATE: "修改 User Group 设置",
+    UserGroupCapability.MEMBER_VIEW: "查看成员",
+    UserGroupCapability.MEMBER_MANAGE: "管理成员",
+    UserGroupCapability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
+}
 
-def capabilities_of(role: WorkspaceRole) -> frozenset[Capability]:
+
+def capabilities_of(role: MembershipRole) -> frozenset[Capability]:
     return ROLE_CAPABILITIES[role]
 
 
-def describe(capability: Capability) -> str:
+def describe(capability: Capability | UserGroupCapability) -> str:
+    if isinstance(capability, UserGroupCapability):
+        return USER_GROUP_CAPABILITY_LABELS.get(capability, capability.value)
     return CAPABILITY_LABELS.get(capability, capability.value)

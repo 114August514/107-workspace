@@ -83,7 +83,7 @@ class ProjectService:
     async def list_for_workspace(
         self, user_id: str, workspace_id: str, page: PageRequest
     ) -> Page[Project]:
-        await self._guard.workspace(user_id, workspace_id, needs=Capability.PROJECT_VIEW)
+        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.PROJECT_VIEW)
         return await self._repos.projects.list_for_workspace(workspace_id, page)
 
     async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Project]:
@@ -95,7 +95,7 @@ class ProjectService:
     async def create(
         self, user_id: str, workspace_id: str, name: str, description: str = ""
     ) -> Project:
-        await self._guard.workspace(user_id, workspace_id, needs=Capability.PROJECT_CREATE)
+        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.PROJECT_CREATE)
         name = name.strip()
         if not name:
             raise ValidationFailed("Project 名称不能为空")
@@ -449,7 +449,7 @@ class ProjectService:
         )
 
         # 2. 目标空间可写
-        target = await self._guard.workspace(
+        target = await self._guard.legacy_workspace(
             user_id, target_workspace_id, needs=Capability.PROJECT_CREATE
         )
 

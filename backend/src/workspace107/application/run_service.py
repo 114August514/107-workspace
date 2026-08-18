@@ -591,7 +591,7 @@ class RunService:
         self, project: Project, configuration: RunConfiguration, problems: list[str]
     ) -> EnvironmentVersion | None:
         """按 运行方案 -> Project -> Workspace 默认 的顺序解析实际环境。"""
-        workspace = await self._repos.workspaces.get(project.workspace_id)
+        workspace = await self._repos.legacy_workspaces.get(project.workspace_id)
         candidate_id = (
             configuration.environment_version_id
             or project.environment_version_id

@@ -10,7 +10,7 @@ import type {
   ProjectVersion,
   ProjectVersionPage,
   WorkingChange,
-  Workspace,
+  LegacyWorkspaceContext,
 } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
@@ -28,7 +28,7 @@ const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
 interface Props {
   projectId: string
   projectName: string
-  workspace: Workspace | undefined
+  workspace: LegacyWorkspaceContext | undefined
   refreshToken: number
   onVersionSaved: () => void
 }

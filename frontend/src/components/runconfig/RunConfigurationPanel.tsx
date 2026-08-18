@@ -5,7 +5,12 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { ComputePlan, Environment, RunConfiguration, Workspace } from '../../api/types'
+import type {
+  ComputePlan,
+  Environment,
+  RunConfiguration,
+  LegacyWorkspaceContext,
+} from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { AsyncSection } from '../common/AsyncSection'
@@ -14,7 +19,7 @@ import { describeMissing, findMissingReferences } from './unresolved'
 
 interface Props {
   projectId: string
-  workspace: Workspace | undefined
+  workspace: LegacyWorkspaceContext | undefined
   defaultConfigurationId: string | null
   onSubmitRun: (configuration: RunConfiguration) => void
   onChanged: () => void

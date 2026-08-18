@@ -16,7 +16,7 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { ProjectFile, Workspace } from '../../api/types'
+import type { ProjectFile, LegacyWorkspaceContext } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { formatBytes, formatRelative } from '../../utils/format'
@@ -25,7 +25,7 @@ import { AsyncSection } from '../common/AsyncSection'
 interface Props {
   projectId: string
   /** 用来判断当前用户能不能改内容。undefined 表示还没加载出来，一律按不能处理。 */
-  workspace: Workspace | undefined
+  workspace: LegacyWorkspaceContext | undefined
   onChanged: () => void
 }
 

@@ -6,6 +6,11 @@ import asyncio
 from typing import Any
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from workspace107.domain import ids
+from workspace107.domain.compute import ResourceEntitlement
+from workspace107.infrastructure.db.repositories import SqlRepositories
 
 RUN_WAIT_TIMEOUT = 30.0
 TERMINAL = {"succeeded", "failed", "cancelled", "submit_failed"}
@@ -33,6 +38,39 @@ async def wait_for_run(
         await asyncio.sleep(0.05)
 
 
+async def ensure_user_group(
+    client: httpx.AsyncClient, *, headers: dict[str, str] | None = None
+) -> str:
+    """Return the caller's first User Group, creating one when needed."""
+    home_response = await client.get("/api/v1/me", headers=headers)
+    home_response.raise_for_status()
+    home = home_response.json()
+    if home["user_groups"]:
+        return str(home["user_groups"][0]["id"])
+    response = await client.post(
+        "/api/v1/user-groups",
+        json={"name": f"{home['user']['username']} test group"},
+        headers=headers,
+    )
+    response.raise_for_status()
+    return str(response.json()["id"])
+
+
+async def grant_test_entitlement(
+    session: AsyncSession, workspace_id: str, compute_plan_id: str = "plan_cpu_quick"
+) -> None:
+    """Seed only the entitlement required by a test; UserGroup creation grants none."""
+    await SqlRepositories(session).entitlements.add(
+        ResourceEntitlement(
+            id=ids.new_id(ids.ENTITLEMENT),
+            workspace_id=workspace_id,
+            compute_plan_id=compute_plan_id,
+            max_concurrent_runs=2,
+        )
+    )
+    await session.commit()
+
+
 async def create_project_with_version(
     client: httpx.AsyncClient,
     *,
@@ -41,8 +79,7 @@ async def create_project_with_version(
     headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """创建 Project、写入文件并保存一个版本，返回 Project。"""
-    home = (await client.get("/api/v1/me", headers=headers)).json()
-    workspace_id = home["workspaces"][0]["id"]
+    workspace_id = await ensure_user_group(client, headers=headers)
 
     project = (
         await client.post(
@@ -72,9 +109,8 @@ async def create_project_with_version(
 async def use_default_environment(
     client: httpx.AsyncClient, *, headers: dict[str, str] | None = None
 ) -> str:
-    """把 Personal Workspace 的默认环境设为 Python 3.12，返回 Workspace ID。"""
-    home = (await client.get("/api/v1/me", headers=headers)).json()
-    workspace_id = home["workspaces"][0]["id"]
+    """Set the group's legacy default environment and return its compatibility ID."""
+    workspace_id = await ensure_user_group(client, headers=headers)
     await client.patch(
         f"/api/v1/workspaces/{workspace_id}",
         json={"default_environment_version_id": "ev_python_312"},

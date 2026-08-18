@@ -16,6 +16,7 @@ interface Style {
 
 const NOTIFICATION_STYLE: Record<NotificationType, Style> = {
   workspace_invited: { color: 'blue', label: '邀请' },
+  user_group_invited: { color: 'blue', label: '邀请' },
   member_removed: { color: 'red', label: '成员变动' },
   role_changed: { color: 'gold', label: '角色变更' },
   ownership_received: { color: 'gold', label: '所有权' },
@@ -43,6 +44,8 @@ export function notificationPath(notification: Notification): string | null {
   switch (notification.target_type) {
     case 'workspace':
       return `/workspaces/${notification.target_id}`
+    case 'user_group':
+      return `/user-groups/${notification.target_id}`
     case 'project':
       return `/projects/${notification.target_id}`
     case 'run':

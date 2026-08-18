@@ -8,7 +8,7 @@ import { field } from '../../utils/field'
 import { describeComputeRequest, formatMemory } from '../../utils/format'
 import { AsyncSection } from '../common/AsyncSection'
 
-/** Workspace 可用的算力方案与并发上限。 */
+/** 当前 Project 可用的算力方案与并发上限。 */
 export function EntitlementPanel({ workspaceId }: { workspaceId: string }) {
   const entitlements = useAsync<Entitlement[]>(
     () => api.listEntitlements(workspaceId),
@@ -64,14 +64,14 @@ export function EntitlementPanel({ workspaceId }: { workspaceId: string }) {
       <Alert
         type="info"
         showIcon
-        message="资源权益决定这个 Workspace 能用哪些算力方案"
-        description="当前迁移实现会为新 Workspace 自动授予全部公开方案；正式权益申请与审批尚未接入。真实的分区、QoS 和配额以平台页面为准。"
+        message="这里显示当前可用于这些 Project 的算力方案"
+        description="算力方案由平台分配；如果当前没有可用方案，相关 Project 就无法提交 Run。"
       />
       <AsyncSection
         loading={entitlements.loading || plans.loading}
         error={entitlements.error ?? plans.error}
         empty={(entitlements.data ?? []).length === 0}
-        emptyText="这个 Workspace 还没有任何算力权益"
+        emptyText="当前没有可用的算力方案"
       >
         <Table
           rowKey="id"
