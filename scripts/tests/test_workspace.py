@@ -101,6 +101,18 @@ class WorkspaceCliTests(unittest.TestCase):
         with self.assertRaisesRegex(TaskError, "Could not parse tool version"):
             common._major_version("unknown")
 
+    def test_command_text_quotes_windows_style_paths_consistently(self) -> None:
+        self.assertEqual(
+            common.command_text([r"C:\workspace\backend\.venv\Scripts\python.exe", "train.py"]),
+            r"'C:\workspace\backend\.venv\Scripts\python.exe' train.py",
+        )
+
+    def test_command_text_quotes_paths_with_spaces_consistently(self) -> None:
+        self.assertEqual(
+            common.command_text([r"C:\Program Files\Python\python.exe", "train.py"]),
+            r"'C:\Program Files\Python\python.exe' train.py",
+        )
+
     def test_backend_python_executable_is_resolved_by_uv(self) -> None:
         expected = r"C:\workspace\backend\.venv\Scripts\python.exe"
         with mock.patch.object(project, "backend_uv") as backend_uv:
