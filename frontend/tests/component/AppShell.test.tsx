@@ -48,6 +48,18 @@ function readyHome(data = homeData): AsyncState<Home> {
   return { data, loading: false, error: undefined, reload: vi.fn() }
 }
 
+const contextGuideCases = [
+  ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
+  ['/user-groups/grp-1', '在这里管理成员，并进入关联的 Project 与配置；协作内容保留在各自对象中。'],
+  ['/workspaces/ws-1', '这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。'],
+  [
+    '/projects/p-1',
+    '当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。',
+  ],
+  ['/versions/v-1', '这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。'],
+  ['/runs/r-1', '这里展示当前 Run 的状态、日志和产物；后续修改不会回写其运行快照。'],
+] as const
+
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location">{location.pathname}</output>
@@ -74,6 +86,21 @@ afterEach(() => {
 })
 
 describe('AppShell 壳层', () => {
+  it.each(contextGuideCases)('路由 %s 显示对应的页面引导', (pathname, message) => {
+    renderShell('student', readyHome(), pathname)
+
+    const guide = screen.getByRole('complementary', { name: '页面引导' })
+    expect(guide).toHaveTextContent(message)
+    expect(guide.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByText('GPU 型号、分区、QoS 和配额等信息以平台页面为准。')).toBeNull()
+  })
+
+  it('不为未匹配的嵌套路径显示页面引导', () => {
+    renderShell('student', readyHome(), '/projects/p-1/extra')
+
+    expect(screen.queryByRole('complementary', { name: '页面引导' })).toBeNull()
+  })
+
   it('非首页 Body 仅直接包含 main，Primer Content 在 main 内负责正文居中', () => {
     renderShell('student', readyHome(), '/projects/p-1')
     const body = screen.getByRole('banner').nextElementSibling

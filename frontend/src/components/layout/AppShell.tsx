@@ -8,6 +8,7 @@ import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
+import { ContextGuide } from './ContextGuide'
 import { appShellCopy } from './copy'
 import { UserSwitcher } from './UserSwitcher'
 import { WorkNavigation } from './WorkNavigation'
@@ -90,9 +91,7 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
         </main>
       </div>
 
-      <footer className={styles.footer}>
-        <div className={styles.footerInner}>{appShellCopy.footer}</div>
-      </footer>
+      <ContextGuide pathname={location.pathname} />
 
       {navigationOpen ? (
         <Dialog
