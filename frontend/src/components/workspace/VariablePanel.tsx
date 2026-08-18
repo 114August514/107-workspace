@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { Variable, Workspace } from '../../api/types'
+import type { LegacyWorkspaceContext, Variable } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { AsyncSection } from '../common/AsyncSection'
@@ -15,7 +15,7 @@ import { AsyncSection } from '../common/AsyncSection'
  * 两者的界面刻意不同：Variable 的值可以看，Secret 只列名称——
  * 后端根本没有读取 Secret 值的接口（docs/product/design.md 第 3.1.4 节）。
  */
-export function VariablePanel({ workspace }: { workspace: Workspace }) {
+export function VariablePanel({ workspace }: { workspace: LegacyWorkspaceContext }) {
   const variables = useAsync<Variable[]>(() => api.listVariables(workspace.id), [workspace.id])
   const secrets = useAsync<string[]>(() => api.listSecretNames(workspace.id), [workspace.id])
   const [variableForm] = Form.useForm<Variable>()

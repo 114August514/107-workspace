@@ -15,25 +15,24 @@ import { PrimerRoot } from '../../src/primer/setup'
 
 const homeData: Home = {
   user: { id: 'u-1', username: 'student', display_name: '同学' },
-  workspaces: [
+  user_groups: [
     {
-      id: 'ws-1',
+      id: 'grp-1',
       name: '计算物理课题组',
       description: '',
-      kind: 'collaborative',
-      owner_id: 'u-1',
+      created_by_id: 'u-1',
       created_at: '2026-08-15T10:00:00Z',
-      default_environment_version_id: null,
       role: 'owner',
       capabilities: [],
     },
   ],
+  personal_resource_context_id: null,
   recent_projects: [
     {
       id: 'p-1',
       name: 'LJ 流体模拟',
       description: '',
-      workspace_id: 'ws-1',
+      workspace_id: 'grp-1',
       status: 'active',
       created_by: 'u-1',
       created_at: '2026-08-15T10:00:00Z',
@@ -127,7 +126,7 @@ describe('AppShell 壳层', () => {
     expect(within(homeLink).getByText('首页', { selector: 'span' })).toBeVisible()
     expect(within(dialog).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
       'href',
-      '/workspaces/ws-1',
+      '/user-groups/grp-1',
     )
     fireEvent.click(within(dialog).getByRole('link', { name: /LJ 流体模拟/ }))
 
@@ -161,11 +160,11 @@ describe('AppShell 壳层', () => {
     expect(screen.getByText('页面内容')).toBeVisible()
   })
 
-  it('header 创建按钮打开创建协作空间弹窗', async () => {
+  it('header 创建按钮打开创建 User Group 弹窗', async () => {
     renderShell('student')
-    fireEvent.click(screen.getByRole('button', { name: '创建协作空间' }))
+    fireEvent.click(screen.getByRole('button', { name: '创建 User Group' }))
     expect(await screen.findByRole('dialog')).toBeVisible()
-    expect(screen.getByText('创建协作空间', { selector: 'h1' })).toBeTruthy()
+    expect(screen.getByText('创建 User Group', { selector: 'h1' })).toBeTruthy()
   })
 
   it('身份切换器展示当前身份并展开可选身份', async () => {
@@ -200,15 +199,13 @@ describe('AppShell 壳层', () => {
     const teacherHome: Home = {
       ...homeData,
       user: { id: 'u-2', username: 'teacher', display_name: '老师' },
-      workspaces: [
+      user_groups: [
         {
-          id: 'ws-teacher',
-          name: '教师工作空间',
+          id: 'grp-teacher',
+          name: '教师用户组',
           description: '',
-          kind: 'collaborative',
-          owner_id: 'u-2',
+          created_by_id: 'u-2',
           created_at: '2026-08-15T10:00:00Z',
-          default_environment_version_id: null,
           role: 'owner',
           capabilities: [],
         },
@@ -240,7 +237,7 @@ describe('AppShell 壳层', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
     const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
-    expect(within(dialog).getByRole('link', { name: '教师工作空间' })).toBeVisible()
+    expect(within(dialog).getByRole('link', { name: '教师用户组' })).toBeVisible()
     await act(async () => resolveStudent(homeData))
     expect(within(dialog).queryByRole('link', { name: '计算物理课题组' })).toBeNull()
     expect(home).toHaveBeenCalledTimes(2)

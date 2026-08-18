@@ -7,7 +7,7 @@ import type { Home } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
 import { NotificationBell } from '../notification/NotificationBell'
-import { CreateWorkspaceDialog } from '../workspace/CreateWorkspaceDialog'
+import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { appShellCopy } from './copy'
 import { UserSwitcher } from './UserSwitcher'
 import { WorkNavigation } from './WorkNavigation'
@@ -62,10 +62,10 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
               className={styles.createButton}
               variant="default"
               leadingVisual={PlusIcon}
-              aria-label={appShellCopy.createWorkspace}
+              aria-label={appShellCopy.createUserGroup}
               onClick={() => setCreateOpen(true)}
             >
-              <span className={styles.createLabel}>{appShellCopy.createWorkspace}</span>
+              <span className={styles.createLabel}>{appShellCopy.createUserGroup}</span>
             </Button>
             {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
                 避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
@@ -124,10 +124,13 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
         </Dialog>
       ) : null}
 
-      <CreateWorkspaceDialog
+      <CreateUserGroupDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={(workspace) => navigate(`/workspaces/${workspace.id}`)}
+        onCreated={(userGroup) => {
+          home.reload()
+          navigate(`/user-groups/${userGroup.id}`)
+        }}
       />
     </div>
   )

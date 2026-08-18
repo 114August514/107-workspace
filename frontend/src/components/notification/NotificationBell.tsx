@@ -138,7 +138,7 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
           onRetry={notifications.reload}
           empty={items.length === 0}
           emptyText="还没有通知"
-          emptyDescription="收到协作邀请、Run 结束时，这里会出现提醒。"
+          emptyDescription="收到 User Group 邀请、Run 结束时，这里会出现提醒。"
         >
           <ul className={styles.list}>
             {items.map((notification) => (

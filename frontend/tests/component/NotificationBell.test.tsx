@@ -117,6 +117,29 @@ describe('NotificationBell 通知浮层', () => {
     expect(link).toHaveAttribute('href', '/runs/run-1')
   })
 
+  it('User Group 邀请链接到新的治理页面', async () => {
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(
+      makePage([
+        makeNotification({
+          type: 'user_group_invited',
+          title: '你收到一个 User Group 邀请',
+          target_id: 'grp-1',
+          target_type: 'user_group',
+        }),
+      ]),
+    )
+
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
+
+    expect(await screen.findByText('邀请')).toBeVisible()
+    expect(screen.getByRole('link', { name: '你收到一个 User Group 邀请' })).toHaveAttribute(
+      'href',
+      '/user-groups/grp-1',
+    )
+  })
+
   it('点击未读条目标记已读并刷新未读数', async () => {
     const unread = vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
     const markOne = vi
@@ -180,7 +203,7 @@ describe('NotificationBell 通知浮层', () => {
     const unread = makeNotification({ target_id: null, target_type: null })
     const read = makeNotification({
       id: 'n-2',
-      title: '你已被移出 Workspace',
+      title: '你已被移出 User Group',
       target_id: null,
       target_type: null,
       read_at: '2026-08-15T09:00:00Z',
@@ -196,7 +219,7 @@ describe('NotificationBell 通知浮层', () => {
       name: '将「Run「首次运行」已成功」标为已读',
     })
     expect(markButton).toBeVisible()
-    expect(screen.queryByRole('button', { name: '将「你已被移出 Workspace」标为已读' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '将「你已被移出 User Group」标为已读' })).toBeNull()
 
     fireEvent.click(markButton)
     await waitFor(() => expect(markOne).toHaveBeenCalledWith('n-1'))

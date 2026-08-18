@@ -21,7 +21,7 @@ interface Props {
   home: AsyncResource<Home>
 }
 
-/** 个人首页：待处理邀请、最近 Run 和算力方案目录。 */
+/** 个人首页：待处理邀请、个人资源、最近 Run 和算力方案目录。 */
 export function HomePage({ username, home }: Props) {
   const user = home.data?.user
   const runs = home.data?.recent_runs ?? []
@@ -43,6 +43,23 @@ export function HomePage({ username, home }: Props) {
           <div className={styles.dashboard}>
             <div className={styles.main}>
               <Invitations username={username} onResponded={home.reload} />
+              {home.data.personal_resource_context_id ? (
+                <Card
+                  as="section"
+                  padding="normal"
+                  className={styles.card}
+                  aria-label={homeCopy.personalResource.title}
+                >
+                  <h2 className={styles.cardTitle}>{homeCopy.personalResource.title}</h2>
+                  <p className={styles.cardDescription}>{homeCopy.personalResource.description}</p>
+                  <Link
+                    as={RouterLink}
+                    to={`/workspaces/${home.data.personal_resource_context_id}`}
+                  >
+                    {homeCopy.personalResource.action}
+                  </Link>
+                </Card>
+              ) : null}
               <Card
                 as="section"
                 padding="normal"
@@ -90,10 +107,9 @@ export function HomePage({ username, home }: Props) {
 }
 
 /**
- * 待处理的邀请。
+ * 待处理的 User Group 邀请。
  *
- * 放在首页而不是空间里：被邀请的人还进不去那个空间。
- * 主次操作并排（接受 primary、拒绝 default）；拒绝不是危险操作，不标红。
+ * 被邀请的人尚未形成有效 Membership；主次操作并排，拒绝不是危险操作。
  */
 function Invitations({ username, onResponded }: { username: string; onResponded: () => void }) {
   const invitations = useAsync<Invitation[]>(() => api.listInvitations(), [username])
@@ -103,15 +119,15 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
   )
 
   const respond = async (invitation: Invitation, accept: boolean) => {
-    setPendingId(invitation.workspace_id)
+    setPendingId(invitation.user_group_id)
     setRespondError(null)
     try {
-      await api.respondToInvitation(invitation.workspace_id, accept)
+      await api.respondToInvitation(invitation.user_group_id, accept)
       invitations.reload()
       onResponded()
     } catch (error) {
       setRespondError({
-        name: invitation.workspace_name,
+        name: invitation.user_group_name,
         view: toAsyncError(error as Error) ?? { message: homeCopy.invitations.fallbackError },
       })
     } finally {
@@ -138,21 +154,21 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
       >
         <ul className={styles.list}>
           {items.map((invitation) => (
-            <li key={invitation.workspace_id} className={styles.invitationItem}>
+            <li key={invitation.user_group_id} className={styles.invitationItem}>
               <div className={styles.invitationMain}>
-                <div className={styles.invitationTitle}>{invitation.workspace_name}</div>
+                <div className={styles.invitationTitle}>{invitation.user_group_name}</div>
                 <div className={styles.invitationMeta}>
                   {invitationKind(roleLabel(invitation.role))}
                 </div>
-                {invitation.workspace_description ? (
-                  <div className={styles.invitationMeta}>{invitation.workspace_description}</div>
+                {invitation.user_group_description ? (
+                  <div className={styles.invitationMeta}>{invitation.user_group_description}</div>
                 ) : null}
               </div>
               <div className={styles.invitationActions}>
                 <Button
                   variant="primary"
                   disabled={pendingId !== null}
-                  loading={pendingId === invitation.workspace_id}
+                  loading={pendingId === invitation.user_group_id}
                   onClick={() => void respond(invitation, true)}
                 >
                   {homeCopy.invitations.accept}
@@ -184,7 +200,7 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
   )
 }
 
-/** 算力方案目录只展示平台真实返回的预设，不代表当前空间已获得对应权益。 */
+/** 算力方案目录只展示平台真实返回的预设，不代表当前用户已获得对应权益。 */
 function ComputePlanCatalog() {
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
 

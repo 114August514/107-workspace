@@ -1,4 +1,4 @@
-import { HomeIcon, OrganizationIcon, PersonIcon, ProjectIcon } from '@primer/octicons-react'
+import { HomeIcon, OrganizationIcon, ProjectIcon } from '@primer/octicons-react'
 import { NavList } from '@primer/react'
 import type { RefObject } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
@@ -21,7 +21,10 @@ interface Props {
  */
 export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
   const location = useLocation()
-  const workspaceNames = new Map(home.workspaces.map((workspace) => [workspace.id, workspace.name]))
+  const ownerNames = new Map(home.user_groups.map((userGroup) => [userGroup.id, userGroup.name]))
+  if (home.personal_resource_context_id) {
+    ownerNames.set(home.personal_resource_context_id, workNavigationCopy.personalResourceGroup)
+  }
 
   return (
     <NavList aria-label={workNavigationCopy.ariaLabel} className={styles.navigation}>
@@ -39,25 +42,25 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
         </NavList.LeadingVisual>
         <span className={styles.itemText}>{workNavigationCopy.home}</span>
       </NavList.Item>
-      <NavList.Group title={workNavigationCopy.workspaceGroup}>
-        {home.workspaces.length === 0 ? (
-          <li className={styles.empty}>{workNavigationCopy.workspaceEmpty}</li>
+      <NavList.Group title={workNavigationCopy.userGroupGroup}>
+        {home.user_groups.length === 0 ? (
+          <li className={styles.empty}>{workNavigationCopy.userGroupEmpty}</li>
         ) : (
-          home.workspaces.map((workspace) => (
+          home.user_groups.map((userGroup) => (
             <NavList.Item
               className={styles.item}
-              key={workspace.id}
+              key={userGroup.id}
               as={RouterLink}
-              to={`/workspaces/${workspace.id}`}
+              to={`/user-groups/${userGroup.id}`}
               aria-current={
-                location.pathname === `/workspaces/${workspace.id}` ? 'page' : undefined
+                location.pathname === `/user-groups/${userGroup.id}` ? 'page' : undefined
               }
               onClick={onNavigate}
             >
               <NavList.LeadingVisual>
-                {workspace.kind === 'personal' ? <PersonIcon /> : <OrganizationIcon />}
+                <OrganizationIcon />
               </NavList.LeadingVisual>
-              <span className={styles.itemText}>{workspace.name}</span>
+              <span className={styles.itemText}>{userGroup.name}</span>
             </NavList.Item>
           ))
         )}
@@ -80,10 +83,8 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
               </NavList.LeadingVisual>
               <span className={styles.itemContent}>
                 <span className={styles.itemText}>{project.name}</span>
-                {workspaceNames.get(project.workspace_id) ? (
-                  <span className={styles.itemMeta}>
-                    {workspaceNames.get(project.workspace_id)}
-                  </span>
+                {ownerNames.get(project.workspace_id) ? (
+                  <span className={styles.itemMeta}>{ownerNames.get(project.workspace_id)}</span>
                 ) : null}
               </span>
             </NavList.Item>

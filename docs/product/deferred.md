@@ -34,9 +34,9 @@
 - Official Template / Profile Library；
 - Promote 是否创建官方副本；
 - Creator Attribution 与 Source Provenance；
-- 官方资产由普通 Collaborative Workspace 持有，还是引入其他 Ownership 模型。
+- 官方资产由普通 User Group 持有，还是引入其他 Ownership 模型；
 
-当前倾向：官方库优先建模为平台运营方维护的 Collaborative Workspace，而不是新增 Workspace 类型。
+当前倾向：官方库优先由平台运营的 User Group 持有，而不是新增 Owner 类型。
 
 ---
 
@@ -52,4 +52,4 @@
 - Trusted Evaluation；
 - 课程场景工作流。
 
-Course Profile 不得绕过 Workspace、Project、Run、权限与版本规则。
+Course Profile 不得绕过 User、User Group、Project、Run、权限与版本规则。

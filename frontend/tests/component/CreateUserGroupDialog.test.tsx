@@ -5,21 +5,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 
 import { api, ApiError } from '../../src/api/client'
-import type { Workspace } from '../../src/api/types'
-import { CreateWorkspaceDialog } from '../../src/components/workspace/CreateWorkspaceDialog'
+import type { UserGroup } from '../../src/api/types'
+import { CreateUserGroupDialog } from '../../src/components/workspace/CreateUserGroupDialog'
 import { PrimerRoot } from '../../src/primer/setup'
 
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+function makeUserGroup(overrides: Partial<UserGroup> = {}): UserGroup {
   return {
-    id: 'ws-new',
+    id: 'grp-new',
     name: '计算物理课题组',
-    kind: 'collaborative',
     description: '',
     created_at: '2026-08-16T08:00:00Z',
-    owner_id: 'student',
+    created_by_id: 'student',
     role: 'owner',
     capabilities: [],
-    default_environment_version_id: null,
     ...overrides,
   }
 }
@@ -28,7 +26,7 @@ function renderDialog(onCreated = vi.fn(), onClose = vi.fn(), open = true) {
   render(
     <MemoryRouter>
       <PrimerRoot>
-        <CreateWorkspaceDialog open={open} onClose={onClose} onCreated={onCreated} />
+        <CreateUserGroupDialog open={open} onClose={onClose} onCreated={onCreated} />
       </PrimerRoot>
     </MemoryRouter>,
   )
@@ -39,7 +37,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('CreateWorkspaceDialog', () => {
+describe('CreateUserGroupDialog', () => {
   it('open=false 时不渲染', () => {
     renderDialog(vi.fn(), vi.fn(), false)
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -57,23 +55,23 @@ describe('CreateWorkspaceDialog', () => {
     expect(description).toHaveAttribute('placeholder', '例如：用于计算物理课题组的课程项目')
     expect(description).toHaveAttribute('rows', '4')
     expect(description).toHaveAttribute('maxlength', '500')
-    expect(screen.getByText('简要写明这个空间用于哪些 Project 或计算任务。')).toBeVisible()
+    expect(screen.getByText('简要写明这个 User Group 用于哪些 Project 或协作任务。')).toBeVisible()
   })
 
   it('名称为空时就地报表单错误并将焦点留在名称输入框', async () => {
-    const create = vi.spyOn(api, 'createWorkspace')
+    const create = vi.spyOn(api, 'createUserGroup')
     renderDialog()
 
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
 
-    expect(await screen.findByText('请填写 Workspace 名称')).toBeVisible()
+    expect(await screen.findByText('请填写 User Group 名称')).toBeVisible()
     expect(screen.getByRole('textbox', { name: /名称/ })).toHaveFocus()
     expect(create).not.toHaveBeenCalled()
   })
 
-  it('创建成功后把新空间交给调用方并关闭', async () => {
-    const workspace = makeWorkspace()
-    const created = vi.spyOn(api, 'createWorkspace').mockResolvedValue(workspace)
+  it('创建成功后把新 User Group 交给调用方并关闭', async () => {
+    const userGroup = makeUserGroup()
+    const created = vi.spyOn(api, 'createUserGroup').mockResolvedValue(userGroup)
     const onCreated = vi.fn()
     const onClose = vi.fn()
     renderDialog(onCreated, onClose)
@@ -83,13 +81,13 @@ describe('CreateWorkspaceDialog', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '创建' }))
 
-    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(workspace))
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(userGroup))
     expect(onClose).toHaveBeenCalled()
     expect(created).toHaveBeenCalledWith('计算物理课题组', '')
   })
 
   it('说明填写了就随名称一起提交', async () => {
-    const created = vi.spyOn(api, 'createWorkspace').mockResolvedValue(makeWorkspace())
+    const created = vi.spyOn(api, 'createUserGroup').mockResolvedValue(makeUserGroup())
     renderDialog()
 
     fireEvent.change(screen.getByLabelText(/名称/), { target: { value: 'A' } })
@@ -100,7 +98,7 @@ describe('CreateWorkspaceDialog', () => {
   })
 
   it('提交前检查错误逐条显示在弹窗内，弹窗不关闭', async () => {
-    vi.spyOn(api, 'createWorkspace').mockRejectedValue(
+    vi.spyOn(api, 'createUserGroup').mockRejectedValue(
       new ApiError(
         422,
         'validation_error',

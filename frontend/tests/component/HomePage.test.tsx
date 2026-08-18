@@ -11,27 +11,27 @@ import { HomePage } from '../../src/pages/HomePage'
 import { PrimerRoot } from '../../src/primer/setup'
 
 const invitation: Invitation = {
-  workspace_id: 'ws-inv',
-  workspace_name: 'test_invite',
-  workspace_description: '',
+  user_group_id: 'grp-inv',
+  user_group_name: 'test_invite',
+  user_group_description: '',
   role: 'member',
   invited_at: '2026-08-15T10:00:00Z',
 }
 
 const homeData: Home = {
   user: { id: 'u-1', username: 'student', display_name: '同学' },
-  workspaces: [
+  user_groups: [
     {
-      id: 'ws-1',
+      id: 'grp-1',
       name: '计算物理课题组',
       description: '',
-      kind: 'collaborative',
-      owner_id: 'u-1',
+      created_by_id: 'u-1',
       created_at: '2026-08-15T10:00:00Z',
-      default_environment_version_id: null,
-      role: null,
+      role: 'owner',
+      capabilities: [],
     },
   ],
+  personal_resource_context_id: null,
   recent_projects: [
     {
       id: 'p-1',
@@ -124,7 +124,7 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
     expect(await screen.findByText('cpu-basic')).toBeInTheDocument()
   })
 
-  it('HomePage 正文不自行渲染导航或重复的 Workspace、Project 卡片', async () => {
+  it('HomePage 正文不自行渲染导航或重复的 User Group、Project 卡片', async () => {
     vi.spyOn(api, 'home').mockResolvedValue(homeData)
     vi.spyOn(api, 'listInvitations').mockResolvedValue([])
     vi.spyOn(api, 'computePlans').mockResolvedValue([])
@@ -134,14 +134,14 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
     expect(await screen.findByRole('region', { name: '最近提交的 Run' })).toBeVisible()
     expect(screen.queryByRole('complementary', { name: '首页工作入口' })).toBeNull()
     expect(screen.queryByRole('navigation', { name: '工作入口' })).toBeNull()
-    expect(screen.queryByRole('region', { name: '我的 Workspace' })).toBeNull()
+    expect(screen.queryByRole('region', { name: '我的 User Group' })).toBeNull()
     expect(screen.queryByRole('region', { name: '最近使用的 Project' })).toBeNull()
   })
 
   it('没有数据时栏目显示空态说明，而不是只剩标题', async () => {
     vi.spyOn(api, 'home').mockResolvedValue({
       ...homeData,
-      workspaces: [],
+      user_groups: [],
       recent_projects: [],
       recent_runs: [],
     })
@@ -196,7 +196,7 @@ describe('HomePage 首页请求统一异步状态', () => {
 })
 
 describe('HomePage 邀请区块', () => {
-  it('以紧凑行呈现：空间名 + 身份说明 + 并排的接受/拒绝，而不是通知式 Banner', async () => {
+  it('以紧凑行呈现：User Group 名称 + 身份说明 + 并排的接受/拒绝，而不是通知式 Banner', async () => {
     vi.spyOn(api, 'home').mockResolvedValue(homeData)
     vi.spyOn(api, 'listInvitations').mockResolvedValue([invitation])
     vi.spyOn(api, 'computePlans').mockResolvedValue([])
@@ -205,7 +205,7 @@ describe('HomePage 邀请区块', () => {
 
     expect(await screen.findByText('待处理邀请')).toBeInTheDocument()
     expect(await screen.findByText('test_invite')).toBeInTheDocument()
-    expect(screen.getByText('协作空间 · 成员')).toBeInTheDocument()
+    expect(screen.getByText('User Group · 成员')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '接受邀请' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '拒绝' })).toBeInTheDocument()
     expect(screen.queryByText(/邀请你以/)).not.toBeInTheDocument()
@@ -220,7 +220,7 @@ describe('HomePage 邀请区块', () => {
     renderHome()
 
     fireEvent.click(await screen.findByRole('button', { name: '接受邀请' }))
-    await waitFor(() => expect(respond).toHaveBeenCalledWith('ws-inv', true))
+    await waitFor(() => expect(respond).toHaveBeenCalledWith('grp-inv', true))
     await waitFor(() => expect(screen.queryByText('test_invite')).not.toBeInTheDocument())
   })
 

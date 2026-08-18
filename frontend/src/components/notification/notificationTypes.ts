@@ -18,6 +18,7 @@ interface Style {
 
 const NOTIFICATION_STYLE: Record<NotificationType, Style> = {
   workspace_invited: { variant: 'accent', label: '邀请' },
+  user_group_invited: { variant: 'accent', label: '邀请' },
   member_removed: { variant: 'danger', label: '成员变动' },
   role_changed: { variant: 'attention', label: '角色变更' },
   ownership_received: { variant: 'attention', label: '所有权' },
@@ -37,14 +38,16 @@ export function notificationVariant(type: NotificationType): LabelProps['variant
 /**
  * 点这条通知去哪里。
  *
- * 返回 null 表示不做成链接——比如「你被移出了空间」，
- * 他已经看不到那个空间，链过去只会是 404。
+ * 返回 null 表示不做成链接——比如「你被移出了 User Group」，
+ * 你已经无法访问它，链过去只会是 404。
  */
 export function notificationPath(notification: Notification): string | null {
   if (!notification.target_id || !notification.target_type) return null
   switch (notification.target_type) {
     case 'workspace':
       return `/workspaces/${notification.target_id}`
+    case 'user_group':
+      return `/user-groups/${notification.target_id}`
     case 'project':
       return `/projects/${notification.target_id}`
     case 'run':

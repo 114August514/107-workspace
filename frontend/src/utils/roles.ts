@@ -5,24 +5,24 @@
  * 不要从角色反推权限，否则前后端会各自维护一份授权策略并逐渐失配。
  */
 
-import type { WorkspaceRole } from '../api/types'
+import type { MembershipRole } from '../api/types'
 
 interface RoleStyle {
   color: string
   label: string
 }
 
-const ROLE_STYLE: Record<WorkspaceRole, RoleStyle> = {
+const ROLE_STYLE: Record<MembershipRole, RoleStyle> = {
   owner: { color: 'gold', label: '所有者' },
   admin: { color: 'blue', label: '管理员' },
   member: { color: 'default', label: '成员' },
   viewer: { color: 'default', label: '只读' },
 }
 
-export function roleLabel(role: WorkspaceRole): string {
+export function roleLabel(role: MembershipRole): string {
   return ROLE_STYLE[role].label
 }
 
-export function roleColor(role: WorkspaceRole): string {
+export function roleColor(role: MembershipRole): string {
   return ROLE_STYLE[role].color
 }

@@ -4,22 +4,22 @@ import { useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { AsyncErrorView } from '../../api/errors'
 import { toAsyncError } from '../../api/errors'
-import type { Workspace } from '../../api/types'
+import type { UserGroup } from '../../api/types'
 
 interface Props {
   open: boolean
   onClose: () => void
   /** 创建成功后的回调；调用方决定是跳转还是刷新列表。 */
-  onCreated: (workspace: Workspace) => void
+  onCreated: (userGroup: UserGroup) => void
 }
 
-export function CreateWorkspaceDialog({ open, onClose, onCreated }: Props) {
+export function CreateUserGroupDialog({ open, onClose, onCreated }: Props) {
   // 表单状态放在内层组件里，随弹窗一起挂载卸载：每次打开都是干净表单
   if (!open) return null
-  return <CreateWorkspaceForm onClose={onClose} onCreated={onCreated} />
+  return <CreateUserGroupForm onClose={onClose} onCreated={onCreated} />
 }
 
-function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
+function CreateUserGroupForm({ onClose, onCreated }: Omit<Props, 'open'>) {
   const nameInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -30,7 +30,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
   const submit = async () => {
     const trimmed = name.trim()
     if (!trimmed) {
-      setNameError('请填写 Workspace 名称')
+      setNameError('请填写 User Group 名称')
       nameInputRef.current?.focus()
       return
     }
@@ -38,8 +38,8 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
     setSubmitting(true)
     setSubmitError(null)
     try {
-      const workspace = await api.createWorkspace(trimmed, description.trim())
-      onCreated(workspace)
+      const userGroup = await api.createUserGroup(trimmed, description.trim())
+      onCreated(userGroup)
       onClose()
     } catch (error) {
       setSubmitError(toAsyncError(error as Error) ?? null)
@@ -50,7 +50,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
 
   return (
     <Dialog
-      title="创建协作空间"
+      title="创建 User Group"
       width="large"
       initialFocusRef={nameInputRef}
       onClose={() => {
@@ -75,7 +75,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
       >
         <Stack gap="normal">
           {submitError && (
-            <Banner variant="critical" data-testid="create-workspace-error">
+            <Banner variant="critical" data-testid="create-user-group-error">
               <Banner.Title>{submitError.message}</Banner.Title>
               {submitError.problems && submitError.problems.length > 0 && (
                 <Banner.Description>
@@ -88,7 +88,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
               )}
             </Banner>
           )}
-          <FormControl required disabled={submitting} id="create-workspace-name">
+          <FormControl required disabled={submitting} id="create-user-group-name">
             <FormControl.Label>名称</FormControl.Label>
             <TextInput
               ref={nameInputRef}
@@ -102,7 +102,7 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
               <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
             )}
           </FormControl>
-          <FormControl disabled={submitting} id="create-workspace-description">
+          <FormControl disabled={submitting} id="create-user-group-description">
             <FormControl.Label>说明（可选）</FormControl.Label>
             <Textarea
               value={description}
@@ -113,7 +113,9 @@ function CreateWorkspaceForm({ onClose, onCreated }: Omit<Props, 'open'>) {
               block
               resize="vertical"
             />
-            <FormControl.Caption>简要写明这个空间用于哪些 Project 或计算任务。</FormControl.Caption>
+            <FormControl.Caption>
+              简要写明这个 User Group 用于哪些 Project 或协作任务。
+            </FormControl.Caption>
           </FormControl>
         </Stack>
       </form>
