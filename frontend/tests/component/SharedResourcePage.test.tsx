@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourcePage } from '../../src/pages/SharedResourcePage'
-import type { SharedResourceDetail, Workspace } from '../../src/api/types'
+import type {
+  SharedResourceDetail,
+  SharedResourceVersion,
+  SharedResourceVersionDetail,
+  Workspace,
+} from '../../src/api/types'
 
 /**
  * SharedResourcePage 用户可观察行为。
@@ -20,11 +25,13 @@ import type { SharedResourceDetail, Workspace } from '../../src/api/types'
 
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
 const mockGetWorkspace = vi.hoisted(() => vi.fn())
+const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResource: mockGetSharedResource,
     getWorkspace: mockGetWorkspace,
+    getSharedResourceVersion: mockGetSharedResourceVersion,
   },
 }))
 
@@ -59,6 +66,31 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     created_at: '2026-08-14T10:00:00Z',
     versions: [],
     ...overrides,
+  }
+}
+
+function makeVersionSummary(id: string, label: string, sequence: number): SharedResourceVersion {
+  return {
+    id,
+    shared_resource_id: 'res_test',
+    label,
+    description: '',
+    sequence,
+    file_count: 1,
+    total_size: 100,
+    created_at: '2026-08-14T10:00:00Z',
+    created_by: 'student',
+  }
+}
+
+function makeVersionDetail(
+  id: string,
+  label: string,
+  sequence: number,
+): SharedResourceVersionDetail {
+  return {
+    ...makeVersionSummary(id, label, sequence),
+    files: [{ path: 'train.py', content_hash: 'abc', size: 100 }],
   }
 }
 
@@ -155,30 +187,42 @@ describe('SharedResourcePage 权限与空态', () => {
     expect(screen.queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument()
   })
 
-  it('已发布版本在表格中列出，并链接到版本详情', async () => {
+  it('已发布版本列在左侧列表，默认选中最新版本的详情', async () => {
     mockGetSharedResource.mockResolvedValue(
       makeResource({
-        versions: [
-          {
-            id: 'ver_1',
-            shared_resource_id: 'res_test',
-            label: 'v1',
-            description: '首个版本',
-            sequence: 1,
-            file_count: 3,
-            total_size: 1024,
-            created_at: '2026-08-14T10:00:00Z',
-            created_by: 'student',
-          },
-        ],
+        versions: [makeVersionSummary('ver_2', 'v2', 2), makeVersionSummary('ver_1', 'v1', 1)],
       }),
     )
     mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+    mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
 
     renderPage()
 
-    const link = await screen.findByRole('link', { name: 'v1' })
-    expect(link).toHaveAttribute('href', '/shared-resource-versions/ver_1')
+    expect(await screen.findByRole('button', { name: /v2/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /v1/ })).toBeInTheDocument()
+    expect(screen.getByText('最新')).toBeInTheDocument()
+    // 右侧详情默认加载最新版本，不去请求旧版本
+    await waitFor(() => {
+      expect(mockGetSharedResourceVersion).toHaveBeenCalledWith('ver_2')
+    })
+    expect(mockGetSharedResourceVersion).not.toHaveBeenCalledWith('ver_1')
+  })
+
+  it('点击左侧版本切换右侧详情', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        versions: [makeVersionSummary('ver_2', 'v2', 2), makeVersionSummary('ver_1', 'v1', 1)],
+      }),
+    )
+    mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+    mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /v1/ }))
+    await waitFor(() => {
+      expect(mockGetSharedResourceVersion).toHaveBeenCalledWith('ver_1')
+    })
   })
 
   it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {

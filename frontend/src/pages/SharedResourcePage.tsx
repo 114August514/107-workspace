@@ -1,22 +1,22 @@
 import { PackageIcon, PencilIcon, PlusIcon } from '@primer/octicons-react'
 import { Breadcrumbs, Button, Label, Text } from '@primer/react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
-import type { SharedResourceDetail, SharedResourceVersion, Workspace } from '../api/types'
+import type { SharedResourceDetail, Workspace } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
-import { PrimerMono, PrimerRelativeTime } from '../components/primer/PrimerMono'
+import { PrimerRelativeTime } from '../components/primer/PrimerMono'
 import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
+import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 import { PrimerRoot } from '../primer/setup'
-import { formatBytes } from '../utils/format'
 
 export function SharedResourcePage() {
   const { resourceId = '' } = useParams()
@@ -40,7 +40,17 @@ export function SharedResourcePage() {
   const isPlatform = resource.data?.is_platform_owned ?? false
   const canManage = !isPlatform && can(workspace.data, 'shared_resource.manage')
   const canPublish = !isPlatform && can(workspace.data, 'shared_resource.version.create')
+  // 版本列表按 sequence 倒序，首个即最新。
   const versions = resource.data?.versions ?? []
+  const latestVersionId = versions[0]?.id
+
+  // 选中版本同步到 ?version=：刷新不丢，也允许直接分享某个版本的链接。
+  // URL 里的 id 不在当前版本列表里（失效或乱填）时落回最新版本。
+  const [searchParams, setSearchParams] = useSearchParams()
+  const versionFromUrl = searchParams.get('version')
+  const selectedVersionId = versions.some((v) => v.id === versionFromUrl)
+    ? versionFromUrl
+    : versions[0]?.id
 
   return (
     <PrimerRoot>
@@ -100,57 +110,54 @@ export function SharedResourcePage() {
           )}
         </AsyncState>
 
-        <PrimerListCard title="版本">
-          <AsyncState
-            loading={resource.loading}
-            error={normalizeError(resource.error)}
-            empty={resource.data !== undefined && versions.length === 0}
-            emptyText="这个共享资源还没有已发布版本。"
-            emptyDescription={
-              canPublish ? '发布首个版本后，Project 才能引用这个共享资源。' : undefined
-            }
-            emptyAction={canPublish ? '发布版本' : null}
-            onEmptyAction={canPublish ? () => setPublishing(true) : undefined}
-          >
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  {(['版本', '说明', '文件数', '总大小', '发布时间'] as const).map((h) => (
-                    <th key={h} className={styles.th}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {versions.map((version: SharedResourceVersion) => (
-                  <tr key={version.id} className={styles.row}>
-                    <td className={styles.td}>
-                      <Link
-                        to={`/shared-resource-versions/${version.id}`}
-                        className={styles.nameLink}
-                      >
-                        {version.label}
-                      </Link>
-                    </td>
-                    <td className={styles.td}>
-                      <Text size="small" className={styles.desc}>
-                        {version.description || '—'}
-                      </Text>
-                    </td>
-                    <td className={styles.td}>
-                      <PrimerMono>{String(version.file_count)}</PrimerMono>
-                    </td>
-                    <td className={styles.td}>{formatBytes(version.total_size)}</td>
-                    <td className={styles.td}>
+        {versions.length === 0 ? (
+          <PrimerListCard title="版本">
+            <AsyncState
+              loading={resource.loading}
+              error={normalizeError(resource.error)}
+              empty={resource.data !== undefined}
+              emptyText="这个共享资源还没有已发布版本。"
+              emptyDescription={
+                canPublish ? '发布首个版本后，Project 才能引用这个共享资源。' : undefined
+              }
+              emptyAction={canPublish ? '发布版本' : null}
+              onEmptyAction={canPublish ? () => setPublishing(true) : undefined}
+            >
+              {null}
+            </AsyncState>
+          </PrimerListCard>
+        ) : (
+          <div className={styles.splitLayout}>
+            {/* GitHub Releases 式样：左侧版本列表，右侧选中版本详情。 */}
+            <nav className={styles.versionNav} aria-label="版本列表">
+              {versions.map((version) => {
+                const selected = version.id === selectedVersionId
+                return (
+                  <button
+                    key={version.id}
+                    type="button"
+                    aria-current={selected ? 'true' : undefined}
+                    className={
+                      selected
+                        ? `${styles.versionItem} ${styles.versionItemSelected}`
+                        : styles.versionItem
+                    }
+                    onClick={() => setSearchParams({ version: version.id }, { replace: true })}
+                  >
+                    <span className={styles.versionItemLabel}>
+                      {version.label}
+                      {version.id === latestVersionId && <Label>最新</Label>}
+                    </span>
+                    <Text size="small" className={styles.desc}>
                       <PrimerRelativeTime value={version.created_at} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </AsyncState>
-        </PrimerListCard>
+                    </Text>
+                  </button>
+                )
+              })}
+            </nav>
+            {selectedVersionId && <SharedResourceVersionBody versionId={selectedVersionId} />}
+          </div>
+        )}
 
         <EditSharedResourceModal
           open={editing}

@@ -231,3 +231,82 @@
   margin: 0;
   color: var(--fgColor-muted);
 }
+
+/* GitHub Releases 式分栏：左侧版本列表，右侧选中版本详情；
+ * 窄屏堆叠，版本列表排在详情上方。 */
+.splitLayout {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  gap: var(--base-size-24);
+  align-items: start;
+}
+
+@media (max-width: 48rem) {
+  .splitLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.versionNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-4);
+}
+
+/* 版本条目：整块可点，选中态走 accent 强调边与文字，键盘焦点可见。 */
+.versionItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--base-size-4);
+  padding: var(--base-size-8) var(--base-size-12);
+  border: none;
+  border-left: var(--borderWidth-thick) solid transparent;
+  border-radius: var(--borderRadius-medium);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--fgColor-default);
+}
+
+.versionItem:hover {
+  background: var(--bgColor-muted);
+}
+
+.versionItem:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+}
+
+.versionItemSelected {
+  border-left-color: var(--borderColor-accent-emphasis);
+  background: var(--bgColor-muted);
+}
+
+.versionItemSelected .versionItemLabel {
+  color: var(--fgColor-accent);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.versionItemLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+/* 右侧详情顶部的版本 tag 行：图标 + 版本标签 + 相对时间。 */
+.versionTagRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.versionTitle {
+  margin: 0;
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-title-lineHeight-medium);
+  color: var(--fgColor-default);
+}
