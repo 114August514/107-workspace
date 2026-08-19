@@ -75,11 +75,6 @@
   min-width: 0;
 }
 
-.navigationDrawer [data-component='Dialog.CloseButton'] {
-  min-width: 44px;
-  min-height: 44px;
-}
-
 .contextGuide {
   min-height: var(--base-size-44);
   padding: var(--base-size-8) 50px;

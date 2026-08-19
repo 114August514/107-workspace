@@ -2,11 +2,26 @@ export const appShellCopy = {
   brand: '107 Workspace',
   openNavigation: '打开导航',
   createUserGroup: '创建 User Group',
-  drawerTitle: '107 Workspace',
   sidebarLabel: '首页工作入口',
-  navigationLoading: '正在加载工作入口…',
-  navigationError: '工作入口加载失败。',
-  navigationErrorNextStep: '请检查网络连接后重试。',
+} as const
+
+export const globalNavigationCopy = {
+  title: '107 Workspace',
+  ariaLabel: '全局导航',
+  heading: '全局导航',
+  close: '关闭导航',
+  home: '首页',
+  personalResource: '个人资源',
+  userGroupsGroup: '你的 User Group',
+  userGroupsEmpty: '还没有可进入的 User Group',
+  recentProjectsGroup: '最近使用的 Project',
+  recentProjectsEmpty: '还没有最近使用的 Project',
+  showRemaining: (count: number) => `显示其余 ${count} 个`,
+  showRemainingUserGroups: (count: number) => `显示其余 ${count} 个 User Group`,
+  showRemainingProjects: (count: number) => `显示其余 ${count} 个 Project`,
+  loading: '正在加载全局导航…',
+  error: '全局导航加载失败。',
+  errorNextStep: '请检查网络连接后重试。',
 } as const
 
 export const contextGuideCopy = {

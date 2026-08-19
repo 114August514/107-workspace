@@ -44,6 +44,21 @@ const homeData: Home = {
   recent_runs: [],
 }
 
+const manyHomeItems: Home = {
+  ...homeData,
+  user_groups: Array.from({ length: 7 }, (_, index) => ({
+    ...homeData.user_groups[0]!,
+    id: `grp-${index + 1}`,
+    name: `User Group ${index + 1}`,
+  })),
+  recent_projects: Array.from({ length: 7 }, (_, index) => ({
+    ...homeData.recent_projects[0]!,
+    id: `p-${index + 1}`,
+    name: `Project ${index + 1}`,
+    workspace_id: `grp-${index + 1}`,
+  })),
+}
+
 function readyHome(data = homeData): AsyncState<Home> {
   return { data, loading: false, error: undefined, reload: vi.fn() }
 }
@@ -147,6 +162,12 @@ describe('AppShell 壳层', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
     expect(dialog).toBeVisible()
+    expect(within(dialog).getByRole('navigation', { name: '全局导航' })).toBeVisible()
+    expect(within(dialog).queryByRole('navigation', { name: '工作入口' })).toBeNull()
+    expect(within(dialog).getByRole('heading', { name: '你的 User Group' })).toBeVisible()
+    const sidebar = screen.getByRole('complementary', { name: '首页工作入口' })
+    expect(within(sidebar).getByRole('navigation', { name: '工作入口' })).toBeVisible()
+    expect(within(sidebar).getByRole('heading', { name: 'User Group' })).toBeVisible()
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     const homeLink = within(dialog).getByRole('link', { name: '首页' })
     expect(homeLink).toHaveAttribute('aria-current', 'page')
@@ -173,17 +194,52 @@ describe('AppShell 壳层', () => {
     expect(trigger).toHaveFocus()
   })
 
-  it('导航加载失败只影响抽屉，不阻断当前页面内容', async () => {
+  it('Close 关闭导航并把焦点返回 header 菜单按钮', async () => {
+    renderShell('student')
+
+    const trigger = screen.getByRole('button', { name: '打开导航' })
+    fireEvent.click(trigger)
+    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭导航' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '107 Workspace' })).toBeNull())
+    expect(trigger).toHaveFocus()
+  })
+
+  it('导航加载时显示权威文案且不渲染导航列表', async () => {
     renderShell('student', {
       data: undefined,
-      loading: false,
-      error: new Error('offline'),
+      loading: true,
+      error: undefined,
       reload: vi.fn(),
     })
 
     expect(screen.getByText('页面内容')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
-    expect(await screen.findByText('工作入口加载失败。')).toBeVisible()
+    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
+    expect(within(dialog).getByRole('status')).toHaveTextContent('正在加载全局导航…')
+    expect(within(dialog).queryByRole('navigation', { name: '全局导航' })).toBeNull()
+    expect(screen.getByText('页面内容')).toBeVisible()
+  })
+
+  it('导航加载失败只影响抽屉，重试调用共享 Home state 的 reload', async () => {
+    const reload = vi.fn()
+    renderShell('student', {
+      data: undefined,
+      loading: false,
+      error: new Error('offline'),
+      reload,
+    })
+
+    expect(screen.getByText('页面内容')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
+    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
+    expect(within(dialog).getByText('全局导航加载失败。')).toBeVisible()
+    expect(within(dialog).getByText('请检查网络连接后重试。')).toBeVisible()
+    expect(within(dialog).queryByRole('navigation', { name: '全局导航' })).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: '重试' }))
+
+    expect(reload).toHaveBeenCalledTimes(1)
     expect(screen.getByText('页面内容')).toBeVisible()
   })
 
@@ -200,8 +256,8 @@ describe('AppShell 壳层', () => {
     expect(await screen.findByRole('menuitem', { name: 'teacher' })).toBeVisible()
   })
 
-  it('首页与抽屉共享一次 /me 请求', async () => {
-    const home = vi.spyOn(api, 'home').mockResolvedValue(homeData)
+  it('Drawer 展开和重开只使用一次共享 /me 请求，并重置为前五项', async () => {
+    const home = vi.spyOn(api, 'home').mockResolvedValue(manyHomeItems)
     vi.spyOn(api, 'listInvitations').mockResolvedValue([])
     vi.spyOn(api, 'computePlans').mockResolvedValue([])
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
@@ -214,10 +270,28 @@ describe('AppShell 壳层', () => {
       </StrictMode>,
     )
     const sidebar = await screen.findByRole('complementary', { name: '首页工作入口' })
-    expect(within(sidebar).getByRole('link', { name: '计算物理课题组' })).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
-    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
-    expect(within(dialog).getByRole('link', { name: '计算物理课题组' })).toBeVisible()
+    expect(within(sidebar).getByRole('link', { name: 'User Group 7' })).toBeVisible()
+    expect(within(sidebar).getByRole('link', { name: /Project 7/ })).toBeVisible()
+
+    const trigger = screen.getByRole('button', { name: '打开导航' })
+    fireEvent.click(trigger)
+    let dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
+    expect(within(dialog).queryByRole('link', { name: 'User Group 6' })).toBeNull()
+    expect(within(dialog).queryByRole('link', { name: /Project 6/ })).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: '显示其余 2 个 User Group' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: '显示其余 2 个 Project' }))
+    expect(within(dialog).getByRole('link', { name: 'User Group 7' })).toBeVisible()
+    expect(within(dialog).getByRole('link', { name: /Project 7/ })).toBeVisible()
+    expect(home).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: '关闭导航' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '107 Workspace' })).toBeNull())
+    fireEvent.click(trigger)
+    dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
+    expect(within(dialog).queryByRole('link', { name: 'User Group 6' })).toBeNull()
+    expect(within(dialog).queryByRole('link', { name: /Project 6/ })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: '显示其余 2 个 User Group' })).toBeVisible()
+    expect(within(dialog).getByRole('button', { name: '显示其余 2 个 Project' })).toBeVisible()
     expect(home).toHaveBeenCalledTimes(1)
   })
 

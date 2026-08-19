@@ -1,11 +1,11 @@
 import { PlusIcon, ThreeBarsIcon } from '@primer/octicons-react'
-import { Button, defaultPaneWidth, Dialog, IconButton, PageLayout } from '@primer/react'
+import { Button, defaultPaneWidth, IconButton, PageLayout } from '@primer/react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 
 import type { Home } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
-import { AsyncState } from '../common/AsyncState'
+import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { ContextGuide } from './ContextGuide'
@@ -32,7 +32,6 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
   const location = useLocation()
   const navigationId = useId()
   const navigationButtonRef = useRef<HTMLButtonElement>(null)
-  const homeLinkRef = useRef<HTMLAnchorElement>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
 
@@ -94,33 +93,12 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
       <ContextGuide pathname={location.pathname} />
 
       {navigationOpen ? (
-        <Dialog
-          title={appShellCopy.drawerTitle}
-          position="left"
-          width="medium"
-          height="large"
-          className={styles.navigationDrawer}
-          initialFocusRef={homeLinkRef}
+        <GlobalNavigationDrawer
+          id={navigationId}
+          home={home}
           returnFocusRef={navigationButtonRef}
           onClose={() => setNavigationOpen(false)}
-        >
-          <div id={navigationId}>
-            <AsyncState
-              loading={home.loading}
-              loadingText={appShellCopy.navigationLoading}
-              error={toNavigationError(home.error)}
-              onRetry={home.reload}
-            >
-              {home.data ? (
-                <WorkNavigation
-                  home={home.data}
-                  homeLinkRef={homeLinkRef}
-                  onNavigate={() => setNavigationOpen(false)}
-                />
-              ) : null}
-            </AsyncState>
-          </div>
-        </Dialog>
+        />
       ) : null}
 
       <CreateUserGroupDialog
@@ -133,12 +111,4 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
       />
     </div>
   )
-}
-
-function toNavigationError(error: Error | undefined) {
-  if (!error) return undefined
-  return {
-    message: appShellCopy.navigationError,
-    problems: [appShellCopy.navigationErrorNextStep],
-  }
 }

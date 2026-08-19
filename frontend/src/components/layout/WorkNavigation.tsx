@@ -1,6 +1,5 @@
 import { HomeIcon, OrganizationIcon, ProjectIcon } from '@primer/octicons-react'
 import { NavList } from '@primer/react'
-import type { RefObject } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 
 import type { Home } from '../../api/types'
@@ -9,17 +8,14 @@ import styles from './WorkNavigation.module.css'
 
 interface Props {
   home: Home
-  onNavigate?: () => void
-  homeLinkRef?: RefObject<HTMLAnchorElement | null>
 }
 
 /**
- * 当前用户的真实工作入口。
+ * Home 页面常驻栏中的工作入口。
  *
- * 只展示 `/me` 已经返回的数据；首页常驻栏和壳层抽屉复用同一组件，
- * 组件本身不发请求，也不引入第二套数据流。
+ * 只展示 AppShell 已加载的 `/me` 数据，组件本身不发请求。
  */
-export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
+export function WorkNavigation({ home }: Props) {
   const location = useLocation()
   const ownerNames = new Map(home.user_groups.map((userGroup) => [userGroup.id, userGroup.name]))
   if (home.personal_resource_context_id) {
@@ -33,9 +29,7 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
         className={styles.item}
         as={RouterLink}
         to="/"
-        ref={homeLinkRef}
         aria-current={location.pathname === '/' ? 'page' : undefined}
-        onClick={onNavigate}
       >
         <NavList.LeadingVisual>
           <HomeIcon />
@@ -55,7 +49,6 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
               aria-current={
                 location.pathname === `/user-groups/${userGroup.id}` ? 'page' : undefined
               }
-              onClick={onNavigate}
             >
               <NavList.LeadingVisual>
                 <OrganizationIcon />
@@ -76,7 +69,6 @@ export function WorkNavigation({ home, onNavigate, homeLinkRef }: Props) {
               as={RouterLink}
               to={`/projects/${project.id}`}
               aria-current={location.pathname === `/projects/${project.id}` ? 'page' : undefined}
-              onClick={onNavigate}
             >
               <NavList.LeadingVisual>
                 <ProjectIcon />
