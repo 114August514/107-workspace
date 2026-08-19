@@ -325,11 +325,6 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     if demo_group is None:
         raise TaskError(f"Demo User Group {DEMO_USER_GROUP_ID!r} is not visible to the demo user")
     workspace_id = demo_group["id"]
-    client.request(
-        "PATCH",
-        f"/workspaces/{workspace_id}",
-        {"default_environment_version_id": "ev_python_312"},
-    )
     if verbose:
         print(f"Workspace: {workspace_id}")
 

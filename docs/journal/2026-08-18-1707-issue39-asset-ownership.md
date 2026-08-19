@@ -175,3 +175,13 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 - 结论：`PASS`。
 - 覆盖：personal adapter Activity scope 修复、unscoped `latest_version` 删除及相应 reverify evidence；无新增 finding。
 - 发布边界：候选可提交并创建 PR；Issue 在 PR 合并前保持 active，不归档 journal。
+
+## 2026-08-19 PR #58 Windows smoke remediation
+
+- Hosted log evidence：run `32208249779` / job `95935553393` 的 setup 与 full check 均 PASS；`workspace.py smoke` 已显式执行 `workspace107.tools.seed --demo`，seed 创建 `ev_demo_python_312_2026` 并把 `grp_demo` default 设置为该版本，随后 HTTP flow 又 PATCH legacy exact ID `ev_python_312`，收到 `404 Environment Version ev_python_312 不存在`。
+- Root cause：#39 有意删除 legacy asset aggregates/IDs 并禁止 ID 重用；isolated smoke 的冗余 PATCH 仍假定旧 ID。plain seed 只创建 Compute Plans 的契约无误，demo bootstrap 也已成功；故 evidence 将诊断从 D1 收敛为 D0。
+- Fix：删除冗余 legacy-ID PATCH。HTTP smoke 直接消费 `--demo` bootstrap 已建立的 actor-owned `grp_demo` default Environment，不恢复 non-demo assets、legacy ID、Platform/null owner、latest/fallback 语义。
+- Reproduction before fix：`uv run --no-project python scripts/workspace.py smoke` → exit 1，同一 `PATCH /workspaces/grp_demo` 404。
+- Reproduction after fix：同一 `uv run --no-project python scripts/workspace.py smoke` → exit 0，`ok isolated HTTP core run completed`。
+- Seed regression：`cd backend && uv run pytest -q tests/integration/test_seed.py` → `5 passed in 0.36s`；plain/demo bootstrap contract 保持。
+- Full verification：`make check` → exit 0；workflow `15 tests`，backend `207 passed, 2 skipped`，frontend `12 files / 48 tests`，API contract check PASS。未改 API/schema，未重新生成 contract artifact。
