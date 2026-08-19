@@ -36,6 +36,7 @@ from .common import (
 )
 
 TERMINAL_RUN_STATUSES = {"succeeded", "failed", "cancelled", "submit_failed"}
+DEMO_USER_GROUP_ID = "grp_demo"
 JOURNAL_FIELD = re.compile(r"^-\s*([^:：]+)[:：]\s*(.*)$")
 COMPOSE_FILE = REPO_ROOT / "deploy" / "compose.yaml"
 
@@ -267,7 +268,15 @@ def demo(*, smoke: bool = False) -> None:
             }
         )
         backend_uv("run", "alembic", "upgrade", "head", env=environment, quiet=smoke)
-        backend_uv("run", "python", "-m", "workspace107.tools.seed", env=environment, quiet=smoke)
+        backend_uv(
+            "run",
+            "python",
+            "-m",
+            "workspace107.tools.seed",
+            "--demo",
+            env=environment,
+            quiet=smoke,
+        )
 
         command = [
             _backend_python_executable(),
@@ -293,7 +302,7 @@ def demo(*, smoke: bool = False) -> None:
             )
             try:
                 _wait_until_ready(f"{base_url}/health", process, server_log)
-                _exercise_core_run(ApiClient(base_url), verbose=not smoke)
+                _exercise_core_run(ApiClient(base_url, user="student"), verbose=not smoke)
             finally:
                 _stop_processes([process])
 
@@ -308,9 +317,14 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         if verbose:
             print(f"\n{label}")
 
-    say("1. Resolve personal Workspace")
+    say("1. Resolve explicit demo User Group")
     home = client.request("GET", "/me")
-    workspace_id = home["workspaces"][0]["id"]
+    demo_group = next(
+        (group for group in home["user_groups"] if group["id"] == DEMO_USER_GROUP_ID), None
+    )
+    if demo_group is None:
+        raise TaskError(f"Demo User Group {DEMO_USER_GROUP_ID!r} is not visible to the demo user")
+    workspace_id = demo_group["id"]
     client.request(
         "PATCH",
         f"/workspaces/{workspace_id}",

@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { api, newIdempotencyKey } from '../api/client'
-import type { LogChunk, RunDetail, Workspace } from '../api/types'
+import type { LogChunk, RunDetail, LegacyWorkspaceContext } from '../api/types'
 import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncSection } from '../components/common/AsyncSection'
@@ -35,8 +35,9 @@ export function RunPage() {
   // 取消和重跑都是写操作。不按能力收敛的话，Viewer 看得到按钮、
   // 点了必然 403——后端拦得住，但让用户点一个注定失败的按钮不是好体验
   // 前端能力只管「显不显示入口」，真正的授权仍由后端逐请求校验。
-  const workspace = useAsync<Workspace | undefined>(
-    async () => (detail.data ? api.getWorkspace(detail.data.run.workspace_id) : undefined),
+  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
+    async () =>
+      detail.data ? api.getLegacyWorkspaceContext(detail.data.run.workspace_id) : undefined,
     [detail.data?.run.workspace_id],
   )
   const logs = useAsync<LogChunk[]>(() => api.readLogs(runId), [runId])
@@ -88,7 +89,12 @@ export function RunPage() {
 
   return (
     <Stack gap="large">
-      <AsyncSection loading={detail.loading} error={detail.error}>
+      <AsyncSection
+        loading={detail.loading}
+        error={detail.error}
+        onRetry={detail.reload}
+        errorTitle="无法加载这个 Run。"
+      >
         {detail.data && run && (
           <>
             <PageHeader
@@ -177,7 +183,12 @@ export function RunPage() {
                   label: '日志',
                   children: (
                     <Card>
-                      <AsyncSection loading={logs.loading} error={logs.error}>
+                      <AsyncSection
+                        loading={logs.loading}
+                        error={logs.error}
+                        onRetry={logs.reload}
+                        errorTitle="无法加载日志。"
+                      >
                         <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
                       </AsyncSection>
                     </Card>

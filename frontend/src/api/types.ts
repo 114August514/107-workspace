@@ -23,9 +23,10 @@ type Schemas = components['schemas']
 // 这些在契约里带取值列表，所以派生出来是联合类型而不是 string。
 // switch / Record 少写一个分支，TypeScript 会直接报错。
 
-export type WorkspaceKind = Schemas['WorkspaceKind']
-export type WorkspaceRole = Schemas['WorkspaceRole']
+export type LegacyWorkspaceKind = Schemas['LegacyWorkspaceKind']
+export type MembershipRole = Schemas['MembershipRole']
 export type Capability = Schemas['Capability']
+export type UserGroupCapability = Schemas['UserGroupCapability']
 export type MembershipStatus = Schemas['MembershipStatus']
 export type ProjectStatus = Schemas['ProjectStatus']
 export type RunStatus = Schemas['RunStatus']
@@ -35,10 +36,11 @@ export type LogStream = Schemas['LogStream']
 export type InputSourceType = Schemas['InputSourceType']
 export type ChangeKind = Schemas['ChangeKind']
 
-// -- 身份与空间 -------------------------------------------------------------
+// -- Identity and User Group -------------------------------------------------
 
 export type User = Schemas['UserOut']
-export type Workspace = Schemas['WorkspaceOut']
+export type UserGroup = Schemas['UserGroupOut']
+export type LegacyWorkspaceContext = Schemas['LegacyWorkspaceContextOut']
 export type Member = Schemas['MemberOut']
 export type Invitation = Schemas['InvitationOut']
 export type Variable = Schemas['VariableOut']
@@ -120,16 +122,12 @@ export type ApiErrorBody = Schemas['ErrorOut']
 
 // -- 权限 -------------------------------------------------------------------
 
-/**
- * 判断当前用户在这个空间里能不能做某件事。
- *
- * **不要按角色推导**（比如 `role === 'owner'`）——那样规则就有两份，
- * 后端改了矩阵前端不会跟着变。能力清单由后端算好放在 `capabilities` 里。
- *
- * 前端权限只管「显不显示入口」；真正的拦截永远在后端。
- */
-export function can(workspace: Workspace | undefined, capability: Capability): boolean {
-  return workspace?.capabilities?.includes(capability) ?? false
+/** UI capability checks mirror the server-provided list; authorization remains server-side. */
+export function can(
+  context: { capabilities?: Capability[] } | undefined,
+  capability: Capability,
+): boolean {
+  return context?.capabilities?.includes(capability) ?? false
 }
 
 // -- 分页 -------------------------------------------------------------------

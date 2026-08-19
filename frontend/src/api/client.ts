@@ -25,8 +25,10 @@ import type {
   FileContent,
   Home,
   Invitation,
+  LegacyWorkspaceContext,
   LogChunk,
   Member,
+  MembershipRole,
   NotificationPage,
   PreflightResult,
   PageQuery,
@@ -51,8 +53,7 @@ import type {
   Variable,
   VersionDiff,
   WorkingChange,
-  Workspace,
-  WorkspaceRole,
+  UserGroup,
 } from './types'
 
 /** 后端统一的错误响应结构。 */
@@ -75,6 +76,19 @@ export class ApiError extends Error {
   /** 提交前检查失败时会带回多条问题，展示时应当逐条列出。 */
   get detail(): string {
     return this.problems.length > 0 ? this.problems.join('\n') : this.message
+  }
+}
+
+/**
+ * 底层 fetch 无法建立连接时（后端未启动、代理失败、DNS/网络中断）
+ * 抛出的类型化错误。message 仅供内部调试，UI copy 由 toAsyncError 按上下文决定。
+ */
+export class NetworkError extends Error {
+  readonly code = 'network_unavailable'
+
+  constructor(cause: unknown) {
+    super('Network request failed', { cause })
+    this.name = 'NetworkError'
   }
 }
 
@@ -109,7 +123,21 @@ const identity: Middleware = {
   },
 }
 
-const http = createClient<paths>({ baseUrl: '' })
+/**
+ * 包装全局 fetch，把 fetch 层 reject 的异常统一转成 NetworkError。
+ * 收到响应（包括 4xx/5xx）时不进入 catch，交给 openapi-fetch 正常解析；
+ * 任何导致 fetch Promise reject 的底层错误（连接失败、DNS、CORS、中断等）
+ * 都会被捕获并带上原始 cause。
+ */
+const safeFetch: typeof fetch = async (input, init) => {
+  try {
+    return await globalThis.fetch(input, init)
+  } catch (cause) {
+    throw new NetworkError(cause)
+  }
+}
+
+const http = createClient<paths>({ baseUrl: '', fetch: safeFetch })
 http.use(identity)
 
 /** 把 openapi-fetch 的 `{ data, error }` 转成「成功返回值 / 抛 ApiError」。 */
@@ -153,57 +181,75 @@ export const api = {
   computePlans: async (): Promise<ComputePlan[]> =>
     unwrap(await http.GET('/api/v1/catalog/compute-plans')),
 
-  // -- Workspace ---------------------------------------------------------
-  listWorkspaces: async (): Promise<Workspace[]> => unwrap(await http.GET('/api/v1/workspaces')),
+  // -- User Group governance -------------------------------------------
+  listUserGroups: async (): Promise<UserGroup[]> => unwrap(await http.GET('/api/v1/user-groups')),
 
-  getWorkspace: async (id: string): Promise<Workspace> =>
+  getUserGroup: async (id: string): Promise<UserGroup> =>
+    unwrap(
+      await http.GET('/api/v1/user-groups/{user_group_id}', {
+        params: { path: { user_group_id: id } },
+      }),
+    ),
+
+  createUserGroup: async (name: string, description: string): Promise<UserGroup> =>
+    unwrap(await http.POST('/api/v1/user-groups', { body: { name, description } })),
+
+  updateUserGroup: async (
+    id: string,
+    payload: { name?: string; description?: string },
+  ): Promise<UserGroup> =>
+    unwrap(
+      await http.PATCH('/api/v1/user-groups/{user_group_id}', {
+        params: { path: { user_group_id: id } },
+        body: payload,
+      }),
+    ),
+
+  getLegacyWorkspaceContext: async (id: string): Promise<LegacyWorkspaceContext> =>
     unwrap(
       await http.GET('/api/v1/workspaces/{workspace_id}', {
         params: { path: { workspace_id: id } },
       }),
     ),
 
-  createWorkspace: async (name: string, description: string): Promise<Workspace> =>
-    unwrap(await http.POST('/api/v1/workspaces', { body: { name, description } })),
-
-  updateWorkspace: async (
+  setLegacyDefaultEnvironment: async (
     id: string,
-    payload: { name?: string; description?: string; default_environment_version_id?: string },
-  ): Promise<Workspace> =>
+    defaultEnvironmentVersionId: string | null,
+  ): Promise<LegacyWorkspaceContext> =>
     unwrap(
       await http.PATCH('/api/v1/workspaces/{workspace_id}', {
         params: { path: { workspace_id: id } },
-        body: payload,
+        body: { default_environment_version_id: defaultEnvironmentVersionId },
       }),
     ),
 
   listMembers: async (id: string): Promise<Member[]> =>
     unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/members', {
-        params: { path: { workspace_id: id } },
+      await http.GET('/api/v1/user-groups/{user_group_id}/members', {
+        params: { path: { user_group_id: id } },
       }),
     ),
 
-  inviteMember: async (id: string, username: string, role: WorkspaceRole): Promise<Member> =>
+  inviteMember: async (id: string, username: string, role: MembershipRole): Promise<Member> =>
     unwrap(
-      await http.POST('/api/v1/workspaces/{workspace_id}/members', {
-        params: { path: { workspace_id: id } },
+      await http.POST('/api/v1/user-groups/{user_group_id}/members', {
+        params: { path: { user_group_id: id } },
         body: { username, role },
       }),
     ),
 
-  changeMemberRole: async (id: string, userId: string, role: WorkspaceRole): Promise<Member> =>
+  changeMemberRole: async (id: string, userId: string, role: MembershipRole): Promise<Member> =>
     unwrap(
-      await http.PATCH('/api/v1/workspaces/{workspace_id}/members/{target_user_id}', {
-        params: { path: { workspace_id: id, target_user_id: userId } },
+      await http.PATCH('/api/v1/user-groups/{user_group_id}/members/{target_user_id}', {
+        params: { path: { user_group_id: id, target_user_id: userId } },
         body: { role },
       }),
     ),
 
   removeMember: async (id: string, userId: string): Promise<void> => {
     unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/members/{target_user_id}', {
-        params: { path: { workspace_id: id, target_user_id: userId } },
+      await http.DELETE('/api/v1/user-groups/{user_group_id}/members/{target_user_id}', {
+        params: { path: { user_group_id: id, target_user_id: userId } },
       }),
     )
   },
@@ -213,8 +259,8 @@ export const api = {
 
   respondToInvitation: async (id: string, accept: boolean): Promise<void> => {
     unwrap(
-      await http.POST('/api/v1/workspaces/{workspace_id}/invitation', {
-        params: { path: { workspace_id: id } },
+      await http.POST('/api/v1/user-groups/{user_group_id}/invitation', {
+        params: { path: { user_group_id: id } },
         body: { accept },
       }),
     )

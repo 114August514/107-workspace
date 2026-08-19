@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-WORKSPACE = "ws"
 USER = "usr"
+USER_GROUP = "grp"
 MEMBERSHIP = "mbr"
 PROJECT = "prj"
 PROJECT_VERSION = "pv"

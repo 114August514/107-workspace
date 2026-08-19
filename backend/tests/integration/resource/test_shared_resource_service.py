@@ -16,21 +16,21 @@ from __future__ import annotations
 
 import httpx
 
+from tests.helpers import ensure_user_group
 from workspace107.application.shared_resource_service import MAX_RESOURCE_NAME_LEN
 
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
 
 
-async def _personal_workspace(client: httpx.AsyncClient, headers: dict[str, str]) -> str:
-    home = (await client.get("/api/v1/me", headers=headers)).json()
-    return str(next(w for w in home["workspaces"] if w["kind"] == "personal")["id"])
+async def _user_group(client: httpx.AsyncClient, headers: dict[str, str]) -> str:
+    return await ensure_user_group(client, headers=headers)
 
 
 async def _create_resource(
     client: httpx.AsyncClient, name: str = "测试资源", headers: dict[str, str] | None = None
 ) -> dict:
-    workspace_id = await _personal_workspace(client, headers or ALICE)
+    workspace_id = await _user_group(client, headers or ALICE)
     return (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",
@@ -78,7 +78,7 @@ async def _publish_version(
 
 
 async def test_create_rejects_empty_name(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     response = await client.post(
         f"/api/v1/workspaces/{workspace_id}/shared-resources",
         json={"name": "   "},
@@ -91,7 +91,7 @@ async def test_create_rejects_empty_name(client: httpx.AsyncClient) -> None:
 
 
 async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     response = await client.post(
         f"/api/v1/workspaces/{workspace_id}/shared-resources",
         json={"name": "x" * (MAX_RESOURCE_NAME_LEN + 1)},
@@ -106,7 +106,7 @@ async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
 
 
 async def test_create_assigns_owner_workspace(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     response = await client.post(
         f"/api/v1/workspaces/{workspace_id}/shared-resources",
         json={"name": "数据集 A", "description": "训练用"},
@@ -122,7 +122,7 @@ async def test_create_assigns_owner_workspace(client: httpx.AsyncClient) -> None
 
 async def test_create_requires_manage_capability(client: httpx.AsyncClient) -> None:
     """非成员在别人的 Workspace 上 create 会被挡掉，且按不存在处理。"""
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     response = await client.post(
         f"/api/v1/workspaces/{workspace_id}/shared-resources",
         json={"name": "越权创建"},
@@ -136,7 +136,7 @@ async def test_create_requires_manage_capability(client: httpx.AsyncClient) -> N
 
 
 async def test_update_changes_name_and_description(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",
@@ -156,7 +156,7 @@ async def test_update_changes_name_and_description(client: httpx.AsyncClient) ->
 
 
 async def test_update_rejects_empty_name(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",
@@ -313,8 +313,8 @@ async def test_read_version_file_rejects_missing_path(client: httpx.AsyncClient)
 async def test_list_for_workspace_excludes_other_workspace_resources(
     client: httpx.AsyncClient,
 ) -> None:
-    alice_ws = await _personal_workspace(client, ALICE)
-    bob_ws = await _personal_workspace(client, BOB)
+    alice_ws = await _user_group(client, ALICE)
+    bob_ws = await _user_group(client, BOB)
     await client.post(
         f"/api/v1/workspaces/{alice_ws}/shared-resources",
         json={"name": "Alice 的"},
@@ -347,7 +347,7 @@ async def test_get_version_blocks_cross_workspace_access(
 
 
 async def test_create_records_activity(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",
@@ -369,7 +369,7 @@ async def test_create_records_activity(client: httpx.AsyncClient) -> None:
 
 
 async def test_publish_version_records_activity(client: httpx.AsyncClient) -> None:
-    workspace_id = await _personal_workspace(client, ALICE)
+    workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             f"/api/v1/workspaces/{workspace_id}/shared-resources",

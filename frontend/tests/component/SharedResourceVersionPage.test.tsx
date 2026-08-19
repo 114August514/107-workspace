@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourceVersionPage } from '../../src/pages/SharedResourceVersionPage'
 import type {
+  LegacyWorkspaceContext,
   SharedResourceDetail,
   SharedResourceVersionDetail,
-  Workspace,
 } from '../../src/api/types'
 
 /**
@@ -24,7 +24,7 @@ const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
 const mockReadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
 const mockDownloadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
-const mockGetWorkspace = vi.hoisted(() => vi.fn())
+const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
   api: {
@@ -32,7 +32,7 @@ vi.mock('../../src/api/client', () => ({
     getSharedResource: mockGetSharedResource,
     readSharedResourceVersionFile: mockReadSharedResourceVersionFile,
     downloadSharedResourceVersionFile: mockDownloadSharedResourceVersionFile,
-    getWorkspace: mockGetWorkspace,
+    getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
   },
 }))
 
@@ -65,13 +65,11 @@ const resource: SharedResourceDetail = {
   versions: [],
 }
 
-const workspace: Workspace = {
+const workspace: LegacyWorkspaceContext = {
   id: 'ws_test',
   name: 'Test 空间',
-  description: '',
   kind: 'collaborative',
   owner_id: 'owner',
-  created_at: null,
   default_environment_version_id: null,
   capabilities: [],
   role: 'admin',
@@ -95,7 +93,7 @@ describe('SharedResourceVersionPage 文件预览', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     mockGetSharedResourceVersion.mockResolvedValue(version)
     mockGetSharedResource.mockResolvedValue(resource)
-    mockGetWorkspace.mockResolvedValue(workspace)
+    mockGetLegacyWorkspaceContext.mockResolvedValue(workspace)
   })
 
   afterEach(() => {

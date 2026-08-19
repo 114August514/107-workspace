@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { Member, Workspace, WorkspaceRole } from '../../api/types'
+import type { Member, MembershipRole, UserGroup } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { roleLabel } from '../../utils/roles'
@@ -17,25 +17,23 @@ import { RoleTag } from '../common/RoleTag'
  * Owner 不在其中：换所有者是一次明确的交接，走转让流程，
  * 不能靠改角色造出第二个所有者。
  */
-const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const satisfies readonly WorkspaceRole[]
+const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const satisfies readonly MembershipRole[]
 
 interface Props {
-  workspace: Workspace
+  userGroup: UserGroup
 }
 
-export function MemberPanel({ workspace }: Props) {
-  const members = useAsync<Member[]>(() => api.listMembers(workspace.id), [workspace.id])
-  const [form] = Form.useForm<{ username: string; role: WorkspaceRole }>()
+export function MemberPanel({ userGroup }: Props) {
+  const members = useAsync<Member[]>(() => api.listMembers(userGroup.id), [userGroup.id])
+  const [form] = Form.useForm<{ username: string; role: MembershipRole }>()
   const [inviting, setInviting] = useState(false)
-  // 按能力判断，不按角色——角色到能力的映射只有后端一份
-  const canManage = can(workspace, 'member.manage')
-  const isPersonal = workspace.kind === 'personal'
+  const canManage = can(userGroup, 'member.manage')
 
   const invite = async () => {
     const values = await form.validateFields()
     setInviting(true)
     try {
-      await api.inviteMember(workspace.id, values.username, values.role ?? 'member')
+      await api.inviteMember(userGroup.id, values.username, values.role ?? 'member')
       message.success(`已向 ${values.username} 发送邀请`)
       form.resetFields()
       members.reload()
@@ -48,7 +46,7 @@ export function MemberPanel({ workspace }: Props) {
 
   const remove = async (member: Member) => {
     try {
-      await api.removeMember(workspace.id, member.user_id)
+      await api.removeMember(userGroup.id, member.user_id)
       message.success(`已移除 ${member.username}`)
       members.reload()
     } catch (error) {
@@ -56,9 +54,9 @@ export function MemberPanel({ workspace }: Props) {
     }
   }
 
-  const changeRole = async (member: Member, role: WorkspaceRole) => {
+  const changeRole = async (member: Member, role: MembershipRole) => {
     try {
-      await api.changeMemberRole(workspace.id, member.user_id, role)
+      await api.changeMemberRole(userGroup.id, member.user_id, role)
       message.success(`${member.username} 的角色已改为 ${roleLabel(role)}`)
       members.reload()
     } catch (error) {
@@ -73,9 +71,8 @@ export function MemberPanel({ workspace }: Props) {
       title: '角色',
       dataIndex: field<Member>('role'),
       width: 160,
-      render: (role: WorkspaceRole, member) => {
-        // Owner 的角色不能在这里改——要换所有者得走转让流程
-        if (!canManage || isPersonal || role === 'owner') {
+      render: (role: MembershipRole, member) => {
+        if (!canManage || role === 'owner') {
           return <RoleTag role={role} />
         }
         return (
@@ -101,7 +98,7 @@ export function MemberPanel({ workspace }: Props) {
     },
   ]
 
-  if (canManage && !isPersonal) {
+  if (canManage) {
     columns.push({
       title: '操作',
       width: 100,
@@ -109,7 +106,7 @@ export function MemberPanel({ workspace }: Props) {
         member.role === 'owner' ? null : (
           <Popconfirm
             title={`移除 ${member.username}？`}
-            description="移除后该成员立刻失去这个空间的全部访问权。"
+            description="移除后该成员立刻失去这个 User Group 的访问权。"
             okText="移除"
             cancelText="取消"
             onConfirm={() => remove(member)}
@@ -124,7 +121,7 @@ export function MemberPanel({ workspace }: Props) {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      {canManage && !isPersonal && (
+      {canManage && (
         <Form form={form} layout="inline" initialValues={{ role: 'member' }}>
           <Form.Item
             name="username"

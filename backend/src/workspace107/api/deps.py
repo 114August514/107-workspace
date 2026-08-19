@@ -17,13 +17,15 @@ from ..application.access import AccessGuard
 from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
 from ..application.health_service import HealthService
+from ..application.identity_service import IdentityService
 from ..application.notifier import NotificationService, Notifier
 from ..application.project_service import ProjectService
 from ..application.run_configuration_service import RunConfigurationService
 from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
 from ..application.shared_resource_service import SharedResourceService
-from ..application.workspace_service import WorkspaceService
+from ..application.user_group_service import UserGroupService
+from ..application.workspace_service import LegacyWorkspaceService
 from ..config import Settings
 from ..domain.models import User
 from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
@@ -65,7 +67,9 @@ class Services:
     不要往这个容器里塞端口。
     """
 
-    workspaces: WorkspaceService
+    identity: IdentityService
+    user_groups: UserGroupService
+    legacy_workspaces: LegacyWorkspaceService
     projects: ProjectService
     run_configurations: RunConfigurationService
     runs: RunService
@@ -95,9 +99,9 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
     notifier = Notifier(publisher, context.clock, session)
 
     return Services(
-        workspaces=WorkspaceService(
-            repos, guard, context.clock, vault, activity, notifier, session
-        ),
+        identity=IdentityService(repos, context.clock, session),
+        user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
+        legacy_workspaces=LegacyWorkspaceService(repos, guard, vault),
         projects=ProjectService(
             repos,
             guard,
@@ -157,16 +161,9 @@ async def get_current_user(
     services: Annotated[Services, Depends(get_services)],
     x_user: Annotated[str | None, Header(alias=DEV_USER_HEADER)] = None,
 ) -> User:
-    """解析当前用户。
-
-    ``auth_mode=dev`` 时用 ``X-User`` 请求头识别用户，未提供时使用默认账号，
-    首次出现会自动建号并准备 Personal Workspace。
-
-    对接学校统一身份认证（设计稿 2.1 [V1]）后，这里换成从认证结果解析身份，
-    下游服务不需要改动。
-    """
+    """Resolve the dev identity without creating a Personal Workspace."""
     username = (x_user or DEFAULT_DEV_USER).strip() or DEFAULT_DEV_USER
-    return await services.workspaces.ensure_user(username)
+    return await services.identity.ensure_user(username)
 
 
 def get_page(

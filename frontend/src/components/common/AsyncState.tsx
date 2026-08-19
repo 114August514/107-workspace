@@ -7,6 +7,8 @@ interface Props {
   loading: boolean
   /** 已经归一化的错误展示数据；组件不依赖 API client，由调用方拆解错误对象。 */
   error?: { message: string; problems?: string[]; requestId?: string }
+  /** 可恢复错误的重试回调；提供时错误态会渲染「重试」主操作。 */
+  onRetry?: () => void
   empty?: boolean
   /** 空态标题；说明缺什么。 */
   emptyText?: string
@@ -45,6 +47,7 @@ function Padded({ children }: { children: ReactNode }) {
 export function AsyncState({
   loading,
   error,
+  onRetry,
   empty,
   emptyText,
   emptyDescription,
@@ -83,6 +86,7 @@ export function AsyncState({
               </Text>
             )}
           </Banner.Description>
+          {onRetry ? <Banner.PrimaryAction onClick={onRetry}>重试</Banner.PrimaryAction> : null}
         </Banner>
       </Padded>
     )

@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
-import type { SharedResourceDetail, Workspace } from '../api/types'
+import type { LegacyWorkspaceContext, SharedResourceDetail } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
@@ -27,10 +27,10 @@ export function SharedResourcePage() {
     () => api.getSharedResource(resourceId),
     [resourceId, token],
   )
-  const workspace = useAsync<Workspace | undefined>(
+  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
     async () =>
       resource.data?.owner_workspace_id
-        ? api.getWorkspace(resource.data.owner_workspace_id)
+        ? api.getLegacyWorkspaceContext(resource.data.owner_workspace_id)
         : undefined,
     [resource.data?.owner_workspace_id],
   )

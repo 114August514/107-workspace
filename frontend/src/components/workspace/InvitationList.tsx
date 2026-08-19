@@ -28,8 +28,8 @@ export function InvitationList({ username, onResponded }: Props) {
 
   const respond = async (invitation: Invitation, accept: boolean) => {
     try {
-      await api.respondToInvitation(invitation.workspace_id, accept)
-      message.success(accept ? `已加入「${invitation.workspace_name}」` : '已拒绝邀请')
+      await api.respondToInvitation(invitation.user_group_id, accept)
+      message.success(accept ? `已加入「${invitation.user_group_name}」` : '已拒绝邀请')
       invitations.reload()
       onResponded()
     } catch (error) {
@@ -44,19 +44,19 @@ export function InvitationList({ username, onResponded }: Props) {
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
       {items.map((invitation) => (
         <Alert
-          key={invitation.workspace_id}
+          key={invitation.user_group_id}
           type="info"
           showIcon
           message={
             <Space wrap size={8}>
-              <Typography.Text strong>{invitation.workspace_name}</Typography.Text>
+              <Typography.Text strong>{invitation.user_group_name}</Typography.Text>
               <Typography.Text type="secondary">
                 {`邀请你以「${roleLabel(invitation.role)}」身份加入`}
               </Typography.Text>
               <RelativeTime value={invitation.invited_at} />
             </Space>
           }
-          description={invitation.workspace_description || undefined}
+          description={invitation.user_group_description || undefined}
           action={
             <Space>
               <Button size="small" onClick={() => respond(invitation, false)}>

@@ -18,14 +18,14 @@ from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
     InputSourceType,
+    LegacyWorkspaceKind,
+    MembershipRole,
     MembershipStatus,
     NotificationType,
     ProjectStatus,
     RunEventType,
     RunStatus,
     TargetType,
-    WorkspaceKind,
-    WorkspaceRole,
 )
 from ...domain.errors import ConflictError
 from ...domain.models import (
@@ -37,6 +37,7 @@ from ...domain.models import (
     ForkRelation,
     IdempotencyRecord,
     InputBinding,
+    LegacyWorkspace,
     Membership,
     Notification,
     Project,
@@ -50,7 +51,7 @@ from ...domain.models import (
     SharedResourceFile,
     SharedResourceVersion,
     User,
-    Workspace,
+    UserGroup,
     WorkspaceVariable,
 )
 from ...domain.pagination import Page, PageRequest
@@ -73,7 +74,8 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("users.username",), "这个用户名已经被占用"),
     (("uq_personal_workspace",), "这个用户已经有 Personal Workspace 了"),
     (("uq_project_name", "projects.name"), "当前 Workspace 中已存在同名 Project"),
-    (("uq_membership", "memberships.user_id"), "该用户已经是成员或已被邀请"),
+    (("uq_user_group_membership", "memberships.user_id"), "该用户已经是成员或已被邀请"),
+    (("uq_membership_active_owner", "memberships.user_group_id"), "User Group 已有有效 Owner"),
     (
         ("uq_entitlement", "resource_entitlements.compute_plan_id"),
         "该 Workspace 已经拥有这个算力方案的资源权益",
@@ -162,13 +164,15 @@ class UserRepositoryImpl:
         return _to_user(row) if row else None
 
 
-class WorkspaceRepositoryImpl:
+class LegacyWorkspaceRepositoryImpl:
+    """Private anchors for downstream workspace_id foreign keys."""
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def add(self, workspace: Workspace) -> None:
+    async def add(self, workspace: LegacyWorkspace) -> None:
         self._session.add(
-            t.WorkspaceRow(
+            t.LegacyWorkspaceRow(
                 id=workspace.id,
                 kind=workspace.kind.value,
                 name=workspace.name,
@@ -180,12 +184,12 @@ class WorkspaceRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def get(self, workspace_id: str) -> Workspace | None:
-        row = await self._session.get(t.WorkspaceRow, workspace_id)
-        return _to_workspace(row) if row else None
+    async def get(self, workspace_id: str) -> LegacyWorkspace | None:
+        row = await self._session.get(t.LegacyWorkspaceRow, workspace_id)
+        return _to_legacy_workspace(row) if row else None
 
-    async def update(self, workspace: Workspace) -> None:
-        row = await self._session.get(t.WorkspaceRow, workspace.id)
+    async def update(self, workspace: LegacyWorkspace) -> None:
+        row = await self._session.get(t.LegacyWorkspaceRow, workspace.id)
         if row is None:
             return
         row.name = workspace.name
@@ -194,28 +198,85 @@ class WorkspaceRepositoryImpl:
         row.default_environment_version_id = workspace.default_environment_version_id
         await _flush(self._session)
 
-    async def get_personal(self, owner_id: str) -> Workspace | None:
-        stmt = select(t.WorkspaceRow).where(
-            t.WorkspaceRow.owner_id == owner_id,
-            t.WorkspaceRow.kind == WorkspaceKind.PERSONAL.value,
+    async def get_personal(self, owner_id: str) -> LegacyWorkspace | None:
+        stmt = select(t.LegacyWorkspaceRow).where(
+            t.LegacyWorkspaceRow.owner_id == owner_id,
+            t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.PERSONAL.value,
         )
         row = (await self._session.execute(stmt)).scalars().first()
-        return _to_workspace(row) if row else None
+        return _to_legacy_workspace(row) if row else None
 
-    async def list_for_user(self, user_id: str) -> list[Workspace]:
-        member_ids = select(t.MembershipRow.workspace_id).where(
+
+class UserGroupRepositoryImpl:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, user_group: UserGroup) -> None:
+        self._session.add(
+            t.UserGroupRow(
+                id=user_group.id,
+                name=user_group.name,
+                description=user_group.description,
+                created_by_id=user_group.created_by_id,
+                created_at=user_group.created_at or datetime.now(UTC),
+            )
+        )
+        await _flush(self._session)
+
+    async def get(self, user_group_id: str) -> UserGroup | None:
+        row = await self._session.get(t.UserGroupRow, user_group_id)
+        return _to_user_group(row) if row else None
+
+    async def get_for_update(self, user_group_id: str) -> UserGroup | None:
+        # PostgreSQL locks this exact UserGroup row. SQLite ignores FOR UPDATE,
+        # so acquire its transaction-wide write lock with an exact-row no-op
+        # update before reading any Membership state.
+        if self._session.bind and self._session.bind.dialect.name == "sqlite":
+            await self._session.execute(
+                update(t.UserGroupRow)
+                .where(t.UserGroupRow.id == user_group_id)
+                .values(id=t.UserGroupRow.id)
+            )
+        stmt = select(t.UserGroupRow).where(t.UserGroupRow.id == user_group_id).with_for_update()
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_user_group(row) if row else None
+
+    async def get_for_active_member(self, user_group_id: str, user_id: str) -> UserGroup | None:
+        stmt = (
+            select(t.UserGroupRow)
+            .join(
+                t.MembershipRow,
+                t.MembershipRow.user_group_id == t.UserGroupRow.id,
+            )
+            .where(
+                t.UserGroupRow.id == user_group_id,
+                t.MembershipRow.user_id == user_id,
+                t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+            )
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_user_group(row) if row else None
+
+    async def update(self, user_group: UserGroup) -> None:
+        row = await self._session.get(t.UserGroupRow, user_group.id)
+        if row is None:
+            return
+        row.name = user_group.name
+        row.description = user_group.description
+        await _flush(self._session)
+
+    async def list_for_user(self, user_id: str) -> list[UserGroup]:
+        group_ids = select(t.MembershipRow.user_group_id).where(
             t.MembershipRow.user_id == user_id,
             t.MembershipRow.status == MembershipStatus.ACTIVE.value,
         )
         stmt = (
-            select(t.WorkspaceRow)
-            .where(
-                (t.WorkspaceRow.owner_id == user_id) | t.WorkspaceRow.id.in_(member_ids),
-            )
-            .order_by(t.WorkspaceRow.kind, t.WorkspaceRow.created_at)
+            select(t.UserGroupRow)
+            .where(t.UserGroupRow.id.in_(group_ids))
+            .order_by(t.UserGroupRow.created_at, t.UserGroupRow.id)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_workspace(row) for row in rows]
+        return [_to_user_group(row) for row in rows]
 
 
 class MembershipRepositoryImpl:
@@ -226,7 +287,7 @@ class MembershipRepositoryImpl:
         self._session.add(
             t.MembershipRow(
                 id=membership.id,
-                workspace_id=membership.workspace_id,
+                user_group_id=membership.user_group_id,
                 user_id=membership.user_id,
                 role=membership.role.value,
                 status=membership.status.value,
@@ -243,9 +304,9 @@ class MembershipRepositoryImpl:
         row.status = membership.status.value
         await _flush(self._session)
 
-    async def get(self, workspace_id: str, user_id: str) -> Membership | None:
+    async def get(self, user_group_id: str, user_id: str) -> Membership | None:
         stmt = select(t.MembershipRow).where(
-            t.MembershipRow.workspace_id == workspace_id,
+            t.MembershipRow.user_group_id == user_group_id,
             t.MembershipRow.user_id == user_id,
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -263,19 +324,28 @@ class MembershipRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_membership(row) for row in rows]
 
-    async def list_for_workspace(self, workspace_id: str) -> list[Membership]:
+    async def list_for_user_group(self, user_group_id: str) -> list[Membership]:
         stmt = (
             select(t.MembershipRow)
             .where(
-                t.MembershipRow.workspace_id == workspace_id,
+                t.MembershipRow.user_group_id == user_group_id,
                 t.MembershipRow.status.in_(
                     [MembershipStatus.ACTIVE.value, MembershipStatus.INVITED.value]
                 ),
             )
-            .order_by(t.MembershipRow.created_at)
+            .order_by(t.MembershipRow.created_at, t.MembershipRow.id)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_membership(row) for row in rows]
+
+    async def get_active_owner(self, user_group_id: str) -> Membership | None:
+        stmt = select(t.MembershipRow).where(
+            t.MembershipRow.user_group_id == user_group_id,
+            t.MembershipRow.role == MembershipRole.OWNER.value,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_membership(row) if row else None
 
 
 class VariableRepositoryImpl:
@@ -1316,7 +1386,8 @@ class SqlRepositories:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.users = UserRepositoryImpl(session)
-        self.workspaces = WorkspaceRepositoryImpl(session)
+        self.legacy_workspaces = LegacyWorkspaceRepositoryImpl(session)
+        self.user_groups = UserGroupRepositoryImpl(session)
         self.memberships = MembershipRepositoryImpl(session)
         self.variables = VariableRepositoryImpl(session)
         self.projects = ProjectRepositoryImpl(session)
@@ -1352,13 +1423,20 @@ class SqlRepositories:
 
 
 def _visible_workspace_ids(user_id: str):
-    """按有效 Membership 返回当前用户可见的 Workspace（GR-102）。"""
-    member_ids = select(t.MembershipRow.workspace_id).where(
+    """Resolve private legacy anchors without exposing Workspace governance."""
+    group_ids = select(t.MembershipRow.user_group_id).where(
         t.MembershipRow.user_id == user_id,
         t.MembershipRow.status == MembershipStatus.ACTIVE.value,
     )
-    return select(t.WorkspaceRow.id).where(
-        (t.WorkspaceRow.owner_id == user_id) | t.WorkspaceRow.id.in_(member_ids)
+    return select(t.LegacyWorkspaceRow.id).where(
+        (
+            (t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.PERSONAL.value)
+            & (t.LegacyWorkspaceRow.owner_id == user_id)
+        )
+        | (
+            (t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.COLLABORATIVE.value)
+            & t.LegacyWorkspaceRow.id.in_(group_ids)
+        )
     )
 
 
@@ -1372,10 +1450,10 @@ def _to_user(row: t.UserRow) -> User:
     )
 
 
-def _to_workspace(row: t.WorkspaceRow) -> Workspace:
-    return Workspace(
+def _to_legacy_workspace(row: t.LegacyWorkspaceRow) -> LegacyWorkspace:
+    return LegacyWorkspace(
         id=row.id,
-        kind=WorkspaceKind(row.kind),
+        kind=LegacyWorkspaceKind(row.kind),
         name=row.name,
         description=row.description,
         owner_id=row.owner_id,
@@ -1384,12 +1462,22 @@ def _to_workspace(row: t.WorkspaceRow) -> Workspace:
     )
 
 
+def _to_user_group(row: t.UserGroupRow) -> UserGroup:
+    return UserGroup(
+        id=row.id,
+        name=row.name,
+        description=row.description,
+        created_by_id=row.created_by_id,
+        created_at=_aware(row.created_at),
+    )
+
+
 def _to_membership(row: t.MembershipRow) -> Membership:
     return Membership(
         id=row.id,
-        workspace_id=row.workspace_id,
+        user_group_id=row.user_group_id,
         user_id=row.user_id,
-        role=WorkspaceRole(row.role),
+        role=MembershipRole(row.role),
         status=MembershipStatus(row.status),
         created_at=_aware(row.created_at),
     )

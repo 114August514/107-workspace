@@ -12,6 +12,8 @@ import { isRunStatus, runStatusLabel } from '../../utils/runStatus'
 const ACTION_TEXT: Record<ActivityAction, string> = {
   workspace_created: '创建了空间',
   workspace_updated: '修改了空间设置',
+  user_group_created: '创建了 User Group',
+  user_group_updated: '修改了 User Group 设置',
   member_invited: '邀请了',
   member_joined: '加入了空间',
   member_left: '退出了空间',
@@ -44,6 +46,8 @@ export function targetPath(activity: Activity): string | null {
   switch (activity.target_type) {
     case 'workspace':
       return `/workspaces/${activity.target_id}`
+    case 'user_group':
+      return `/user-groups/${activity.target_id}`
     case 'project':
       return `/projects/${activity.target_id}`
     case 'run':

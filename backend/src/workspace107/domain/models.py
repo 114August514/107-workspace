@@ -2,7 +2,8 @@
 
 可变对象与不可变版本必须分离（GR-201、GR-202、GR-203）：
 
-    可变：  Workspace、Project、ProjectFile、RunConfiguration、Environment
+    可变：  UserGroup、Membership、LegacyWorkspace（兼容）、Project、ProjectFile、
+            RunConfiguration、Environment
     不可变：ProjectVersion、EnvironmentVersion、RunSnapshot、Artifact 内容
 
 Project Version、Environment Version 和 Run Snapshot 在代码及仓储层都不可变；
@@ -19,17 +20,18 @@ from .enums import (
     ActivityAction,
     ArtifactStatus,
     InputSourceType,
+    LegacyWorkspaceKind,
     LogStream,
+    MembershipRole,
     MembershipStatus,
     NotificationType,
     ProjectStatus,
     RunEventType,
     RunStatus,
     TargetType,
-    WorkspaceKind,
-    WorkspaceRole,
 )
 from .errors import ValidationFailed
+from .ownership import OwnerKind, OwnerReference
 from .secrets import EnvValue
 
 # --------------------------------------------------------------------------
@@ -39,11 +41,7 @@ from .secrets import EnvValue
 
 @dataclass(slots=True)
 class User:
-    """平台中的自然人身份。
-
-    User 本身不是 Project、Run 或资源的所有权边界——用户创建的对象归属于
-    操作发生时所在的 Workspace 层级（设计稿 §3.2.1）。
-    """
+    """A natural-person identity and a legal ownership subject."""
 
     id: str
     username: str
@@ -51,13 +49,32 @@ class User:
     email: str | None = None
     created_at: datetime | None = None
 
+    @property
+    def owner_reference(self) -> OwnerReference:
+        return OwnerReference(kind=OwnerKind.USER, id=self.id)
+
 
 @dataclass(slots=True)
-class Workspace:
-    """成员、权限、Project、资源权益和治理规则的归属边界。"""
+class UserGroup:
+    """An independent collaboration organization."""
 
     id: str
-    kind: WorkspaceKind
+    name: str
+    description: str = ""
+    created_by_id: str | None = None
+    created_at: datetime | None = None
+
+    @property
+    def owner_reference(self) -> OwnerReference:
+        return OwnerReference(kind=OwnerKind.USER_GROUP, id=self.id)
+
+
+@dataclass(slots=True)
+class LegacyWorkspace:
+    """Private compatibility anchor for child domains not yet migrated by #36-#42."""
+
+    id: str
+    kind: LegacyWorkspaceKind
     name: str
     description: str = ""
     owner_id: str = ""
@@ -66,21 +83,17 @@ class Workspace:
 
     @property
     def is_personal(self) -> bool:
-        return self.kind is WorkspaceKind.PERSONAL
+        return self.kind is LegacyWorkspaceKind.PERSONAL
 
 
 @dataclass(slots=True)
 class Membership:
-    """User 在 Workspace 中的身份。
-
-    Membership 只在对应 Workspace 内生效，不会传播到用户的 Personal
-    Workspace 或其他 Collaborative Workspace。
-    """
+    """A User's role and lifecycle state in one exact User Group."""
 
     id: str
-    workspace_id: str
+    user_group_id: str
     user_id: str
-    role: WorkspaceRole
+    role: MembershipRole
     status: MembershipStatus
     created_at: datetime | None = None
 

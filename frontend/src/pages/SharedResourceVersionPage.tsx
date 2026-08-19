@@ -3,7 +3,11 @@ import { Breadcrumbs, Text } from '@primer/react'
 import { Link, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
-import type { SharedResourceDetail, SharedResourceVersionDetail, Workspace } from '../api/types'
+import type {
+  LegacyWorkspaceContext,
+  SharedResourceDetail,
+  SharedResourceVersionDetail,
+} from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
@@ -28,10 +32,10 @@ export function SharedResourceVersionPage() {
     [version.data?.shared_resource_id],
   )
   // 面包屑要回到所属工作区的「共享资源」深链路，所以也得加载工作区。
-  const workspace = useAsync<Workspace | undefined>(
+  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
     async () =>
       resource.data?.owner_workspace_id
-        ? api.getWorkspace(resource.data.owner_workspace_id)
+        ? api.getLegacyWorkspaceContext(resource.data.owner_workspace_id)
         : undefined,
     [resource.data?.owner_workspace_id],
   )

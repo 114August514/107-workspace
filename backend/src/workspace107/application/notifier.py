@@ -88,36 +88,34 @@ class Notifier:
 
     # -- 成员相关 --------------------------------------------------------
 
-    async def workspace_invited(
-        self, *, actor_id: str, invitee_id: str, workspace_id: str, workspace_name: str, role: str
+    async def user_group_invited(
+        self,
+        *,
+        actor_id: str,
+        invitee_id: str,
+        user_group_id: str,
+        user_group_name: str,
+        role: str,
     ) -> None:
         await self._publish(
             recipient_id=invitee_id,
             actor_id=actor_id,
-            type=NotificationType.WORKSPACE_INVITED,
-            title=f"邀请你加入「{workspace_name}」",
+            type=NotificationType.USER_GROUP_INVITED,
+            title=f"邀请你加入「{user_group_name}」",
             body=f"角色：{role}。在首页可以接受或拒绝。",
-            workspace_id=workspace_id,
-            # **不给跳转目标。** 还没接受之前他对这个空间没有访问权，
-            # 链到 /workspaces/{id} 只会是 404，因为邀请尚未形成有效成员权限。
-            # 处理入口在首页的邀请列表，不在那个空间里。
-            #
-            # 早先这里链的就是那个空间，正文还写着「在空间列表里可以接受」——
-            # 而空间列表只查 ACTIVE，他根本看不到。**通知指向了一个
-            # 打不开的页面和一个不存在的入口**，等于没通知。
+            workspace_id=user_group_id,
         )
 
     async def member_removed(
-        self, *, actor_id: str, member_id: str, workspace_id: str, workspace_name: str
+        self, *, actor_id: str, member_id: str, user_group_id: str, user_group_name: str
     ) -> None:
         await self._publish(
             recipient_id=member_id,
             actor_id=actor_id,
             type=NotificationType.MEMBER_REMOVED,
-            title=f"你已被移出「{workspace_name}」",
-            body="你不再能访问这个空间里的 Project 和 Run。",
-            workspace_id=workspace_id,
-            # 不给跳转：他已经看不到这个空间了，链过去只会是 404
+            title=f"你已被移出「{user_group_name}」",
+            body="你不再能访问这个 User Group 拥有的对象。",
+            workspace_id=user_group_id,
             mandatory=True,
         )
 
@@ -126,34 +124,34 @@ class Notifier:
         *,
         actor_id: str,
         member_id: str,
-        workspace_id: str,
-        workspace_name: str,
+        user_group_id: str,
+        user_group_name: str,
         role: str,
     ) -> None:
         await self._publish(
             recipient_id=member_id,
             actor_id=actor_id,
             type=NotificationType.ROLE_CHANGED,
-            title=f"你在「{workspace_name}」的角色改为 {role}",
-            body="能做什么随之变化，具体以空间页面显示的为准。",
-            workspace_id=workspace_id,
-            target_type=TargetType.WORKSPACE,
-            target_id=workspace_id,
+            title=f"你在「{user_group_name}」的角色改为 {role}",
+            body="能做什么随之变化，具体以 User Group 页面为准。",
+            workspace_id=user_group_id,
+            target_type=TargetType.USER_GROUP,
+            target_id=user_group_id,
             mandatory=True,
         )
 
     async def ownership_received(
-        self, *, actor_id: str, new_owner_id: str, workspace_id: str, workspace_name: str
+        self, *, actor_id: str, new_owner_id: str, user_group_id: str, user_group_name: str
     ) -> None:
         await self._publish(
             recipient_id=new_owner_id,
             actor_id=actor_id,
             type=NotificationType.OWNERSHIP_RECEIVED,
-            title=f"你成为「{workspace_name}」的所有者",
-            body="你现在负责这个空间的成员、配置和资源权益。",
-            workspace_id=workspace_id,
-            target_type=TargetType.WORKSPACE,
-            target_id=workspace_id,
+            title=f"你成为「{user_group_name}」的 Owner",
+            body="你现在负责这个 User Group 的成员与治理。",
+            workspace_id=user_group_id,
+            target_type=TargetType.USER_GROUP,
+            target_id=user_group_id,
             mandatory=True,
         )
 

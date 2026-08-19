@@ -39,6 +39,7 @@ router = APIRouter(tags=["shared-resource"])
     "/workspaces/{workspace_id}/shared-resources",
     response_model=list[s.SharedResourceOut],
     summary="列出 Workspace 持有的共享资源",
+    deprecated=True,
 )
 async def list_workspace_shared_resources(
     workspace_id: str, user: CurrentUser, services: ServicesDep
@@ -57,6 +58,7 @@ async def list_workspace_shared_resources(
     response_model=s.SharedResourceOut,
     status_code=status.HTTP_201_CREATED,
     summary="创建 Workspace 共享资源",
+    deprecated=True,
 )
 async def create_shared_resource(
     workspace_id: str,

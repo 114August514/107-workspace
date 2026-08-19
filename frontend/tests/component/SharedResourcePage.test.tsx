@@ -6,10 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourcePage } from '../../src/pages/SharedResourcePage'
 import type {
+  LegacyWorkspaceContext,
   SharedResourceDetail,
   SharedResourceVersion,
   SharedResourceVersionDetail,
-  Workspace,
 } from '../../src/api/types'
 
 /**
@@ -24,13 +24,13 @@ import type {
  */
 
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
-const mockGetWorkspace = vi.hoisted(() => vi.fn())
+const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResource: mockGetSharedResource,
-    getWorkspace: mockGetWorkspace,
+    getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
     getSharedResourceVersion: mockGetSharedResourceVersion,
   },
 }))
@@ -42,16 +42,14 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
-function makeWorkspace(caps: string[]): Workspace {
+function makeWorkspace(caps: string[]): LegacyWorkspaceContext {
   return {
     id: 'ws_test',
     name: 'Test 空间',
-    description: '',
     kind: 'collaborative',
     owner_id: 'owner',
-    created_at: null,
     default_environment_version_id: null,
-    capabilities: caps as Workspace['capabilities'],
+    capabilities: caps as LegacyWorkspaceContext['capabilities'],
     role: 'admin',
   }
 }
@@ -117,7 +115,7 @@ describe('SharedResourcePage 权限与空态', () => {
 
   it('有发布权限时显示「发布版本」，空态给出 CTA 且不绑定物理位置', async () => {
     mockGetSharedResource.mockResolvedValue(makeResource({ versions: [] }))
-    mockGetWorkspace.mockResolvedValue(
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
       makeWorkspace(['workspace.view', 'shared_resource.view', 'shared_resource.version.create']),
     )
 
@@ -137,7 +135,9 @@ describe('SharedResourcePage 权限与空态', () => {
 
   it('无发布权限时不显示「发布版本」，空态也不给 CTA', async () => {
     mockGetSharedResource.mockResolvedValue(makeResource({ versions: [] }))
-    mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
 
     renderPage()
 
@@ -154,7 +154,7 @@ describe('SharedResourcePage 权限与空态', () => {
 
   it('有 manage 权限时显示「修改共享资源」', async () => {
     mockGetSharedResource.mockResolvedValue(makeResource({ versions: [] }))
-    mockGetWorkspace.mockResolvedValue(
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
       makeWorkspace([
         'workspace.view',
         'shared_resource.view',
@@ -175,7 +175,7 @@ describe('SharedResourcePage 权限与空态', () => {
       makeResource({ is_platform_owned: true, owner_workspace_id: null }),
     )
     // Platform 资源不加载 workspace（owner_workspace_id 为 null）
-    mockGetWorkspace.mockResolvedValue(undefined)
+    mockGetLegacyWorkspaceContext.mockResolvedValue(undefined)
 
     renderPage()
 
@@ -193,7 +193,9 @@ describe('SharedResourcePage 权限与空态', () => {
         versions: [makeVersionSummary('ver_2', 'v2', 2), makeVersionSummary('ver_1', 'v1', 1)],
       }),
     )
-    mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
     mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
 
     renderPage()
@@ -214,7 +216,9 @@ describe('SharedResourcePage 权限与空态', () => {
         versions: [makeVersionSummary('ver_2', 'v2', 2), makeVersionSummary('ver_1', 'v1', 1)],
       }),
     )
-    mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
     mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
 
     renderPage()
@@ -227,7 +231,9 @@ describe('SharedResourcePage 权限与空态', () => {
 
   it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
     mockGetSharedResource.mockResolvedValue(makeResource())
-    mockGetWorkspace.mockResolvedValue(makeWorkspace(['workspace.view', 'shared_resource.view']))
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
 
     renderPage()
 

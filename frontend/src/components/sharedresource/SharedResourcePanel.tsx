@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { SharedResource, Workspace } from '../../api/types'
+import type { LegacyWorkspaceContext, SharedResource } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
 import { normalizeError } from '../common/asyncStateError'
@@ -16,7 +16,7 @@ import { CreateSharedResourceModal } from './CreateSharedResourceModal'
 import { SharedResourceTable } from './SharedResourceTable'
 
 interface Props {
-  workspace: Workspace
+  workspace: LegacyWorkspaceContext
 }
 
 /**
