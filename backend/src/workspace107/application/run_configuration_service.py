@@ -62,7 +62,7 @@ class RunConfigurationService:
             user_id, project_id, needs=Capability.RUN_CONFIGURATION_MANAGE
         )
         plan = await self._require_plan(data.compute_plan_id)
-        parsed = await self._build_fields(data, plan)
+        parsed = await self._build_fields(user_id, data, plan)
 
         configuration = RunConfiguration(
             id=ids.new_id(ids.RUN_CONFIGURATION),
@@ -95,7 +95,7 @@ class RunConfigurationService:
             user_id, configuration.project_id, needs=Capability.RUN_CONFIGURATION_MANAGE
         )
         plan = await self._require_plan(data.compute_plan_id)
-        parsed = await self._build_fields(data, plan)
+        parsed = await self._build_fields(user_id, data, plan)
 
         configuration.name = parsed.name
         configuration.description = data.description
@@ -136,7 +136,7 @@ class RunConfigurationService:
         return plan
 
     async def _build_fields(
-        self, data: RunConfigurationInput, plan: ComputePlan
+        self, user_id: str, data: RunConfigurationInput, plan: ComputePlan
     ) -> _ParsedConfiguration:
         name = data.name.strip()
         if not name:
@@ -150,7 +150,9 @@ class RunConfigurationService:
 
         environment_version_id: str | None = None
         if data.environment_version_id:
-            version = await self._repos.environments.get_version(data.environment_version_id)
+            version = await self._repos.environments.get_version_discoverable_for_user(
+                user_id, data.environment_version_id
+            )
             if version is None:
                 raise ObjectNotFound("Environment Version", data.environment_version_id)
             environment_version_id = version.id

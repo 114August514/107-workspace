@@ -17,8 +17,11 @@ from workspace107.domain.models import (
     SharedResourceFile,
     SharedResourceVersion,
 )
+from workspace107.domain.ownership import OwnerKind, OwnerReference
 
 NOW = datetime(2026, 8, 11, 12, 0, tzinfo=UTC)
+ALICE = OwnerReference(OwnerKind.USER, "usr_alice")
+GROUP = OwnerReference(OwnerKind.USER_GROUP, "grp_alice")
 
 
 def _files(*paths: str) -> tuple[SharedResourceFile, ...]:
@@ -30,18 +33,20 @@ def _files(*paths: str) -> tuple[SharedResourceFile, ...]:
 
 def test_shared_resource_可变_名称和说明可就地修改() -> None:
     """与 Project/Workspace 同属「可变对象」——展示元数据可在范围内修改。"""
-    resource = SharedResource(id="shr_1", name="原名", description="旧说明")
+    resource = SharedResource(id="shr_1", name="原名", owner=ALICE, description="旧说明")
     resource.name = "新名"
     resource.description = "新说明"
     assert resource.name == "新名"
     assert resource.description == "新说明"
 
 
-def test_shared_resource_is_platform_owned_按_owner_workspace_id_判断() -> None:
-    assert SharedResource(id="shr_p", name="平台资源", owner_workspace_id=None).is_platform_owned
-    assert not SharedResource(
-        id="shr_w", name="空间资源", owner_workspace_id="ws_1"
-    ).is_platform_owned
+def test_shared_resource_必须带_typed_owner() -> None:
+    user_resource = SharedResource(id="shr_u", name="个人资源", owner=ALICE)
+    group_resource = SharedResource(id="shr_g", name="组资源", owner=GROUP)
+    assert user_resource.owner.kind is OwnerKind.USER
+    assert user_resource.owner.id == "usr_alice"
+    assert group_resource.owner.kind is OwnerKind.USER_GROUP
+    assert group_resource.owner.id == "grp_alice"
 
 
 # -- SharedResourceVersion / File：不可变（frozen） --------------------------

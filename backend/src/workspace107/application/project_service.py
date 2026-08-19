@@ -152,7 +152,9 @@ class ProjectService:
         if inherit_workspace_environment:
             project.environment_version_id = None
         elif environment_version_id is not None:
-            version = await self._repos.environments.get_version(environment_version_id)
+            version = await self._repos.environments.get_version_discoverable_for_user(
+                user_id, environment_version_id
+            )
             if version is None:
                 raise ObjectNotFound("Environment Version", environment_version_id)
             project.environment_version_id = version.id

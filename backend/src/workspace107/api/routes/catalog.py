@@ -17,12 +17,12 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
     summary="列出运行环境",
 )
 async def list_environments(
-    user: CurrentUser,  # 目录接口要求登录，但不区分用户
+    user: CurrentUser,
     services: ServicesDep,
 ) -> list[s.EnvironmentOut]:
-    """登录后只读返回平台统一维护的运行环境及其全部已发布版本，不按用户区分。"""
-    views = await services.catalog.list_environments()
-    return [p.environment_out(view.environment, view.versions) for view in views]
+    """返回当前 User 作为 Owner 或 owning UserGroup active member 可发现的环境。"""
+    views = await services.catalog.list_environments(user.id)
+    return [p.environment_out(view) for view in views]
 
 
 @router.get(
@@ -42,16 +42,13 @@ async def list_compute_plans(
 @router.get(
     "/shared-resources",
     response_model=list[s.SharedResourceOut],
-    summary="列出 Platform 持有的共享资源",
+    summary="列出当前用户可发现的共享资源（兼容别名）",
+    deprecated=True,
 )
-async def list_platform_shared_resources(
+async def list_actor_shared_resources(
     user: CurrentUser,
     services: ServicesDep,
 ) -> list[s.SharedResourceOut]:
-    """登录后只读返回 Platform 持有的 Shared Resource，不按用户区分。
-
-    Workspace 持有的资源请走 ``GET /workspaces/{id}/shared-resources``；
-    跨 Workspace Asset Grant 在 M4 单独 Issue。
-    """
-    resources = await services.shared_resources.list_platform(user.id)
-    return [p.shared_resource_out(r) for r in resources]
+    """Deprecated actor-scoped alias; canonical path is ``GET /shared-resources``."""
+    views = await services.shared_resources.list_actor_discoverable(user.id)
+    return [p.shared_resource_out(view) for view in views]

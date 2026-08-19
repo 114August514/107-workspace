@@ -105,7 +105,7 @@ async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
     assert any("name" in p for p in body["problems"])
 
 
-async def test_create_assigns_owner_workspace(client: httpx.AsyncClient) -> None:
+async def test_create_assigns_owner_group(client: httpx.AsyncClient) -> None:
     workspace_id = await _user_group(client, ALICE)
     response = await client.post(
         f"/api/v1/workspaces/{workspace_id}/shared-resources",
@@ -116,8 +116,11 @@ async def test_create_assigns_owner_workspace(client: httpx.AsyncClient) -> None
     body = response.json()
     assert body["name"] == "数据集 A"
     assert body["description"] == "训练用"
-    assert body["owner_workspace_id"] == workspace_id
-    assert body["is_platform_owned"] is False
+    assert body["owner"] == {
+        "kind": "user_group",
+        "id": workspace_id,
+        "display_name": "alice test group",
+    }
 
 
 async def test_create_requires_manage_capability(client: httpx.AsyncClient) -> None:

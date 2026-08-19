@@ -54,7 +54,9 @@ class LegacyWorkspaceService:
             user_id, workspace_id, needs=Capability.USER_GROUP_UPDATE
         )
         if environment_version_id is not None:
-            version = await self._repos.environments.get_version(environment_version_id)
+            version = await self._repos.environments.get_version_discoverable_for_user(
+                user_id, environment_version_id
+            )
             if version is None or not version.available:
                 raise ObjectNotFound("Environment Version", environment_version_id)
         access.workspace.default_environment_version_id = environment_version_id
