@@ -7,7 +7,7 @@ export default defineConfig({
     noExternal: ['@primer/react'],
   },
   server: {
-    port: 5173,
+    port: 5174,
     // 开发时把 /api 转发到后端，避免前端代码里出现硬编码地址。
     proxy: {
       '/api': {

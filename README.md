@@ -46,7 +46,7 @@ uv run --no-project python scripts/workspace.py dev
 ```
 
 后端接口文档默认位于 <http://127.0.0.1:8000/docs>，前端默认位于
-<http://127.0.0.1:5173>。
+<http://127.0.0.1:5174>。
 
 提交前运行统一检查：
 

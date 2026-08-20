@@ -13,7 +13,7 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-打开 <http://127.0.0.1:5173>。开发服务器把 `/api` 转发到 `http://127.0.0.1:8000`，
+打开 <http://127.0.0.1:5174>。开发服务器把 `/api` 转发到 `http://127.0.0.1:8000`，
 所以代码里不出现后端地址。需要先按 [`backend/README.md`](../backend/README.md)
 启动后端并载入种子数据。
 

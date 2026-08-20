@@ -1,0 +1,18 @@
+/* 共享资源表单对话框复用的 textarea 视觉规则。
+ * 走 Primer Primitives 功能 token，覆盖默认/聚焦状态，焦点可见。 */
+
+.textarea {
+  width: 100%;
+  padding: var(--base-size-8) var(--base-size-12);
+  font-family: inherit;
+  font-size: var(--text-body-size-medium);
+  line-height: var(--base-text-lineHeight-normal);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  resize: vertical;
+}
+
+.textarea:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+}

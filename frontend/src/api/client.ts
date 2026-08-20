@@ -45,6 +45,11 @@ import type {
   RunDetail,
   RunDraft,
   RunPage,
+  SharedResource,
+  SharedResourceDetail,
+  SharedResourceUpdate,
+  SharedResourceVersion,
+  SharedResourceVersionDetail,
   Variable,
   VersionDiff,
   WorkingChange,
@@ -566,6 +571,120 @@ export const api = {
     link.remove()
     URL.revokeObjectURL(url)
   },
+
+  // -- 共享资源 ----------------------------------------------------------
+  listWorkspaceSharedResources: async (workspaceId: string): Promise<SharedResource[]> =>
+    unwrap(
+      await http.GET('/api/v1/workspaces/{workspace_id}/shared-resources', {
+        params: { path: { workspace_id: workspaceId } },
+      }),
+    ),
+
+  /** Platform 持有的公共资源。读路径，后端预留见 design.md §2.6 D。 */
+  listPlatformSharedResources: async (): Promise<SharedResource[]> =>
+    unwrap(await http.GET('/api/v1/catalog/shared-resources')),
+
+  getSharedResource: async (id: string): Promise<SharedResourceDetail> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resources/{resource_id}', {
+        params: { path: { resource_id: id } },
+      }),
+    ),
+
+  createSharedResource: async (
+    workspaceId: string,
+    name: string,
+    description: string,
+  ): Promise<SharedResource> =>
+    unwrap(
+      await http.POST('/api/v1/workspaces/{workspace_id}/shared-resources', {
+        params: { path: { workspace_id: workspaceId } },
+        body: { name, description },
+      }),
+    ),
+
+  updateSharedResource: async (
+    id: string,
+    payload: SharedResourceUpdate,
+  ): Promise<SharedResource> =>
+    unwrap(
+      await http.PATCH('/api/v1/shared-resources/{resource_id}', {
+        params: { path: { resource_id: id } },
+        body: payload,
+      }),
+    ),
+
+  /**
+   * 发布 Shared Resource 新版本。
+   *
+   * 后端是 multipart/form-data：每个文件挂在 `files` 下，`description` 是普通
+   * 字段，`prefix` 走 query。openapi-fetch 的默认序列化器会把 FormData 原样
+   * 透传，浏览器自动补 Content-Type 和 boundary——所以这里手动构造 FormData。
+   *
+   * 契约里 `files` 的类型是 `string[]`（openapi-typescript 对 UploadFile 的
+   * 近似），但运行时放的是 File 对象，所以这一处要 cast。
+   */
+  publishSharedResourceVersion: async (
+    resourceId: string,
+    payload: { files: File[]; description: string; prefix?: string },
+  ): Promise<SharedResourceVersion> => {
+    const form = new FormData()
+    for (const file of payload.files) {
+      form.append('files', file)
+    }
+    form.append('description', payload.description)
+    return unwrap(
+      await http.POST('/api/v1/shared-resources/{resource_id}/versions', {
+        params: {
+          path: { resource_id: resourceId },
+          query: payload.prefix ? { prefix: payload.prefix } : undefined,
+        },
+        // 见上面注释：契约类型把 files 标成 string[]，这里实际是 File。
+        body: form as unknown as {
+          description: string
+          files: string[]
+        },
+      }),
+    )
+  },
+
+  getSharedResourceVersion: async (versionId: string): Promise<SharedResourceVersionDetail> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resource-versions/{version_id}', {
+        params: { path: { version_id: versionId } },
+      }),
+    ),
+
+  /**
+   * 读版本内单个文件的文本内容（后端以 text/plain 直返）。
+   *
+   * 必须显式 `parseAs: 'text'`：openapi-fetch 默认按 JSON 解析响应体，
+   * 而这里后端返回的是纯文本——不写的话普通文本会被 `JSON.parse` 直接抛
+   * SyntaxError，恰好长得像 JSON 的文件（`123`、`true`、`[1,2]`）则会被
+   * 解析成数字/数组，静默返回错误类型。和 `downloadArtifactFile` 用
+   * `parseAs: 'blob'` 是同一个道理。
+   */
+  readSharedResourceVersionFile: async (versionId: string, path: string): Promise<string> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resource-versions/{version_id}/files/content', {
+        params: { path: { version_id: versionId }, query: { path } },
+        parseAs: 'text',
+      }),
+    ),
+
+  /**
+   * 按原始字节取版本内单个文件（图片预览走它）。
+   *
+   * `files/content` 以 text/plain 直出，二进制经它会被损坏；这里用
+   * `parseAs: 'blob'` 拿原始字节，调用方再建 object URL 渲染或下载。
+   */
+  downloadSharedResourceVersionFile: async (versionId: string, path: string): Promise<Blob> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resource-versions/{version_id}/files/download', {
+        params: { path: { version_id: versionId }, query: { path } },
+        parseAs: 'blob',
+      }),
+    ),
 
   // -- Fork --------------------------------------------------------------
   forkVersion: async (

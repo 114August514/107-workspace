@@ -1,0 +1,312 @@
+/* Shared Resource 表面共用的表格与元数据布局。
+ *
+ * 原生 <table> 用不上 Primer 的 sx/Box，长期视觉规则收进这里，
+ * 取色全部走 Primer Primitives 功能 token，不复制 GitHub 色值。 */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.th {
+  text-align: left;
+  padding: var(--base-size-8) var(--base-size-16);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
+  color: var(--fgColor-muted);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.td {
+  padding: var(--base-size-8) var(--base-size-16);
+  color: var(--fgColor-default);
+  vertical-align: top;
+}
+
+.row {
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row:hover {
+  background: var(--bgColor-muted);
+}
+
+/* 版本详情页的键值元数据表：左列标签贴 muted 底，窄屏下不压行。 */
+.metaTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  overflow: hidden;
+}
+
+.metaLabel {
+  padding: var(--base-size-8) var(--base-size-16);
+  font-weight: var(--base-text-weight-semibold);
+  color: var(--fgColor-default);
+  background: var(--bgColor-muted);
+  width: 9rem;
+}
+
+.metaCell {
+  padding: var(--base-size-8) var(--base-size-16);
+  color: var(--fgColor-default);
+}
+
+.metaRow {
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.metaRow:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 48rem) {
+  /* 窄屏把固定列宽放开，避免标签列挤掉值列。 */
+  .metaLabel {
+    width: auto;
+  }
+}
+
+/* 版本内文件路径：点了是预览而不是导航，所以用 button 但视觉上像链接。
+ * 覆盖 default/hover/focus 状态，键盘焦点可见。 */
+.fileButton {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+  color: var(--fgColor-accent);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fileButton:hover {
+  text-decoration: underline;
+}
+
+.fileButton:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+  border-radius: var(--borderRadius-small);
+}
+
+/* 资源 / 版本身份链接：accent 色 + 半粗，hover 下划线，键盘焦点可见。
+ * 资源列表的「名称」与版本列表的「版本」共用这一条规则。 */
+.nameLink {
+  font-weight: var(--base-text-weight-semibold);
+  color: var(--fgColor-accent);
+  text-decoration: none;
+}
+
+.nameLink:hover {
+  text-decoration: underline;
+}
+
+.nameLink:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+  border-radius: var(--borderRadius-small);
+}
+
+/* 次要说明文本：muted 色，用于说明列、容量等次级信息。 */
+.desc {
+  color: var(--fgColor-muted);
+}
+
+/* 列表表头固定列宽，主内容列(名称 / 说明)自适应。 */
+.colName {
+  width: 15rem;
+}
+
+.colOwner {
+  width: 7rem;
+}
+
+.colCreated {
+  width: 8.5rem;
+}
+
+.colSize {
+  width: 7rem;
+}
+
+/* 文件预览 Dialog：说明行、加载行与内容 pre 的视觉规则。 */
+.previewNote {
+  display: block;
+  margin-bottom: var(--base-size-12);
+  color: var(--fgColor-muted);
+}
+
+.previewLoading {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.previewCode {
+  margin: 0;
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+  line-height: var(--base-text-lineHeight-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 图片预览：不超出弹窗，居中，透明背景也能看清边界。 */
+.previewImage {
+  display: block;
+  max-width: 100%;
+  max-height: 24rem;
+  margin-inline: auto;
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+}
+
+/* 判不了类型的文件：不硬猜内容，明说不可预览并给下载出路。 */
+.previewUnknown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: var(--base-size-24) 0;
+  text-align: center;
+}
+
+.previewDownload {
+  font-weight: var(--base-text-weight-semibold);
+  color: var(--fgColor-accent);
+  text-decoration: none;
+}
+
+.previewDownload:hover {
+  text-decoration: underline;
+}
+
+.previewDownload:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+  border-radius: var(--borderRadius-small);
+}
+
+/* 页头：GitHub 仓库头式样。面包屑独占一行，标题换到第二行，
+ * 图标 + h1 + 归属标签左对齐，操作按钮推到标题行右侧；
+ * 窄屏允许换行，按钮不会被挤出视口。 */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-8);
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.titleIcon {
+  color: var(--fgColor-muted);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-title-size-large);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-title-lineHeight-large);
+  color: var(--fgColor-default);
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--base-size-8);
+}
+
+.headerDescription {
+  margin: 0;
+  color: var(--fgColor-muted);
+}
+
+/* GitHub Releases 式分栏：左侧版本列表，右侧选中版本详情；
+ * 窄屏堆叠，版本列表排在详情上方。 */
+.splitLayout {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: var(--base-size-16);
+  align-items: start;
+}
+
+@media (max-width: 48rem) {
+  .splitLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.versionNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-4);
+}
+
+/* 版本条目：整块可点，选中态走 accent 强调边与文字，键盘焦点可见。 */
+.versionItem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--base-size-4);
+  padding: var(--base-size-8) var(--base-size-12);
+  border: none;
+  border-left: var(--borderWidth-thick) solid transparent;
+  border-radius: var(--borderRadius-medium);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--fgColor-default);
+}
+
+.versionItem:hover {
+  background: var(--bgColor-muted);
+}
+
+.versionItem:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: 2px;
+}
+
+.versionItemSelected {
+  border-left-color: var(--borderColor-accent-emphasis);
+  background: var(--bgColor-muted);
+}
+
+.versionItemSelected .versionItemLabel {
+  color: var(--fgColor-accent);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.versionItemLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+/* 右侧详情顶部的版本 tag 行：图标 + 版本标签 + 相对时间。 */
+.versionTagRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.versionTitle {
+  margin: 0;
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-title-lineHeight-medium);
+  color: var(--fgColor-default);
+}
