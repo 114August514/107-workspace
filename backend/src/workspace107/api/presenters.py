@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..application.entitlement_service import EntitlementView
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
-from ..application.workspace_service import EntitlementView, LegacyWorkspaceView
+from ..application.workspace_service import LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
 from ..domain.models import (
     Activity,

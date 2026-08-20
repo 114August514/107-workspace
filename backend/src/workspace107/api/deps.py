@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from ..application.access import AccessGuard
 from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
+from ..application.entitlement_service import EntitlementService
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
 from ..application.notifier import NotificationService, Notifier
@@ -70,6 +71,7 @@ class Services:
     identity: IdentityService
     user_groups: UserGroupService
     legacy_workspaces: LegacyWorkspaceService
+    entitlements: EntitlementService
     projects: ProjectService
     run_configurations: RunConfigurationService
     runs: RunService
@@ -102,6 +104,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         identity=IdentityService(repos, context.clock, session),
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
         legacy_workspaces=LegacyWorkspaceService(repos, guard, vault),
+        entitlements=EntitlementService(repos),
         projects=ProjectService(
             repos,
             guard,
