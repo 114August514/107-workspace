@@ -50,21 +50,6 @@ async def update_legacy_workspace_context(
 
 
 @router.get(
-    "/{workspace_id}/entitlements",
-    response_model=list[s.EntitlementOut],
-    summary="列出旧 Workspace 资源权益",
-    deprecated=True,
-)
-async def list_entitlements(
-    workspace_id: str, user: CurrentUser, services: ServicesDep
-) -> list[s.EntitlementOut]:
-    return [
-        p.entitlement_out(view)
-        for view in await services.legacy_workspaces.list_entitlements(user.id, workspace_id)
-    ]
-
-
-@router.get(
     "/{workspace_id}/variables",
     response_model=list[s.VariableOut],
     summary="列出旧 Workspace Variable",

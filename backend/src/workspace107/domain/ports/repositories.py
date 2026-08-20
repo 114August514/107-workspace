@@ -122,15 +122,13 @@ class ComputePlanRepository(Protocol):
 
 
 class EntitlementRepository(Protocol):
-    async def list_for_workspace(self, workspace_id: str) -> list[ResourceEntitlement]: ...
+    async def list_for_user(self, user_id: str) -> list[ResourceEntitlement]: ...
     async def get_for_plan(
-        self, workspace_id: str, compute_plan_id: str
+        self, user_id: str, compute_plan_id: str
     ) -> ResourceEntitlement | None: ...
     async def add(self, entitlement: ResourceEntitlement) -> None: ...
 
-    async def lock_for_plan(
-        self, workspace_id: str, compute_plan_id: str
-    ) -> ResourceEntitlement | None:
+    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
         """取权益并在当前事务内独占它，直到事务结束。
 
         用于把「数一数还剩几个并发名额，然后创建 Run」这一段串行化。
@@ -169,7 +167,7 @@ class RunRepository(Protocol):
         """条件更新把 Run 推进到终态。抢到返回 True，别人已推进过返回 False。"""
         ...
 
-    async def count_unfinished_for_plan(self, workspace_id: str, compute_plan_id: str) -> int: ...
+    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int: ...
 
 
 class IdempotencyRepository(Protocol):

@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..domain.capabilities import Capability
-from ..domain.compute import ComputePlan, ResourceEntitlement
 from ..domain.enums import MembershipRole
 from ..domain.errors import ObjectNotFound, ValidationFailed
 from ..domain.models import LegacyWorkspace, WorkspaceVariable
@@ -22,12 +21,6 @@ class LegacyWorkspaceView:
     workspace: LegacyWorkspace
     role: MembershipRole
     capabilities: frozenset[Capability]
-
-
-@dataclass(frozen=True, slots=True)
-class EntitlementView:
-    entitlement: ResourceEntitlement
-    plan: ComputePlan
 
 
 class LegacyWorkspaceService:
@@ -60,15 +53,6 @@ class LegacyWorkspaceService:
         access.workspace.default_environment_version_id = environment_version_id
         await self._repos.legacy_workspaces.update(access.workspace)
         return access.workspace
-
-    async def list_entitlements(self, user_id: str, workspace_id: str) -> list[EntitlementView]:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.ENTITLEMENT_VIEW)
-        result: list[EntitlementView] = []
-        for entitlement in await self._repos.entitlements.list_for_workspace(workspace_id):
-            plan = await self._repos.compute_plans.get(entitlement.compute_plan_id)
-            if plan is not None:
-                result.append(EntitlementView(entitlement=entitlement, plan=plan))
-        return result
 
     async def list_variables(self, user_id: str, workspace_id: str) -> list[WorkspaceVariable]:
         await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_VIEW)
