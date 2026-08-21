@@ -51,7 +51,9 @@ async def preflight(
         compute_plan_id=result.compute_plan.id if result.compute_plan else None,
         compute_request=p.compute_request_out(result.compute_request),
         resolved_environment_variables=result.resolved_env_literals,
-        secret_references={name: ref.as_key() for name, ref in result.resolved_env_secret_refs.items()},
+        secret_references={
+            name: ref.as_key() for name, ref in result.resolved_env_secret_refs.items()
+        },
     )
 
 

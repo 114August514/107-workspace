@@ -75,18 +75,15 @@ def _preflight_config_rows(bind: sa.Connection, *, allow_project: bool = False) 
                 continue
             if row["scope_kind"] not in ("user", "user_group"):
                 raise RuntimeError(f"unknown or non-legacy scope: {row['scope_kind']}")
-            expected = "personal" if row["scope_kind"] == "user" else "collaborative"
-            matches = (
-                bind.execute(
-                    sa.text(
-                        "SELECT id FROM workspaces WHERE kind=:kind AND "
-                        "(owner_id=:scope_id OR id=:scope_id)"
-                    ),
-                    {"kind": expected, "scope_id": row["scope_id"]},
+            if row["scope_kind"] == "user":
+                statement = sa.text(
+                    "SELECT id FROM workspaces WHERE kind='personal' AND owner_id=:scope_id"
                 )
-                .scalars()
-                .all()
-            )
+            else:
+                statement = sa.text(
+                    "SELECT id FROM workspaces WHERE kind='collaborative' AND id=:scope_id"
+                )
+            matches = bind.execute(statement, {"scope_id": row["scope_id"]}).scalars().all()
             if len(matches) != 1:
                 raise RuntimeError(
                     f"cannot prove legacy scope mapping: {row['scope_kind']}:{row['scope_id']}"

@@ -2,8 +2,8 @@ import pytest
 
 from workspace107.application.access import AccessGuard
 from workspace107.domain.enums import MembershipRole, MembershipStatus
-from workspace107.domain.models import Membership, UserGroup
 from workspace107.domain.errors import ObjectNotFound, PermissionDenied
+from workspace107.domain.models import Membership, UserGroup
 
 
 class _Groups:

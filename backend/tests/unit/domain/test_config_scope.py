@@ -1,4 +1,7 @@
+import pytest
+
 from workspace107.domain.config_scope import ConfigScope, ConfigScopeKind, SecretReference
+from workspace107.domain.errors import ValidationFailed
 
 
 def test_scope_identity_covers_all_supported_scopes() -> None:
@@ -10,11 +13,6 @@ def test_scope_identity_covers_all_supported_scopes() -> None:
 def test_secret_reference_is_scope_qualified() -> None:
     ref = SecretReference(ConfigScope.user_group("g"), "TOKEN")
     assert ref.as_key() == "user_group:g:TOKEN"
-
-
-import pytest
-
-from workspace107.domain.errors import ValidationFailed
 
 
 @pytest.mark.parametrize(

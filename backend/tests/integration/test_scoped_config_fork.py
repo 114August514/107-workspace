@@ -6,7 +6,7 @@ from tests.helpers import create_project_with_version, ensure_user_group
 @pytest.mark.asyncio
 async def test_fork_preserves_config_expressions_without_copying_scope_values(client) -> None:
     source = await create_project_with_version(client, name="source-config")
-    source_group = await ensure_user_group(client)
+    await ensure_user_group(client)
     versions = await client.get(f"/api/v1/projects/{source['id']}/versions")
     assert versions.status_code == 200
     version_id = versions.json()["items"][0]["id"]

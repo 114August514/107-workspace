@@ -1,9 +1,10 @@
 """Scoped Variable/Secret identities and exact references."""
 
 from __future__ import annotations
+
+import re
 from dataclasses import dataclass
 from enum import StrEnum
-import re
 
 from .errors import ValidationFailed
 from .ownership import OwnerReference
@@ -53,7 +54,7 @@ class SecretReference:
         return f"{self.scope.kind.value}:{self.scope.id}:{self.name}"
 
     @classmethod
-    def from_key(cls, value: str) -> "SecretReference":
+    def from_key(cls, value: str) -> SecretReference:
         parts = value.split(":")
         if (
             len(parts) != 3

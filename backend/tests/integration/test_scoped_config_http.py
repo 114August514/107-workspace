@@ -29,7 +29,8 @@ async def test_user_group_and_project_config_full_http_crud(client) -> None:
     await _crud(client, f"/api/v1/user-groups/{group_id}", secret_value="group-plaintext")
 
     project_response = await client.post(
-        f"/api/v1/workspaces/{group_id}/projects", json={"name": "config-project", "description": ""}
+        f"/api/v1/workspaces/{group_id}/projects",
+        json={"name": "config-project", "description": ""},
     )
     assert project_response.status_code == 201
     project_id = project_response.json()["id"]

@@ -9,7 +9,11 @@ from workspace107.infrastructure.db.secret_vault import DatabaseSecretVault
 @pytest.mark.asyncio
 async def test_scoped_variable_repository_isolates_same_names(context, session) -> None:
     repo = SqlRepositories(session).variables
-    scopes = [ConfigScope.user("student"), ConfigScope.user_group("grp"), ConfigScope.project("project")]
+    scopes = [
+        ConfigScope.user("student"),
+        ConfigScope.user_group("grp"),
+        ConfigScope.project("project"),
+    ]
     for scope in scopes:
         await repo.upsert(Variable(scope=scope, name="SAME", value=scope.id))
     await session.commit()
@@ -22,7 +26,9 @@ async def test_scoped_variable_repository_isolates_same_names(context, session) 
 
 
 @pytest.mark.asyncio
-async def test_secret_vault_resolves_exact_scope_references_without_listing_values(context, session) -> None:
+async def test_secret_vault_resolves_exact_scope_references_without_listing_values(
+    context, session
+) -> None:
     vault = DatabaseSecretVault(session)
     user = ConfigScope.user("student")
     group = ConfigScope.user_group("grp")
