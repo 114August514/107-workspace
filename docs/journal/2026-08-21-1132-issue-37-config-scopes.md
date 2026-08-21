@@ -5,7 +5,7 @@
 - 分支：`refactor/37-config-scopes`
 - Worktree：`/home/august/Projects/ustc_107/107-workspace-37`
 - Reviewed code/evidence HEAD: `68869657569136d3896656ec052e7694b76ee636`.
-- PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; subsequent journal-only publication commit is reported externally; primary worktree 未触碰。
+- PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; remediation journal commit follows; primary worktree 未触碰。
 
 ## 当前完成范围
 - User/UserGroup/Project scoped Variable/Secret、严格 scope repository/vault、显式 CRUD/API、Project-first/owner/user resolver、typed exact SecretReference、snapshot freeze、execution/rerun current Secret、no-fallback failure、log redaction、Fork expression isolation。
@@ -14,11 +14,11 @@
 - Alembic f37 migration covers scoped config, Snapshot JSON exact refs, redaction table/FK, deterministic legacy mapping and refusal safety; PostgreSQL job runs existing identity test then scoped config test.
 
 ## 最终证据
-- Reviewed code/evidence HEAD `68869657569136d3896656ec052e7694b76ee636` `make check` PASS: backend Ruff lint/format; backend **238 passed, 4 skipped**; frontend format/lint/typecheck; frontend **68 passed**; frontend build; API contract sync/check.
+- Reviewed code/evidence HEAD `68869657569136d3896656ec052e7694b76ee636` `make check` PASS: backend Ruff lint/format; backend **241 passed, 4 skipped**; frontend **60 passed** with format/lint/typecheck/build; workflow/API contract pass。
 - `make smoke` PASS: isolated HTTP core Run completed with Project-scoped seed path.
 - Targeted #37 suite: 107 passed; migration suite: 7 passed; focused Fork/execution/rerun and historical-redaction tests passed.
 - PostgreSQL 17 fresh Docker evidence: scoped test **2 passed, 0 skipped**; JSON object/exact refs, scoped rows, redaction PK/FK cascade, downgrade/re-upgrade and refusal preservation verified. Container `workspace107-pg17-37` removed; post-cleanup container listing empty.
-- Independent targeted re-reviews: PASS. No live 107 activity.
+- Independent targeted re-reviews: PASS (both); no live 107 activity。
 
 ## Known boundaries
 - PostgreSQL evidence is fixture-scoped and separate from the standard local SQLite `make check`; PR is published but not merged.
@@ -30,4 +30,4 @@ Use `git revert <commit>` per exact commit; no stash/reset/clean used.
 ## Review remediation evidence
 - `3805a99` restored rerun concurrency/plan checks, fixed submit-failure notification `run_id`, removed stale frontend scope-availability heuristic, and added name-pattern validation.
 - `ec28a46` added real rerun-limit and scheduler-submit-failure regressions and removed dead unresolved helper/test files.
-- Current verification: backend **241 passed / 4 skipped**; frontend **60 passed**, typecheck/format/lint/build pass; contract sync/check and `make smoke` pass. Final full `make check` requires the current import-order fix to be rerun.
+- `5a40e40` records complete remediation evidence; final `make check` is green with the counts above; no stale pending-check claim remains。
