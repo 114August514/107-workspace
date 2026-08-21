@@ -26,3 +26,8 @@
 
 ## Rollback
 Use `git revert <commit>` per exact commit; no stash/reset/clean used.
+
+## Review remediation evidence
+- `3805a99` restored rerun concurrency/plan checks, fixed submit-failure notification `run_id`, removed stale frontend scope-availability heuristic, and added name-pattern validation.
+- `ec28a46` added real rerun-limit and scheduler-submit-failure regressions and removed dead unresolved helper/test files.
+- Current verification: backend **241 passed / 4 skipped**; frontend **60 passed**, typecheck/format/lint/build pass; contract sync/check and `make smoke` pass. Final full `make check` requires the current import-order fix to be rerun.

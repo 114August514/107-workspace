@@ -5,14 +5,15 @@ import json
 
 import pytest
 from sqlalchemy import text
-from workspace107.domain.errors import SchedulerError
-from workspace107.infrastructure.scheduler import MockScheduler
+
 from tests.helpers import (
     create_project_with_version,
     grant_test_entitlement,
     use_default_environment,
     wait_for_run,
 )
+from workspace107.domain.errors import SchedulerError
+from workspace107.infrastructure.scheduler import MockScheduler
 
 
 @pytest.mark.asyncio
