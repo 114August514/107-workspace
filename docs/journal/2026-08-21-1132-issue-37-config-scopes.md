@@ -45,6 +45,10 @@
 - #35 migration fixture now includes personal/collaborative Variable and Secret rows and asserts exact `user`/`user_group` scopes; upgrade/downgrade/upgrade test passes.
 - FastAPI diagnostic confirmed unchanged `/api/v1/me` works; prior config 404 was username-vs-ID test setup, not router/dependency breakage. No dependency bounds or main wiring workaround changed.
 - Commit：`30eb602`。
+
+## 高风险迁移证据
+- 新增实际 Alembic fixtures：orphan Workspace、collaborative group missing active OWNER、Project scope downgrade refusal/data preservation、successful downgrade legacy FK/table shape；4 passed。
+- Commit：待提交；这些 fixtures 使用独立 SQLite 文件并清理 `get_settings` 缓存，避免跨测试数据库串扰。
 ## 回退方式
 `git revert <commit>`
 
