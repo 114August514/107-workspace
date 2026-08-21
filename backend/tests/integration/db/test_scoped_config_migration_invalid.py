@@ -62,7 +62,6 @@ def test_scoped_config_upgrade_rejects_group_without_active_owner(tmp_path: Path
 def test_project_scope_downgrade_refuses_and_preserves_scoped_data(tmp_path: Path) -> None:
     database = tmp_path / "project.db"
     config = _config(database)
-    command.upgrade(config, CONFIG_BASE_REVISION)
     command.upgrade(config, "head")
     connection = sqlite3.connect(database)
     connection.execute("INSERT INTO variables VALUES ('project','p','LEVEL','x')")
@@ -99,4 +98,94 @@ def test_successful_downgrade_restores_legacy_fk_shape(tmp_path: Path) -> None:
     assert connection.execute(
         "SELECT workspace_id,name,value FROM workspace_variables"
     ).fetchall() == [("p", "LEVEL", "x")]
+    connection.close()
+
+
+def test_downgrade_rejects_project_exact_snapshot_ref_without_mutation(tmp_path: Path) -> None:
+    database = tmp_path / "project-snapshot.db"
+    config = _config(database)
+    command.upgrade(config, CONFIG_BASE_REVISION)
+    connection = sqlite3.connect(database)
+    now = "2026-08-21 00:00:00+00:00"
+    connection.execute(
+        "INSERT INTO users (id,username,display_name,email,created_at) VALUES ('u','u','U',NULL,?)",
+        (now,),
+    )
+    connection.execute(
+        "INSERT INTO workspaces VALUES ('w','personal','W','', 'u', NULL, ?)", (now,)
+    )
+    connection.execute(
+        "INSERT INTO projects (id,workspace_id,name,description,status,"
+        "environment_version_id,default_run_configuration_id,created_by,created_at,updated_at) "
+        "VALUES ('p','w','P','', 'active',NULL,NULL,'u',?,?)",
+        (now, now),
+    )
+    connection.commit()
+    connection.close()
+    command.upgrade(config, "head")
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "INSERT INTO run_snapshots (id,payload) VALUES ('s',?)",
+        ('{"project_id":"p","env":{"secret_refs":{"T":"project:p:TOKEN"}}}',),
+    )
+    connection.commit()
+    connection.close()
+    with pytest.raises(RuntimeError):
+        command.downgrade(config, PREVIOUS_REVISION)
+    connection = sqlite3.connect(database)
+    assert (
+        "project:p:TOKEN"
+        in connection.execute("SELECT payload FROM run_snapshots WHERE id='s'").fetchone()[0]
+    )
+    assert connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='variables'"
+    ).fetchone() == ("variables",)
+    connection.close()
+
+
+def test_downgrade_rejects_non_owner_user_snapshot_ref(tmp_path: Path) -> None:
+    database = tmp_path / "user-snapshot.db"
+    config = _config(database)
+    command.upgrade(config, CONFIG_BASE_REVISION)
+    connection = sqlite3.connect(database)
+    now = "2026-08-21 00:00:00+00:00"
+    connection.executemany(
+        "INSERT INTO users (id,username,display_name,email,created_at) VALUES (?, ?, ?, NULL, ?)",
+        [("owner", "owner", "Owner", now), ("other", "other", "Other", now)],
+    )
+    connection.execute(
+        "INSERT INTO workspaces VALUES ('g','collaborative','G','', 'owner', NULL, ?)", (now,)
+    )
+    connection.execute("INSERT INTO user_groups VALUES ('g','G','',NULL,?)", (now,))
+    connection.execute(
+        "INSERT INTO memberships (id,user_group_id,user_id,role,status,created_at) "
+        "VALUES ('m','g','owner','owner','active',?)",
+        (now,),
+    )
+    connection.execute(
+        "INSERT INTO projects (id,workspace_id,name,description,status,"
+        "environment_version_id,default_run_configuration_id,created_by,created_at,updated_at) "
+        "VALUES ('p','g','P','', 'active',NULL,NULL,'owner',?,?)",
+        (now, now),
+    )
+    connection.commit()
+    connection.close()
+    command.upgrade(config, "head")
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "INSERT INTO run_snapshots (id,payload) VALUES ('s',?)",
+        ('{"project_id":"p","env":{"secret_refs":{"T":"user:other:TOKEN"}}}',),
+    )
+    connection.commit()
+    connection.close()
+    with pytest.raises(RuntimeError):
+        command.downgrade(config, PREVIOUS_REVISION)
+    connection = sqlite3.connect(database)
+    assert (
+        "user:other:TOKEN"
+        in connection.execute("SELECT payload FROM run_snapshots WHERE id='s'").fetchone()[0]
+    )
+    assert connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='secrets'"
+    ).fetchone() == ("secrets",)
     connection.close()
