@@ -82,3 +82,12 @@ async def test_secret_exact_scope_and_missing_problem():
     )
     assert result.secret_refs == {"T": SecretReference(project, "TOKEN")}
     assert owner not in secrets.queries
+
+
+@pytest.mark.asyncio
+async def test_personal_owner_reference_is_not_valid_for_other_initiator():
+    resolver = ScopedConfigResolver(Vars({}), Secrets(set()))
+    ref = SecretReference(ConfigScope.user("owner"), "TOKEN")
+    values, problems = await resolver.validate_and_resolve(access(), "other", {"T": ref})
+    assert values == {}
+    assert problems

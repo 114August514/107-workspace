@@ -86,3 +86,30 @@ class ScopedConfigResolver:
             else:
                 refs[env_name] = SecretReference(scope, value.value)
         return ScopedResolution(literals=literals, secret_refs=refs, problems=problems)
+
+    async def validate_and_resolve(
+        self,
+        access: ProjectAccess,
+        initiated_by_user_id: str,
+        refs: dict[str, SecretReference],
+    ) -> tuple[dict[str, str], list[str]]:
+        """Validate every exact ref first, then resolve all-or-fail."""
+        allowed = {
+            ConfigScope.project(access.project.id),
+            ConfigScope.user(initiated_by_user_id),
+        }
+        if access.workspace.kind is LegacyWorkspaceKind.COLLABORATIVE:
+            allowed.add(ConfigScope.user_group(access.workspace.id))
+        elif access.workspace.kind is not LegacyWorkspaceKind.PERSONAL:
+            return {}, [f"Unknown legacy workspace kind: {access.workspace.kind!r}"]
+        problems: list[str] = []
+        for env_name, ref in refs.items():
+            if ref.scope not in allowed:
+                problems.append(f"环境变量 {env_name} 的 exact Secret reference 无权使用")
+        if problems:
+            return {}, problems
+        resolved = await self._secrets.resolve(list(refs.values()))
+        missing = [name for name, ref in refs.items() if ref not in resolved]
+        if missing:
+            return {}, [f"环境变量 {name} 引用的 exact Secret 不存在或不可用" for name in missing]
+        return {name: resolved[ref] for name, ref in refs.items()}, []
