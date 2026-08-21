@@ -22,6 +22,8 @@ from workspace107.domain.secrets import (
         ("${{ vars.LOG_LEVEL }}", EnvValueKind.VARIABLE, "LOG_LEVEL"),
         ("${{vars.LOG_LEVEL}}", EnvValueKind.VARIABLE, "LOG_LEVEL"),
         ("${{ secrets.HF_TOKEN }}", EnvValueKind.SECRET, "HF_TOKEN"),
+        ("${{ user.vars.LOG_LEVEL }}", EnvValueKind.VARIABLE, "LOG_LEVEL"),
+        ("${{ user.secrets.HF_TOKEN }}", EnvValueKind.SECRET, "HF_TOKEN"),
     ],
 )
 def test_parses_environment_value_expression(raw: str, kind: EnvValueKind, value: str) -> None:
@@ -33,6 +35,8 @@ def test_parses_environment_value_expression(raw: str, kind: EnvValueKind, value
 def test_expression_round_trips_to_original_form() -> None:
     assert parse_env_value("${{ secrets.HF_TOKEN }}").expression == "${{ secrets.HF_TOKEN }}"
     assert parse_env_value("${{ vars.EPOCHS }}").expression == "${{ vars.EPOCHS }}"
+    assert parse_env_value("${{ user.vars.EPOCHS }}").expression == "${{ user.vars.EPOCHS }}"
+    assert parse_env_value("${{ user.secrets.HF_TOKEN }}").expression == "${{ user.secrets.HF_TOKEN }}"
     assert parse_env_value("32").expression == "32"
 
 

@@ -24,7 +24,9 @@ from dataclasses import dataclass
 from .enums import EnvValueKind
 from .errors import ValidationFailed
 
-_EXPRESSION = re.compile(r"^\$\{\{\s*(vars|secrets)\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$")
+_EXPRESSION = re.compile(
+    r"^\$\{\{\s*((?:user\.)?(?:vars|secrets))\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$"
+)
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 REDACTED = "***"
@@ -32,14 +34,11 @@ REDACTED = "***"
 
 @dataclass(frozen=True, slots=True)
 class EnvValue:
-    """Run Configuration 中一个环境变量的取值。
-
-    ``kind`` 为 ``literal`` 时 ``value`` 是字面量；
-    为 ``variable`` / ``secret`` 时 ``value`` 是被引用的名称。
-    """
+    """Run Configuration value, retaining explicit initiated-user scope."""
 
     kind: EnvValueKind
     value: str
+    user_scope: bool = False
 
     @property
     def expression(self) -> str:
@@ -47,17 +46,17 @@ class EnvValue:
         if self.kind is EnvValueKind.LITERAL:
             return self.value
         namespace = "vars" if self.kind is EnvValueKind.VARIABLE else "secrets"
-        return f"${{{{ {namespace}.{self.value} }}}}"
-
-
+        prefix = "user." if self.user_scope else ""
+        return f"${{{{ {prefix}{namespace}.{self.value} }}}}"
 def parse_env_value(raw: str) -> EnvValue:
-    """把原始字符串解析为 :class:`EnvValue`。"""
+    """Parse literal, standard, and explicit initiated-user references."""
     match = _EXPRESSION.match(raw.strip())
     if match is None:
         return EnvValue(EnvValueKind.LITERAL, raw)
     namespace, name = match.group(1), match.group(2)
-    kind = EnvValueKind.VARIABLE if namespace == "vars" else EnvValueKind.SECRET
-    return EnvValue(kind, name)
+    user_scope = namespace.startswith("user.")
+    kind = EnvValueKind.VARIABLE if namespace.endswith("vars") else EnvValueKind.SECRET
+    return EnvValue(kind, name, user_scope=user_scope)
 
 
 def parse_env_map(raw: dict[str, str]) -> dict[str, EnvValue]:
