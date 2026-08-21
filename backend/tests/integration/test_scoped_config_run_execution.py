@@ -4,7 +4,9 @@ import hashlib
 import json
 
 import pytest
-
+from sqlalchemy import text
+from workspace107.domain.errors import SchedulerError
+from workspace107.infrastructure.scheduler import MockScheduler
 from tests.helpers import (
     create_project_with_version,
     grant_test_entitlement,
@@ -144,4 +146,98 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     ).status_code == 404
     original_again = await client.get(f"/api/v1/runs/{run.json()['id']}/logs")
     original_text = json.dumps(original_again.json())
+
     assert "project-token" not in original_text
+
+
+@pytest.mark.asyncio
+async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> None:
+    await client.get("/api/v1/me")
+    group_id = await use_default_environment(client)
+    project = await create_project_with_version(client, name="rerun-guards")
+    await grant_test_entitlement(session, group_id)
+    config = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "guard",
+            "command": "echo ok",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": "ev_python_312",
+            "compute_request": {
+                "nodes": 1,
+                "cpus": 2,
+                "memory_mb": 1,
+                "gpus": 0,
+                "time_limit_minutes": 1,
+            },
+        },
+    )
+    assert config.status_code == 201
+    run = await client.post(
+        f"/api/v1/projects/{project['id']}/runs", json={"run_configuration_id": config.json()["id"]}
+    )
+    assert run.status_code == 201
+    await wait_for_run(client, run.json()["id"])
+    before = (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"]
+    await session.execute(
+        text("UPDATE resource_entitlements SET max_concurrent_runs=1 WHERE workspace_id=:id"),
+        {"id": group_id},
+    )
+    await session.execute(
+        text("UPDATE runs SET status='running' WHERE id=:id"), {"id": run.json()["id"]}
+    )
+    await session.commit()
+    blocked = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
+    assert blocked.status_code == 422
+    assert (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"] == before
+    await session.execute(
+        text("UPDATE runs SET status='succeeded' WHERE id=:id"), {"id": run.json()["id"]}
+    )
+    await session.execute(text("UPDATE compute_plans SET max_cpus=1 WHERE id='plan_cpu_quick'"))
+    await session.commit()
+    blocked_plan = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
+    assert blocked_plan.status_code == 422
+    assert (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"] == before
+
+
+class _FailingScheduler(MockScheduler):
+    async def submit(self, submission) -> str:
+        raise SchedulerError("scheduler unavailable")
+
+
+@pytest.mark.asyncio
+async def test_scheduler_submit_failure_persists_run_and_notification(
+    client, session, context
+) -> None:
+    context.scheduler = _FailingScheduler()
+    await client.get("/api/v1/me")
+    group_id = await use_default_environment(client)
+    project = await create_project_with_version(client, name="submit-failure")
+    await grant_test_entitlement(session, group_id)
+    config = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "failure",
+            "command": "echo ok",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": "ev_python_312",
+        },
+    )
+    assert config.status_code == 201
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/runs", json={"run_configuration_id": config.json()["id"]}
+    )
+    assert response.status_code == 201
+    run = response.json()
+    assert run["status"] == "submit_failed"
+    assert "scheduler unavailable" in run["failure_reason"]
+    detail = await client.get(f"/api/v1/runs/{run['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["run"]["failure_reason"] == run["failure_reason"]
+    assert any(event["type"] == "submit_failed" for event in detail.json()["events"])
+    notifications = await client.get("/api/v1/notifications")
+    assert notifications.status_code == 200
+    items = notifications.json()["items"]
+    notification = next(item for item in items if item["type"] == "run_submit_failed")
+    assert notification["target_type"] == "run"
+    assert notification["target_id"] == run["id"]
