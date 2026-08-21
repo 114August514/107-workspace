@@ -43,3 +43,9 @@ Legacy workspace config 只有在 owner/user/group、active owner、唯一 perso
 - Removed obsolete Workspace Variable/Secret routes and LegacyWorkspaceService config methods; unrelated workspace compatibility remains.
 - Migrated seed, smoke script and frontend RunConfiguration availability to explicit Project scope; removed obsolete VariablePanel/client methods. Canonical OpenAPI/frontend generation removed workspace config operations; contract assertion enforces absence.
 - Active-tree search finds no WorkspaceVariable/WorkspaceSecret, workspace config route, legacy config service call, or generic config path. Cutover verification is complete.
+
+## PostgreSQL 17 remediation
+- Ephemeral container intent: `workspace107-pg17-37`, PostgreSQL 17 Alpine, localhost port 55437, URL credentials never committed or reported.
+- Fresh live run: `test_scoped_config_postgres.py` **2 passed, 0 skipped**; covered e35→f37 scoped rows, JSON object/exact refs, redaction PK/FK schema, f37 downgrade/re-upgrade, and Project refusal preservation.
+- Cleanup: `docker rm -f workspace107-pg17-37` succeeded; `docker ps -a --filter name=workspace107-pg17-37` empty.
+- CI postgres job now runs existing identity test first, then scoped config test. Remaining cosmetic Ruff E501 SQL-line cleanup is pending.
