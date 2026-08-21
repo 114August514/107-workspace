@@ -149,6 +149,16 @@ class AccessGuard:
             access.require(needs)
         return access
 
+    async def scoped_config_group(self, user_id: str, user_group_id: str, *, manage: bool) -> None:
+        """Authorize config without exposing governance capability projections."""
+        group = await self._repos.user_groups.get_for_active_member(user_group_id, user_id)
+        membership = await self._repos.memberships.get(user_group_id, user_id)
+        if group is None or membership is None or not membership.is_active:
+            raise ObjectNotFound("User Group", user_group_id)
+        required = Capability.CONFIG_MANAGE if manage else Capability.CONFIG_VIEW
+        if required not in capabilities_of(membership.role):
+            raise PermissionDenied(f"当前角色（{membership.role.value}）无权{describe(required)}")
+
     async def legacy_workspace(
         self, user_id: str, workspace_id: str, *, needs: Capability | None = None
     ) -> LegacyWorkspaceAccess:

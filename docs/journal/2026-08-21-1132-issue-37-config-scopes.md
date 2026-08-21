@@ -18,7 +18,12 @@
 ## 实现进度
 - 已完成当前持久化基础切片：ConfigScope/SecretReference、scoped Variable/Secret 表与迁移、Repository/SecretVault scope API、legacy workspace service 显式映射。
 - Commit：`5b205f3`；目标分支仍在进行中。
-- 待后续切片：Run resolution/Secret exact-ref 调用方、迁移集成测试与完整 repository 行为测试；本切片不提供 public CRUD routes。
+
+## API 切片
+- 新增 `ConfigurationService` 与 scoped Variable/Secret CRUD 路由，User/User Group/Project 均通过同一授权入口；PUBLIC Project 不绕过 Project guard。
+- 已通过 canonical contract sync/check，生成 OpenAPI 与 frontend types。
+- 当前仍不接入 Run resolver/execution；待补 repository/migration integration fixtures 与完整 auth behavior tests。
+- 待后续切片：Run resolution/Secret exact-ref 调用方、迁移集成测试与完整 repository/auth 行为测试。
 
 ## 仓外副作用
 无；不进行 live 107 活动、远端发布或其他仓外操作。
