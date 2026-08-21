@@ -1,7 +1,7 @@
 import { PlusOutlined } from '@ant-design/icons'
 import { Button, Card, Tabs, Tag } from 'antd'
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
@@ -18,11 +18,27 @@ import { ProjectTable } from '../components/project/ProjectTable'
 import { DefaultEnvironmentPicker } from '../components/workspace/DefaultEnvironmentPicker'
 import { EntitlementPanel } from '../components/workspace/EntitlementPanel'
 import { VariablePanel } from '../components/workspace/VariablePanel'
+import { SharedResourcePanel } from '../components/sharedresource/SharedResourcePanel'
 import { tablePagination } from '../utils/pagination'
 
 /** Bounded frontend compatibility for persisted Workspace links and downstream data. */
 export function LegacyWorkspacePage() {
   const { workspaceId = '' } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  // 深链路：/workspaces/:id/shared-resources 初始选中「共享资源」tab，其余落到默认。
+  // 其余 tab 没有独立路由，选中态必须由本地 state 持有——activeKey 只从 URL 推导的话，
+  // 点击无路由的 tab 导航回基础路由后 activeKey 永远停在 projects，tab 像点不动。
+  const [selectedTab, setSelectedTab] = useState(() =>
+    location.pathname.endsWith('/shared-resources') ? 'shared-resources' : 'projects',
+  )
+  // 空间之间跳转时按新 URL 重新推导选中 tab，避免沿用上一个空间的选中态。
+  useEffect(() => {
+    setSelectedTab(
+      location.pathname.endsWith('/shared-resources') ? 'shared-resources' : 'projects',
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId])
   const workspace = useAsync<LegacyWorkspaceContext>(
     () => api.getLegacyWorkspaceContext(workspaceId),
     [workspaceId],
@@ -76,7 +92,14 @@ export function LegacyWorkspacePage() {
       </AsyncSection>
 
       <Tabs
-        defaultActiveKey="projects"
+        activeKey={selectedTab}
+        onChange={(key) => {
+          setSelectedTab(key)
+          // 只有共享资源 tab 有独立深链路；其余 tab 回到 Workspace 基础路由。
+          navigate(key === 'shared-resources' ? `shared-resources` : `.`, {
+            replace: true,
+          })
+        }}
         items={[
           {
             key: 'projects',
@@ -109,6 +132,13 @@ export function LegacyWorkspacePage() {
                   />
                 )}
               </Card>
+            ),
+          },
+          {
+            key: 'shared-resources',
+            label: '共享资源',
+            children: (
+              <Card>{workspace.data && <SharedResourcePanel workspace={workspace.data} />}</Card>
             ),
           },
           {

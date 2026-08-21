@@ -11,6 +11,8 @@ import { HomePage } from './pages/HomePage'
 import { LegacyWorkspacePage } from './pages/LegacyWorkspacePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
+import { SharedResourcePage } from './pages/SharedResourcePage'
+import { SharedResourceVersionPage } from './pages/SharedResourceVersionPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
 import { UserGroupPage } from './pages/UserGroupPage'
 import { PrimerRoot } from './primer/setup'
@@ -96,9 +98,18 @@ export function ProductRoutes({ username, home }: { username: string; home: Asyn
       <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
       <Route path="/workspaces/:workspaceId" element={<LegacyWorkspacePage key={username} />} />
+      <Route
+        path="/workspaces/:workspaceId/shared-resources"
+        element={<LegacyWorkspacePage key={username} />}
+      />
       <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
       <Route path="/runs/:runId" element={<RunPage key={username} />} />
       <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
+      <Route path="/shared-resources/:resourceId" element={<SharedResourcePage key={username} />} />
+      <Route
+        path="/shared-resource-versions/:versionId"
+        element={<SharedResourceVersionPage key={username} />}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
