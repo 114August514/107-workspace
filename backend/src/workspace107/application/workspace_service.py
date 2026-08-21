@@ -9,9 +9,10 @@ from dataclasses import dataclass
 
 from ..domain.capabilities import Capability
 from ..domain.compute import ComputePlan, ResourceEntitlement
-from ..domain.enums import MembershipRole
+from ..domain.config_scope import ConfigScope
+from ..domain.enums import LegacyWorkspaceKind, MembershipRole
 from ..domain.errors import ObjectNotFound, ValidationFailed
-from ..domain.models import LegacyWorkspace, WorkspaceVariable
+from ..domain.models import LegacyWorkspace, Variable
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.secret_vault import SecretVault
 from .access import AccessGuard
@@ -70,32 +71,52 @@ class LegacyWorkspaceService:
                 result.append(EntitlementView(entitlement=entitlement, plan=plan))
         return result
 
-    async def list_variables(self, user_id: str, workspace_id: str) -> list[WorkspaceVariable]:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_VIEW)
-        return await self._repos.variables.list_for_workspace(workspace_id)
+    async def list_variables(self, user_id: str, workspace_id: str) -> list[Variable]:
+        access = await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.CONFIG_VIEW
+        )
+        return await self._repos.variables.list_for_scope(_legacy_scope(access.workspace))
 
     async def set_variable(
         self, user_id: str, workspace_id: str, name: str, value: str
-    ) -> WorkspaceVariable:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_MANAGE)
-        variable = WorkspaceVariable(workspace_id=workspace_id, name=name, value=value)
+    ) -> Variable:
+        access = await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.CONFIG_MANAGE
+        )
+        variable = Variable(scope=_legacy_scope(access.workspace), name=name, value=value)
         await self._repos.variables.upsert(variable)
         return variable
 
     async def delete_variable(self, user_id: str, workspace_id: str, name: str) -> None:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_MANAGE)
-        await self._repos.variables.delete(workspace_id, name)
+        access = await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.CONFIG_MANAGE
+        )
+        await self._repos.variables.delete(_legacy_scope(access.workspace), name)
 
     async def list_secret_names(self, user_id: str, workspace_id: str) -> list[str]:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_VIEW)
-        return sorted(await self._secrets.list_names(workspace_id))
+        access = await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.CONFIG_VIEW
+        )
+        return sorted(await self._secrets.list_names(_legacy_scope(access.workspace)))
 
     async def set_secret(self, user_id: str, workspace_id: str, name: str, value: str) -> None:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_MANAGE)
+        access = await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.CONFIG_MANAGE
+        )
         if not value:
             raise ValidationFailed("Secret 值不能为空")
-        await self._secrets.set_secret(workspace_id, name, value)
+        await self._secrets.set_secret(_legacy_scope(access.workspace), name, value)
 
     async def delete_secret(self, user_id: str, workspace_id: str, name: str) -> None:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.CONFIG_MANAGE)
-        await self._secrets.delete_secret(workspace_id, name)
+        access = await self._guard.legacy_workspace(
+            user_id, workspace_id, needs=Capability.CONFIG_MANAGE
+        )
+        await self._secrets.delete_secret(_legacy_scope(access.workspace), name)
+
+
+def _legacy_scope(workspace: LegacyWorkspace) -> ConfigScope:
+    if workspace.kind is LegacyWorkspaceKind.PERSONAL:
+        return ConfigScope.user(workspace.owner_id)
+    if workspace.kind is LegacyWorkspaceKind.COLLABORATIVE:
+        return ConfigScope.user_group(workspace.id)
+    raise ValidationFailed(f"无法为 Workspace {workspace.id} 确定配置 scope")

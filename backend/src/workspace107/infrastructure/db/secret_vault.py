@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...domain.config_scope import ConfigScope, SecretReference
 from . import tables as t
 
 
@@ -18,12 +19,13 @@ class DatabaseSecretVault:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def set_secret(self, workspace_id: str, name: str, value: str) -> None:
-        row = await self._session.get(t.WorkspaceSecretRow, (workspace_id, name))
+    async def set_secret(self, scope: ConfigScope, name: str, value: str) -> None:
+        row = await self._session.get(t.SecretRow, (scope.kind.value, scope.id, name))
         if row is None:
             self._session.add(
-                t.WorkspaceSecretRow(
-                    workspace_id=workspace_id,
+                t.SecretRow(
+                    scope_kind=scope.kind.value,
+                    scope_id=scope.id,
                     name=name,
                     value=value,
                     updated_at=datetime.now(UTC),
@@ -34,27 +36,30 @@ class DatabaseSecretVault:
             row.updated_at = datetime.now(UTC)
         await self._session.flush()
 
-    async def delete_secret(self, workspace_id: str, name: str) -> None:
+    async def delete_secret(self, scope: ConfigScope, name: str) -> None:
         await self._session.execute(
-            delete(t.WorkspaceSecretRow).where(
-                t.WorkspaceSecretRow.workspace_id == workspace_id,
-                t.WorkspaceSecretRow.name == name,
+            delete(t.SecretRow).where(
+                t.SecretRow.scope_kind == scope.kind.value,
+                t.SecretRow.scope_id == scope.id,
+                t.SecretRow.name == name,
             )
         )
         await self._session.flush()
 
-    async def list_names(self, workspace_id: str) -> set[str]:
-        stmt = select(t.WorkspaceSecretRow.name).where(
-            t.WorkspaceSecretRow.workspace_id == workspace_id
+    async def list_names(self, scope: ConfigScope) -> set[str]:
+        stmt = select(t.SecretRow.name).where(
+            t.SecretRow.scope_kind == scope.kind.value,
+            t.SecretRow.scope_id == scope.id,
         )
         return set((await self._session.execute(stmt)).scalars().all())
 
-    async def resolve(self, workspace_id: str, names: list[str]) -> dict[str, str]:
-        if not names:
-            return {}
-        stmt = select(t.WorkspaceSecretRow).where(
-            t.WorkspaceSecretRow.workspace_id == workspace_id,
-            t.WorkspaceSecretRow.name.in_(names),
-        )
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return {row.name: row.value for row in rows}
+    async def resolve(self, references: list[SecretReference]) -> dict[SecretReference, str]:
+        result: dict[SecretReference, str] = {}
+        for reference in references:
+            row = await self._session.get(
+                t.SecretRow,
+                (reference.scope.kind.value, reference.scope.id, reference.name),
+            )
+            if row is not None:
+                result[reference] = row.value
+        return result

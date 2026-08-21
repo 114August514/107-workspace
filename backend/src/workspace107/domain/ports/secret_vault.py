@@ -6,23 +6,20 @@ GR-304 及设计稿 §3.1.4：Secret 明文不进入领域对象、Run Snapshot�
 用来把值注入子进程环境；其余路径只能拿到名称列表。
 """
 
-from __future__ import annotations
-
 from typing import Protocol
+
+from ..config_scope import ConfigScope, SecretReference
 
 
 class SecretVault(Protocol):
-    async def set_secret(self, workspace_id: str, name: str, value: str) -> None: ...
+    async def set_secret(self, scope: ConfigScope, name: str, value: str) -> None: ...
 
-    async def delete_secret(self, workspace_id: str, name: str) -> None: ...
+    async def delete_secret(self, scope: ConfigScope, name: str) -> None: ...
 
-    async def list_names(self, workspace_id: str) -> set[str]:
-        """列出 Workspace 中已配置的 Secret 名称，不返回值。"""
+    async def list_names(self, scope: ConfigScope) -> set[str]:
+        """列出一个明确 scope 的 Secret 名称，不返回值。"""
         ...
 
-    async def resolve(self, workspace_id: str, names: list[str]) -> dict[str, str]:
-        """取出指定 Secret 的值，仅供执行阶段注入进程环境使用。
-
-        缺失的名称直接省略，由调用方决定如何处理。
-        """
+    async def resolve(self, references: list[SecretReference]) -> dict[SecretReference, str]:
+        """Resolve exact references only at execution boundary."""
         ...

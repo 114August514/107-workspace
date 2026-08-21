@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
+from ..config_scope import ConfigScope
 from ..models import (
     Activity,
     Artifact,
@@ -32,7 +33,7 @@ from ..models import (
     SharedResourceVersion,
     User,
     UserGroup,
-    WorkspaceVariable,
+    Variable,
 )
 from ..pagination import Page, PageRequest
 from ..run_snapshot import RunSnapshot
@@ -72,9 +73,10 @@ class MembershipRepository(Protocol):
 
 
 class VariableRepository(Protocol):
-    async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceVariable]: ...
-    async def upsert(self, variable: WorkspaceVariable) -> None: ...
-    async def delete(self, workspace_id: str, name: str) -> None: ...
+    async def list_for_scope(self, scope: ConfigScope) -> list[Variable]: ...
+    async def get(self, scope: ConfigScope, name: str) -> Variable | None: ...
+    async def upsert(self, variable: Variable) -> None: ...
+    async def delete(self, scope: ConfigScope, name: str) -> None: ...
 
 
 class ProjectRepository(Protocol):

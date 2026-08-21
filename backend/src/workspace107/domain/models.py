@@ -16,6 +16,7 @@ import posixpath
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from .config_scope import ConfigScope
 from .enums import (
     ActivityAction,
     ArtifactStatus,
@@ -103,23 +104,19 @@ class Membership:
 
 
 @dataclass(slots=True)
-class WorkspaceVariable:
-    """由 Workspace 管理、可直接查看和引用的非敏感键值配置。"""
+class Variable:
+    """A non-sensitive value owned by one explicit configuration scope."""
 
-    workspace_id: str
+    scope: ConfigScope
     name: str
     value: str
 
 
 @dataclass(slots=True)
-class WorkspaceSecret:
-    """由 Workspace 安全保存的敏感键值配置。
+class Secret:
+    """Secret metadata; plaintext is never represented in the domain model."""
 
-    领域对象里刻意不携带秘密值：读取路径只暴露名称，
-    值的获取由 ``SecretVault`` 端口在执行阶段完成（设计稿 §3.1.4）。
-    """
-
-    workspace_id: str
+    scope: ConfigScope
     name: str
     updated_at: datetime | None = None
 

@@ -1,4 +1,5 @@
 """Scoped Variable/Secret identities and exact references."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,19 +20,19 @@ class ConfigScope:
     id: str
 
     @classmethod
-    def user(cls, user_id: str) -> "ConfigScope":
+    def user(cls, user_id: str) -> ConfigScope:
         return cls(ConfigScopeKind.USER, user_id)
 
     @classmethod
-    def user_group(cls, group_id: str) -> "ConfigScope":
+    def user_group(cls, group_id: str) -> ConfigScope:
         return cls(ConfigScopeKind.USER_GROUP, group_id)
 
     @classmethod
-    def project(cls, project_id: str) -> "ConfigScope":
+    def project(cls, project_id: str) -> ConfigScope:
         return cls(ConfigScopeKind.PROJECT, project_id)
 
     @classmethod
-    def owner(cls, owner: OwnerReference) -> "ConfigScope":
+    def owner(cls, owner: OwnerReference) -> ConfigScope:
         kind = ConfigScopeKind(owner.kind.value)
         return cls(kind, owner.id)
 
