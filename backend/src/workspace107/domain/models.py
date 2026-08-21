@@ -85,6 +85,13 @@ class LegacyWorkspace:
     def is_personal(self) -> bool:
         return self.kind is LegacyWorkspaceKind.PERSONAL
 
+    @property
+    def owner_reference(self) -> OwnerReference:
+        """Map the compatibility anchor to its canonical User/UserGroup owner."""
+        if self.is_personal:
+            return OwnerReference(kind=OwnerKind.USER, id=self.owner_id)
+        return OwnerReference(kind=OwnerKind.USER_GROUP, id=self.id)
+
 
 @dataclass(slots=True)
 class Membership:

@@ -4,8 +4,8 @@
 特殊 Platform/public 绕过路径。本 Core 阶段提交 Run 时按不存在或无权访问拒绝。
 
 服务层不会创建跨 Owner SR（owner authority 只允许 actor 或其 active User Group），
-所以这里通过 ``session`` 夹具直接插入一条平台组 SR + 版本，再经 HTTP 引用它提交
-Run，断言被挡在提交前（422）。
+所以这里通过 ``session`` 夹具直接插入一条平台组 SR + 版本，再经 HTTP 尝试保存
+Run Configuration，断言跨 Owner exact reference 在持久化前按不存在拒绝（404）。
 """
 
 from __future__ import annotations
@@ -15,11 +15,7 @@ from datetime import UTC, datetime
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import (
-    create_project_with_version,
-    grant_test_entitlement,
-    use_default_environment,
-)
+from tests.helpers import create_project_with_version
 from workspace107.infrastructure.db.tables import (
     SharedResourceRow,
     SharedResourceVersionFileRow,
@@ -89,40 +85,30 @@ async def _seed_platform_resource_with_version(session: AsyncSession) -> str:
     return "shrv_platform_1"
 
 
-async def test_platform_shared_resource_作_run_输入被挡在提交前(
+async def test_platform_shared_resource_作_run_输入被挡在运行方案保存前(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """引用平台组 SR 版本作 Run 输入 → preflight 422，提示需 M4 Asset Grant。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    """引用平台组 SR 版本时保存 Run Configuration 即按不存在拒绝。"""
     version_id = await _seed_platform_resource_with_version(session)
 
     project = await create_project_with_version(
         client, name="引用平台资源", files={"main.py": "pass"}, headers=ALICE
     )
-    configuration = (
-        await client.post(
-            f"/api/v1/projects/{project['id']}/run-configurations",
-            json={
-                "name": "消费平台资源",
-                "command": "python main.py",
-                "compute_plan_id": "plan_cpu_quick",
-                "input_bindings": [
-                    {
-                        "source_type": "shared_resource_version",
-                        "source_id": version_id,
-                        "access_path": "/inputs/w",
-                    }
-                ],
-            },
-            headers=ALICE,
-        )
-    ).json()
     response = await client.post(
-        f"/api/v1/projects/{project['id']}/runs",
-        json={"run_configuration_id": configuration["id"]},
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "消费平台资源",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version_id,
+                    "access_path": "/inputs/w",
+                }
+            ],
+        },
         headers=ALICE,
     )
-    assert response.status_code == 422
-    problems = response.json()["problems"]
-    assert any("不存在或无权访问" in p for p in problems), problems
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"

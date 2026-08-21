@@ -247,57 +247,46 @@ for p in sorted(root.rglob("*")):
 # -- 错误路径 ---------------------------------------------------------------
 
 
-async def test_引用不存在的_version_会挡在提交前(
+async def test_引用不存在的_version_会挡在运行方案保存前(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    await use_default_environment(session, client, headers=ALICE)
     project = await create_project_with_version(
         client, name="错误输入", files={"main.py": "pass"}, headers=ALICE
     )
-    configuration = (
-        await client.post(
-            f"/api/v1/projects/{project['id']}/run-configurations",
-            json={
-                "name": "跑一下",
-                "command": "python main.py",
-                "compute_plan_id": "plan_cpu_quick",
-                "input_bindings": [
-                    {
-                        "source_type": "shared_resource_version",
-                        "source_id": "shrv_not_exist",
-                        "access_path": "/inputs/x",
-                    }
-                ],
-            },
-            headers=ALICE,
-        )
-    ).json()
-
     response = await client.post(
-        f"/api/v1/projects/{project['id']}/runs",
-        json={"run_configuration_id": configuration["id"]},
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "跑一下",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": "shrv_not_exist",
+                    "access_path": "/inputs/x",
+                }
+            ],
+        },
         headers=ALICE,
     )
-    assert response.status_code == 422
-    assert any("不存在" in p for p in response.json()["problems"])
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
 
 
 # -- 跨 Workspace 引用 -------------------------------------------------------
 
 
-async def test_跨_workspace_引用_shared_resource_被挡在提交前(
+async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存前(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """Bob cannot resolve an asset owned by Alice's exact User Group."""
-    alice_workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, alice_workspace_id)
+    """Bob cannot persist an asset owned by Alice's exact User Group."""
+    await use_default_environment(session, client, headers=ALICE)
     version = await _create_resource_with_version(
         client, name="Alice 私有", files=[("a.txt", b"x")]
     )
     bob_headers = {"X-User": "bob"}
     bob_ws = await use_default_environment(session, client, headers=bob_headers)
-    await grant_test_entitlement(session, bob_ws)
     project = (
         await client.post(
             f"/api/v1/workspaces/{bob_ws}/projects",
@@ -305,39 +294,21 @@ async def test_跨_workspace_引用_shared_resource_被挡在提交前(
             headers=bob_headers,
         )
     ).json()
-    await client.put(
-        f"/api/v1/projects/{project['id']}/files",
-        json={"path": "main.py", "content": "pass"},
-        headers=bob_headers,
-    )
-    await client.post(
-        f"/api/v1/projects/{project['id']}/versions",
-        json={"message": "v1"},
-        headers=bob_headers,
-    )
-    configuration = (
-        await client.post(
-            f"/api/v1/projects/{project['id']}/run-configurations",
-            json={
-                "name": "引用 Alice 的",
-                "command": "python main.py",
-                "compute_plan_id": "plan_cpu_quick",
-                "input_bindings": [
-                    {
-                        "source_type": "shared_resource_version",
-                        "source_id": version["id"],
-                        "access_path": "/inputs/x",
-                    }
-                ],
-            },
-            headers=bob_headers,
-        )
-    ).json()
-
     response = await client.post(
-        f"/api/v1/projects/{project['id']}/runs",
-        json={"run_configuration_id": configuration["id"]},
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "引用 Alice 的",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version["id"],
+                    "access_path": "/inputs/x",
+                }
+            ],
+        },
         headers=bob_headers,
     )
-    assert response.status_code == 422
-    assert any("不存在" in p for p in response.json()["problems"])
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"

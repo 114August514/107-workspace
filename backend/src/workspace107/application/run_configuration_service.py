@@ -14,9 +14,14 @@ from ..domain.compute import ComputePlan, ComputeRequest, check_request_against_
 from ..domain.enums import InputSourceType
 from ..domain.errors import ConflictError, ObjectNotFound, ValidationFailed
 from ..domain.models import ArtifactCollectionRule, InputBinding, RunConfiguration
+from ..domain.ownership import OwnerReference
 from ..domain.ports.repositories import Repositories
 from ..domain.secrets import EnvValue, parse_env_map
 from .access import AccessGuard
+from .asset_use import (
+    environment_version_for_owner_use,
+    shared_resource_version_for_owner_use,
+)
 from .project_service import normalize_path
 
 
@@ -62,7 +67,7 @@ class RunConfigurationService:
             user_id, project_id, needs=Capability.RUN_CONFIGURATION_MANAGE
         )
         plan = await self._require_plan(data.compute_plan_id)
-        parsed = await self._build_fields(user_id, data, plan)
+        parsed = await self._build_fields(user_id, data, plan, access.workspace.owner_reference)
 
         configuration = RunConfiguration(
             id=ids.new_id(ids.RUN_CONFIGURATION),
@@ -91,11 +96,11 @@ class RunConfigurationService:
         self, user_id: str, configuration_id: str, data: RunConfigurationInput
     ) -> RunConfiguration:
         configuration = await self.get(user_id, configuration_id)
-        await self._guard.project(
+        access = await self._guard.project(
             user_id, configuration.project_id, needs=Capability.RUN_CONFIGURATION_MANAGE
         )
         plan = await self._require_plan(data.compute_plan_id)
-        parsed = await self._build_fields(user_id, data, plan)
+        parsed = await self._build_fields(user_id, data, plan, access.workspace.owner_reference)
 
         configuration.name = parsed.name
         configuration.description = data.description
@@ -136,7 +141,11 @@ class RunConfigurationService:
         return plan
 
     async def _build_fields(
-        self, user_id: str, data: RunConfigurationInput, plan: ComputePlan
+        self,
+        user_id: str,
+        data: RunConfigurationInput,
+        plan: ComputePlan,
+        project_owner: OwnerReference,
     ) -> _ParsedConfiguration:
         name = data.name.strip()
         if not name:
@@ -150,8 +159,8 @@ class RunConfigurationService:
 
         environment_version_id: str | None = None
         if data.environment_version_id:
-            version = await self._repos.environments.get_version_discoverable_for_user(
-                user_id, data.environment_version_id
+            version = await environment_version_for_owner_use(
+                self._repos, user_id, data.environment_version_id, project_owner
             )
             if version is None:
                 raise ObjectNotFound("Environment Version", data.environment_version_id)
@@ -174,6 +183,14 @@ class RunConfigurationService:
                 access_path=raw["access_path"],
                 source_subpath=raw.get("source_subpath", ""),
             )
+            if (
+                binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
+                and await shared_resource_version_for_owner_use(
+                    self._repos, user_id, binding.source_id, project_owner
+                )
+                is None
+            ):
+                raise ObjectNotFound("Shared Resource Version", binding.source_id)
             if binding.access_path in seen_paths:
                 raise ConflictError(f"输入访问路径 {binding.access_path} 重复")
             seen_paths.add(binding.access_path)

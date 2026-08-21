@@ -1,6 +1,6 @@
 # issue39-asset-ownership
 
-- 状态：待 PR review（C2；independent review remediation 的 targeted re-review PASS；合并前保持 active）
+- 状态：PR #58 authorization BLOCKER remediation 已完成 targeted independent review PASS；待发布
 - 认领：August；当前 worktree 的 sole writer
 - 写入边界：`/home/august/Projects/ustc_107/107-workspace-39-asset-ownership`
 - 分支：`refactor/39-asset-ownership`
@@ -185,3 +185,36 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 - Reproduction after fix：同一 `uv run --no-project python scripts/workspace.py smoke` → exit 0，`ok isolated HTTP core run completed`。
 - Seed regression：`cd backend && uv run pytest -q tests/integration/test_seed.py` → `5 passed in 0.36s`；plain/demo bootstrap contract 保持。
 - Full verification：`make check` → exit 0；workflow `15 tests`，backend `207 passed, 2 skipped`，frontend `12 files / 48 tests`，API contract check PASS。未改 API/schema，未重新生成 contract artifact。
+
+## 2026-08-19 PR #58 Project-owner asset-use remediation
+
+### Root cause and frozen invariant
+
+- Fresh-context review 在 exact prior HEAD `405d8954450a5bfe8e2324c7710d9e294e3e283b` 发现 BLOCKER：application services 把 repository 的 actor discoverability（User self 或任一 active UserGroup Membership）直接复用为 consuming Project 的 asset-use authorization。Alice 同时属于 Group A+B 时，A-owned Project 因而可以保存并运行 B-owned asset exact reference。
+- #39 的 use invariant 冻结为：Environment / Shared Resource 的 `OwnerReference` 必须与 consuming Project Owner 完全相等；cross-owner use 在 #40 有有效 USE Grant 前一律 fail closed。Catalog/detail/management 的 actor discovery 保持不变，不能把 Project Visibility、Membership 或 Initiated By User identity 当作跨 Owner use。
+- Legacy Project 仍通过 compatibility Workspace 取 Owner：personal → `OwnerReference(USER, workspace.owner_id)`；collaborative → `OwnerReference(USER_GROUP, workspace.id)`。这是唯一 mapping，deprecated Shared Resource adapter 也复用它。
+
+### RED evidence
+
+- 新增最小行为回归后、任何 production source edit 前运行：`cd backend && uv run pytest -q tests/integration/resource/test_asset_owner_use.py::test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project` → `1 failed in 0.44s`。
+- 失败原因精确命中 BLOCKER：Alice 是 A+B active Owner member，B-owned Shared Resource Version detail 仍 `200`（可发现），但 A-owned Project 的 Run Configuration POST 实际返回 `201`，测试期望 fail-closed `404`；响应已持久化该 B-owned exact input reference。
+
+### Narrow implementation and extension seam
+
+- `application/asset_use.py` 是唯一 use boundary：先走既有 actor-scoped version/parent repository reads，再在 application 层比较 parent asset Owner 与 target Project Owner；不相等或任一对象不可发现都返回同一 unavailable result。没有 Grant model、ACL/policy engine、schema/API change、fallback 或 compatibility shim。
+- Boundary 已接入：Workspace/UserGroup default Environment、Project Environment update、Run Configuration Environment/Shared Resource save、fork 到 target Owner 前的全部复制引用校验、Run Environment resolution、Shared Resource preflight、rerun snapshot revalidation。Fork 在任何写入前校验；trusted `SharedResourceRepository.get_version_by_id` 只保留在 create/rerun revalidation 成功后的 exact snapshot materialization。
+- #40 只需在这个 application seam 上扩展“exact same Owner 或 valid USE Grant”；repository actor discovery 与 exact snapshot lookup 职责不变。
+
+### Green evidence to date
+
+- 同一 core regression → `1 passed in 0.42s`；同时证明直接插入的 bypassed Run Configuration 在 preflight 返回 `ok=false`，Run create 返回 `422`。
+- `cd backend && uv run pytest -q tests/integration/resource/test_asset_owner_use.py` → `4 passed in 1.30s`：覆盖 A+B/B-resource core case、Group default/Project/Run Configuration Environment assignment、User-owned Environment into Group Project、same-owner positive、bypassed Environment preflight、fork Environment/Shared Resource target-owner checks，以及同一 snapshot 中 Environment+Shared Resource Owner 变更后的 rerun revalidation。
+- `cd backend && uv run pytest -q tests/integration/resource` → `35 passed in 8.78s`。既有不存在/cross-Workspace/platform Shared Resource tests 已收敛为更早的 Run Configuration save `404`；same-owner input materialization/只读/subpath 正常路径保持通过。
+- Broader ownership targeted：`cd backend && uv run pytest -q tests/unit/domain/test_ownership.py tests/integration/test_seed.py tests/contract/test_asset_owner_contract.py tests/integration/db/test_asset_owner_discovery.py` → `13 passed in 1.34s`。
+- Full：`make check` → exit 0；workflow `15 tests`，backend `213 passed, 2 skipped`，frontend `12 files / 48 tests`，lint/format/typecheck/build 与 API contract check 全部通过。无 API/schema 变化，generated artifacts 未变化。
+- Smoke：`uv run --no-project python scripts/workspace.py smoke` → exit 0，`ok isolated HTTP core run completed`；demo bootstrap 的 same-owner Environment default、Run Configuration save、preflight、snapshot materialization 与 mock Run 仍正常。
+
+### Targeted independent review
+
+- 独立 reviewer 以 fresh-context、read-only、high-risk mode 审查全部 asset-use callsite，并核对 actor discovery 与 consuming Project use authorization 的职责分离；结论 `PASS`，无 findings。
+- Reviewer 的 targeted test invocation 因 command approval 不可用而未执行；这仅限制 reviewer 自身的动态 evidence。Review 未修改 source，因此 implementer 的 fresh targeted、full 与 smoke evidence 仍为当前候选证据。

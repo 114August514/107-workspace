@@ -16,7 +16,6 @@ from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.enums import ActivityAction, TargetType
 from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
 from ..domain.models import (
-    LegacyWorkspace,
     SharedResource,
     SharedResourceFile,
     SharedResourceVersion,
@@ -46,12 +45,6 @@ def _normalize_path(raw: str) -> str:
     if normalized in {".", ".."} or normalized.startswith("../"):
         raise ValidationFailed(f"路径 {raw!r} 越出了资源根目录")
     return normalized
-
-
-def _legacy_owner(workspace: LegacyWorkspace) -> OwnerReference:
-    if workspace.is_personal:
-        return OwnerReference(OwnerKind.USER, workspace.owner_id)
-    return OwnerReference(OwnerKind.USER_GROUP, workspace.id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +105,7 @@ class SharedResourceService:
         workspace_access = await self._guard.legacy_workspace(
             user_id, workspace_id, needs=Capability.SHARED_RESOURCE_VIEW
         )
-        owner = _legacy_owner(workspace_access.workspace)
+        owner = workspace_access.workspace.owner_reference
         resources = [
             resource
             for resource in await self._repos.shared_resources.list_discoverable_for_user(user_id)
@@ -167,7 +160,7 @@ class SharedResourceService:
         workspace_access = await self._guard.legacy_workspace(
             user_id, workspace_id, needs=Capability.SHARED_RESOURCE_MANAGE
         )
-        owner = _legacy_owner(workspace_access.workspace)
+        owner = workspace_access.workspace.owner_reference
         resource = await self._create_with_owner(user_id, owner, name, description)
         return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
 

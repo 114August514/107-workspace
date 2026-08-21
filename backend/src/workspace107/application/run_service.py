@@ -49,6 +49,7 @@ from ..domain.models import (
     RunLogChunk,
     SharedResourceVersion,
 )
+from ..domain.ownership import OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
@@ -59,6 +60,10 @@ from ..domain.run_snapshot import RunSnapshot, build_snapshot
 from ..domain.secrets import ResolvedEnv, redact, resolve_env
 from .access import AccessGuard
 from .activity import ActivityRecorder
+from .asset_use import (
+    environment_version_for_owner_use,
+    shared_resource_version_for_owner_use,
+)
 from .notifier import Notifier
 
 MAX_LOG_BYTES = 256 * 1024
@@ -235,7 +240,11 @@ class RunService:
             problems.append("Project 还没有保存过版本，请先保存一个 Project Version")
 
         environment_version = await self._resolve_environment_version(
-            user_id, access.project, configuration, problems
+            user_id,
+            access.project,
+            configuration,
+            access.workspace.owner_reference,
+            problems,
         )
 
         plan = await self._repos.compute_plans.get(configuration.compute_plan_id)
@@ -269,7 +278,14 @@ class RunService:
         )
         problems.extend(env_problems)
 
-        problems.extend(await self._check_inputs(user_id, configuration, access.workspace.id))
+        problems.extend(
+            await self._check_inputs(
+                user_id,
+                configuration,
+                access.workspace.id,
+                access.workspace.owner_reference,
+            )
+        )
 
         return PreflightResult(
             problems=problems,
@@ -404,12 +420,20 @@ class RunService:
             access.workspace.id, source_snapshot.compute_plan_id
         )
 
-        problems = await self._revalidate_snapshot(user_id, source_snapshot, access.workspace.id)
+        problems = await self._revalidate_snapshot(
+            user_id,
+            source_snapshot,
+            access.workspace.id,
+            access.workspace.owner_reference,
+        )
         if problems:
             raise PreflightRejected(problems)
 
-        environment_version = await self._repos.environments.get_version_discoverable_for_user(
-            user_id, source_snapshot.environment_version_id
+        environment_version = await environment_version_for_owner_use(
+            self._repos,
+            user_id,
+            source_snapshot.environment_version_id,
+            access.workspace.owner_reference,
         )
         plan = await self._repos.compute_plans.get(source_snapshot.compute_plan_id)
         project_version = await self._repos.project_versions.get(source_snapshot.project_version_id)
@@ -592,6 +616,7 @@ class RunService:
         user_id: str,
         project: Project,
         configuration: RunConfiguration,
+        project_owner: OwnerReference,
         problems: list[str],
     ) -> EnvironmentVersion | None:
         """按 运行方案 -> Project -> Workspace 默认 的顺序解析实际环境。"""
@@ -605,11 +630,11 @@ class RunService:
             problems.append("没有可用的运行环境，请为 Project 或 Workspace 选择默认环境")
             return None
 
-        version = await self._repos.environments.get_version_discoverable_for_user(
-            user_id, candidate_id
+        version = await environment_version_for_owner_use(
+            self._repos, user_id, candidate_id, project_owner
         )
         if version is None:
-            problems.append("引用的运行环境版本已不存在")
+            problems.append("引用的运行环境版本不存在或无权供当前 Project 使用")
             return None
         if not version.available:
             problems.append(f"运行环境版本 {version.version} 当前不可用")
@@ -711,7 +736,11 @@ class RunService:
         ]
 
     async def _check_inputs(
-        self, user_id: str, configuration: RunConfiguration, workspace_id: str
+        self,
+        user_id: str,
+        configuration: RunConfiguration,
+        workspace_id: str,
+        project_owner: OwnerReference,
     ) -> list[str]:
         problems: list[str] = []
         for binding in configuration.input_bindings:
@@ -728,17 +757,23 @@ class RunService:
                     binding.source_id,
                     binding.access_path,
                     binding.source_subpath,
+                    project_owner,
                 )
                 if problem is not None:
                     problems.append(problem)
         return problems
 
     async def _check_shared_resource_version_input(
-        self, user_id: str, version_id: str, access_path: str, subpath: str = ""
+        self,
+        user_id: str,
+        version_id: str,
+        access_path: str,
+        subpath: str,
+        project_owner: OwnerReference,
     ) -> str | None:
-        """Validate an input through its repository-scoped parent ownership boundary."""
-        version = await self._repos.shared_resources.get_version_discoverable_for_user(
-            user_id, version_id
+        """Validate actor discovery and exact Project-owner asset use."""
+        version = await shared_resource_version_for_owner_use(
+            self._repos, user_id, version_id, project_owner
         )
         if version is None:
             return f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
@@ -782,7 +817,11 @@ class RunService:
         return inputs
 
     async def _revalidate_snapshot(
-        self, user_id: str, snapshot: RunSnapshot, workspace_id: str
+        self,
+        user_id: str,
+        snapshot: RunSnapshot,
+        workspace_id: str,
+        project_owner: OwnerReference,
     ) -> list[str]:
         """重跑之前按当前权限和资源资格重新校验历史快照中的每一个引用。"""
         problems: list[str] = []
@@ -791,11 +830,11 @@ class RunService:
         if version is None:
             problems.append("来源 Project Version 已不存在")
 
-        environment_version = await self._repos.environments.get_version_discoverable_for_user(
-            user_id, snapshot.environment_version_id
+        environment_version = await environment_version_for_owner_use(
+            self._repos, user_id, snapshot.environment_version_id, project_owner
         )
         if environment_version is None:
-            problems.append("来源运行环境版本已不存在")
+            problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
         elif not environment_version.available:
             problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
 
@@ -832,6 +871,7 @@ class RunService:
                     binding.source_id,
                     binding.access_path,
                     binding.source_subpath,
+                    project_owner,
                 )
                 if problem is not None:
                     problems.append(problem)
