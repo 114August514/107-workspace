@@ -33,3 +33,9 @@ Legacy workspace config 只有在 owner/user/group、active owner、唯一 perso
 
 ## 回滚
 按独立 commit 使用 `git revert <commit>`；不使用 stash/reset/clean 清理用户内容。
+
+## 独立复审 A remediation
+- `run_secret_redactions` and private SecretVault `retain_for_redaction`/`redaction_values` retain injected values by per-run digest for historical log redaction only; FK cascade and Alembic create/drop included.
+- `_submit` retains after exact validation and before storage/scheduler; `read_logs` uses retention first and bounded current-ref fallback only for legacy runs. Execution test rereads original logs after rotation/deletion and remains redacted.
+- B workspace routes remain because real current seed/tests/frontend callers were found; migration is a separate bounded task.
+- Commit：`649db1b`；PostgreSQL evidence remains a separate remediation。
