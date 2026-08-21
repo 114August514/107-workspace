@@ -272,7 +272,6 @@ export const api = {
       }),
     ),
 
-
   // -- Project -----------------------------------------------------------
   listProjects: async (workspaceId: string, query: PageQuery = {}): Promise<ProjectPage> =>
     unwrap(
@@ -401,10 +400,18 @@ export const api = {
     ),
 
   listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
-    unwrap(await http.GET('/api/v1/projects/{project_id}/variables', { params: { path: { project_id: projectId } } })),
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/variables', {
+        params: { path: { project_id: projectId } },
+      }),
+    ),
 
   listProjectSecrets: async (projectId: string): Promise<string[]> =>
-    unwrap(await http.GET('/api/v1/projects/{project_id}/secrets', { params: { path: { project_id: projectId } } })),
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/secrets', {
+        params: { path: { project_id: projectId } },
+      }),
+    ),
 
   // -- 运行方案 ----------------------------------------------------------
   listRunConfigurations: async (projectId: string): Promise<RunConfiguration[]> =>

@@ -41,14 +41,8 @@ export function RunConfigurationPanel({
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
   // 用来判断哪些引用在当前空间解析不了。Fork 过来的方案常常缺东西——
   // 等用户点了提交才告诉他，就太晚了。
-  const secretNames = useAsync<string[]>(
-    async () => api.listProjectSecrets(projectId),
-    [projectId],
-  )
-  const variables = useAsync(
-    async () => api.listProjectVariables(projectId),
-    [projectId],
-  )
+  const secretNames = useAsync<string[]>(async () => api.listProjectSecrets(projectId), [projectId])
+  const variables = useAsync(async () => api.listProjectVariables(projectId), [projectId])
   const available = {
     secrets: secretNames.data ?? [],
     variables: (variables.data ?? []).map((v) => v.name),
