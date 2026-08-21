@@ -279,3 +279,11 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 > Permanent tests 只保留 migration truth、owner/use authorization、canonical API contract和用户可观察 frontend behavior；已删除 adapter-only、representation-only、localized-copy、mock-plumbing及 #40 future-Grant breadcrumb coverage。平台运营 UserGroup 无特殊 public/use bypass 的唯一 regression 保留。
 
 GitHub PR body 尚未修改：本轮明确要求 commits 仅留本地、先独立评审，不在此阶段执行 hosted mutation。
+
+### Fresh verification
+
+- Targeted backend migration/ownership/asset-use/seed/contract/resource/domain：`57 passed`；其中保留的平台特殊绕过 regression 一并通过。
+- Affected frontend component/API：`3` files / `22` tests PASS；删除一个 speculative foreign-User case 后，UserGroup 与 self-User breadcrumb cases仍通过。
+- `make contract-check` PASS；生成 diff 只删除三个 deprecated paths/operations及其孤立 adapter schema，共 `contracts/openapi.json` 359 lines、`frontend/src/api/schema.d.ts` 301 lines，没有 canonical path/DTO addition。
+- Full `make check` PASS：workflow `15` tests，backend `211 passed, 2 skipped`，frontend `15` files / `70` tests，lint/format/typecheck/build/contract均通过。第一次 full run 唯一失败是新增 import block 的 Ruff ordering，按 Ruff canonical fix 后重跑通过。
+- `uv run --no-project python scripts/workspace.py smoke` PASS：`ok isolated HTTP core run completed`。未访问 live 107。

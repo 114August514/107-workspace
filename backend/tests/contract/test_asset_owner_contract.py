@@ -7,7 +7,6 @@ from tests.helpers import ensure_user_group
 
 from workspace107.infrastructure.db.tables import EnvironmentRow
 
-
 ALICE = {"X-User": "alice"}
 FORBIDDEN_OWNER_FIELDS = {"owner_workspace_id", "is_platform_owned"}
 
