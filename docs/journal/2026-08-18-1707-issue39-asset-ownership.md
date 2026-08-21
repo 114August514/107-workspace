@@ -236,3 +236,9 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 - `make check` → exit `0`：workflow `15` tests，backend `213 passed, 2 skipped`，frontend `15` files / `69` tests，lint/format/typecheck/build/API contract 全部 PASS。
 - Isolated runtime smoke 使用一次性 SQLite DB/storage、`alembic upgrade head` 和 `seed --demo`：`student` 向 `grp_demo` canonical owner 创建 Shared Resource 得到 `201` 与 `{kind:user_group,id:grp_demo,display_name:演示 User Group}`；detail owner summary 完全一致；actor discovery 随后可见；发布一文件版本并经 #15 `/files/download` 取回原始 `28` bytes。backend/frontend dev server 均实际启动，临时 DB/storage 随后删除。
 - 当前 harness 未挂载文档所述 Browser device（schema-conforming `xd://browser` open 返回 no such tool，已提交 harness tool report），因此不能给出真实 Chromium 视觉/键盘证据；UI 行为证据限于 jsdom component tests、typecheck/build 与实际 dev server/API smoke。未访问 live 107。
+
+### Post-merge targeted independent review
+
+- Fresh-context reviewer 以 committed merge `7aa9074c950b65b9d2b697c2e278149fb78af80b` 为对象只读审查后结论 `PASS`，无 findings，确认可安全 push。
+- Reviewer 核对了两侧语义：#39 canonical User/UserGroup owner、显式 OwnerReference create、OwnerSummaryOut、exact Project-owner use boundary 与 fail-closed authorization；#15 create/edit/publish/version/preview/binary-download surface 和 MIME/Content-Disposition route；以及 source-first generated contract、personal/UserGroup owner mapping、capability gating、deep links 和 activity/notification target dispatch。
+- Reviewer 环境不能调用 bash，因此以 committed tree 直接审查而未自行执行 parent diff/test；这是 review evidence 的限制，不改变上节 implementer 的 fresh merge、targeted/full/contract/runtime evidence。保留的 deprecated Workspace/catalog adapters、#40 前无 cross-owner USE Grant，以及 User-owned resource 不伪造 Workspace activity feed 均被确认是 intentional residual scope，不是 blocker。
