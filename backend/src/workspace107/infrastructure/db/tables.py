@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -130,16 +131,30 @@ class ProjectRow(Base):
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("users.id"), nullable=True, index=True
+    )
+    owner_user_group_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("user_groups.id"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32))
+    visibility: Mapped[str] = mapped_column(String(32), default="owner_scope")
     environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     default_run_configuration_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
-    __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_project_name"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "name", name="uq_project_name"),
+        CheckConstraint(
+            "((owner_user_id IS NOT NULL AND owner_user_group_id IS NULL) "
+            "OR (owner_user_id IS NULL AND owner_user_group_id IS NOT NULL))",
+            name="ck_projects_exactly_one_owner",
+        ),
+    )
 
 
 class ProjectFileRow(Base):

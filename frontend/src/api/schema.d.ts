@@ -249,6 +249,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出当前用户可发现的 Project */
+        get: operations["list_discoverable_projects_api_v1_projects_get"];
+        put?: never;
+        /** 为 User 或 User Group 创建 Project */
+        post: operations["create_owned_project_api_v1_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}": {
         parameters: {
             query?: never;
@@ -1537,8 +1555,9 @@ export interface components {
              * @default
              */
             name: string;
+            target_owner?: components["schemas"]["OwnerReferenceIn"] | null;
             /** Target Workspace Id */
-            target_workspace_id: string;
+            target_workspace_id?: string | null;
         };
         /**
          * ForkSourceOut
@@ -1759,6 +1778,25 @@ export interface components {
          * @enum {string}
          */
         NotificationType: "workspace_invited" | "user_group_invited" | "member_removed" | "role_changed" | "ownership_received" | "run_succeeded" | "run_failed" | "run_submit_failed";
+        /**
+         * OwnerKind
+         * @enum {string}
+         */
+        OwnerKind: "user" | "user_group";
+        /** OwnerReferenceIn */
+        OwnerReferenceIn: {
+            /** Id */
+            id: string;
+            kind: components["schemas"]["OwnerKind"];
+        };
+        /** OwnerSummaryOut */
+        OwnerSummaryOut: {
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id: string;
+            kind: components["schemas"]["OwnerKind"];
+        };
         /** PageOut[ActivityOut] */
         PageOut_ActivityOut_: {
             /** Has More */
@@ -1859,6 +1897,19 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** ProjectCreateOwnedIn */
+        ProjectCreateOwnedIn: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+            owner: components["schemas"]["OwnerReferenceIn"];
+            /** @default owner_scope */
+            visibility: components["schemas"]["ProjectVisibility"];
+        };
         /** ProjectFileOut */
         ProjectFileOut: {
             /** Content Hash */
@@ -1886,9 +1937,11 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            owner: components["schemas"]["OwnerSummaryOut"];
             status: components["schemas"]["ProjectStatus"];
             /** Updated At */
             updated_at: string | null;
+            visibility: components["schemas"]["ProjectVisibility"];
             /** Workspace Id */
             workspace_id: string;
         };
@@ -1911,6 +1964,7 @@ export interface components {
             /** Name */
             name?: string | null;
             status?: components["schemas"]["ProjectStatus"] | null;
+            visibility?: components["schemas"]["ProjectVisibility"] | null;
         };
         /** ProjectVersionDetailOut */
         ProjectVersionDetailOut: {
@@ -1971,6 +2025,12 @@ export interface components {
             /** Total Size */
             total_size: number;
         };
+        /**
+         * ProjectVisibility
+         * @description Project discovery boundary, independent from operation permissions.
+         * @enum {string}
+         */
+        ProjectVisibility: "owner_scope" | "public";
         /** ReadinessOut */
         ReadinessOut: {
             /** Database */
@@ -3319,6 +3379,167 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_discoverable_projects_api_v1_projects_get: {
+        parameters: {
+            query?: {
+                /** @description 页码，从 1 开始 */
+                page?: number;
+                /** @description 每页条数 */
+                page_size?: number;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut_ProjectOut_"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_owned_project_api_v1_projects_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCreateOwnedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
             };
             /** @description 请求不合法 */
             400: {

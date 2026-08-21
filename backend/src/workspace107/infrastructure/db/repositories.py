@@ -23,6 +23,7 @@ from ...domain.enums import (
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     TargetType,
@@ -54,6 +55,7 @@ from ...domain.models import (
     UserGroup,
     WorkspaceVariable,
 )
+from ...domain.ownership import OwnerKind, OwnerReference
 from ...domain.pagination import Page, PageRequest
 from ...domain.run_snapshot import RunSnapshot
 from ...domain.secrets import parse_env_value
@@ -394,13 +396,17 @@ class ProjectRepositoryImpl:
         self._session = session
 
     async def add(self, project: Project) -> None:
+        owner_user_id, owner_user_group_id = _owner_columns(project.owner)
         self._session.add(
             t.ProjectRow(
                 id=project.id,
                 workspace_id=project.workspace_id,
+                owner_user_id=owner_user_id,
+                owner_user_group_id=owner_user_group_id,
                 name=project.name,
                 description=project.description,
                 status=project.status.value,
+                visibility=project.visibility.value,
                 environment_version_id=project.environment_version_id,
                 default_run_configuration_id=project.default_run_configuration_id,
                 created_by=project.created_by,
@@ -421,6 +427,10 @@ class ProjectRepositoryImpl:
         row.name = project.name
         row.description = project.description
         row.status = project.status.value
+        owner_user_id, owner_user_group_id = _owner_columns(project.owner)
+        row.owner_user_id = owner_user_id
+        row.owner_user_group_id = owner_user_group_id
+        row.visibility = project.visibility.value
         row.environment_version_id = project.environment_version_id
         row.default_run_configuration_id = project.default_run_configuration_id
         row.updated_at = project.updated_at or datetime.now(UTC)
@@ -434,11 +444,33 @@ class ProjectRepositoryImpl:
         )
         return await _paginate(self._session, stmt, page, _to_project)
 
-    async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
-        visible = _visible_workspace_ids(user_id)
+    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
+        owner_scope = (
+            t.ProjectRow.owner_user_id == user_id
+        ) | t.ProjectRow.owner_user_group_id.in_(group_ids)
         stmt = (
             select(t.ProjectRow)
-            .where(t.ProjectRow.workspace_id.in_(visible))
+            .where((t.ProjectRow.visibility == "public") | owner_scope)
+            .order_by(t.ProjectRow.updated_at.desc())
+        )
+        return await _paginate(self._session, stmt, page, _to_project)
+
+    async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
+        stmt = (
+            select(t.ProjectRow)
+            .where(
+                (t.ProjectRow.visibility == "public")
+                | (t.ProjectRow.owner_user_id == user_id)
+                | t.ProjectRow.owner_user_group_id.in_(group_ids)
+            )
             .order_by(t.ProjectRow.updated_at.desc())
             .limit(limit)
         )
@@ -1484,18 +1516,32 @@ def _to_membership(row: t.MembershipRow) -> Membership:
 
 
 def _to_project(row: t.ProjectRow) -> Project:
+    if row.owner_user_id:
+        owner = OwnerReference(kind=OwnerKind.USER, id=row.owner_user_id)
+    elif row.owner_user_group_id:
+        owner = OwnerReference(kind=OwnerKind.USER_GROUP, id=row.owner_user_group_id)
+    else:  # pragma: no cover - only possible for a corrupt pre-#36 row
+        owner = OwnerReference(kind=OwnerKind.USER_GROUP, id=row.workspace_id)
     return Project(
         id=row.id,
         workspace_id=row.workspace_id,
         name=row.name,
+        owner=owner,
         description=row.description,
         status=ProjectStatus(row.status),
+        visibility=ProjectVisibility(row.visibility),
         environment_version_id=row.environment_version_id,
         default_run_configuration_id=row.default_run_configuration_id,
         created_by=row.created_by,
         created_at=_aware(row.created_at),
         updated_at=_aware(row.updated_at),
     )
+
+
+def _owner_columns(owner: OwnerReference) -> tuple[str | None, str | None]:
+    if owner.kind is OwnerKind.USER:
+        return owner.id, None
+    return None, owner.id
 
 
 def _to_project_file(row: t.ProjectFileRow) -> ProjectFile:

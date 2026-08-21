@@ -71,6 +71,14 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "NULL, NULL, 'usr_alice', ?, ?)",
         (now, now),
     )
+    connection.execute(
+        "INSERT INTO projects "
+        "(id, workspace_id, name, description, status, environment_version_id, "
+        "default_run_configuration_id, created_by, created_at, updated_at) "
+        "VALUES ('prj_group', 'ws_collab', 'Group project', '', 'active', "
+        "NULL, NULL, 'usr_bob', ?, ?)",
+        (now, now),
+    )
     connection.commit()
     connection.close()
 
@@ -89,8 +97,16 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         ("ws_collab", "collaborative"),
         ("ws_personal", "personal"),
     ]
-    assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
-        ("prj_personal", "ws_personal")
+    assert _rows(connection, "SELECT id, workspace_id FROM projects ORDER BY id") == [
+        ("prj_group", "ws_collab"),
+        ("prj_personal", "ws_personal"),
+    ]
+    assert _rows(
+        connection,
+        "SELECT id, owner_user_id, owner_user_group_id, visibility FROM projects ORDER BY id",
+    ) == [
+        ("prj_group", None, "ws_collab", "owner_scope"),
+        ("prj_personal", "usr_alice", None, "owner_scope"),
     ]
     assert _rows(
         connection,
@@ -149,8 +165,9 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         ("ws_collab", "usr_bob", "owner", "active"),
         ("ws_personal", "usr_alice", "owner", "active"),
     ]
-    assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
-        ("prj_personal", "ws_personal")
+    assert _rows(connection, "SELECT id, workspace_id FROM projects ORDER BY id") == [
+        ("prj_group", "ws_collab"),
+        ("prj_personal", "ws_personal"),
     ]
     connection.close()
 
@@ -160,8 +177,16 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         ("grp_new",),
         ("ws_collab",),
     ]
-    assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
-        ("prj_personal", "ws_personal")
+    assert _rows(connection, "SELECT id, workspace_id FROM projects ORDER BY id") == [
+        ("prj_group", "ws_collab"),
+        ("prj_personal", "ws_personal"),
+    ]
+    assert _rows(
+        connection,
+        "SELECT id, owner_user_id, owner_user_group_id, visibility FROM projects ORDER BY id",
+    ) == [
+        ("prj_group", None, "ws_collab", "owner_scope"),
+        ("prj_personal", "usr_alice", None, "owner_scope"),
     ]
     assert _rows(
         connection,

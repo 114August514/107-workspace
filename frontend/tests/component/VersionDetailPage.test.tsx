@@ -49,9 +49,11 @@ const version: ProjectVersionDetail = {
 const project: Project = {
   id: 'prj_test',
   workspace_id: 'ws_test',
+  owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test Workspace' },
   name: 'Test Project',
   description: '',
   status: 'active',
+  visibility: 'owner_scope',
   created_at: null,
   updated_at: null,
   created_by: 'student',

@@ -90,9 +90,11 @@ describe('ForkModal target eligibility', () => {
     const created: Project = {
       id: 'prj_forked',
       workspace_id: 'grp_writer',
+      owner: { kind: 'user_group', id: 'grp_writer', display_name: 'Writer Lab' },
       name: 'Source Project',
       description: '',
       status: 'active',
+      visibility: 'owner_scope',
       environment_version_id: null,
       default_run_configuration_id: null,
       created_by: 'alice',

@@ -167,7 +167,8 @@ async def create_project(
     services: ServicesDep,
 ) -> s.ProjectOut:
     return p.project_out(
-        await services.projects.create(user.id, workspace_id, payload.name, payload.description)
+        await services.projects.create(user.id, workspace_id, payload.name, payload.description),
+        owner_scope=True,
     )
 
 
