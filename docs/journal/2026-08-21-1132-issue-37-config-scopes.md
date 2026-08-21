@@ -39,6 +39,12 @@
 - 真实 SQLite persistence tests：2 passed；真实 HTTP explicit resource CRUD/auth tests：2 passed；existing #35 Alembic round-trip migration test：1 passed。
 - HTTP coverage now initializes actual User identity, creates actual UserGroup and Project, exercises set/list/delete for Variable and Secret in all three families, foreign User and existing Project unauthorized 404, and asserts Secret list has no plaintext/value.
 - Standard `main.py` import and single `app.include_router(api_router)` wiring restored; no special-case router registration or dependency-bound changes.
+
+## 集成证据更新
+- SQLite persistence：2 passed；HTTP explicit User/UserGroup/Project CRUD：2 passed；existing HTTP `/api/v1/me` test：1 passed。
+- #35 migration fixture now includes personal/collaborative Variable and Secret rows and asserts exact `user`/`user_group` scopes; upgrade/downgrade/upgrade test passes.
+- FastAPI diagnostic confirmed unchanged `/api/v1/me` works; prior config 404 was username-vs-ID test setup, not router/dependency breakage. No dependency bounds or main wiring workaround changed.
+- Commit：`30eb602`。
 ## 回退方式
 `git revert <commit>`
 
