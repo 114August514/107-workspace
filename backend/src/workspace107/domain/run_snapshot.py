@@ -20,11 +20,11 @@ from datetime import datetime
 from typing import Any
 
 from .compute import ComputeRequest, ResolvedSchedulerConfiguration
+from .config_scope import SecretReference
 from .enums import InputSourceType
 from .errors import ValidationFailed
 from .models import ArtifactCollectionRule, InputBinding
 from .secrets import ResolvedEnv
-from .config_scope import SecretReference
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +55,8 @@ class RunSnapshot:
     created_at: datetime
 
     def __post_init__(self) -> None:
+        if any(not isinstance(ref, SecretReference) for ref in self.env_secret_refs.values()):
+            raise ValidationFailed("Run Snapshot Secret references must be scope-qualified")
         # 工作目录必须留在 Run 目录里。它会被拼成执行时的 cwd
         # （`paths.work / working_directory`），逃出去就等于让用户程序
         # 在平台任意目录下运行。
@@ -180,11 +182,7 @@ def build_snapshot(
         environment_image=environment_image,
         environment_setup_command=environment_setup_command,
         env_literals=dict(resolved_env.literals),
-        env_secret_refs={
-            name: ref
-            for name, ref in resolved_env.secret_refs.items()
-            if isinstance(ref, SecretReference)
-        },
+        env_secret_refs=dict(resolved_env.secret_refs),
         input_bindings=input_bindings,
         compute_plan_id=compute_plan_id,
         compute_request=compute_request,

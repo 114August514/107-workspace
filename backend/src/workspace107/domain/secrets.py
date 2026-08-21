@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .config_scope import SecretReference
 from .enums import EnvValueKind
 from .errors import ValidationFailed
 
@@ -48,6 +49,8 @@ class EnvValue:
         namespace = "vars" if self.kind is EnvValueKind.VARIABLE else "secrets"
         prefix = "user." if self.user_scope else ""
         return f"${{{{ {prefix}{namespace}.{self.value} }}}}"
+
+
 def parse_env_value(raw: str) -> EnvValue:
     """Parse literal, standard, and explicit initiated-user references."""
     match = _EXPRESSION.match(raw.strip())
@@ -71,19 +74,15 @@ def parse_env_map(raw: dict[str, str]) -> dict[str, EnvValue]:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedEnv:
-    """创建 Run 时解析出的环境变量配置。
-
-    ``literals`` 已经是最终值，可以安全写入 Run Snapshot；
-    ``secret_refs`` 只保存引用关系，执行时才由平台注入实际值。
-    """
+    """创建 Run 时解析出的环境变量配置，Secret 仅保存 exact reference。"""
 
     literals: dict[str, str]
-    secret_refs: dict[str, str]
+    secret_refs: dict[str, SecretReference]
 
     def snapshot_payload(self) -> dict[str, dict[str, str]]:
         return {
             "literals": dict(self.literals),
-            "secret_refs": dict(self.secret_refs),
+            "secret_refs": {name: ref.as_key() for name, ref in self.secret_refs.items()},
         }
 
 
