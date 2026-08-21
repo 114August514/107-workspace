@@ -1,6 +1,6 @@
 # issue-37-config-scopes
 
-- 状态：进行中
+- 状态：待复审
 - 认领：August / Codex
 - 上下文：Issue #37；分支 `refactor/37-config-scopes`；linked worktree `/home/august/Projects/ustc_107/107-workspace-37`
 - 开始：2026-08-21 11:32 +0800
@@ -69,3 +69,9 @@
 - 不动 primary dirty worktree 的现有修改。
 - 不修改 #36/#38/#39 的 ownership、entitlement 或 asset worktree 内容。
 - 不加依赖；不实现通用 key-value framework。
+
+## 候选状态（2026-08-21）
+- 主要提交链：`dad2deb`, `3a787d5`, `5b205f3`, `af25715`, `f1c0f99`, `5372f78`, `921c416`, `bb84aef`, `4ce4abe`, `aacde1e`, `7d960f5`, `685cfd3`。
+- Evidence：#37 targeted suite 107 passed；migration suite 7 passed；focused Fork and execution/rerun tests passed；canonical contract sync/check passed；`make check` backend tests 237 passed/2 skipped, frontend checks/build passed. Final backend lint/format fixes are pending this journal commit.
+- Covered behavior: scoped CRUD/auth, exact refs, Project-first resolution, preflight, current Secret rotation, no-fallback deletion failure, snapshot freeze, log/API redaction, Fork expression isolation, migration round-trip/refusal safety.
+- Remaining overlap risks: private #36 ownership contract; active #38 entitlement and #39 ownership branches overlap repository/table/run/config/seed/OpenAPI files. No push or external side effects.
