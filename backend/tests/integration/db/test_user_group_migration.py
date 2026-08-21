@@ -71,6 +71,14 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "NULL, NULL, 'usr_alice', ?, ?)",
         (now, now),
     )
+    connection.executemany(
+        "INSERT INTO workspace_variables (workspace_id, name, value) VALUES (?, ?, ?)",
+        [("ws_personal", "LEVEL", "personal"), ("ws_collab", "LEVEL", "collab")],
+    )
+    connection.executemany(
+        "INSERT INTO workspace_secrets (workspace_id, name, value, updated_at) VALUES (?, ?, ?, ?)",
+        [("ws_personal", "TOKEN", "personal-secret", now), ("ws_collab", "TOKEN", "collab-secret", now)],
+    )
     connection.commit()
     connection.close()
 
@@ -89,6 +97,14 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         ("ws_collab", "collaborative"),
         ("ws_personal", "personal"),
     ]
+    assert _rows(
+        connection,
+        "SELECT scope_kind, scope_id, name, value FROM variables ORDER BY scope_kind, scope_id",
+    ) == [("user", "usr_alice", "LEVEL", "personal"), ("user_group", "ws_collab", "LEVEL", "collab")]
+    assert _rows(
+        connection,
+        "SELECT scope_kind, scope_id, name, value FROM secrets ORDER BY scope_kind, scope_id",
+    ) == [("user", "usr_alice", "TOKEN", "personal-secret"), ("user_group", "ws_collab", "TOKEN", "collab-secret")]
     assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
         ("prj_personal", "ws_personal")
     ]
