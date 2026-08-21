@@ -3,7 +3,7 @@
 Canonical ownership is User/UserGroup; Workspace paths remain bounded deprecated
 adapters until #5/PR15 callers migrate:
 
-- ``GET    /shared-resources``                              —— actor-discoverable resources
+- ``GET    /shared-resources``                               —— actor-discoverable resources
 - ``POST   /shared-resources``                              —— create with explicit owner
 - ``GET    /workspaces/{id}/shared-resources``              —— deprecated bounded list adapter
 - ``POST   /workspaces/{id}/shared-resources``              —— deprecated bounded create adapter
@@ -11,17 +11,20 @@ adapters until #5/PR15 callers migrate:
 - ``PATCH  /shared-resources/{id}``                         —— resource metadata
 - ``POST   /shared-resources/{id}/versions``                —— upload immutable version
 - ``GET    /shared-resource-versions/{id}``                 —— version detail
-- ``GET    /shared-resource-versions/{id}/files/content``   —— read version file
+- ``GET    /shared-resource-versions/{id}/files/content``   —— read version text file
+- ``GET    /shared-resource-versions/{id}/files/download``  —— read original bytes
 
 文件上传使用 ``multipart/form-data``，与 Project 文件上传同模式。
 """
 
 from __future__ import annotations
 
+import mimetypes
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, Query, UploadFile, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 
 from ...application.shared_resource_service import SharedResourceUpload
 from ...domain.ownership import OwnerReference
@@ -221,7 +224,7 @@ async def read_shared_resource_version_file(
     """按可见性校验后返回版本内指定文件的内容。
 
     用 ``text/plain`` 直返字节，前端拿到字符串即可预览或下载；
-    二进制文件建议通过下载而非本接口读取。
+    二进制文件请改走 ``files/download``，经本接口会被损坏。
     """
     data = await services.shared_resources.read_version_file(user.id, version_id, path)
     filename = path.rsplit("/", 1)[-1]
@@ -229,4 +232,35 @@ async def read_shared_resource_version_file(
         content=data,
         media_type="text/plain",
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/shared-resource-versions/{version_id}/files/download",
+    summary="下载 Shared Resource 版本中的文件",
+    responses={200: {"content": {"application/octet-stream": {}}}},
+)
+async def download_shared_resource_version_file(
+    version_id: str,
+    path: Annotated[str, Query(description="版本内的相对路径")],
+    user: CurrentUser,
+    services: ServicesDep,
+) -> Response:
+    """按可见性校验后返回版本内指定文件的原始字节。
+
+    按扩展名推断 MIME 并以 ``inline`` 返回：图片等浏览器能直接渲染的类型
+    供前端内联预览，其余类型前端仍按不可预览处理。``files/content`` 走
+    ``text/plain`` 直出，二进制文件经它会损坏，只能由本接口取原始字节。
+    """
+    data = await services.shared_resources.read_version_file(user.id, version_id, path)
+    filename = path.rsplit("/", 1)[-1]
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    fallback = filename.encode("ascii", errors="replace").decode("ascii").replace('"', "_")
+    quoted = quote(filename, safe="")
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"inline; filename=\"{fallback}\"; filename*=UTF-8''{quoted}"
+        },
     )

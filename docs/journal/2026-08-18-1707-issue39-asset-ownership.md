@@ -218,3 +218,21 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 
 - 独立 reviewer 以 fresh-context、read-only、high-risk mode 审查全部 asset-use callsite，并核对 actor discovery 与 consuming Project use authorization 的职责分离；结论 `PASS`，无 findings。
 - Reviewer 的 targeted test invocation 因 command approval 不可用而未执行；这仅限制 reviewer 自身的动态 evidence。Review 未修改 source，因此 implementer 的 fresh targeted、full 与 smoke evidence 仍为当前候选证据。
+
+## 2026-08-21 PR #58 origin/main integration
+
+### Merge and semantic resolution
+
+- 在 clean `refactor/39-asset-ownership` HEAD `d9253c81898adebeeb0eeb7ba39daae14987f958` 上执行正常 `git merge refs/remotes/origin/main`；合入的 `origin/main` 为 `4b38130721d504848a61bdb98d3839b83421840d`，即 PR #57 后 main。未 rebase、未改写历史。
+- 三个文本冲突仅位于 `backend/src/workspace107/api/routes/shared_resources.py`、`contracts/openapi.json`、`frontend/src/api/schema.d.ts`。后端路由 source-first 合并：保留 #39 canonical User/UserGroup owner list/create/detail/version 与 deprecated bounded Workspace adapters，同时保留 #15 原始字节下载路由及 MIME/Content-Disposition 行为。
+- `contracts/openapi.json` 与 `frontend/src/api/schema.d.ts` 没有手工拼接；由合并后的后端执行 `make contract` 重新生成。`make contract-check` 随后 PASS。
+- #15 前端 Shared Resource surface 已切到 #39 canonical contract：actor discovery 使用 `GET /shared-resources`；创建使用 `POST /shared-resources` 并从当前 Personal/UserGroup context 显式发送 `OwnerReference`；列表、详情、版本页展示 API 返回的 `OwnerSummaryOut`。删除 active frontend code/tests 中的 Platform/null owner、`is_platform_owned`、`owner_workspace_id` 与 catalog/workspace Shared Resource adapter 假设；保留 create/edit/publish/version/preview/download UX 和 capability-gated mutation entry。
+
+### Fresh integration evidence
+
+- `cd frontend && pnpm exec vitest run tests/component/SharedResourcePage.test.tsx tests/component/SharedResourceVersionPage.test.tsx tests/unit/api/sharedResources.test.ts` → `3` suites / `21` tests PASS；新增 canonical discovery path、显式 owner create body、canonical owner display/read-only fallback coverage。
+- `cd backend && uv run pytest -q tests/integration/resource tests/unit/domain/test_ownership.py tests/contract/test_api_contract.py tests/integration/test_seed.py` → `44 passed in 9.48s`。
+- `make contract-check` → PASS；OpenAPI 与 generated frontend types 与合并后 backend 一致。
+- `make check` → exit `0`：workflow `15` tests，backend `213 passed, 2 skipped`，frontend `15` files / `69` tests，lint/format/typecheck/build/API contract 全部 PASS。
+- Isolated runtime smoke 使用一次性 SQLite DB/storage、`alembic upgrade head` 和 `seed --demo`：`student` 向 `grp_demo` canonical owner 创建 Shared Resource 得到 `201` 与 `{kind:user_group,id:grp_demo,display_name:演示 User Group}`；detail owner summary 完全一致；actor discovery 随后可见；发布一文件版本并经 #15 `/files/download` 取回原始 `28` bytes。backend/frontend dev server 均实际启动，临时 DB/storage 随后删除。
+- 当前 harness 未挂载文档所述 Browser device（schema-conforming `xd://browser` open 返回 no such tool，已提交 harness tool report），因此不能给出真实 Chromium 视觉/键盘证据；UI 行为证据限于 jsdom component tests、typecheck/build 与实际 dev server/API smoke。未访问 live 107。

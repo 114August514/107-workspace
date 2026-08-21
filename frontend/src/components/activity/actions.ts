@@ -56,9 +56,9 @@ export function targetPath(activity: Activity): string | null {
       // 版本没有独立页面，跳到它所属的 Project
       return activity.project_id ? `/projects/${activity.project_id}` : null
     case 'shared_resource':
-      return null
+      return `/shared-resources/${activity.target_id}`
     case 'shared_resource_version':
-      return null
+      return `/shared-resource-versions/${activity.target_id}`
     case 'member':
       return null
   }

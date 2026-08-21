@@ -1,0 +1,24 @@
+/* 装列表用的盒子（Primer 版）。
+ *
+ * body 内边距默认为 0，表头直接贴着卡片标题栏，共用底色读起来是一整块。
+ * 全部走 Primer Primitives 功能 token，不复制 GitHub 色值。 */
+
+.card {
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  overflow: hidden;
+  background: var(--bgColor-default);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--base-size-8) var(--base-size-16);
+  background: var(--bgColor-muted);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.body {
+  padding: var(--base-size-16);
+}
