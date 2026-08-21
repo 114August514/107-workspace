@@ -49,7 +49,7 @@ async def _reset_to_e35(engine, config: Config) -> datetime:
         )
         await connection.execute(
             text(
-                "INSERT INTO workspaces VALUES ('w','personal','W','', 'u', NULL, :now), ('g','collaborative','G','', 'u', NULL, :now)"
+                "INSERT INTO workspaces VALUES ('w','personal','W','', 'u', NULL, :now), ('g','collaborative','G','', 'u', NULL, :now)"  # noqa: E501
             ),
             {"now": now},
         )
@@ -58,13 +58,13 @@ async def _reset_to_e35(engine, config: Config) -> datetime:
         )
         await connection.execute(
             text(
-                "INSERT INTO memberships (id,user_group_id,user_id,role,status,created_at) VALUES ('m','g','u','owner','active',:now)"
+                "INSERT INTO memberships (id,user_group_id,user_id,role,status,created_at) VALUES ('m','g','u','owner','active',:now)"  # noqa: E501
             ),
             {"now": now},
         )
         await connection.execute(
             text(
-                "INSERT INTO projects (id,workspace_id,name,description,status,created_by,created_at,updated_at) VALUES ('p','w','P','', 'active','u',:now,:now)"
+                "INSERT INTO projects (id,workspace_id,name,description,status,created_by,created_at,updated_at) VALUES ('p','w','P','', 'active','u',:now,:now)"  # noqa: E501
             ),
             {"now": now},
         )
@@ -85,14 +85,14 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
             )
             await connection.execute(
                 text(
-                    "INSERT INTO workspace_secrets VALUES ('w','TOKEN','secret-w',:now), ('g','TOKEN','secret-g',:now)"
+                    "INSERT INTO workspace_secrets VALUES ('w','TOKEN','secret-w',:now), ('g','TOKEN','secret-g',:now)"  # noqa: E501
                 ),
                 {"now": now},
             )
             await connection.execute(
                 text("INSERT INTO run_snapshots (id,payload) VALUES ('s',CAST(:payload AS json))"),
                 {
-                    "payload": '{"project_id":"p","env":{"literals":{"A":"1"},"secret_refs":{"T":"TOKEN"}}}'
+                    "payload": '{"project_id":"p","env":{"literals":{"A":"1"},"secret_refs":{"T":"TOKEN"}}}'  # noqa: E501
                 },
             )
         await _migrate(config, "head")
@@ -100,7 +100,8 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
             assert (
                 await connection.execute(
                     text(
-                        "SELECT scope_kind,scope_id,name FROM variables ORDER BY scope_kind,scope_id"
+                        "SELECT scope_kind,scope_id,name FROM variables "
+                        "ORDER BY scope_kind,scope_id"
                     )
                 )
             ).all() == [("user", "u", "LEVEL"), ("user_group", "g", "LEVEL")]
@@ -114,7 +115,8 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
             assert (
                 await connection.execute(
                     text(
-                        "SELECT jsonb_typeof(payload::jsonb),payload::jsonb->'env'->'secret_refs'->>'T' FROM run_snapshots"
+                        "SELECT jsonb_typeof(payload::jsonb), "
+                        "payload::jsonb->'env'->'secret_refs'->>'T' FROM run_snapshots"
                     )
                 )
             ).one() == ("object", "user:u:TOKEN")
@@ -122,7 +124,8 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
                 (
                     await connection.execute(
                         text(
-                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid='run_secret_redactions'::regclass"
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid='run_secret_redactions'::regclass"
                         )
                     )
                 )
@@ -146,7 +149,8 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
             assert (
                 await connection.execute(
                     text(
-                        "SELECT jsonb_typeof(payload::jsonb),payload::jsonb->'env'->'secret_refs'->>'T' FROM run_snapshots"
+                        "SELECT jsonb_typeof(payload::jsonb), "
+                        "payload::jsonb->'env'->'secret_refs'->>'T' FROM run_snapshots"
                     )
                 )
             ).one() == ("object", "user:u:TOKEN")
@@ -182,7 +186,7 @@ async def test_postgresql_project_downgrade_refusal_preserves_data() -> None:
             assert (
                 await connection.execute(
                     text(
-                        "SELECT jsonb_typeof(payload::jsonb),payload::jsonb->'env'->'secret_refs'->>'T' FROM run_snapshots"
+                        "SELECT jsonb_typeof(payload::jsonb),payload::jsonb->'env'->'secret_refs'->>'T' FROM run_snapshots"  # noqa: E501
                     )
                 )
             ).one() == ("object", "project:p:TOKEN")
