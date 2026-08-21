@@ -4,8 +4,8 @@
 - 认领：August / Codex
 - 分支：`refactor/37-config-scopes`
 - Worktree：`/home/august/Projects/ustc_107/107-workspace-37`
-- Exact published HEAD: `68869657569136d3896656ec052e7694b76ee636`; remote `origin/refactor/37-config-scopes` matches.
-- Issue #37；PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; primary worktree 未触碰。
+- Reviewed code/evidence HEAD: `68869657569136d3896656ec052e7694b76ee636`.
+- PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; subsequent journal-only publication commit is reported externally; primary worktree 未触碰。
 
 ## 当前完成范围
 - User/UserGroup/Project scoped Variable/Secret、严格 scope repository/vault、显式 CRUD/API、Project-first/owner/user resolver、typed exact SecretReference、snapshot freeze、execution/rerun current Secret、no-fallback failure、log redaction、Fork expression isolation。
