@@ -15,9 +15,10 @@
 - 与 active #38（User Resource Entitlement）和 #39（Asset Ownership）协调，避免覆盖 ownership/access、run/config、repository/table、seed 与 OpenAPI 改动。
 - Run convergence #41 需要消费本 Issue 的稳定 config resolution contract。
 
-## 预期改动
-- 仅记录工作状态；当前不实现应用代码。
-- 后续实现范围以 Issue #37 与 `docs/product/design.md` 配置语义和验收条件为准。
+## 实现进度
+- 已完成当前持久化基础切片：ConfigScope/SecretReference、scoped Variable/Secret 表与迁移、Repository/SecretVault scope API、legacy workspace service 显式映射。
+- Commit：`5b205f3`；目标分支仍在进行中。
+- 待后续切片：Run resolution/Secret exact-ref 调用方、迁移集成测试与完整 repository 行为测试；本切片不提供 public CRUD routes。
 
 ## 仓外副作用
 无；不进行 live 107 活动、远端发布或其他仓外操作。
