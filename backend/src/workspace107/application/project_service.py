@@ -12,16 +12,25 @@ from dataclasses import dataclass
 
 from ..domain import ids
 from ..domain.capabilities import Capability
-from ..domain.enums import ActivityAction, ChangeKind, ProjectStatus, TargetType
+from ..domain.enums import (
+    ActivityAction,
+    ChangeKind,
+    LegacyWorkspaceKind,
+    ProjectStatus,
+    ProjectVisibility,
+    TargetType,
+)
 from ..domain.errors import ConflictError, ObjectNotFound, ValidationFailed
 from ..domain.models import (
     ForkRelation,
+    LegacyWorkspace,
     Project,
     ProjectFile,
     ProjectVersion,
     ProjectVersionFile,
     RunConfiguration,
 )
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
@@ -86,6 +95,9 @@ class ProjectService:
         await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.PROJECT_VIEW)
         return await self._repos.projects.list_for_workspace(workspace_id, page)
 
+    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
+        return await self._repos.projects.list_discoverable_for_user(user_id, page)
+
     async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Project]:
         return await self._repos.projects.list_for_user(user_id, limit=limit)
 
@@ -93,7 +105,14 @@ class ProjectService:
         return await self._guard.project(user_id, project_id)
 
     async def create(
-        self, user_id: str, workspace_id: str, name: str, description: str = ""
+        self,
+        user_id: str,
+        workspace_id: str,
+        name: str,
+        description: str = "",
+        *,
+        visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE,
+        owner: OwnerReference | None = None,
     ) -> Project:
         await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.PROJECT_CREATE)
         name = name.strip()
@@ -107,7 +126,9 @@ class ProjectService:
             id=ids.new_id(ids.PROJECT),
             workspace_id=workspace_id,
             name=name,
+            owner=owner or OwnerReference(kind=OwnerKind.USER_GROUP, id=workspace_id),
             description=description,
+            visibility=visibility,
             created_by=user_id,
             created_at=now,
             updated_at=now,
@@ -124,6 +145,43 @@ class ProjectService:
         )
         return project
 
+    async def create_owned(
+        self,
+        user_id: str,
+        owner: OwnerReference,
+        name: str,
+        description: str = "",
+        *,
+        visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE,
+    ) -> Project:
+        """Create under a canonical owner with a bounded child-domain anchor."""
+        if owner.kind is OwnerKind.USER:
+            if owner.id != user_id:
+                raise ObjectNotFound("Project Owner", owner.id)
+            workspace = await self._repos.legacy_workspaces.get_personal(user_id)
+            if workspace is None:
+                now = self._clock.now()
+                workspace = LegacyWorkspace(
+                    id=f"{ids.LEGACY_WORKSPACE}_personal_{user_id}",
+                    kind=LegacyWorkspaceKind.PERSONAL,
+                    name=f"{user_id} Personal",
+                    owner_id=user_id,
+                    created_at=now,
+                )
+                await self._repos.legacy_workspaces.add(workspace)
+        else:
+            workspace = await self._repos.legacy_workspaces.get(owner.id)
+            if workspace is None:
+                raise ObjectNotFound("User Group", owner.id)
+        return await self.create(
+            user_id,
+            workspace.id,
+            name,
+            description,
+            visibility=visibility,
+            owner=owner,
+        )
+
     async def update(
         self,
         user_id: str,
@@ -134,6 +192,7 @@ class ProjectService:
         environment_version_id: str | None = None,
         inherit_workspace_environment: bool = False,
         default_run_configuration_id: str | None = None,
+        visibility: ProjectVisibility | None = None,
     ) -> Project:
         access = await self._guard.project(user_id, project_id, needs=Capability.PROJECT_UPDATE)
         project = access.project
@@ -149,6 +208,8 @@ class ProjectService:
             project.name = name
         if description is not None:
             project.description = description
+        if visibility is not None:
+            project.visibility = visibility
         if inherit_workspace_environment:
             project.environment_version_id = None
         elif environment_version_id is not None:
@@ -185,12 +246,12 @@ class ProjectService:
     # -- 文件 -----------------------------------------------------------
 
     async def list_files(self, user_id: str, project_id: str) -> list[ProjectFile]:
-        await self._guard.project(user_id, project_id)
+        await self._guard.project(user_id, project_id, owner_scope=True)
         files = await self._repos.project_files.list_for_project(project_id)
         return sorted(files, key=lambda f: f.path)
 
     async def read_file(self, user_id: str, project_id: str, path: str) -> bytes:
-        await self._guard.project(user_id, project_id)
+        await self._guard.project(user_id, project_id, owner_scope=True)
         normalized = normalize_path(path)
         record = await self._repos.project_files.get(project_id, normalized)
         if record is None:
@@ -304,7 +365,7 @@ class ProjectService:
 
     async def working_changes(self, user_id: str, project_id: str) -> list[WorkingTreeChange]:
         """查看当前未保存的文件变更：工作区与最近一个版本的差异。"""
-        await self._guard.project(user_id, project_id)
+        await self._guard.project(user_id, project_id, owner_scope=True)
         latest = await self._repos.project_versions.latest(project_id)
         baseline = {f.path: f.content_hash for f in latest.files} if latest else {}
         current = {
@@ -422,6 +483,7 @@ class ProjectService:
         version_id: str,
         target_workspace_id: str,
         *,
+        target_owner: OwnerReference | None = None,
         name: str = "",
         description: str = "",
     ) -> Project:
@@ -449,25 +511,45 @@ class ProjectService:
         )
 
         # 2. 目标空间可写
-        target = await self._guard.legacy_workspace(
-            user_id, target_workspace_id, needs=Capability.PROJECT_CREATE
-        )
+        if target_owner is not None and target_owner.kind is OwnerKind.USER:
+            if target_owner.id != user_id:
+                raise ObjectNotFound("Project Owner", target_owner.id)
+            personal = await self._repos.legacy_workspaces.get_personal(user_id)
+            if personal is None:
+                now = self._clock.now()
+                personal = LegacyWorkspace(
+                    id=f"{ids.LEGACY_WORKSPACE}_personal_{user_id}",
+                    kind=LegacyWorkspaceKind.PERSONAL,
+                    name=f"{user_id} Personal",
+                    owner_id=user_id,
+                    created_at=now,
+                )
+                await self._repos.legacy_workspaces.add(personal)
+            target = await self._guard.legacy_workspace(user_id, personal.id)
+        else:
+            target_id = target_owner.id if target_owner is not None else target_workspace_id
+            target = await self._guard.legacy_workspace(
+                user_id, target_id, needs=Capability.PROJECT_CREATE
+            )
 
         name = (name or source_access.project.name).strip()
         if not name:
             raise ValidationFailed("Project 名称不能为空")
-        if await self._repos.projects.name_exists(target_workspace_id, name):
+        if await self._repos.projects.name_exists(target.workspace.id, name):
             raise ConflictError(f"当前 Workspace 中已存在名为「{name}」的 Project")
 
         now = self._clock.now()
         project = Project(
             id=ids.new_id(ids.PROJECT),
-            workspace_id=target_workspace_id,
+            workspace_id=target.workspace.id,
             name=name,
+            owner=target_owner or target.workspace.owner_reference,
             description=description or source_access.project.description,
             # 环境选择作为可复用引用跟着复制（GR-503）。目标空间不一定能用，
             # 创建 Run 时仍需按目标 Workspace 的资格重新校验（GR-401）。
-            environment_version_id=source_access.project.environment_version_id,
+            environment_version_id=(
+                source_access.project.environment_version_id if source_access.owner_scope else None
+            ),
             created_by=user_id,
             created_at=now,
             updated_at=now,
@@ -504,9 +586,12 @@ class ProjectService:
         # 4. 运行方案：复制表达式和选择，不复制任何值。
         #    注意这里复制的是源 Project **当前**的运行方案，不是版本快照——
         #    RunConfiguration 挂在 Project 上，版本只固定文件内容。
-        for configuration in await self._repos.run_configurations.list_for_project(
-            source_version.project_id
-        ):
+        configurations = (
+            await self._repos.run_configurations.list_for_project(source_version.project_id)
+            if source_access.owner_scope
+            else []
+        )
+        for configuration in configurations:
             await self._repos.run_configurations.add(
                 RunConfiguration(
                     id=ids.new_id(ids.RUN_CONFIGURATION),

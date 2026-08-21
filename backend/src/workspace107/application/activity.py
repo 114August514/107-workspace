@@ -129,5 +129,7 @@ class ActivityService:
     async def list_for_project(
         self, user_id: str, project_id: str, page: PageRequest
     ) -> Page[Activity]:
-        await self._guard.project(user_id, project_id, needs=Capability.PROJECT_VIEW)
+        await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_VIEW, owner_scope=True
+        )
         return await self._repos.activities.list_for_project(project_id, page)
