@@ -1,18 +1,17 @@
-"""Shared Resource 路由。
+"""Shared Resource routes.
 
-Platform 资源在 ``/catalog/shared-resources`` 列出（见 catalog.py），
-其余 CRUD 走本文件：
+Canonical ownership is User/UserGroup:
 
-- ``GET    /workspaces/{id}/shared-resources``           —— Workspace 资源列表
-- ``POST   /workspaces/{id}/shared-resources``           —— 创建 Workspace 资源
-- ``GET    /shared-resources/{id}``                       —— 资源详情（含版本列表）
-- ``PATCH  /shared-resources/{id}``                       —— 修改资源元信息
-- ``POST   /shared-resources/{id}/versions``              —— 上传文件形成新版本
-- ``GET    /shared-resource-versions/{id}``               —— 版本详情
-- ``GET    /shared-resource-versions/{id}/files/content`` —— 读版本中的文本文件
-- ``GET    /shared-resource-versions/{id}/files/download`` —— 按原始字节下载/预览文件
+- ``GET    /shared-resources``                              —— actor-discoverable resources
+- ``POST   /shared-resources``                             —— create with explicit owner
+- ``GET    /shared-resources/{id}``                        —— resource detail and versions
+- ``PATCH  /shared-resources/{id}``                        —— resource metadata
+- ``POST   /shared-resources/{id}/versions``               —— upload immutable version
+- ``GET    /shared-resource-versions/{id}``                —— version detail
+- ``GET    /shared-resource-versions/{id}/files/content``  —— read version text file
+- ``GET    /shared-resource-versions/{id}/files/download`` —— read original bytes
 
-文件上传使用 ``multipart/form-data``，与 Project 文件上传同模式。
+File uploads use ``multipart/form-data``, matching Project file uploads.
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ from fastapi import APIRouter, File, Form, Query, UploadFile, status
 from fastapi.responses import PlainTextResponse, Response
 
 from ...application.shared_resource_service import SharedResourceUpload
+from ...domain.ownership import OwnerReference
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, ServicesDep
@@ -32,52 +32,45 @@ from ..deps import CurrentUser, ServicesDep
 router = APIRouter(tags=["shared-resource"])
 
 
-# -- Workspace 持有的资源 ---------------------------------------------------
+# -- Canonical actor-owned resources ---------------------------------------
 
 
 @router.get(
-    "/workspaces/{workspace_id}/shared-resources",
+    "/shared-resources",
     response_model=list[s.SharedResourceOut],
-    summary="列出 Workspace 持有的共享资源",
-    deprecated=True,
+    summary="列出当前用户可发现的共享资源",
 )
-async def list_workspace_shared_resources(
-    workspace_id: str, user: CurrentUser, services: ServicesDep
+async def list_shared_resources(
+    user: CurrentUser, services: ServicesDep
 ) -> list[s.SharedResourceOut]:
-    """需要 Shared Resource 查看权限；返回当前 Workspace 持有的资源。
-
-    Platform 持有的资源请走 ``GET /catalog/shared-resources``；跨 Workspace
-    可见的资源在 M4 Asset Grant 实现后单独提供。
-    """
-    resources = await services.shared_resources.list_for_workspace(user.id, workspace_id)
-    return [p.shared_resource_out(r) for r in resources]
+    """Return resources owned by the actor or by an owning UserGroup with active membership."""
+    views = await services.shared_resources.list_discoverable(user.id)
+    return [p.shared_resource_out(view) for view in views]
 
 
 @router.post(
-    "/workspaces/{workspace_id}/shared-resources",
+    "/shared-resources",
     response_model=s.SharedResourceOut,
     status_code=status.HTTP_201_CREATED,
-    summary="创建 Workspace 共享资源",
-    deprecated=True,
+    summary="创建 Shared Resource",
 )
-async def create_shared_resource(
-    workspace_id: str,
-    payload: s.SharedResourceCreateIn,
+async def create_canonical_shared_resource(
+    payload: s.CanonicalSharedResourceCreateIn,
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.SharedResourceOut:
-    """需要 Shared Resource 管理权限；在当前 Workspace 下创建一个空的资源对象。
+    """Create with explicit User/UserGroup owner.
 
-    资源创建后内容为空，需通过 ``POST /shared-resources/{id}/versions`` 上传文件
-    形成首个版本，才能在 Input Binding 中引用。
+    User owner must be the actor; UserGroup owner requires active membership with
+    Shared Resource management capability. Cross-owner attempts are concealed.
     """
-    resource = await services.shared_resources.create(
+    view = await services.shared_resources.create(
         user.id,
-        workspace_id,
+        owner=OwnerReference(payload.owner.kind, payload.owner.id),
         name=payload.name,
         description=payload.description,
     )
-    return p.shared_resource_out(resource)
+    return p.shared_resource_out(view)
 
 
 # -- 单资源 ----------------------------------------------------------------
@@ -92,9 +85,9 @@ async def get_shared_resource(
     resource_id: str, user: CurrentUser, services: ServicesDep
 ) -> s.SharedResourceDetailOut:
     """校验可见性后返回资源信息及其全部版本（按 sequence 倒序）。"""
-    access = await services.shared_resources.get(user.id, resource_id)
+    view = await services.shared_resources.get(user.id, resource_id)
     versions = await services.shared_resources.list_versions(user.id, resource_id)
-    return p.shared_resource_detail_out(access.resource, versions)
+    return p.shared_resource_detail_out(view, versions)
 
 
 @router.patch(
@@ -108,17 +101,14 @@ async def update_shared_resource(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.SharedResourceOut:
-    """需要 Shared Resource 管理权限；仅修改 Workspace 持有资源的名称与说明。
-
-    Platform 持有的资源由平台维护，不接受 API 修改。
-    """
-    resource = await services.shared_resources.update(
+    """需要 Shared Resource 管理权限；仅修改当前 actor 可发现资源的名称与说明。"""
+    view = await services.shared_resources.update(
         user.id,
         resource_id,
         name=payload.name,
         description=payload.description,
     )
-    return p.shared_resource_out(resource)
+    return p.shared_resource_out(view)
 
 
 @router.post(

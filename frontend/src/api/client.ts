@@ -46,6 +46,7 @@ import type {
   RunDraft,
   RunPage,
   SharedResource,
+  SharedResourceCreate,
   SharedResourceDetail,
   SharedResourceUpdate,
   SharedResourceVersion,
@@ -573,16 +574,8 @@ export const api = {
   },
 
   // -- 共享资源 ----------------------------------------------------------
-  listWorkspaceSharedResources: async (workspaceId: string): Promise<SharedResource[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/shared-resources', {
-        params: { path: { workspace_id: workspaceId } },
-      }),
-    ),
-
-  /** Platform 持有的公共资源。读路径，后端预留见 design.md §2.6 D。 */
-  listPlatformSharedResources: async (): Promise<SharedResource[]> =>
-    unwrap(await http.GET('/api/v1/catalog/shared-resources')),
+  listSharedResources: async (): Promise<SharedResource[]> =>
+    unwrap(await http.GET('/api/v1/shared-resources')),
 
   getSharedResource: async (id: string): Promise<SharedResourceDetail> =>
     unwrap(
@@ -591,15 +584,10 @@ export const api = {
       }),
     ),
 
-  createSharedResource: async (
-    workspaceId: string,
-    name: string,
-    description: string,
-  ): Promise<SharedResource> =>
+  createSharedResource: async (payload: SharedResourceCreate): Promise<SharedResource> =>
     unwrap(
-      await http.POST('/api/v1/workspaces/{workspace_id}/shared-resources', {
-        params: { path: { workspace_id: workspaceId } },
-        body: { name, description },
+      await http.POST('/api/v1/shared-resources', {
+        body: payload,
       }),
     ),
 

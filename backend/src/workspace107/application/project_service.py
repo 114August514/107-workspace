@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from ..domain import ids
 from ..domain.capabilities import Capability
-from ..domain.enums import ActivityAction, ChangeKind, ProjectStatus, TargetType
+from ..domain.enums import ActivityAction, ChangeKind, InputSourceType, ProjectStatus, TargetType
 from ..domain.errors import ConflictError, ObjectNotFound, ValidationFailed
 from ..domain.models import (
     ForkRelation,
@@ -28,6 +28,10 @@ from ..domain.ports.repositories import Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
+from .asset_use import (
+    environment_version_for_owner_use,
+    shared_resource_version_for_owner_use,
+)
 
 MAX_INLINE_PREVIEW_BYTES = 512 * 1024
 
@@ -152,7 +156,12 @@ class ProjectService:
         if inherit_workspace_environment:
             project.environment_version_id = None
         elif environment_version_id is not None:
-            version = await self._repos.environments.get_version(environment_version_id)
+            version = await environment_version_for_owner_use(
+                self._repos,
+                user_id,
+                environment_version_id,
+                access.workspace.owner_reference,
+            )
             if version is None:
                 raise ObjectNotFound("Environment Version", environment_version_id)
             project.environment_version_id = version.id
@@ -459,14 +468,47 @@ class ProjectService:
         if await self._repos.projects.name_exists(target_workspace_id, name):
             raise ConflictError(f"当前 Workspace 中已存在名为「{name}」的 Project")
 
+        target_owner = target.workspace.owner_reference
+        project_environment_id = source_access.project.environment_version_id
+        if (
+            project_environment_id is not None
+            and await environment_version_for_owner_use(
+                self._repos, user_id, project_environment_id, target_owner
+            )
+            is None
+        ):
+            raise ObjectNotFound("Environment Version", project_environment_id)
+
+        configurations = await self._repos.run_configurations.list_for_project(
+            source_version.project_id
+        )
+        for configuration in configurations:
+            configuration_environment_id = configuration.environment_version_id
+            if (
+                configuration_environment_id is not None
+                and await environment_version_for_owner_use(
+                    self._repos, user_id, configuration_environment_id, target_owner
+                )
+                is None
+            ):
+                raise ObjectNotFound("Environment Version", configuration_environment_id)
+            for binding in configuration.input_bindings:
+                if (
+                    binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
+                    and await shared_resource_version_for_owner_use(
+                        self._repos, user_id, binding.source_id, target_owner
+                    )
+                    is None
+                ):
+                    raise ObjectNotFound("Shared Resource Version", binding.source_id)
+
         now = self._clock.now()
         project = Project(
             id=ids.new_id(ids.PROJECT),
             workspace_id=target_workspace_id,
             name=name,
             description=description or source_access.project.description,
-            # 环境选择作为可复用引用跟着复制（GR-503）。目标空间不一定能用，
-            # 创建 Run 时仍需按目标 Workspace 的资格重新校验（GR-401）。
+            # Asset references were validated against the target owner before any writes.
             environment_version_id=source_access.project.environment_version_id,
             created_by=user_id,
             created_at=now,
@@ -504,9 +546,7 @@ class ProjectService:
         # 4. 运行方案：复制表达式和选择，不复制任何值。
         #    注意这里复制的是源 Project **当前**的运行方案，不是版本快照——
         #    RunConfiguration 挂在 Project 上，版本只固定文件内容。
-        for configuration in await self._repos.run_configurations.list_for_project(
-            source_version.project_id
-        ):
+        for configuration in configurations:
             await self._repos.run_configurations.add(
                 RunConfiguration(
                     id=ids.new_id(ids.RUN_CONFIGURATION),

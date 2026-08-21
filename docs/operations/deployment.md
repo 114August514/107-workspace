@@ -37,8 +37,9 @@ api (uvicorn :8000) ---> db (PostgreSQL)
       +-- mock process or slurmrestd
 ```
 
-API 容器启动时会执行 Alembic 升级和幂等的平台目录 seed，然后启动应用。该流程假设
-单个 API 实例；扩展到多副本之前，必须把迁移拆成独立的一次性任务。
+API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan seed；只有
+`WORKSPACE107_SEED_DEMO=true` 才额外创建演示资产与 Project。该流程假设单个 API
+实例；扩展到多副本之前，必须把迁移拆成独立的一次性任务。
 
 ## 关键配置
 
@@ -54,8 +55,16 @@ API 容器启动时会执行 Alembic 升级和幂等的平台目录 seed，然�
 | `WORKSPACE107_SLURM_API_USER` | Slurm API 用户 |
 | `WORKSPACE107_SLURM_JWT` | 等价于密码，只能从环境注入 |
 | `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；真实部署必须替换 |
+| `WORKSPACE107_SEED_DEMO` | 仅本地/受信任演示；`true` 时载入演示资产与 Project |
+| `WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME` | 平台演示资产组首次 bootstrap Owner；组已存在时忽略 |
 
 镜像不包含凭据，`.env` 也不会进入 Git 或构建上下文。
+
+演示 Owner 也可通过手动命令的 `--platform-owner-username` 指定，CLI 优先于环境变量。
+该输入只在 `grp_platform_assets` 不存在时生效；后续 seed 以持久化的唯一 active Owner
+Membership 为准，不协调 Owner，也不创建后来改配的用户名。它不是 production
+provisioning 配置。演示 Project 的 `grp_demo` Environment 与平台资产组持有的两条
+Environment 分开存在。
 
 ## Mock 不是沙箱
 

@@ -14,6 +14,7 @@ import { PrimerRelativeTime } from '../components/primer/PrimerMono'
 import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
+import { loadSharedResourceOwnerContext } from '../components/sharedresource/ownerContext'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 import { PrimerRoot } from '../primer/setup'
@@ -28,18 +29,14 @@ export function SharedResourcePage() {
     [resourceId, token],
   )
   const workspace = useAsync<LegacyWorkspaceContext | undefined>(
-    async () =>
-      resource.data?.owner_workspace_id
-        ? api.getLegacyWorkspaceContext(resource.data.owner_workspace_id)
-        : undefined,
-    [resource.data?.owner_workspace_id],
+    async () => (resource.data ? loadSharedResourceOwnerContext(resource.data) : undefined),
+    [resource.data?.owner.kind, resource.data?.owner.id],
   )
   const [editing, setEditing] = useState(false)
   const [publishing, setPublishing] = useState(false)
 
-  const isPlatform = resource.data?.is_platform_owned ?? false
-  const canManage = !isPlatform && can(workspace.data, 'shared_resource.manage')
-  const canPublish = !isPlatform && can(workspace.data, 'shared_resource.version.create')
+  const canManage = can(workspace.data, 'shared_resource.manage')
+  const canPublish = can(workspace.data, 'shared_resource.version.create')
   // 版本列表按 sequence 倒序，首个即最新。
   const versions = resource.data?.versions ?? []
   const latestVersionId = versions[0]?.id
@@ -64,28 +61,28 @@ export function SharedResourcePage() {
                 <Breadcrumbs.Item as={Link} to="/">
                   首页
                 </Breadcrumbs.Item>
-                {isPlatform ? (
-                  <Breadcrumbs.Item>平台</Breadcrumbs.Item>
-                ) : workspace.data ? (
+                {workspace.data ? (
                   <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
-                    {workspace.data.name}
+                    {resource.data.owner.display_name}
                   </Breadcrumbs.Item>
-                ) : null}
-                <Breadcrumbs.Item
-                  as={Link}
-                  to={`/workspaces/${workspace.data?.id ?? ''}/shared-resources`}
-                >
-                  共享资源
-                </Breadcrumbs.Item>
+                ) : (
+                  <Breadcrumbs.Item>{resource.data.owner.display_name}</Breadcrumbs.Item>
+                )}
+                {workspace.data ? (
+                  <Breadcrumbs.Item
+                    as={Link}
+                    to={`/workspaces/${workspace.data.id}/shared-resources`}
+                  >
+                    共享资源
+                  </Breadcrumbs.Item>
+                ) : (
+                  <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
+                )}
               </Breadcrumbs>
               <div className={styles.titleRow}>
                 <PackageIcon className={styles.titleIcon} size={24} />
                 <h1 className={styles.title}>{resource.data.name}</h1>
-                {isPlatform ? (
-                  <Label variant="attention">平台资源</Label>
-                ) : (
-                  <Label variant="done">空间资源</Label>
-                )}
+                <Label>归属：{resource.data.owner.display_name}</Label>
                 <div className={styles.actions}>
                   {canManage && (
                     <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
