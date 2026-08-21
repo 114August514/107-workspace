@@ -14,7 +14,7 @@
 - Alembic f37 migration covers scoped config, Snapshot JSON exact refs, redaction table/FK, deterministic legacy mapping and refusal safety; PostgreSQL job runs existing identity test then scoped config test.
 
 ## 最终证据
-- Exact published HEAD `68869657569136d3896656ec052e7694b76ee636` `make check` PASS: backend Ruff lint/format; backend **238 passed, 4 skipped**; frontend format/lint/typecheck; frontend **68 passed**; frontend build; API contract sync/check.
+- Reviewed code/evidence HEAD `68869657569136d3896656ec052e7694b76ee636` `make check` PASS: backend Ruff lint/format; backend **238 passed, 4 skipped**; frontend format/lint/typecheck; frontend **68 passed**; frontend build; API contract sync/check.
 - `make smoke` PASS: isolated HTTP core Run completed with Project-scoped seed path.
 - Targeted #37 suite: 107 passed; migration suite: 7 passed; focused Fork/execution/rerun and historical-redaction tests passed.
 - PostgreSQL 17 fresh Docker evidence: scoped test **2 passed, 0 skipped**; JSON object/exact refs, scoped rows, redaction PK/FK cascade, downgrade/re-upgrade and refusal preservation verified. Container `workspace107-pg17-37` removed; post-cleanup container listing empty.
