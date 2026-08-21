@@ -22,6 +22,7 @@ from ..api.deps import build_services
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
 from ..domain import ids
+from ..domain.config_scope import ConfigScope
 from ..domain.enums import LegacyWorkspaceKind, MembershipRole, MembershipStatus
 from ..domain.pagination import PageRequest
 from ..infrastructure.db import tables as t
@@ -277,7 +278,9 @@ async def seed_demo(session: AsyncSession, context) -> str:
     )
     await services.projects.save_version(user.id, project.id, "初始版本")
 
-    await services.legacy_workspaces.set_variable(user.id, DEMO_USER_GROUP_ID, "EPOCHS", "5")
+    await services.configuration.set_variable(
+        ConfigScope.user_group(DEMO_USER_GROUP_ID), "EPOCHS", "5"
+    )
     await services.run_configurations.create(
         user.id,
         project.id,

@@ -320,7 +320,8 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     say("1. Resolve explicit demo User Group")
     home = client.request("GET", "/me")
     demo_group = next(
-        (group for group in home["user_groups"] if group["id"] == DEMO_USER_GROUP_ID), None
+        (group for group in home["user_groups"] if group["id"] == DEMO_USER_GROUP_ID),
+        None,
     )
     if demo_group is None:
         raise TaskError(f"Demo User Group {DEMO_USER_GROUP_ID!r} is not visible to the demo user")
@@ -362,7 +363,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     say("4. Create Run Configuration")
     client.request(
         "PUT",
-        f"/workspaces/{workspace_id}/variables",
+        f"/projects/{project_id}/variables",
         {"name": "EPOCHS", "value": "3"},
     )
     configuration = client.request(
@@ -533,7 +534,13 @@ def audit(*, base: str | None = None, max_lines: int = 400) -> None:
     sensitive_patterns = {
         "API contract": ("contracts/", "frontend/src/api/schema.d.ts"),
         "database migration": ("backend/migrations/",),
-        "authentication or authorization": ("auth", "permission", "role", "token", "session"),
+        "authentication or authorization": (
+            "auth",
+            "permission",
+            "role",
+            "token",
+            "session",
+        ),
         "dependency manifest": ("pyproject.toml", "package.json"),
         "secret/config boundary": (".env", "secret", "credential", ".pem", ".key"),
         "architecture decision": ("docs/decisions/",),

@@ -42,12 +42,12 @@ export function RunConfigurationPanel({
   // 用来判断哪些引用在当前空间解析不了。Fork 过来的方案常常缺东西——
   // 等用户点了提交才告诉他，就太晚了。
   const secretNames = useAsync<string[]>(
-    async () => (workspace ? api.listSecretNames(workspace.id) : []),
-    [workspace?.id],
+    async () => api.listProjectSecrets(projectId),
+    [projectId],
   )
   const variables = useAsync(
-    async () => (workspace ? api.listVariables(workspace.id) : []),
-    [workspace?.id],
+    async () => api.listProjectVariables(projectId),
+    [projectId],
   )
   const available = {
     secrets: secretNames.data ?? [],

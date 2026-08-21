@@ -37,5 +37,9 @@ Legacy workspace config 只有在 owner/user/group、active owner、唯一 perso
 ## 独立复审 A remediation
 - `run_secret_redactions` and private SecretVault `retain_for_redaction`/`redaction_values` retain injected values by per-run digest for historical log redaction only; FK cascade and Alembic create/drop included.
 - `_submit` retains after exact validation and before storage/scheduler; `read_logs` uses retention first and bounded current-ref fallback only for legacy runs. Execution test rereads original logs after rotation/deletion and remains redacted.
-- B workspace routes remain because real current seed/tests/frontend callers were found; migration is a separate bounded task.
-- Commit：`649db1b`；PostgreSQL evidence remains a separate remediation。
+- Commit：`649db1b` retention remediation；B cutover is in the current candidate commit；PostgreSQL evidence remains separate。
+
+## B cutover remediation
+- Removed obsolete Workspace Variable/Secret routes and LegacyWorkspaceService config methods; unrelated workspace compatibility remains.
+- Migrated seed, smoke script and frontend RunConfiguration availability to explicit Project scope; removed obsolete VariablePanel/client methods. Canonical OpenAPI/frontend generation removed workspace config operations; contract assertion enforces absence.
+- Active-tree search finds no WorkspaceVariable/WorkspaceSecret, workspace config route, legacy config service call, or generic config path. Cutover verification is complete.
