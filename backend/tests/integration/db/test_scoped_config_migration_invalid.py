@@ -38,7 +38,7 @@ def _base(database: Path) -> tuple[Config, sqlite3.Connection, str]:
 
 
 def test_scoped_config_upgrade_rejects_orphan_workspace(tmp_path: Path) -> None:
-    config, connection, now = _base(tmp_path / "orphan.db")
+    config, connection, _ = _base(tmp_path / "orphan.db")
     connection.execute("INSERT INTO workspace_variables VALUES ('missing','LEVEL','x')")
     connection.commit()
     connection.close()
