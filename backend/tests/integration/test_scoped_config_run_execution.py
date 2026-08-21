@@ -142,3 +142,6 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     assert (
         await client.get(f"/api/v1/runs/{run.json()['id']}", headers={"X-User": "foreign"})
     ).status_code == 404
+    original_again = await client.get(f"/api/v1/runs/{run.json()['id']}/logs")
+    original_text = json.dumps(original_again.json())
+    assert "project-token" not in original_text

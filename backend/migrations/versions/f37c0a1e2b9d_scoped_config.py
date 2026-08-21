@@ -179,6 +179,15 @@ def upgrade() -> None:
     _preflight_config_rows(bind)
     _migrate_snapshot_refs(bind, downgrade=False)
     _create_scoped_tables()
+    op.create_table(
+        "run_secret_redactions",
+        sa.Column(
+            "run_id", sa.String(40), sa.ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
+        ),
+        sa.Column("value_digest", sa.String(64), nullable=False),
+        sa.Column("value", sa.Text(), nullable=False),
+        sa.PrimaryKeyConstraint("run_id", "value_digest"),
+    )
     for source, target in (("workspace_variables", "variables"), ("workspace_secrets", "secrets")):
         for row in bind.execute(sa.text(f"SELECT * FROM {source}")).mappings().all():
             kind, scope_id = _scope_for_workspace(bind, row["workspace_id"])
@@ -254,5 +263,6 @@ def downgrade() -> None:
                     "updated_at": row.get("updated_at"),
                 },
             )
+    op.drop_table("run_secret_redactions")
     op.drop_table("variables")
     op.drop_table("secrets")

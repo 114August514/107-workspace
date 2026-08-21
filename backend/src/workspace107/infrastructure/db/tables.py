@@ -289,6 +289,18 @@ class RunRow(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RunSecretRedactionRow(Base):
+    """Internal SecretVault retention for historical log redaction only."""
+
+    __tablename__ = "run_secret_redactions"
+
+    run_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    value_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
 class IdempotencyKeyRow(Base):
     """幂等登记。
 

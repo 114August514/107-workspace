@@ -125,6 +125,9 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "SELECT payload FROM run_snapshots WHERE id='snap_1'"
     ).fetchone()[0]
     assert "user:usr_alice:TOKEN" in str(snapshot_payload)
+    assert connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='run_secret_redactions'"
+    ).fetchone() == ("run_secret_redactions",)
     assert "personal-secret" not in str(snapshot_payload)
     assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
         ("prj_personal", "ws_personal")

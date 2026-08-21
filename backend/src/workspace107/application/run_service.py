@@ -169,10 +169,11 @@ class RunService:
         access = await self._guard.run(user_id, run_id)
         snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
         secret_values: list[str] = []
-        if snapshot is not None and snapshot.env_secret_refs:
-            refs = list(set(snapshot.env_secret_refs.values()))
-            resolved = await self._secrets.resolve(refs)
-            secret_values = list(resolved.values())
+        if snapshot is not None:
+            secret_values = await self._secrets.redaction_values(access.run.id)
+            if not secret_values and snapshot.env_secret_refs:
+                refs = list(set(snapshot.env_secret_refs.values()))
+                secret_values = list((await self._secrets.resolve(refs)).values())
 
         chunks: list[RunLogChunk] = []
         for stream in (LogStream.STDOUT, LogStream.STDERR):
@@ -498,6 +499,7 @@ class RunService:
                 )
                 if problems:
                     raise ValidationFailed("; ".join(problems))
+                await self._secrets.retain_for_redaction(run.id, list(values.values()))
             inputs = await self._materialize_inputs(snapshot.input_bindings)
             paths = await self._storage.prepare_run_directory(
                 run.id,

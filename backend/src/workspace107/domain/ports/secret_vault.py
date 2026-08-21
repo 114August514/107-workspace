@@ -1,9 +1,8 @@
 """Secret 存取端口。
 
-GR-304 及设计稿 §3.1.4：Secret 明文不进入领域对象、Run Snapshot、日志和 API 响应。
-
-因此这个端口的读取入口只有 ``resolve``，它只在执行边界上被调用一次，
-用来把值注入子进程环境；其余路径只能拿到名称列表。
+Secret values never enter domain snapshots, API responses, or logs. `resolve` is
+the execution injection entry; `retain_for_redaction` is a private vault-owned
+historical redaction boundary and must be replaced by KMS/Vault storage in production.
 """
 
 from typing import Protocol
@@ -23,3 +22,7 @@ class SecretVault(Protocol):
     async def resolve(self, references: list[SecretReference]) -> dict[SecretReference, str]:
         """Resolve exact references only at execution boundary."""
         ...
+
+    async def retain_for_redaction(self, run_id: str, values: list[str]) -> None: ...
+
+    async def redaction_values(self, run_id: str) -> list[str]: ...
