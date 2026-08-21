@@ -5,7 +5,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourceVersionPage } from '../../src/pages/SharedResourceVersionPage'
-import type { SharedResourceDetail, SharedResourceVersionDetail } from '../../src/api/types'
+import type {
+  LegacyWorkspaceContext,
+  SharedResourceDetail,
+  SharedResourceVersionDetail,
+} from '../../src/api/types'
 
 /**
  * SharedResourceVersionPage 文件预览状态。
@@ -18,6 +22,8 @@ import type { SharedResourceDetail, SharedResourceVersionDetail } from '../../sr
 
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
+const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
+const mockHome = vi.hoisted(() => vi.fn())
 const mockReadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
 const mockDownloadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
 
@@ -25,6 +31,8 @@ vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResourceVersion: mockGetSharedResourceVersion,
     getSharedResource: mockGetSharedResource,
+    getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
+    home: mockHome,
     readSharedResourceVersionFile: mockReadSharedResourceVersionFile,
     downloadSharedResourceVersionFile: mockDownloadSharedResourceVersionFile,
   },
@@ -58,6 +66,26 @@ const resource: SharedResourceDetail = {
   versions: [],
 }
 
+const ownerContext: LegacyWorkspaceContext = {
+  id: 'ws_test',
+  name: 'Test 空间',
+  kind: 'collaborative',
+  owner_id: 'owner',
+  default_environment_version_id: null,
+  capabilities: [],
+  role: 'admin',
+}
+
+const personalContext: LegacyWorkspaceContext = {
+  id: 'ws_personal',
+  name: '个人资源',
+  kind: 'personal',
+  owner_id: 'usr_student',
+  default_environment_version_id: null,
+  capabilities: [],
+  role: 'owner',
+}
+
 function renderPage(versionId = 'ver_test') {
   return render(
     <MemoryRouter initialEntries={[`/shared-resource-versions/${versionId}`]}>
@@ -76,6 +104,7 @@ describe('SharedResourceVersionPage 文件预览', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     mockGetSharedResourceVersion.mockResolvedValue(version)
     mockGetSharedResource.mockResolvedValue(resource)
+    mockGetLegacyWorkspaceContext.mockResolvedValue(ownerContext)
   })
 
   afterEach(() => {
@@ -188,14 +217,19 @@ describe('SharedResourceVersionPage 文件预览', () => {
     expect(mockReadSharedResourceVersionFile).not.toHaveBeenCalled()
   })
 
-  it('面包屑展示 canonical owner 并链接资源详情', async () => {
+  it('面包屑从 canonical owner context 链接 owner workspace 和共享资源列表', async () => {
     mockReadSharedResourceVersionFile.mockResolvedValue('content')
     renderPage()
 
-    // 面包屑：首页 → canonical owner → 共享资源 → 预训练权重（v1 由 TitleArea 呈现）
-    expect(await screen.findByText('Test 空间')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Test 空间' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '共享资源' })).not.toBeInTheDocument()
+    // 面包屑：首页 → canonical owner workspace → 共享资源列表 → 预训练权重。
+    expect(await screen.findByRole('link', { name: 'Test 空间' })).toHaveAttribute(
+      'href',
+      '/workspaces/ws_test',
+    )
+    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
+      'href',
+      '/workspaces/ws_test/shared-resources',
+    )
     expect(screen.getByRole('link', { name: '预训练权重' })).toHaveAttribute(
       'href',
       '/shared-resources/res_test',
@@ -204,5 +238,45 @@ describe('SharedResourceVersionPage 文件预览', () => {
     const current = screen.getByRole('heading', { name: 'v1', level: 1 })
     expect(current).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'v1' })).not.toBeInTheDocument()
+  })
+
+  it('User owner 等于当前 User 时链接 personal resource context', async () => {
+    mockGetSharedResource.mockResolvedValue({
+      ...resource,
+      owner: { kind: 'user', id: 'usr_student', display_name: 'Student' },
+    })
+    mockHome.mockResolvedValue({
+      user: { id: 'usr_student' },
+      personal_resource_context_id: 'ws_personal',
+    })
+    mockGetLegacyWorkspaceContext.mockResolvedValue(personalContext)
+    renderPage()
+
+    expect(await screen.findByRole('link', { name: 'Student' })).toHaveAttribute(
+      'href',
+      '/workspaces/ws_personal',
+    )
+    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
+      'href',
+      '/workspaces/ws_personal/shared-resources',
+    )
+    expect(mockGetLegacyWorkspaceContext).toHaveBeenCalledWith('ws_personal')
+  })
+
+  it('foreign User owner context 无法解析时保留安全的纯文本面包屑', async () => {
+    mockGetSharedResource.mockResolvedValue({
+      ...resource,
+      owner: { kind: 'user', id: 'usr_foreign', display_name: 'Foreign Owner' },
+    })
+    mockHome.mockResolvedValue({
+      user: { id: 'usr_student' },
+      personal_resource_context_id: 'ws_personal',
+    })
+    renderPage()
+
+    expect(await screen.findByText('Foreign Owner')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Foreign Owner' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '共享资源' })).not.toBeInTheDocument()
+    expect(mockGetLegacyWorkspaceContext).not.toHaveBeenCalled()
   })
 })

@@ -3,10 +3,15 @@ import { Breadcrumbs, Text } from '@primer/react'
 import { Link, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
-import type { SharedResourceDetail, SharedResourceVersionDetail } from '../api/types'
+import type {
+  LegacyWorkspaceContext,
+  SharedResourceDetail,
+  SharedResourceVersionDetail,
+} from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
+import { loadSharedResourceOwnerContext } from '../components/sharedresource/ownerContext'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 import { PrimerStack } from '../components/primer/PrimerStack'
@@ -27,6 +32,10 @@ export function SharedResourceVersionPage() {
     async () => (version.data ? api.getSharedResource(version.data.shared_resource_id) : undefined),
     [version.data?.shared_resource_id],
   )
+  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
+    async () => (resource.data ? loadSharedResourceOwnerContext(resource.data) : undefined),
+    [resource.data?.owner.kind, resource.data?.owner.id],
+  )
 
   return (
     <PrimerRoot>
@@ -39,10 +48,24 @@ export function SharedResourceVersionPage() {
                 <Breadcrumbs.Item as={Link} to="/">
                   首页
                 </Breadcrumbs.Item>
-                {resource.data && (
-                  <Breadcrumbs.Item>{resource.data.owner.display_name}</Breadcrumbs.Item>
+                {resource.data &&
+                  (workspace.data ? (
+                    <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                      {resource.data.owner.display_name}
+                    </Breadcrumbs.Item>
+                  ) : (
+                    <Breadcrumbs.Item>{resource.data.owner.display_name}</Breadcrumbs.Item>
+                  ))}
+                {workspace.data ? (
+                  <Breadcrumbs.Item
+                    as={Link}
+                    to={`/workspaces/${workspace.data.id}/shared-resources`}
+                  >
+                    共享资源
+                  </Breadcrumbs.Item>
+                ) : (
+                  <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
                 )}
-                <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
                 {resource.data && (
                   <Breadcrumbs.Item as={Link} to={`/shared-resources/${resource.data.id}`}>
                     {resource.data.name}

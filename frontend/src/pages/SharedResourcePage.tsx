@@ -14,23 +14,10 @@ import { PrimerRelativeTime } from '../components/primer/PrimerMono'
 import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
+import { loadSharedResourceOwnerContext } from '../components/sharedresource/ownerContext'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 import { PrimerRoot } from '../primer/setup'
-
-async function loadOwnerContext(
-  resource: SharedResourceDetail,
-): Promise<LegacyWorkspaceContext | undefined> {
-  if (resource.owner.kind === 'user_group') {
-    return api.getLegacyWorkspaceContext(resource.owner.id)
-  }
-
-  const home = await api.home()
-  if (resource.owner.id !== home.user.id || !home.personal_resource_context_id) {
-    return undefined
-  }
-  return api.getLegacyWorkspaceContext(home.personal_resource_context_id)
-}
 
 export function SharedResourcePage() {
   const { resourceId = '' } = useParams()
@@ -42,7 +29,7 @@ export function SharedResourcePage() {
     [resourceId, token],
   )
   const workspace = useAsync<LegacyWorkspaceContext | undefined>(
-    async () => (resource.data ? loadOwnerContext(resource.data) : undefined),
+    async () => (resource.data ? loadSharedResourceOwnerContext(resource.data) : undefined),
     [resource.data?.owner.kind, resource.data?.owner.id],
   )
   const [editing, setEditing] = useState(false)

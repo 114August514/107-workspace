@@ -240,5 +240,13 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 ### Post-merge targeted independent review
 
 - Fresh-context reviewer 以 committed merge `7aa9074c950b65b9d2b697c2e278149fb78af80b` 为对象只读审查后结论 `PASS`，无 findings，确认可安全 push。
-- Reviewer 核对了两侧语义：#39 canonical User/UserGroup owner、显式 OwnerReference create、OwnerSummaryOut、exact Project-owner use boundary 与 fail-closed authorization；#15 create/edit/publish/version/preview/binary-download surface 和 MIME/Content-Disposition route；以及 source-first generated contract、personal/UserGroup owner mapping、capability gating、deep links 和 activity/notification target dispatch。
+- Reviewer 核对了两侧语义：#39 canonical User/UserGroup owner、显式 OwnerReference create、OwnerSummaryOut、exact Project-owner use boundary 与 fail-closed authorization；#15 create/edit/publish/version/preview/binary-download surface 和 MIME/Content-Disposition route；以及 source-first generated contract、personal/UserGroup owner mapping、capability gating 和 activity/notification target dispatch。
 - Reviewer 环境不能调用 bash，因此以 committed tree 直接审查而未自行执行 parent diff/test；这是 review evidence 的限制，不改变上节 implementer 的 fresh merge、targeted/full/contract/runtime evidence。保留的 deprecated Workspace/catalog adapters、#40 前无 cross-owner USE Grant，以及 User-owned resource 不伪造 Workspace activity feed 均被确认是 intentional residual scope，不是 blocker。
+
+### Post-push targeted re-review breadcrumb remediation
+
+- Targeted independent re-review 在 current head `fd6fba70c09cdd1ec1392b46f7176ef21ab18f93` 对 authorization 结论仍为 `PASS`，但发现一个 `P3/Low`：从 Activity/Notification 进入 `SharedResourceVersionPage` 后，canonical owner 与“共享资源”面包屑只有纯文本，丢失了 pre-merge 返回 owner workspace 和 `/workspaces/:id/shared-resources` 的链接。上节把 deep links 列为已确认行为不准确，已从该 claim 删除。
+- RED：只改 component behavior test 后运行 `pnpm exec vitest run tests/component/SharedResourceVersionPage.test.tsx` → `1 failed, 7 passed`；失败精确为找不到 `link` role / `Test 空间`，证明不是实现后补写的测试。
+- Remediation：把两页原有 canonical owner → legacy context mapping 收敛到一个 `loadSharedResourceOwnerContext` helper；UserGroup 使用 `owner.id`，User 仅在等于当前 User 时使用 `personal_resource_context_id`，否则返回 `undefined`。Version page 在 context 可解析时恢复 owner workspace 与 Shared Resource list 链接；foreign User/future-grant 等不可解析 owner 保留纯文本 fail-safe fallback。
+- GREEN：Version page suite `9 passed`；三组 Shared Resource frontend suites `23 passed`；`pnpm run typecheck` 与 `pnpm run build` 均 PASS。既有 production build 仅保留已知 chunk-size warning。
+- Authorization evidence 仍有效：本次只修改 frontend owner-context helper、两个页面的 resolver reuse、version-page component test 和本 journal；未触碰 backend、contract、generated API schema、migration 或 authorization source，先前 backend targeted/full/PostgreSQL/runtime evidence 的被测对象未变化。
