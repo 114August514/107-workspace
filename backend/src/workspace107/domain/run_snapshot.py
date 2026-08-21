@@ -24,6 +24,7 @@ from .enums import InputSourceType
 from .errors import ValidationFailed
 from .models import ArtifactCollectionRule, InputBinding
 from .secrets import ResolvedEnv
+from .config_scope import SecretReference
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +44,8 @@ class RunSnapshot:
     environment_image: str
     environment_setup_command: str
     env_literals: dict[str, str]
-    env_secret_refs: dict[str, str]
-    """环境变量名 -> Workspace Secret 名称。值不在这里，执行时才注入。"""
+    env_secret_refs: dict[str, SecretReference]
+    """环境变量名 -> scope-qualified Secret reference; never plaintext."""
     input_bindings: tuple[InputBinding, ...]
     compute_plan_id: str
     compute_request: ComputeRequest
@@ -86,7 +87,7 @@ class RunSnapshot:
             },
             "env": {
                 "literals": dict(self.env_literals),
-                "secret_refs": dict(self.env_secret_refs),
+                "secret_refs": {name: ref.as_key() for name, ref in self.env_secret_refs.items()},
             },
             "input_bindings": [b.as_payload() for b in self.input_bindings],
             "compute": {
@@ -115,7 +116,9 @@ class RunSnapshot:
             environment_image=environment["image"],
             environment_setup_command=environment.get("setup_command", ""),
             env_literals=dict(env["literals"]),
-            env_secret_refs=dict(env["secret_refs"]),
+            env_secret_refs={
+                name: SecretReference.from_key(value) for name, value in env["secret_refs"].items()
+            },
             input_bindings=tuple(
                 InputBinding(
                     source_type=InputSourceType(b["source_type"]),
@@ -177,7 +180,11 @@ def build_snapshot(
         environment_image=environment_image,
         environment_setup_command=environment_setup_command,
         env_literals=dict(resolved_env.literals),
-        env_secret_refs=dict(resolved_env.secret_refs),
+        env_secret_refs={
+            name: ref
+            for name, ref in resolved_env.secret_refs.items()
+            if isinstance(ref, SecretReference)
+        },
         input_bindings=input_bindings,
         compute_plan_id=compute_plan_id,
         compute_request=compute_request,

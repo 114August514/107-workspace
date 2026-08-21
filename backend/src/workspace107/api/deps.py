@@ -24,6 +24,7 @@ from ..application.project_service import ProjectService
 from ..application.run_configuration_service import RunConfigurationService
 from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
+from ..application.scoped_config_resolver import ScopedConfigResolver
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
 from ..application.workspace_service import LegacyWorkspaceService
@@ -123,6 +124,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             vault,
             activity,
             notifier,
+            config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
         catalog=CatalogService(repos),
         health=HealthService(repos),

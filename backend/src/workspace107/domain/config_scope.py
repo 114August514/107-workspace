@@ -1,10 +1,11 @@
 """Scoped Variable/Secret identities and exact references."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import StrEnum
+import re
 
+from .errors import ValidationFailed
 from .ownership import OwnerReference
 
 
@@ -45,4 +46,23 @@ class SecretReference:
     name: str
 
     def as_key(self) -> str:
+        if not self.scope.id or ":" in self.scope.id or not self.name or ":" in self.name:
+            raise ValidationFailed(
+                "Secret reference contains an invalid delimiter or empty segment"
+            )
         return f"{self.scope.kind.value}:{self.scope.id}:{self.name}"
+
+    @classmethod
+    def from_key(cls, value: str) -> "SecretReference":
+        parts = value.split(":")
+        if (
+            len(parts) != 3
+            or not all(parts)
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", parts[2])
+        ):
+            raise ValidationFailed("Secret reference must be kind:id:name with a valid name")
+        try:
+            kind = ConfigScopeKind(parts[0])
+        except ValueError as exc:
+            raise ValidationFailed(f"Unknown Secret reference scope: {parts[0]!r}") from exc
+        return cls(ConfigScope(kind, parts[1]), parts[2])

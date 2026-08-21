@@ -55,6 +55,12 @@
 ## 验收
 - User、User Group、Project 三种 scope 的 CRUD、repository 与 authorization 测试。
 - 标准/显式 user 引用解析、Project → exact Project Owner 优先级、命中后不可回退、缺失/无权/不可用引用使 preflight 失败。
+
+## Run 配置解析切片
+- 新增 `ScopedConfigResolver` application seam：Project-first exact scope、owner fallback、explicit initiated-user isolation，返回 fixed literals、typed SecretReference 与 accumulated problems。
+- RunService preflight 通过 deps 单点注入 resolver；typed snapshot serialization and exact-ref callsites are mechanically adapted for log redaction, submit, and revalidation lookup.
+- Focused resolver/snapshot/domain tests passed (28); Ruff and import checks passed。
+- 未完成：execution-time authorization/rotation semantics, legacy Snapshot JSON migration, and full Run integration behavior.
 - Variable Snapshot 固定值、Secret exact reference 与执行时授权校验、Secret 脱敏和不可回读。
 - Fork 复制表达式但不复制值或访问权；迁移拒绝无法证明 owner 的 legacy Workspace config。
 - `make check`
