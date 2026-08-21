@@ -1,7 +1,7 @@
 import { BellIcon } from '@primer/octicons-react'
 import { AnchoredOverlay, Banner, Button, CounterLabel, Label, Link, Text } from '@primer/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import type { AsyncErrorView } from '../../api/errors'
@@ -96,17 +96,15 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
     }
   }
 
-  const markOne = async (notification: Notification): Promise<boolean> => {
-    if (notification.read_at) return true
+  const markOne = async (notification: Notification): Promise<void> => {
+    if (notification.read_at) return
     setMarkError(null)
     try {
       await api.markNotificationRead(notification.id)
       setToken((n) => n + 1)
       onChanged()
-      return true
     } catch (error) {
       setMarkError(toAsyncError(error as Error) ?? null)
-      return false
     }
   }
 
@@ -161,10 +159,9 @@ function NotificationLine({
   onNavigate,
 }: {
   notification: Notification
-  onRead: () => Promise<boolean>
+  onRead: () => Promise<void>
   onNavigate: () => void
 }) {
-  const navigate = useNavigate()
   const path = notificationPath(notification)
   const unread = !notification.read_at
 
@@ -193,16 +190,9 @@ function NotificationLine({
         <Link
           as={RouterLink}
           to={path}
-          onClick={async (event) => {
-            if (!unread) {
-              onNavigate()
-              return
-            }
-            event.preventDefault()
-            if (await onRead()) {
-              onNavigate()
-              navigate(path)
-            }
+          onClick={() => {
+            if (unread) void onRead()
+            onNavigate()
           }}
         >
           {title}

@@ -159,26 +159,27 @@ describe('NotificationBell 通知浮层', () => {
   it('linked unread success navigates and closes the overlay', async () => {
     vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
     vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
-    vi.spyOn(api, 'markNotificationRead').mockResolvedValue(undefined)
+    const markOne = vi.spyOn(api, 'markNotificationRead').mockResolvedValue(undefined)
     renderBell()
     fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
     fireEvent.click(await screen.findByRole('link', { name: /首次运行/ }))
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/runs/run-1'))
+    expect(markOne).toHaveBeenCalledWith('n-1')
     expect(screen.queryByText('通知')).toBeNull()
   })
 
-  it('linked unread failure keeps location and overlay error visible', async () => {
+  it('linked unread failure still navigates and closes the overlay', async () => {
     vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
     vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
-    vi.spyOn(api, 'markNotificationRead').mockRejectedValue(
-      new ApiError(500, 'internal_error', '标记已读失败。', [], 'req-44'),
-    )
+    const markOne = vi
+      .spyOn(api, 'markNotificationRead')
+      .mockRejectedValue(new ApiError(500, 'internal_error', '标记已读失败。', [], 'req-44'))
     renderBell()
     fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
     fireEvent.click(await screen.findByRole('link', { name: /首次运行/ }))
-    expect(await screen.findByText('标记已读失败。')).toBeVisible()
-    expect(screen.getByTestId('location')).toHaveTextContent('/')
-    expect(screen.getByText('通知')).toBeVisible()
+    await waitFor(() => expect(markOne).toHaveBeenCalledWith('n-1'))
+    expect(screen.getByTestId('location')).toHaveTextContent('/runs/run-1')
+    expect(screen.queryByText('通知')).toBeNull()
   })
 
   it('标记已读失败在浮层内显示错误，不再弹全局提示', async () => {
@@ -197,6 +198,8 @@ describe('NotificationBell 通知浮层', () => {
     )
 
     expect(await screen.findByText('标记已读失败。')).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent('/')
+    expect(screen.getByText('通知')).toBeVisible()
   })
 
   it('无目标未读通知提供语义化标记操作，已读通知保持静态', async () => {
