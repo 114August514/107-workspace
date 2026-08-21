@@ -26,3 +26,8 @@ def test_secret_reference_rejects_malformed_keys(value: str) -> None:
 def test_secret_reference_rejects_delimiter_ambiguity() -> None:
     with pytest.raises(ValidationFailed):
         SecretReference(ConfigScope.user("u:other"), "TOKEN").as_key()
+
+
+def test_secret_reference_rejects_invalid_name_on_serialization() -> None:
+    with pytest.raises(ValidationFailed):
+        SecretReference(ConfigScope.user("u"), "foo-bar").as_key()

@@ -47,10 +47,12 @@ class SecretReference:
     name: str
 
     def as_key(self) -> str:
-        if not self.scope.id or ":" in self.scope.id or not self.name or ":" in self.name:
-            raise ValidationFailed(
-                "Secret reference contains an invalid delimiter or empty segment"
-            )
+        if (
+            not self.scope.id
+            or ":" in self.scope.id
+            or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.name)
+        ):
+            raise ValidationFailed("Secret reference contains an invalid delimiter or name")
         return f"{self.scope.kind.value}:{self.scope.id}:{self.name}"
 
     @classmethod
