@@ -1,6 +1,7 @@
 """Migrate Workspace config rows to explicit User/UserGroup/Project scopes."""
 
 import copy
+import hashlib
 import json
 import re
 from collections.abc import Sequence
@@ -174,6 +175,57 @@ def _create_scoped_tables() -> None:
     )
 
 
+def _backfill_redactions(bind: sa.Connection) -> None:
+    rows = (
+        bind.execute(
+            sa.text(
+                "SELECT r.id, r.submitted_at, s.payload, p.workspace_id "
+                "FROM runs r JOIN run_snapshots s ON s.id=r.snapshot_id "
+                "JOIN projects p ON p.id=r.project_id WHERE r.submitted_at IS NOT NULL"
+            )
+        )
+        .mappings()
+        .all()
+    )
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        payload = _payload(row["payload"])
+        env = payload.get("env")
+        if not isinstance(env, dict):
+            continue
+        refs = env.get("secret_refs", {})
+        if not isinstance(refs, dict):
+            continue
+        for raw in refs.values():
+            name = raw.rsplit(":", 1)[-1] if isinstance(raw, str) else ""
+            if not name or ":" in name or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                continue
+            secret = bind.execute(
+                sa.text(
+                    "SELECT value FROM workspace_secrets WHERE workspace_id=:workspace "
+                    "AND name=:name AND updated_at <= :submitted"
+                ),
+                {"workspace": row["workspace_id"], "name": name, "submitted": row["submitted_at"]},
+            ).scalar_one_or_none()
+            if secret is None or not secret:
+                continue
+            digest = hashlib.sha256(secret.encode()).hexdigest()
+            if (row["id"], digest) in seen:
+                continue
+            bind.execute(
+                sa.text(
+                    "INSERT INTO run_secret_redactions "
+                    "(run_id,value_digest,value) VALUES (:run,:digest,:value)"
+                ),
+                {"run": row["id"], "digest": digest, "value": secret},
+            )
+            seen.add((row["id"], digest))
+
+
+# Historical values rotated or deleted before this migration cannot be reconstructed;
+# only timestamp-provable current values are retained for redaction.
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     _preflight_config_rows(bind)
@@ -207,6 +259,7 @@ def upgrade() -> None:
                     "updated_at": row.get("updated_at"),
                 },
             )
+    _backfill_redactions(bind)
     op.drop_table("workspace_variables")
     op.drop_table("workspace_secrets")
 

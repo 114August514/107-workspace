@@ -1,19 +1,15 @@
-"""环境变量表达式、Variable 与 Secret 解析。
+"""Environment Variable expressions and exact scoped Secret references.
 
-Run Configuration 使用与 GitHub Actions 类似的表达式引用 Workspace 的
-Variable 和 Secret::
+Run Configuration expressions resolve User, User Group, and Project scopes::
 
     env:
       LOG_LEVEL: ${{ vars.LOG_LEVEL }}
-      BATCH_SIZE: "32"
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      USER_TOKEN: ${{ user.secrets.USER_TOKEN }}
 
-创建 Run 时：
-
-    字面值和 Variable -> 解析后固定到 Run Snapshot
-    Secret            -> Run Snapshot 只保存引用表达式，执行时由平台注入
-
-对应 GR-304 及设计稿 §3.1.4：Run Snapshot、日志和 API 响应不得出现 Secret 明文。
+The application resolver fixes Variable values into Run Snapshot and stores only
+scope-qualified SecretReference keys. Secret plaintext is never serialized into
+Snapshot, API responses, or logs.
 """
 
 from __future__ import annotations
@@ -84,42 +80,6 @@ class ResolvedEnv:
             "literals": dict(self.literals),
             "secret_refs": {name: ref.as_key() for name, ref in self.secret_refs.items()},
         }
-
-
-def resolve_env(
-    env: dict[str, EnvValue],
-    *,
-    variables: dict[str, str],
-    available_secrets: set[str],
-) -> tuple[ResolvedEnv, list[str]]:
-    """把环境变量配置解析为可固定进 Run Snapshot 的形式。
-
-    返回解析结果和问题列表。引用了不存在的 Variable 或 Secret 时，
-    对应条目不会进入结果，并在问题列表中给出说明；创建 Run 时必须校验引用
-    的 Variable 和 Secret 是否存在且可用（设计稿 §3.1.4）。
-    """
-    literals: dict[str, str] = {}
-    secret_refs: dict[str, str] = {}
-    problems: list[str] = []
-
-    for name, value in env.items():
-        match value.kind:
-            case EnvValueKind.LITERAL:
-                literals[name] = value.value
-            case EnvValueKind.VARIABLE:
-                if value.value not in variables:
-                    problems.append(
-                        f"环境变量 {name} 引用的 Workspace Variable {value.value} 不存在"
-                    )
-                    continue
-                literals[name] = variables[value.value]
-            case EnvValueKind.SECRET:
-                if value.value not in available_secrets:
-                    problems.append(f"环境变量 {name} 引用的 Workspace Secret {value.value} 不存在")
-                    continue
-                secret_refs[name] = value.value
-
-    return ResolvedEnv(literals=literals, secret_refs=secret_refs), problems
 
 
 def redact(text: str, secret_values: list[str]) -> str:
