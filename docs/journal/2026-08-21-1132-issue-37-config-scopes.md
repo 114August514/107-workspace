@@ -25,6 +25,12 @@
 - 当前仍不接入 Run resolver/execution；待补 repository/migration integration fixtures 与完整 auth behavior tests。
 - 待后续切片：Run resolution/Secret exact-ref 调用方、迁移集成测试与完整 repository/auth 行为测试。
 
+## 授权与契约决策
+- User Group 配置权限使用私有 `AccessGuard.scoped_config_group`：repository-filtered active membership 后按内部 `capabilities_of(role)` 检查 CONFIG_VIEW/CONFIG_MANAGE，不改变 `UserGroupOut` capability matrix。
+- 公共路径固定为 `/users/{user_id}`, `/user-groups/{user_group_id}`, `/projects/{project_id}` 下的 `variables`/`secrets`，不暴露 generic scope discriminator。
+- Secret 路径只返回名称，OpenAPI contract test 确认无 plaintext `value` 字段。
+- Commit：`f1c0f99`；Run resolver/execution integration 仍待后续切片。
+
 ## 仓外副作用
 无；不进行 live 107 活动、远端发布或其他仓外操作。
 
