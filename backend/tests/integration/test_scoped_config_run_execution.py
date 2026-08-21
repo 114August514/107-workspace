@@ -74,8 +74,11 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     assert preflight.status_code == 200
     body = preflight.json()
     assert body["problems"] == []
-    assert "project:" in json.dumps(body["secret_references"])
-    assert "owner" not in json.dumps(body["secret_references"])
+    assert body["secret_references"] == {
+        "TOKEN": f"project:{project['id']}:TOKEN",
+        "OWNER_ONLY_SECRET": f"user_group:{group_id}:OWNER_ONLY_SECRET",
+        "USER_TOKEN": f"user:{user_id}:USER_TOKEN",
+    }
     assert "project-token" not in json.dumps(body)
 
     run = await client.post(
@@ -84,11 +87,58 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     assert run.status_code == 201
     detail = await wait_for_run(client, run.json()["id"])
     snapshot = detail["snapshot"]
-    assert snapshot["environment_variables"]["LEVEL"] == "project-level"
-    assert "project:" in json.dumps(snapshot["secret_references"])
+    assert snapshot["environment_variables"] == {
+        "LEVEL": "project-level",
+        "OWNER_ONLY": "owner-only",
+        "USER_LEVEL": "user-level",
+    }
+    assert snapshot["secret_references"] == {
+        "TOKEN": f"project:{project['id']}:TOKEN",
+        "OWNER_ONLY_SECRET": f"user_group:{group_id}:OWNER_ONLY_SECRET",
+        "USER_TOKEN": f"user:{user_id}:USER_TOKEN",
+    }
     assert "project-token" not in json.dumps(snapshot)
     logs = await client.get(f"/api/v1/runs/{run.json()['id']}/logs")
     logs.raise_for_status()
     text = json.dumps(logs.json())
     assert hashlib.sha256(b"project-token").hexdigest() in text
     assert "project-token" not in text
+
+    for owner, name, value in (
+        (f"/api/v1/projects/{project['id']}", "LEVEL", "project-level-rotated"),
+        (f"/api/v1/user-groups/{group_id}", "OWNER_ONLY", "owner-only-rotated"),
+        (f"/api/v1/users/{user_id}", "USER_LEVEL", "user-level-rotated"),
+    ):
+        assert (
+            await client.put(f"{owner}/variables", json={"name": name, "value": value})
+        ).status_code == 200
+    for owner, name, value in (
+        (f"/api/v1/projects/{project['id']}", "TOKEN", "project-token-rotated"),
+        (f"/api/v1/user-groups/{group_id}", "OWNER_ONLY_SECRET", "owner-only-secret-rotated"),
+        (f"/api/v1/users/{user_id}", "USER_TOKEN", "user-token-rotated"),
+    ):
+        assert (
+            await client.put(f"{owner}/secrets", json={"name": name, "value": value})
+        ).status_code == 204
+    rerun = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
+    assert rerun.status_code == 201
+    rerun_detail = await wait_for_run(client, rerun.json()["id"])
+    assert rerun_detail["snapshot"]["environment_variables"] == snapshot["environment_variables"]
+    rerun_logs = await client.get(f"/api/v1/runs/{rerun.json()['id']}/logs")
+    rerun_text = json.dumps(rerun_logs.json())
+    for value in ("project-token-rotated", "owner-only-secret-rotated", "user-token-rotated"):
+        assert hashlib.sha256(value.encode()).hexdigest() in rerun_text
+        assert value not in rerun_text
+
+    before = (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"]
+    assert (
+        await client.delete(f"/api/v1/projects/{project['id']}/secrets/TOKEN")
+    ).status_code == 204
+    failed = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
+    assert failed.status_code == 422
+    assert "exact Secret" in failed.text
+    after = (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"]
+    assert after == before
+    assert (
+        await client.get(f"/api/v1/runs/{run.json()['id']}", headers={"X-User": "foreign"})
+    ).status_code == 404
