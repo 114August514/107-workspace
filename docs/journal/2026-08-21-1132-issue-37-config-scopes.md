@@ -4,7 +4,7 @@
 - 认领：August / Codex
 - 分支：`refactor/37-config-scopes`
 - Worktree：`/home/august/Projects/ustc_107/107-workspace-37`
-- Reviewed code/evidence HEAD: `68869657569136d3896656ec052e7694b76ee636`.
+- Reviewed remediation code/evidence HEAD: `5a40e40162b667583fe22144d72a2f7072daa462`.
 - PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; remediation journal commit follows; primary worktree 未触碰。
 
 ## 当前完成范围
@@ -14,7 +14,7 @@
 - Alembic f37 migration covers scoped config, Snapshot JSON exact refs, redaction table/FK, deterministic legacy mapping and refusal safety; PostgreSQL job runs existing identity test then scoped config test.
 
 ## 最终证据
-- Reviewed code/evidence HEAD `68869657569136d3896656ec052e7694b76ee636` `make check` PASS: backend Ruff lint/format; backend **241 passed, 4 skipped**; frontend **60 passed** with format/lint/typecheck/build; workflow/API contract pass。
+- Reviewed remediation code/evidence HEAD `5a40e40162b667583fe22144d72a2f7072daa462` `make check` PASS: backend Ruff lint/format; backend **241 passed, 4 skipped**; frontend **60 passed** with format/lint/typecheck/build; workflow/API contract pass。
 - `make smoke` PASS: isolated HTTP core Run completed with Project-scoped seed path.
 - Targeted #37 suite: 107 passed; migration suite: 7 passed; focused Fork/execution/rerun and historical-redaction tests passed.
 - PostgreSQL 17 fresh Docker evidence: scoped test **2 passed, 0 skipped**; JSON object/exact refs, scoped rows, redaction PK/FK cascade, downgrade/re-upgrade and refusal preservation verified. Container `workspace107-pg17-37` removed; post-cleanup container listing empty.
