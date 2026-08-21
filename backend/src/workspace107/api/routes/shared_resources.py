@@ -1,20 +1,17 @@
-"""Shared Resource 路由。
+"""Shared Resource routes.
 
-Canonical ownership is User/UserGroup; Workspace paths remain bounded deprecated
-adapters until #5/PR15 callers migrate:
+Canonical ownership is User/UserGroup:
 
-- ``GET    /shared-resources``                               —— actor-discoverable resources
-- ``POST   /shared-resources``                              —— create with explicit owner
-- ``GET    /workspaces/{id}/shared-resources``              —— deprecated bounded list adapter
-- ``POST   /workspaces/{id}/shared-resources``              —— deprecated bounded create adapter
-- ``GET    /shared-resources/{id}``                         —— resource detail and versions
-- ``PATCH  /shared-resources/{id}``                         —— resource metadata
-- ``POST   /shared-resources/{id}/versions``                —— upload immutable version
-- ``GET    /shared-resource-versions/{id}``                 —— version detail
-- ``GET    /shared-resource-versions/{id}/files/content``   —— read version text file
-- ``GET    /shared-resource-versions/{id}/files/download``  —— read original bytes
+- ``GET    /shared-resources``                              —— actor-discoverable resources
+- ``POST   /shared-resources``                             —— create with explicit owner
+- ``GET    /shared-resources/{id}``                        —— resource detail and versions
+- ``PATCH  /shared-resources/{id}``                        —— resource metadata
+- ``POST   /shared-resources/{id}/versions``               —— upload immutable version
+- ``GET    /shared-resource-versions/{id}``                —— version detail
+- ``GET    /shared-resource-versions/{id}/files/content``  —— read version text file
+- ``GET    /shared-resource-versions/{id}/files/download`` —— read original bytes
 
-文件上传使用 ``multipart/form-data``，与 Project 文件上传同模式。
+File uploads use ``multipart/form-data``, matching Project file uploads.
 """
 
 from __future__ import annotations
@@ -70,53 +67,6 @@ async def create_canonical_shared_resource(
     view = await services.shared_resources.create(
         user.id,
         owner=OwnerReference(payload.owner.kind, payload.owner.id),
-        name=payload.name,
-        description=payload.description,
-    )
-    return p.shared_resource_out(view)
-
-
-# -- Workspace 持有的资源（deprecated adapter） ------------------------------
-
-
-@router.get(
-    "/workspaces/{workspace_id}/shared-resources",
-    response_model=list[s.SharedResourceOut],
-    summary="列出 Workspace 持有的共享资源",
-    deprecated=True,
-)
-async def list_workspace_shared_resources(
-    workspace_id: str, user: CurrentUser, services: ServicesDep
-) -> list[s.SharedResourceOut]:
-    """Deprecated compatibility path scoped to the mapped User/UserGroup owner.
-
-    Canonical discovery is ``GET /shared-resources``. Cross-owner grants remain #40.
-    """
-    views = await services.shared_resources.list_for_workspace(user.id, workspace_id)
-    return [p.shared_resource_out(view) for view in views]
-
-
-@router.post(
-    "/workspaces/{workspace_id}/shared-resources",
-    response_model=s.SharedResourceOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="创建 Workspace 共享资源",
-    deprecated=True,
-)
-async def create_shared_resource(
-    workspace_id: str,
-    payload: s.SharedResourceCreateIn,
-    user: CurrentUser,
-    services: ServicesDep,
-) -> s.SharedResourceOut:
-    """需要 Shared Resource 管理权限；在当前 Workspace 下创建一个空的资源对象。
-
-    资源创建后内容为空，需通过 ``POST /shared-resources/{id}/versions`` 上传文件
-    形成首个版本，才能在 Input Binding 中引用。
-    """
-    view = await services.shared_resources.create_for_workspace(
-        user.id,
-        workspace_id,
         name=payload.name,
         description=payload.description,
     )

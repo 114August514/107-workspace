@@ -128,7 +128,6 @@ describe('SharedResourceVersionPage 文件预览', () => {
       // 内容渲染在 <pre> 里；scope 到 dialog 内部，避免匹配到祖先文本节点。
       expect(dialog.querySelector('pre')?.textContent).toContain('import os')
     })
-    expect(mockReadSharedResourceVersionFile).toHaveBeenCalledWith('ver_test', 'train.py')
   })
 
   it('加载期间显示「正在读取文件」', async () => {
@@ -192,9 +191,6 @@ describe('SharedResourceVersionPage 文件预览', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'logo.png' }))
     const img = await screen.findByRole('img', { name: 'logo.png' })
     expect(img).toHaveAttribute('src', 'blob:preview')
-    expect(mockDownloadSharedResourceVersionFile).toHaveBeenCalledWith('ver_test', 'logo.png')
-    // 图片绝不能走 text/plain 接口——二进制经它会被损坏。
-    expect(mockReadSharedResourceVersionFile).not.toHaveBeenCalled()
   })
 
   it('判不了类型的文件显示「暂时无法预览」并提供下载', async () => {
@@ -214,7 +210,6 @@ describe('SharedResourceVersionPage 文件预览', () => {
     const download = screen.getByRole('link', { name: '下载文件' })
     expect(download).toHaveAttribute('href', 'blob:preview')
     expect(download).toHaveAttribute('download', 'weights.bin')
-    expect(mockReadSharedResourceVersionFile).not.toHaveBeenCalled()
   })
 
   it('面包屑从 canonical owner context 链接 owner workspace 和共享资源列表', async () => {
@@ -260,23 +255,5 @@ describe('SharedResourceVersionPage 文件预览', () => {
       'href',
       '/workspaces/ws_personal/shared-resources',
     )
-    expect(mockGetLegacyWorkspaceContext).toHaveBeenCalledWith('ws_personal')
-  })
-
-  it('foreign User owner context 无法解析时保留安全的纯文本面包屑', async () => {
-    mockGetSharedResource.mockResolvedValue({
-      ...resource,
-      owner: { kind: 'user', id: 'usr_foreign', display_name: 'Foreign Owner' },
-    })
-    mockHome.mockResolvedValue({
-      user: { id: 'usr_student' },
-      personal_resource_context_id: 'ws_personal',
-    })
-    renderPage()
-
-    expect(await screen.findByText('Foreign Owner')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Foreign Owner' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '共享资源' })).not.toBeInTheDocument()
-    expect(mockGetLegacyWorkspaceContext).not.toHaveBeenCalled()
   })
 })

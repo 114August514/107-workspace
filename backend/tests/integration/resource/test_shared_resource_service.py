@@ -33,8 +33,11 @@ async def _create_resource(
     workspace_id = await _user_group(client, headers or ALICE)
     return (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/shared-resources",
-            json={"name": name},
+            "/api/v1/shared-resources",
+            json={
+                "name": name,
+                "owner": {"kind": "user_group", "id": workspace_id},
+            },
             headers=headers or ALICE,
         )
     ).json()
@@ -80,8 +83,11 @@ async def _publish_version(
 async def test_create_rejects_empty_name(client: httpx.AsyncClient) -> None:
     workspace_id = await _user_group(client, ALICE)
     response = await client.post(
-        f"/api/v1/workspaces/{workspace_id}/shared-resources",
-        json={"name": "   "},
+        "/api/v1/shared-resources",
+        json={
+            "name": "   ",
+            "owner": {"kind": "user_group", "id": workspace_id},
+        },
         headers=ALICE,
     )
     assert response.status_code == 422
@@ -93,8 +99,11 @@ async def test_create_rejects_empty_name(client: httpx.AsyncClient) -> None:
 async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
     workspace_id = await _user_group(client, ALICE)
     response = await client.post(
-        f"/api/v1/workspaces/{workspace_id}/shared-resources",
-        json={"name": "x" * (MAX_RESOURCE_NAME_LEN + 1)},
+        "/api/v1/shared-resources",
+        json={
+            "name": "x" * (MAX_RESOURCE_NAME_LEN + 1),
+            "owner": {"kind": "user_group", "id": workspace_id},
+        },
         headers=ALICE,
     )
     # 超长在 Pydantic max_length 校验阶段就被拦下，错误体走 RequestValidationError
@@ -108,8 +117,12 @@ async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
 async def test_create_assigns_owner_group(client: httpx.AsyncClient) -> None:
     workspace_id = await _user_group(client, ALICE)
     response = await client.post(
-        f"/api/v1/workspaces/{workspace_id}/shared-resources",
-        json={"name": "数据集 A", "description": "训练用"},
+        "/api/v1/shared-resources",
+        json={
+            "name": "数据集 A",
+            "description": "训练用",
+            "owner": {"kind": "user_group", "id": workspace_id},
+        },
         headers=ALICE,
     )
     assert response.status_code == 201
@@ -124,14 +137,16 @@ async def test_create_assigns_owner_group(client: httpx.AsyncClient) -> None:
 
 
 async def test_create_requires_manage_capability(client: httpx.AsyncClient) -> None:
-    """非成员在别人的 Workspace 上 create 会被挡掉，且按不存在处理。"""
+    """非成员不能为另一个 User Group 创建资源，且按不存在处理。"""
     workspace_id = await _user_group(client, ALICE)
     response = await client.post(
-        f"/api/v1/workspaces/{workspace_id}/shared-resources",
-        json={"name": "越权创建"},
+        "/api/v1/shared-resources",
+        json={
+            "name": "越权创建",
+            "owner": {"kind": "user_group", "id": workspace_id},
+        },
         headers=BOB,
     )
-    # Bob 看不到 Alice 的 Personal Workspace，按不存在处理
     assert response.status_code == 404
 
 
@@ -142,8 +157,11 @@ async def test_update_changes_name_and_description(client: httpx.AsyncClient) ->
     workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/shared-resources",
-            json={"name": "原名"},
+            "/api/v1/shared-resources",
+            json={
+                "name": "原名",
+                "owner": {"kind": "user_group", "id": workspace_id},
+            },
             headers=ALICE,
         )
     ).json()
@@ -162,8 +180,11 @@ async def test_update_rejects_empty_name(client: httpx.AsyncClient) -> None:
     workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/shared-resources",
-            json={"name": "保留"},
+            "/api/v1/shared-resources",
+            json={
+                "name": "保留",
+                "owner": {"kind": "user_group", "id": workspace_id},
+            },
             headers=ALICE,
         )
     ).json()
@@ -310,29 +331,33 @@ async def test_read_version_file_rejects_missing_path(client: httpx.AsyncClient)
     assert response.status_code == 404
 
 
-# -- 跨 Workspace 可见性 -----------------------------------------------------
+# -- actor-scoped discovery -------------------------------------------------
 
 
-async def test_list_for_workspace_excludes_other_workspace_resources(
+async def test_discovery_excludes_resources_owned_by_other_user_group(
     client: httpx.AsyncClient,
 ) -> None:
     alice_ws = await _user_group(client, ALICE)
     bob_ws = await _user_group(client, BOB)
     await client.post(
-        f"/api/v1/workspaces/{alice_ws}/shared-resources",
-        json={"name": "Alice 的"},
+        "/api/v1/shared-resources",
+        json={
+            "name": "Alice 的",
+            "owner": {"kind": "user_group", "id": alice_ws},
+        },
         headers=ALICE,
     )
     await client.post(
-        f"/api/v1/workspaces/{bob_ws}/shared-resources",
-        json={"name": "Bob 的"},
+        "/api/v1/shared-resources",
+        json={
+            "name": "Bob 的",
+            "owner": {"kind": "user_group", "id": bob_ws},
+        },
         headers=BOB,
     )
 
-    alice_resources = (
-        await client.get(f"/api/v1/workspaces/{alice_ws}/shared-resources", headers=ALICE)
-    ).json()
-    assert [r["name"] for r in alice_resources] == ["Alice 的"]
+    alice_resources = (await client.get("/api/v1/shared-resources", headers=ALICE)).json()
+    assert [(r["name"], r["owner"]["id"]) for r in alice_resources] == [("Alice 的", alice_ws)]
 
 
 async def test_get_version_blocks_cross_workspace_access(
@@ -353,8 +378,11 @@ async def test_create_records_activity(client: httpx.AsyncClient) -> None:
     workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/shared-resources",
-            json={"name": "会被记录的"},
+            "/api/v1/shared-resources",
+            json={
+                "name": "会被记录的",
+                "owner": {"kind": "user_group", "id": workspace_id},
+            },
             headers=ALICE,
         )
     ).json()
@@ -375,8 +403,11 @@ async def test_publish_version_records_activity(client: httpx.AsyncClient) -> No
     workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/shared-resources",
-            json={"name": "会发布版本"},
+            "/api/v1/shared-resources",
+            json={
+                "name": "会发布版本",
+                "owner": {"kind": "user_group", "id": workspace_id},
+            },
             headers=ALICE,
         )
     ).json()

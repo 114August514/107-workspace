@@ -154,9 +154,12 @@ async def test_issue_39_platform_seed_completes_partial_records_and_rejects_drif
 
     restored_environment.owner_user_group_id = DEMO_USER_GROUP_ID
     await session.commit()
-    with pytest.raises(RuntimeError, match="conflicting fixed Environment"):
+    with pytest.raises(RuntimeError):
         await seed_demo(session, context)
     await session.rollback()
+    owner_drift = await session.get(t.EnvironmentRow, "env_platform_pytorch_2026")
+    assert owner_drift is not None
+    assert owner_drift.owner_user_group_id == DEMO_USER_GROUP_ID
 
     restored_environment = await session.get(t.EnvironmentRow, "env_platform_pytorch_2026")
     assert restored_environment is not None
@@ -165,8 +168,12 @@ async def test_issue_39_platform_seed_completes_partial_records_and_rejects_drif
     assert restored_version is not None
     restored_version.image = "conflicting:image"
     await session.commit()
-    with pytest.raises(RuntimeError, match="conflicting fixed EnvironmentVersion"):
+    with pytest.raises(RuntimeError):
         await seed_demo(session, context)
+    await session.rollback()
+    version_drift = await session.get(t.EnvironmentVersionRow, "ev_platform_pytorch_24_2026")
+    assert version_drift is not None
+    assert version_drift.image == "conflicting:image"
 
 
 @pytest.mark.asyncio

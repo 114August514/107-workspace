@@ -66,8 +66,11 @@ async def _create_resource_with_version(
     workspace_id = await _user_group(client)
     resource = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/shared-resources",
-            json={"name": name},
+            "/api/v1/shared-resources",
+            json={
+                "name": name,
+                "owner": {"kind": "user_group", "id": workspace_id},
+            },
             headers=ALICE,
         )
     ).json()

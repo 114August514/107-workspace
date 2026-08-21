@@ -318,16 +318,11 @@ class SharedResourceDetailOut(SharedResourceOut):
     versions: list[SharedResourceVersionOut]
 
 
-class SharedResourceCreateIn(Model):
-    """Deprecated bounded adapter payload preserved without owner."""
+class CanonicalSharedResourceCreateIn(Model):
+    """Canonical creation payload with an explicit legal owner."""
 
     name: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=4096)
-
-
-class CanonicalSharedResourceCreateIn(SharedResourceCreateIn):
-    """Canonical creation payload with an explicit legal owner."""
-
     owner: OwnerReferenceIn
 
 

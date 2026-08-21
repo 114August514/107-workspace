@@ -96,23 +96,6 @@ class SharedResourceService:
         resources = await self._repos.shared_resources.list_discoverable_for_user(user_id)
         return await self._views(resources)
 
-    async def list_actor_discoverable(self, user_id: str) -> list[SharedResourceView]:
-        """Deprecated ``/catalog/shared-resources`` alias; no Platform semantics."""
-        return await self.list_discoverable(user_id)
-
-    async def list_for_workspace(self, user_id: str, workspace_id: str) -> list[SharedResourceView]:
-        """Deprecated bounded adapter for one legacy Workspace ownership subject."""
-        workspace_access = await self._guard.legacy_workspace(
-            user_id, workspace_id, needs=Capability.SHARED_RESOURCE_VIEW
-        )
-        owner = workspace_access.workspace.owner_reference
-        resources = [
-            resource
-            for resource in await self._repos.shared_resources.list_discoverable_for_user(user_id)
-            if resource.owner == owner
-        ]
-        return await self._views(resources)
-
     async def get(self, user_id: str, resource_id: str) -> SharedResourceAccessView:
         access = await self._guard.shared_resource(user_id, resource_id)
         owner = await self._owner(access.resource.owner)
@@ -145,22 +128,6 @@ class SharedResourceService:
         unknown-owner attempts fail before any row is created.
         """
         await self._require_owner_authority(user_id, owner)
-        resource = await self._create_with_owner(user_id, owner, name, description)
-        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
-
-    async def create_for_workspace(
-        self,
-        user_id: str,
-        workspace_id: str,
-        *,
-        name: str,
-        description: str = "",
-    ) -> SharedResourceView:
-        """Deprecated bounded adapter preserving the legacy payload."""
-        workspace_access = await self._guard.legacy_workspace(
-            user_id, workspace_id, needs=Capability.SHARED_RESOURCE_MANAGE
-        )
-        owner = workspace_access.workspace.owner_reference
         resource = await self._create_with_owner(user_id, owner, name, description)
         return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
 

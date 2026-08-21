@@ -1,6 +1,6 @@
 # issue39-asset-ownership
 
-- 状态：PR #58 authorization BLOCKER remediation 已完成 targeted independent review PASS；待发布
+- 状态：PR #58 bounded test-strategy cleanup 已形成 local candidate；待独立评审后更新 PR body / push
 - 认领：August；当前 worktree 的 sole writer
 - 写入边界：`/home/august/Projects/ustc_107/107-workspace-39-asset-ownership`
 - 分支：`refactor/39-asset-ownership`
@@ -250,3 +250,32 @@ SQLite FK 由 `migrations/env.py` 的 connect event 在 Alembic transaction 前�
 - Remediation：把两页原有 canonical owner → legacy context mapping 收敛到一个 `loadSharedResourceOwnerContext` helper；UserGroup 使用 `owner.id`，User 仅在等于当前 User 时使用 `personal_resource_context_id`，否则返回 `undefined`。Version page 在 context 可解析时恢复 owner workspace 与 Shared Resource list 链接；foreign User/future-grant 等不可解析 owner 保留纯文本 fail-safe fallback。
 - GREEN：Version page suite `9 passed`；三组 Shared Resource frontend suites `23 passed`；`pnpm run typecheck` 与 `pnpm run build` 均 PASS。既有 production build 仅保留已知 chunk-size warning。
 - Authorization evidence 仍有效：本次只修改 frontend owner-context helper、两个页面的 resolver reuse、version-page component test 和本 journal；未触碰 backend、contract、generated API schema、migration 或 authorization source，先前 backend targeted/full/PostgreSQL/runtime evidence 的被测对象未变化。
+
+## 2026-08-21 bounded test-strategy cleanup
+
+### Adapter exit completion
+
+- PR #15/#5 的 active frontend 已只消费 canonical `GET/POST /api/v1/shared-resources`；active backend/frontend/source consumer scan 没有发现 Workspace Shared Resource HTTP adapter 或 `/catalog/shared-resources` 调用方。产品内 `/workspaces/:id/shared-resources` 仍是 UI navigation URL，不是被删除的 API adapter。
+- 删除 deprecated Workspace Shared Resource GET/POST routes、deprecated catalog alias、`list_actor_discoverable` / `list_for_workspace` / `create_for_workspace` application methods，以及无 owner payload；LegacyWorkspace compatibility 的其他职责保持不变。
+- Shared Resource resource/input/subpath tests 全部迁移到显式 `OwnerReference` 的 canonical POST；discovery test 改为 canonical actor-scoped list，并显式核对 owner ID。canonical detail/version/read/download、owner authority、#39 exact Project-owner use boundary均保留。
+- `test_platform_shared_resource_input.py` 保留：它是唯一用固定 `grp_platform_assets` 证明平台运营 UserGroup 不具有 Platform/public 特权的 regression；generic A+B cross-owner test 不严格覆盖这个历史特殊风险，因此不满足删除条件。
+
+### Permanent test cleanup and retained behavior
+
+- Migration test 不再固定完整物理列集合、index 名或 CHECK 名/SQLite DDL 文本；仍验证新 owner 列存在且 legacy 列缺失、downgrade 反向形状、两种合法 owner、both/neither rejection、User/UserGroup FK RESTRICT、child-first destructive counts、exact refs、blob survival 与 down/up。
+- Asset-use tests 不再匹配本地化问题文案；改为 public status / `ok` / `preflight_rejected`、稳定 problem cardinality及 DB 中未新增 unauthorized Run。A+B discovery/use separation、Environment assignment、Fork、preflight、create 与 rerun boundaries 均保留。
+- Seed drift tests 不再固定 `RuntimeError` message copy；owner drift 与 immutable version drift 仍分别触发失败，并核对 committed drift state 没有被 seed 改写。
+- 删除 deprecated adapter contract/activity test、SharedResource dataclass owner field-storage test、foreign User/future-Grant breadcrumb test；保留 canonical owner OpenAPI exact fields、order-insensitive `OwnerKind` values、LegacyWorkspace→OwnerReference invariant、UserGroup/self-User breadcrumbs。
+- Component tests 删除由可见 content/image/download link/buttons/read-only fallback 已充分证明的 mock called-with/not-called assertions；API client path/body/query contract assertions保持。
+
+### PR body wording prepared for post-review GitHub update
+
+在现有“修改内容”中将 deprecated adapter 描述替换为：
+
+> Active frontend 和 backend callers 已完成 canonical Shared Resource API cutover；本 cleanup 完成 bounded exit，删除 Workspace GET/POST adapters、`/catalog/shared-resources` alias及专用 application methods/payload。LegacyWorkspace compatibility 的其他职责未改变。
+
+在现有“影响范围与延后项”中删除“Deprecated Workspace/catalog adapters 暂留”并替换为：
+
+> Permanent tests 只保留 migration truth、owner/use authorization、canonical API contract和用户可观察 frontend behavior；已删除 adapter-only、representation-only、localized-copy、mock-plumbing及 #40 future-Grant breadcrumb coverage。平台运营 UserGroup 无特殊 public/use bypass 的唯一 regression 保留。
+
+GitHub PR body 尚未修改：本轮明确要求 commits 仅留本地、先独立评审，不在此阶段执行 hosted mutation。

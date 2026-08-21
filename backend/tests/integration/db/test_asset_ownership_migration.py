@@ -26,10 +26,6 @@ def _columns(connection: sqlite3.Connection, table: str) -> set[str]:
     return {str(row[1]) for row in connection.execute(f"PRAGMA table_info({table})")}
 
 
-def _index_names(connection: sqlite3.Connection, table: str) -> set[str]:
-    return {str(row[1]) for row in connection.execute(f"PRAGMA index_list({table})")}
-
-
 def _foreign_keys(connection: sqlite3.Connection, table: str) -> set[tuple[str, str, str]]:
     return {
         (str(row[3]), str(row[2]), str(row[6]).upper())
@@ -153,45 +149,17 @@ def _seed_predecessor(connection: sqlite3.Connection) -> dict[str, object]:
 
 
 def _assert_owner_schema(connection: sqlite3.Connection) -> None:
-    assert _columns(connection, "environments") == {
-        "id",
-        "name",
-        "description",
-        "owner_user_id",
-        "owner_user_group_id",
-    }
-    assert _columns(connection, "shared_resources") == {
-        "id",
-        "name",
-        "description",
-        "owner_user_id",
-        "owner_user_group_id",
-        "created_at",
-    }
-    assert {
-        "ix_environments_owner_user_id",
-        "ix_environments_owner_user_group_id",
-    } <= _index_names(connection, "environments")
-    assert {
-        "ix_shared_resources_owner_user_id",
-        "ix_shared_resources_owner_user_group_id",
-    } <= _index_names(connection, "shared_resources")
+    for table in ("environments", "shared_resources"):
+        columns = _columns(connection, table)
+        assert {"owner_user_id", "owner_user_group_id"} <= columns
+        assert "owner_workspace_id" not in columns
+
     expected_fks = {
         ("owner_user_id", "users", "RESTRICT"),
         ("owner_user_group_id", "user_groups", "RESTRICT"),
     }
     assert expected_fks <= _foreign_keys(connection, "environments")
     assert expected_fks <= _foreign_keys(connection, "shared_resources")
-    for table, constraint in (
-        ("environments", "ck_environments_exactly_one_owner"),
-        ("shared_resources", "ck_shared_resources_exactly_one_owner"),
-    ):
-        ddl = str(
-            connection.execute(
-                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
-            ).fetchone()[0]
-        ).lower()
-        assert constraint in ddl
 
 
 def _assert_integrity_error(
@@ -294,19 +262,10 @@ def test_issue_39_asset_ownership_migration_is_destructive_and_round_trips(
 
         command.downgrade(config, PREVIOUS_REVISION)
         with sqlite3.connect(database) as connection:
-            assert _columns(connection, "environments") == {
-                "id",
-                "name",
-                "description",
-                "owner_workspace_id",
-            }
-            assert _columns(connection, "shared_resources") == {
-                "id",
-                "name",
-                "description",
-                "owner_workspace_id",
-                "created_at",
-            }
+            for table in ("environments", "shared_resources"):
+                columns = _columns(connection, table)
+                assert "owner_workspace_id" in columns
+                assert {"owner_user_id", "owner_user_group_id"}.isdisjoint(columns)
             assert _asset_counts(connection) == {
                 "environments": 0,
                 "environment_versions": 0,

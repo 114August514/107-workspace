@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import httpx
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import ensure_user_group
+from workspace107.infrastructure.db.tables import EnvironmentRow
 
-from workspace107.infrastructure.db.tables import ActivityRow, EnvironmentRow, LegacyWorkspaceRow
 
 ALICE = {"X-User": "alice"}
 FORBIDDEN_OWNER_FIELDS = {"owner_workspace_id", "is_platform_owned"}
@@ -25,57 +22,12 @@ async def test_issue_39_openapi_uses_only_canonical_owner_summary(
     assert set(owner["required"]) == {"kind", "id", "display_name"}
     assert set(owner["properties"]) == {"kind", "id", "display_name"}
     assert owner["properties"]["kind"] == {"$ref": "#/components/schemas/OwnerKind"}
-    assert models["OwnerKind"]["enum"] == ["user", "user_group"]
+    assert set(models["OwnerKind"]["enum"]) == {"user", "user_group"}
 
     for model_name in ("EnvironmentOut", "SharedResourceOut", "SharedResourceDetailOut"):
         properties = models[model_name]["properties"]
         assert properties["owner"] == {"$ref": "#/components/schemas/OwnerSummaryOut"}
         assert FORBIDDEN_OWNER_FIELDS.isdisjoint(properties)
-
-    adapter_path = schema["paths"]["/api/v1/workspaces/{workspace_id}/shared-resources"]
-    assert adapter_path["get"]["deprecated"] is True
-    assert adapter_path["post"]["deprecated"] is True
-
-
-@pytest.mark.asyncio
-async def test_issue_39_deprecated_workspace_adapter_maps_personal_owner_without_activity(
-    client: httpx.AsyncClient,
-    session: AsyncSession,
-) -> None:
-    user = (await client.get("/api/v1/me", headers=ALICE)).json()["user"]
-    personal_workspace_id = "ws_adapter_personal"
-    session.add(
-        LegacyWorkspaceRow(
-            id=personal_workspace_id,
-            kind="personal",
-            name="Alice personal compatibility workspace",
-            description="",
-            owner_id=user["id"],
-            created_at=datetime.now(UTC),
-        )
-    )
-    await session.commit()
-
-    response = await client.post(
-        f"/api/v1/workspaces/{personal_workspace_id}/shared-resources",
-        json={"name": "Personal adapter resource"},
-        headers=ALICE,
-    )
-
-    assert response.status_code == 201
-    resource = response.json()
-    assert resource["owner"] == {
-        "kind": "user",
-        "id": user["id"],
-        "display_name": user["display_name"],
-    }
-    assert FORBIDDEN_OWNER_FIELDS.isdisjoint(resource)
-    activities = (
-        await session.execute(
-            select(ActivityRow).where(ActivityRow.workspace_id == personal_workspace_id)
-        )
-    ).scalars()
-    assert list(activities) == []
 
 
 @pytest.mark.asyncio

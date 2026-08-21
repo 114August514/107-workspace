@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import grant_test_entitlement, wait_for_run
@@ -11,6 +12,7 @@ from workspace107.infrastructure.db.tables import (
     EnvironmentRow,
     EnvironmentVersionRow,
     RunConfigurationRow,
+    RunRow,
     SharedResourceRow,
     SharedResourceVersionRow,
 )
@@ -184,8 +186,9 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
         headers=ALICE,
     )
     assert preflight.status_code == 200
-    assert preflight.json()["ok"] is False
-    assert any("不存在或无权访问" in problem for problem in preflight.json()["problems"])
+    preflight_body = preflight.json()
+    assert preflight_body["ok"] is False
+    assert len(preflight_body["problems"]) == 1
 
     create = await client.post(
         f"/api/v1/projects/{project['id']}/runs",
@@ -193,7 +196,12 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
         headers=ALICE,
     )
     assert create.status_code == 422
-    assert any("不存在或无权访问" in problem for problem in create.json()["problems"])
+    assert create.json()["code"] == "preflight_rejected"
+    assert len(create.json()["problems"]) == 1
+    persisted_runs = (
+        await session.execute(select(RunRow.id).where(RunRow.project_id == project["id"]))
+    ).scalars()
+    assert list(persisted_runs) == []
 
 
 async def test_issue_39_environment_assignment_requires_exact_project_owner(
@@ -290,8 +298,9 @@ async def test_issue_39_environment_assignment_requires_exact_project_owner(
         headers=ALICE,
     )
     assert preflight.status_code == 200
-    assert preflight.json()["ok"] is False
-    assert any("无权供当前 Project 使用" in p for p in preflight.json()["problems"])
+    preflight_body = preflight.json()
+    assert preflight_body["ok"] is False
+    assert len(preflight_body["problems"]) == 1
 
 
 async def test_issue_39_fork_validates_assets_against_target_owner(
@@ -412,6 +421,9 @@ async def test_issue_39_rerun_revalidates_snapshot_asset_owners(
 
     rerun = await client.post(f"/api/v1/runs/{create.json()['id']}/rerun", headers=ALICE)
     assert rerun.status_code == 422
-    problems = rerun.json()["problems"]
-    assert any("运行环境版本" in p and "无权供当前 Project 使用" in p for p in problems)
-    assert any("Shared Resource Version 不存在或无权访问" in p for p in problems)
+    assert rerun.json()["code"] == "preflight_rejected"
+    assert len(rerun.json()["problems"]) == 2
+    persisted_runs = (
+        await session.execute(select(RunRow.id).where(RunRow.project_id == project["id"]))
+    ).scalars()
+    assert list(persisted_runs) == [create.json()["id"]]

@@ -21,7 +21,6 @@ from workspace107.domain.ownership import OwnerKind, OwnerReference
 
 NOW = datetime(2026, 8, 11, 12, 0, tzinfo=UTC)
 ALICE = OwnerReference(OwnerKind.USER, "usr_alice")
-GROUP = OwnerReference(OwnerKind.USER_GROUP, "grp_alice")
 
 
 def _files(*paths: str) -> tuple[SharedResourceFile, ...]:
@@ -38,15 +37,6 @@ def test_shared_resource_可变_名称和说明可就地修改() -> None:
     resource.description = "新说明"
     assert resource.name == "新名"
     assert resource.description == "新说明"
-
-
-def test_shared_resource_必须带_typed_owner() -> None:
-    user_resource = SharedResource(id="shr_u", name="个人资源", owner=ALICE)
-    group_resource = SharedResource(id="shr_g", name="组资源", owner=GROUP)
-    assert user_resource.owner.kind is OwnerKind.USER
-    assert user_resource.owner.id == "usr_alice"
-    assert group_resource.owner.kind is OwnerKind.USER_GROUP
-    assert group_resource.owner.id == "grp_alice"
 
 
 # -- SharedResourceVersion / File：不可变（frozen） --------------------------

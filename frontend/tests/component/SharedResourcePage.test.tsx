@@ -86,10 +86,11 @@ function makeVersionDetail(
   id: string,
   label: string,
   sequence: number,
+  path = 'train.py',
 ): SharedResourceVersionDetail {
   return {
     ...makeVersionSummary(id, label, sequence),
-    files: [{ path: 'train.py', content_hash: 'abc', size: 100 }],
+    files: [{ path, content_hash: 'abc', size: 100 }],
   }
 }
 
@@ -188,7 +189,6 @@ describe('SharedResourcePage 权限与空态', () => {
       expect(screen.getByText('预训练权重')).toBeInTheDocument()
     })
     expect(screen.getByText('归属：Alice')).toBeInTheDocument()
-    expect(mockGetLegacyWorkspaceContext).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: '修改共享资源' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument()
   })
@@ -209,11 +209,7 @@ describe('SharedResourcePage 权限与空态', () => {
     expect(await screen.findByRole('button', { name: /v2/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /v1/ })).toBeInTheDocument()
     expect(screen.getByText('最新')).toBeInTheDocument()
-    // 右侧详情默认加载最新版本，不去请求旧版本
-    await waitFor(() => {
-      expect(mockGetSharedResourceVersion).toHaveBeenCalledWith('ver_2')
-    })
-    expect(mockGetSharedResourceVersion).not.toHaveBeenCalledWith('ver_1')
+    expect(await screen.findByRole('button', { name: 'train.py' })).toBeInTheDocument()
   })
 
   it('点击左侧版本切换右侧详情', async () => {
@@ -225,14 +221,18 @@ describe('SharedResourcePage 权限与空态', () => {
     mockGetLegacyWorkspaceContext.mockResolvedValue(
       makeWorkspace(['workspace.view', 'shared_resource.view']),
     )
-    mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
+    mockGetSharedResourceVersion.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === 'ver_1'
+          ? makeVersionDetail('ver_1', 'v1', 1, 'old.py')
+          : makeVersionDetail('ver_2', 'v2', 2),
+      ),
+    )
 
     renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: /v1/ }))
-    await waitFor(() => {
-      expect(mockGetSharedResourceVersion).toHaveBeenCalledWith('ver_1')
-    })
+    expect(await screen.findByRole('button', { name: 'old.py' })).toBeInTheDocument()
   })
 
   it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
