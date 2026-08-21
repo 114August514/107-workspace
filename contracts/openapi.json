@@ -2474,6 +2474,7 @@
           "name": {
             "maxLength": 128,
             "minLength": 1,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
             "title": "Name",
             "type": "string"
           },
@@ -2982,6 +2983,7 @@
           "name": {
             "maxLength": 128,
             "minLength": 1,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
             "title": "Name",
             "type": "string"
           },

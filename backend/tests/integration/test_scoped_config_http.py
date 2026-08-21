@@ -50,3 +50,22 @@ async def test_user_foreign_and_project_unauthorized_existing_are_404(client) ->
         f"/api/v1/projects/{project_id}/variables", headers={"X-User": "foreign"}
     )
     assert foreign.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_config_name_pattern_rejects_invalid_names(client) -> None:
+    me = await client.get("/api/v1/me")
+    user_id = me.json()["user"]["id"]
+    for endpoint in (
+        f"/api/v1/users/{user_id}/variables",
+        f"/api/v1/users/{user_id}/secrets",
+    ):
+        assert (
+            await client.put(endpoint, json={"name": "HF_TOKEN", "value": "ok"})
+        ).status_code in (200, 204)
+        assert (
+            await client.put(endpoint, json={"name": "foo-bar", "value": "bad"})
+        ).status_code == 422
+        assert (
+            await client.put(endpoint, json={"name": "123TOKEN", "value": "bad"})
+        ).status_code == 422

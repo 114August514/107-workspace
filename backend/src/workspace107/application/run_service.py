@@ -542,6 +542,7 @@ class RunService:
             await self._notifier.run_submit_failed(
                 recipient_id=run.created_by,
                 workspace_id=access.workspace.id,
+                run_id=run.id,
                 run_name=run.name,
                 reason=str(exc),
             )
@@ -823,6 +824,9 @@ class RunService:
                 problems.append(f"当前 Workspace 已不再拥有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
+            else:
+                problems.extend(await self._check_concurrency(workspace_id, entitlement))
+            problems.extend(check_request_against_plan(plan, snapshot.compute_request))
         _, secret_problems = await self._config_resolver.validate_and_resolve(
             access, initiated_by_user_id, snapshot.env_secret_refs
         )
