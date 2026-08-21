@@ -19,7 +19,10 @@ async def _crud(client, base: str, *, secret_value: str) -> None:
 
 @pytest.mark.asyncio
 async def test_user_group_and_project_config_full_http_crud(client) -> None:
-    await _crud(client, "/api/v1/users/student", secret_value="user-plaintext")
+    me = await client.get("/api/v1/me")
+    assert me.status_code == 200
+    user_id = me.json()["user"]["id"]
+    await _crud(client, f"/api/v1/users/{user_id}", secret_value="user-plaintext")
     group_response = await client.post("/api/v1/user-groups", json={"name": "config-http"})
     assert group_response.status_code == 201
     group_id = group_response.json()["id"]

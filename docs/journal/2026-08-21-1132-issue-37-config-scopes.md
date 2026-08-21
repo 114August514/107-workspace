@@ -34,6 +34,11 @@
 ## 仓外副作用
 无；不进行 live 107 活动、远端发布或其他仓外操作。
 
+
+## 集成证据更新
+- 真实 SQLite persistence tests：2 passed；真实 HTTP explicit resource CRUD/auth tests：2 passed；existing #35 Alembic round-trip migration test：1 passed。
+- HTTP coverage now initializes actual User identity, creates actual UserGroup and Project, exercises set/list/delete for Variable and Secret in all three families, foreign User and existing Project unauthorized 404, and asserts Secret list has no plaintext/value.
+- Standard `main.py` import and single `app.include_router(api_router)` wiring restored; no special-case router registration or dependency-bound changes.
 ## 回退方式
 `git revert <commit>`
 

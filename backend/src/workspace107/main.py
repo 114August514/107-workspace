@@ -19,7 +19,8 @@ from . import __version__
 from .api.deps import AppContext, build_services
 from .api.errors import register_error_handlers
 from .api.middleware import BodySizeLimitMiddleware, RequestContextMiddleware
-from .api.routes import api_router, configuration
+from .api.routes import api_router
+from .config import Settings, get_settings
 from .domain.ports.scheduler import SchedulerPort
 from .infrastructure.clock import SystemClock
 from .infrastructure.db.session import create_engine, create_session_factory
@@ -125,5 +126,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_error_handlers(app)
     app.include_router(api_router)
-    app.include_router(configuration.router, prefix="/api/v1")
     return app
