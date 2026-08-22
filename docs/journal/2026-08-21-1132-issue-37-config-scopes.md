@@ -4,8 +4,8 @@
 - 认领：August / Codex
 - 分支：`refactor/37-config-scopes`
 - Worktree：`/home/august/Projects/ustc_107/107-workspace-37`
-- Reviewed remediation code/evidence HEAD: `5a40e40162b667583fe22144d72a2f7072daa462`.
-- PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; remediation journal commit follows; primary worktree 未触碰。
+- Reviewed code/evidence HEAD: `e9d3e07ff60ac0652a128abc87ea402b6bd80397`.
+- PR #60 `https://github.com/114August514/107-workspace/pull/60` is open, non-draft, base `main`; publication journal commit follows; primary worktree 未触碰。
 
 ## 当前完成范围
 - User/UserGroup/Project scoped Variable/Secret、严格 scope repository/vault、显式 CRUD/API、Project-first/owner/user resolver、typed exact SecretReference、snapshot freeze、execution/rerun current Secret、no-fallback failure、log redaction、Fork expression isolation。
@@ -14,7 +14,7 @@
 - Alembic f37 migration covers scoped config, Snapshot JSON exact refs, redaction table/FK, deterministic legacy mapping and refusal safety; PostgreSQL job runs existing identity test then scoped config test.
 
 ## 最终证据
-- Reviewed remediation code/evidence HEAD `5a40e40162b667583fe22144d72a2f7072daa462` `make check` PASS: backend Ruff lint/format; backend **241 passed, 4 skipped**; frontend **60 passed** with format/lint/typecheck/build; workflow/API contract pass。
+- Reviewed code/evidence HEAD `e9d3e07ff60ac0652a128abc87ea402b6bd80397` `make check` PASS: backend Ruff lint/format; backend **241 passed, 4 skipped**; frontend **60 passed** with format/lint/typecheck/build; workflow/API contract pass。
 - `make smoke` PASS: isolated HTTP core Run completed with Project-scoped seed path.
 - Targeted #37 suite: 107 passed; migration suite: 7 passed; focused Fork/execution/rerun and historical-redaction tests passed.
 - PostgreSQL 17 fresh Docker evidence: scoped test **2 passed, 0 skipped**; JSON object/exact refs, scoped rows, redaction PK/FK cascade, downgrade/re-upgrade and refusal preservation verified. Container `workspace107-pg17-37` removed; post-cleanup container listing empty.
@@ -30,7 +30,7 @@ Use `git revert <commit>` per exact commit; no stash/reset/clean used.
 ## Review remediation evidence
 - `3805a99` restored rerun concurrency/plan checks, fixed submit-failure notification `run_id`, removed stale frontend scope-availability heuristic, and added name-pattern validation.
 - `ec28a46` added real rerun-limit and scheduler-submit-failure regressions and removed dead unresolved helper/test files.
-- `5a40e40` records complete remediation evidence; final `make check` is green with the counts above; no stale pending-check claim remains。
+- Remediation commits `3805a99`, `ec28a46`, `5a40e40` and backfill commits `118ad9b`, `ecf2966`, `3276153`, `e9d3e07` record the reviewed behavior; independent targeted re-reviews PASS。
 
 ## Historical redaction backfill
 - f37 backfills only submitted Runs with legacy Secret `updated_at <= submitted_at`; it deduplicates `(run_id, sha256(value))` and skips empty, missing, malformed, later-rotated, or unsubmitted refs without guessing.
