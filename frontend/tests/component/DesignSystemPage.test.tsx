@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AsyncState } from '../../src/components/common/AsyncState'
 import { DesignSystemPage } from '../../src/pages/design-system/DesignSystemPage'
 import { EMPTY_RECIPE } from '../../src/pages/design-system/model'
+import { PrimerRoot } from '../../src/primer/setup'
 
 const writeText = vi.fn<(value: string) => Promise<void>>()
 
@@ -33,7 +34,11 @@ afterEach(() => {
 
 describe('DesignSystemPage', () => {
   it('呈现为静态 Reference，不含任何 Playground 控制器', () => {
-    render(<DesignSystemPage />)
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
 
     expect(screen.getByRole('heading', { name: '107 Primer UI Reference' })).toBeInTheDocument()
     for (const section of ['Foundations', 'States', 'Patterns', 'Content']) {
@@ -48,7 +53,11 @@ describe('DesignSystemPage', () => {
   })
 
   it('六类状态无需任何操作即可直接查看', () => {
-    render(<DesignSystemPage />)
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
 
     expect(screen.getByText('正在加载共享资源…')).toBeInTheDocument()
     expect(screen.getAllByText('这里还没有共享资源。').length).toBeGreaterThan(0)
@@ -61,7 +70,11 @@ describe('DesignSystemPage', () => {
   })
 
   it('危险确认 Dialog 可打开与取消', async () => {
-    render(<DesignSystemPage />)
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
 
     const trigger = screen.getAllByRole('button', { name: '删除 Project' })[0]
     if (!trigger) throw new Error('缺少危险操作触发按钮')
@@ -74,7 +87,11 @@ describe('DesignSystemPage', () => {
   })
 
   it('页头提供响应式返回入口与完整规范来源', () => {
-    render(<DesignSystemPage />)
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
 
     expect(screen.queryByText('Internal reference')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '返回产品' })).toHaveAttribute('href', '/')
@@ -85,7 +102,11 @@ describe('DesignSystemPage', () => {
 
   it('复制范例源码并反馈结果，2 秒后恢复可复制', async () => {
     vi.useFakeTimers()
-    render(<DesignSystemPage />)
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '复制能力感知空态代码' }))
     await act(async () => {
@@ -105,10 +126,26 @@ describe('DesignSystemPage', () => {
 
 describe('AsyncState', () => {
   it('加载中只呈现动作描述', () => {
-    render(<AsyncState loading>内容</AsyncState>)
+    render(
+      <AsyncState loading loadingText="正在加载共享资源…">
+        内容
+      </AsyncState>,
+    )
 
-    expect(screen.getByText('加载中')).toBeInTheDocument()
+    expect(screen.getByText('正在加载共享资源…')).toBeInTheDocument()
+    expect(screen.queryByText('加载中')).not.toBeInTheDocument()
     expect(screen.queryByText('内容')).not.toBeInTheDocument()
+  })
+
+  it('loadingText 渲染为可见加载文案', () => {
+    render(
+      <AsyncState loading loadingText="正在加载首页内容…">
+        内容
+      </AsyncState>,
+    )
+
+    expect(screen.getByText('正在加载首页内容…')).toBeVisible()
+    expect(screen.getByRole('status')).toHaveTextContent('正在加载首页内容…')
   })
 
   it('错误逐条展示问题并次级保留请求标识', () => {
@@ -116,6 +153,7 @@ describe('AsyncState', () => {
     render(
       <AsyncState
         loading={false}
+        loadingText="正在加载共享资源…"
         error={{
           message: '无法发布这个版本。',
           problems: ['文件 list.txt 已存在', '说明过长'],
@@ -141,6 +179,7 @@ describe('AsyncState', () => {
     render(
       <AsyncState
         loading={false}
+        loadingText="正在加载共享资源…"
         error={{ message: '无法发布这个版本。', problems: ['请修正文件问题后重试。'] }}
       >
         内容
@@ -153,13 +192,22 @@ describe('AsyncState', () => {
 
   it('空态显示说明，正常状态渲染内容', () => {
     const { rerender } = render(
-      <AsyncState loading={false} empty emptyText="这里还没有共享资源。">
+      <AsyncState
+        loading={false}
+        loadingText="正在加载共享资源…"
+        empty
+        emptyText="这里还没有共享资源。"
+      >
         内容
       </AsyncState>,
     )
     expect(screen.getByText('这里还没有共享资源。')).toBeInTheDocument()
 
-    rerender(<AsyncState loading={false}>内容</AsyncState>)
+    rerender(
+      <AsyncState loading={false} loadingText="正在加载共享资源…">
+        内容
+      </AsyncState>,
+    )
     expect(screen.getByText('内容')).toBeInTheDocument()
   })
 })

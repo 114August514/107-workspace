@@ -248,6 +248,32 @@
         "title": "Body_upload_files_api_v1_projects__project_id__files_upload_post",
         "type": "object"
       },
+      "CanonicalSharedResourceCreateIn": {
+        "description": "Canonical creation payload with an explicit legal owner.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 4096,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/OwnerReferenceIn"
+          }
+        },
+        "required": [
+          "name",
+          "owner"
+        ],
+        "title": "CanonicalSharedResourceCreateIn",
+        "type": "object"
+      },
       "Capability": {
         "description": "一个具体的操作许可。\n\n命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。",
         "enum": [
@@ -447,16 +473,8 @@
             "title": "Name",
             "type": "string"
           },
-          "owner_workspace_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Owner Workspace Id"
+          "owner": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
           },
           "versions": {
             "items": {
@@ -470,7 +488,7 @@
           "id",
           "name",
           "description",
-          "owner_workspace_id",
+          "owner",
           "versions"
         ],
         "title": "EnvironmentOut",
@@ -1137,6 +1155,55 @@
         ],
         "title": "NotificationType",
         "type": "string"
+      },
+      "OwnerKind": {
+        "enum": [
+          "user",
+          "user_group"
+        ],
+        "title": "OwnerKind",
+        "type": "string"
+      },
+      "OwnerReferenceIn": {
+        "description": "Canonical owner selection for asset creation.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OwnerKind"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "OwnerReferenceIn",
+        "type": "object"
+      },
+      "OwnerSummaryOut": {
+        "description": "Canonical display-ready ownership summary.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OwnerKind"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "display_name"
+        ],
+        "title": "OwnerSummaryOut",
+        "type": "object"
       },
       "PageOut_ActivityOut_": {
         "properties": {
@@ -2491,27 +2558,6 @@
         "title": "SecretIn",
         "type": "object"
       },
-      "SharedResourceCreateIn": {
-        "properties": {
-          "description": {
-            "default": "",
-            "maxLength": 4096,
-            "title": "Description",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "SharedResourceCreateIn",
-        "type": "object"
-      },
       "SharedResourceDetailOut": {
         "properties": {
           "created_at": {
@@ -2527,24 +2573,12 @@
             "title": "Id",
             "type": "string"
           },
-          "is_platform_owned": {
-            "title": "Is Platform Owned",
-            "type": "boolean"
-          },
           "name": {
             "title": "Name",
             "type": "string"
           },
-          "owner_workspace_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Owner Workspace Id"
+          "owner": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
           },
           "versions": {
             "items": {
@@ -2558,8 +2592,7 @@
           "id",
           "name",
           "description",
-          "owner_workspace_id",
-          "is_platform_owned",
+          "owner",
           "created_at",
           "versions"
         ],
@@ -2581,32 +2614,19 @@
             "title": "Id",
             "type": "string"
           },
-          "is_platform_owned": {
-            "title": "Is Platform Owned",
-            "type": "boolean"
-          },
           "name": {
             "title": "Name",
             "type": "string"
           },
-          "owner_workspace_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Owner Workspace Id"
+          "owner": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
           }
         },
         "required": [
           "id",
           "name",
           "description",
-          "owner_workspace_id",
-          "is_platform_owned",
+          "owner",
           "created_at"
         ],
         "title": "SharedResourceOut",
@@ -3410,7 +3430,7 @@
     },
     "/api/v1/catalog/environments": {
       "get": {
-        "description": "登录后只读返回平台统一维护的运行环境及其全部已发布版本，不按用户区分。",
+        "description": "返回当前 User 作为 Owner 或 owning UserGroup active member 可发现的环境。",
         "operationId": "list_environments_api_v1_catalog_environments_get",
         "parameters": [
           {
@@ -3507,110 +3527,6 @@
           }
         },
         "summary": "列出运行环境",
-        "tags": [
-          "catalog"
-        ]
-      }
-    },
-    "/api/v1/catalog/shared-resources": {
-      "get": {
-        "description": "登录后只读返回 Platform 持有的 Shared Resource，不按用户区分。\n\nWorkspace 持有的资源请走 ``GET /workspaces/{id}/shared-resources``；\n跨 Workspace Asset Grant 在 M4 单独 Issue。",
-        "operationId": "list_platform_shared_resources_api_v1_catalog_shared_resources_get",
-        "parameters": [
-          {
-            "in": "header",
-            "name": "X-User",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SharedResourceOut"
-                  },
-                  "title": "Response List Platform Shared Resources Api V1 Catalog Shared Resources Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "请求不合法"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象可见，但当前角色无权执行该操作"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象不存在，或当前用户没有发现权限"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "与现有状态冲突，例如重名或对象不可修改"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "底层调度系统返回错误"
-          }
-        },
-        "summary": "列出 Platform 持有的共享资源",
         "tags": [
           "catalog"
         ]
@@ -8407,6 +8323,218 @@
         ]
       }
     },
+    "/api/v1/shared-resources": {
+      "get": {
+        "description": "Return resources owned by the actor or by an owning UserGroup with active membership.",
+        "operationId": "list_shared_resources_api_v1_shared_resources_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SharedResourceOut"
+                  },
+                  "title": "Response List Shared Resources Api V1 Shared Resources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "列出当前用户可发现的共享资源",
+        "tags": [
+          "shared-resource"
+        ]
+      },
+      "post": {
+        "description": "Create with explicit User/UserGroup owner.\n\nUser owner must be the actor; UserGroup owner requires active membership with\nShared Resource management capability. Cross-owner attempts are concealed.",
+        "operationId": "create_canonical_shared_resource_api_v1_shared_resources_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CanonicalSharedResourceCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedResourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "创建 Shared Resource",
+        "tags": [
+          "shared-resource"
+        ]
+      }
+    },
     "/api/v1/shared-resources/{resource_id}": {
       "get": {
         "description": "校验可见性后返回资源信息及其全部版本（按 sequence 倒序）。",
@@ -8516,7 +8644,7 @@
         ]
       },
       "patch": {
-        "description": "需要 Shared Resource 管理权限；仅修改 Workspace 持有资源的名称与说明。\n\nPlatform 持有的资源由平台维护，不接受 API 修改。",
+        "description": "需要 Shared Resource 管理权限；仅修改当前 actor 可发现资源的名称与说明。",
         "operationId": "update_shared_resource_api_v1_shared_resources__resource_id__patch",
         "parameters": [
           {
@@ -12627,238 +12755,6 @@
         "summary": "在旧 workspace_id 下创建 Project",
         "tags": [
           "deprecated-workspace-compatibility"
-        ]
-      }
-    },
-    "/api/v1/workspaces/{workspace_id}/shared-resources": {
-      "get": {
-        "deprecated": true,
-        "description": "需要 Shared Resource 查看权限；返回当前 Workspace 持有的资源。\n\nPlatform 持有的资源请走 ``GET /catalog/shared-resources``；跨 Workspace\n可见的资源在 M4 Asset Grant 实现后单独提供。",
-        "operationId": "list_workspace_shared_resources_api_v1_workspaces__workspace_id__shared_resources_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspace_id",
-            "required": true,
-            "schema": {
-              "title": "Workspace Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SharedResourceOut"
-                  },
-                  "title": "Response List Workspace Shared Resources Api V1 Workspaces  Workspace Id  Shared Resources Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "请求不合法"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象可见，但当前角色无权执行该操作"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象不存在，或当前用户没有发现权限"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "与现有状态冲突，例如重名或对象不可修改"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "底层调度系统返回错误"
-          }
-        },
-        "summary": "列出 Workspace 持有的共享资源",
-        "tags": [
-          "shared-resource"
-        ]
-      },
-      "post": {
-        "deprecated": true,
-        "description": "需要 Shared Resource 管理权限；在当前 Workspace 下创建一个空的资源对象。\n\n资源创建后内容为空，需通过 ``POST /shared-resources/{id}/versions`` 上传文件\n形成首个版本，才能在 Input Binding 中引用。",
-        "operationId": "create_shared_resource_api_v1_workspaces__workspace_id__shared_resources_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspace_id",
-            "required": true,
-            "schema": {
-              "title": "Workspace Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-User",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-User"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SharedResourceCreateIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SharedResourceOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "请求不合法"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象可见，但当前角色无权执行该操作"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象不存在，或当前用户没有发现权限"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "与现有状态冲突，例如重名或对象不可修改"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "底层调度系统返回错误"
-          }
-        },
-        "summary": "创建 Workspace 共享资源",
-        "tags": [
-          "shared-resource"
         ]
       }
     }

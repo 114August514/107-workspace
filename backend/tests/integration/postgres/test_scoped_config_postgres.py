@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -86,13 +86,15 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
             )
             await connection.execute(
                 text(
-                    "INSERT INTO workspace_secrets VALUES ('w','TOKEN','secret-w',:now), ('g','TOKEN','secret-g',:now)"  # noqa: E501
+                    "INSERT INTO workspace_secrets VALUES "
+                    "('w','TOKEN','secret-w',:created), ('g','TOKEN','secret-g',:created), "
+                    "('w','LATE','late-secret',:late)"
                 ),
-                {"now": now},
+                {"created": now, "late": now + timedelta(seconds=1)},
             )
             snapshot_payload = (
                 '{"project_id":"p","env":{"literals":{"A":"1"},'
-                '"secret_refs":{"T":"TOKEN","U":"TOKEN"}}}'
+                '"secret_refs":{"T":"TOKEN","U":"TOKEN","L":"LATE"}}}'
             )
             await connection.execute(
                 text("INSERT INTO run_snapshots (id,payload) VALUES ('s',CAST(:payload AS json))"),
@@ -103,9 +105,9 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
                     "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,"
                     "project_version_id,project_version_label,name,status,failure_reason,"
                     "created_by,created_at,submitted_at) VALUES ('r','p','w','s','plan_cpu_quick',"
-                    "'pv','v1','R','succeeded','', 'u',:now,:now)"
+                    "'pv','v1','R','succeeded','', 'u',:created,:submitted)"
                 ),
-                {"now": now},
+                {"created": now, "submitted": now + timedelta(seconds=2)},
             )
         await _migrate(config, "head")
         async with engine.connect() as connection:
@@ -123,7 +125,11 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
                         "SELECT scope_kind,scope_id,name FROM secrets ORDER BY scope_kind,scope_id"
                     )
                 )
-            ).all() == [("user", "u", "TOKEN"), ("user_group", "g", "TOKEN")]
+            ).all() == [
+                ("user", "u", "LATE"),
+                ("user", "u", "TOKEN"),
+                ("user_group", "g", "TOKEN"),
+            ]
             assert (
                 await connection.execute(
                     text(

@@ -1,0 +1,104 @@
+.panel {
+  width: min(420px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--borderColor-default);
+}
+
+.panelBanner {
+  padding: 12px 16px 0;
+}
+
+.panelBody {
+  max-height: min(480px, calc(100vh - 96px));
+  overflow-y: auto;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.item,
+.itemUnread {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 16px;
+}
+
+.itemUnread {
+  background: var(--bgColor-muted);
+  cursor: pointer;
+}
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.itemTime {
+  font-size: 12px;
+  color: var(--fgColor-muted);
+}
+
+.title,
+.titleUnread,
+.itemBody {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.titleUnread {
+  font-weight: 600;
+}
+
+.itemBody {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--fgColor-muted);
+}
+
+.readAction {
+  display: inline-flex;
+  align-items: flex-start;
+  block-size: auto;
+  height: auto;
+  min-block-size: var(--control-small-size, 28px);
+  min-height: var(--control-small-size, 28px);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+  justify-content: flex-start;
+  padding-block: var(--control-small-paddingBlock, 0.375rem);
+}
+
+.readActionLabel {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.readAction > span {
+  inline-size: auto;
+  max-inline-size: 100%;
+  white-space: normal;
+}

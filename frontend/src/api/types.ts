@@ -69,12 +69,15 @@ export type ResolvedScheduler = Schemas['ResolvedSchedulerOut']
 
 // -- 共享资源 ---------------------------------------------------------------
 
+export type OwnerKind = Schemas['OwnerKind']
+export type OwnerReference = Schemas['OwnerReferenceIn']
+export type OwnerSummary = Schemas['OwnerSummaryOut']
 export type SharedResource = Schemas['SharedResourceOut']
 export type SharedResourceDetail = Schemas['SharedResourceDetailOut']
 export type SharedResourceVersion = Schemas['SharedResourceVersionOut']
 export type SharedResourceVersionDetail = Schemas['SharedResourceVersionDetailOut']
 export type SharedResourceVersionFile = Schemas['SharedResourceVersionFileOut']
-export type SharedResourceCreate = Schemas['SharedResourceCreateIn']
+export type SharedResourceCreate = Schemas['CanonicalSharedResourceCreateIn']
 export type SharedResourceUpdate = Schemas['SharedResourceUpdateIn']
 
 // -- 运行方案 ---------------------------------------------------------------

@@ -102,7 +102,11 @@ export function SharedResourceVersionBody({ versionId }: Props) {
 
   return (
     <PrimerStack gap="large">
-      <AsyncState loading={version.loading} error={normalizeError(version.error)}>
+      <AsyncState
+        loading={version.loading}
+        loadingText="正在加载资源版本…"
+        error={normalizeError(version.error)}
+      >
         {version.data && (
           <>
             <div className={styles.versionTagRow}>
@@ -129,6 +133,7 @@ export function SharedResourceVersionBody({ versionId }: Props) {
       <PrimerListCard title="文件">
         <AsyncState
           loading={version.loading}
+          loadingText="正在加载资源版本…"
           error={normalizeError(version.error)}
           empty={version.data !== undefined && (version.data.files ?? []).length === 0}
           emptyText="这个版本没有文件。"

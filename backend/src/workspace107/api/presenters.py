@@ -7,13 +7,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..application.catalog_service import EnvironmentView
+from ..application.ownership import OwnerSummary
+from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
 from ..application.workspace_service import EntitlementView, LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
 from ..domain.models import (
     Activity,
     Artifact,
-    Environment,
     EnvironmentVersion,
     ForkRelation,
     InputBinding,
@@ -24,7 +26,6 @@ from ..domain.models import (
     Run,
     RunConfiguration,
     RunEvent,
-    SharedResource,
     SharedResourceVersion,
     User,
 )
@@ -149,15 +150,23 @@ def version_detail_out(version: ProjectVersion) -> s.ProjectVersionDetailOut:
     )
 
 
+def owner_summary_out(owner: OwnerSummary) -> s.OwnerSummaryOut:
+    return s.OwnerSummaryOut(
+        kind=owner.kind,
+        id=owner.id,
+        display_name=owner.display_name,
+    )
+
+
 def environment_out(
-    environment: Environment, versions: list[EnvironmentVersion]
+    view: EnvironmentView,
 ) -> s.EnvironmentOut:
     return s.EnvironmentOut(
-        id=environment.id,
-        name=environment.name,
-        description=environment.description,
-        owner_workspace_id=environment.owner_workspace_id,
-        versions=[environment_version_out(v) for v in versions],
+        id=view.environment.id,
+        name=view.environment.name,
+        description=view.environment.description,
+        owner=owner_summary_out(view.owner),
+        versions=[environment_version_out(v) for v in view.versions],
     )
 
 
@@ -362,22 +371,25 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
     )
 
 
-def shared_resource_out(resource: SharedResource) -> s.SharedResourceOut:
+def shared_resource_out(view: SharedResourceView) -> s.SharedResourceOut:
     return s.SharedResourceOut(
-        id=resource.id,
-        name=resource.name,
-        description=resource.description,
-        owner_workspace_id=resource.owner_workspace_id,
-        is_platform_owned=resource.is_platform_owned,
-        created_at=resource.created_at,
+        id=view.resource.id,
+        name=view.resource.name,
+        description=view.resource.description,
+        owner=owner_summary_out(view.owner),
+        created_at=view.resource.created_at,
     )
 
 
+def shared_resource_access_out(view: SharedResourceAccessView) -> s.SharedResourceOut:
+    return shared_resource_out(SharedResourceView(resource=view.resource, owner=view.owner))
+
+
 def shared_resource_detail_out(
-    resource: SharedResource, versions: list[SharedResourceVersion]
+    view: SharedResourceAccessView, versions: list[SharedResourceVersion]
 ) -> s.SharedResourceDetailOut:
     return s.SharedResourceDetailOut(
-        **shared_resource_out(resource).model_dump(),
+        **shared_resource_access_out(view).model_dump(),
         versions=[shared_resource_version_out(v) for v in versions],
     )
 

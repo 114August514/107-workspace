@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../src/api/client'
 import type { Home } from '../../src/api/types'
 import { HomePage } from '../../src/pages/HomePage'
+import { PrimerRoot } from '../../src/primer/setup'
 
 function home(personalResourceContextId: string | null): Home {
   return {
@@ -30,13 +31,23 @@ describe('Home personal resource discovery', () => {
   })
 
   it('shows a normal personal resource entry for retained data without recent Projects', async () => {
-    vi.spyOn(api, 'home').mockResolvedValue(home('ws_personal_alice'))
     vi.spyOn(api, 'listInvitations').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
 
     render(
-      <MemoryRouter>
-        <HomePage username="alice" />
-      </MemoryRouter>,
+      <PrimerRoot>
+        <MemoryRouter>
+          <HomePage
+            username="alice"
+            home={{
+              data: home('ws_personal_alice'),
+              loading: false,
+              error: undefined,
+              reload: vi.fn(),
+            }}
+          />
+        </MemoryRouter>
+      </PrimerRoot>,
     )
 
     expect(await screen.findByRole('link', { name: '查看个人资源' })).toHaveAttribute(
@@ -47,13 +58,18 @@ describe('Home personal resource discovery', () => {
   })
 
   it('does not show the entry for a user without retained personal data', async () => {
-    vi.spyOn(api, 'home').mockResolvedValue(home(null))
     vi.spyOn(api, 'listInvitations').mockResolvedValue([])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([])
 
     render(
-      <MemoryRouter>
-        <HomePage username="alice" />
-      </MemoryRouter>,
+      <PrimerRoot>
+        <MemoryRouter>
+          <HomePage
+            username="alice"
+            home={{ data: home(null), loading: false, error: undefined, reload: vi.fn() }}
+          />
+        </MemoryRouter>
+      </PrimerRoot>,
     )
 
     await screen.findByRole('heading', { name: 'Alice，欢迎回来' })

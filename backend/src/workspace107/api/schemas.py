@@ -26,6 +26,7 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
+from ..domain.ownership import OwnerKind
 
 
 class Model(BaseModel):
@@ -240,11 +241,26 @@ class EnvironmentVersionOut(Model):
     available: bool
 
 
+class OwnerReferenceIn(Model):
+    """Canonical owner selection for asset creation."""
+
+    kind: OwnerKind
+    id: str
+
+
+class OwnerSummaryOut(Model):
+    """Canonical display-ready ownership summary."""
+
+    kind: OwnerKind
+    id: str
+    display_name: str
+
+
 class EnvironmentOut(Model):
     id: str
     name: str
     description: str
-    owner_workspace_id: str | None
+    owner: OwnerSummaryOut
     versions: list[EnvironmentVersionOut]
 
 
@@ -272,8 +288,7 @@ class SharedResourceOut(Model):
     id: str
     name: str
     description: str
-    owner_workspace_id: str | None
-    is_platform_owned: bool
+    owner: OwnerSummaryOut
     created_at: datetime
 
 
@@ -303,9 +318,12 @@ class SharedResourceDetailOut(SharedResourceOut):
     versions: list[SharedResourceVersionOut]
 
 
-class SharedResourceCreateIn(Model):
+class CanonicalSharedResourceCreateIn(Model):
+    """Canonical creation payload with an explicit legal owner."""
+
     name: str = Field(min_length=1, max_length=128)
     description: str = Field(default="", max_length=4096)
+    owner: OwnerReferenceIn
 
 
 class SharedResourceUpdateIn(Model):

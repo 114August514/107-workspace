@@ -19,24 +19,24 @@
 同一概念在所有页面使用同一写法。代码、API 和诊断信息可以保留英文标识，普通用户文案
 优先使用下表中的界面名称。
 
-| 领域名称 | 界面名称 | 使用说明 |
-| :--- | :--- | :--- |
-| User | 用户 | 用户名、账号名保持原值，不翻译 |
-| User Group | User Group | 目标产品中的协作与 Ownership 边界，保留英文 |
-| Workspace | 不新增 | 旧实现和路由术语；新界面随产品语义迁移到 User Group |
-| Project | Project | 保留英文 |
-| Project Version | Project 版本；局部上下文可写“版本” | 不写“代码快照”，除非解释版本语义 |
-| Run Configuration | 运行方案 | 不向普通用户暴露内部配置对象名 |
-| Run | Run | 保留英文 |
-| Run Snapshot | 运行快照 | 只在复现、审计等需要解释固定内容的表面出现 |
-| Environment | 运行环境 | 不简称“环境”，避免与部署环境混淆 |
-| Environment Version | 环境版本 | 在运行环境详情内可简称“版本” |
-| Shared Resource | 共享资源 | 不显示 `SharedResource` 或简称 `SR` |
-| Shared Resource Version | 资源版本 | 在共享资源详情内可简称“版本” |
-| Artifact | 运行产物 | 诊断或管理员表面可附带英文 `Artifact` |
-| Input Binding | 运行输入 | 不显示 `InputBinding` |
-| Variable | Variable | 保留产品正式英文名称 |
-| Secret | Secret | 保留产品正式英文名称，不展示明文值 |
+| 领域名称                | 界面名称                           | 使用说明                                            |
+| :---------------------- | :--------------------------------- | :-------------------------------------------------- |
+| User                    | 用户                               | 用户名、账号名保持原值，不翻译                      |
+| User Group              | User Group                         | 目标产品中的协作与 Ownership 边界，保留英文         |
+| Workspace               | 不新增                             | 旧实现和路由术语；新界面随产品语义迁移到 User Group |
+| Project                 | Project                            | 保留英文                                            |
+| Project Version         | Project 版本；局部上下文可写“版本” | 不写“代码快照”，除非解释版本语义                    |
+| Run Configuration       | 运行方案                           | 不向普通用户暴露内部配置对象名                      |
+| Run                     | Run                                | 保留英文                                            |
+| Run Snapshot            | 运行快照                           | 只在复现、审计等需要解释固定内容的表面出现          |
+| Environment             | 运行环境                           | 不简称“环境”，避免与部署环境混淆                    |
+| Environment Version     | 环境版本                           | 在运行环境详情内可简称“版本”                        |
+| Shared Resource         | 共享资源                           | 不显示 `SharedResource` 或简称 `SR`                 |
+| Shared Resource Version | 资源版本                           | 在共享资源详情内可简称“版本”                        |
+| Artifact                | 运行产物                           | 诊断或管理员表面可附带英文 `Artifact`               |
+| Input Binding           | 运行输入                           | 不显示 `InputBinding`                               |
+| Variable                | Variable                           | 保留产品正式英文名称                                |
+| Secret                  | Secret                             | 保留产品正式英文名称，不展示明文值                  |
 
 规则：
 
@@ -60,6 +60,7 @@
 
 ```text
 创建 Project
+创建 User Group
 创建共享资源
 发布版本
 提交 Run
@@ -90,6 +91,71 @@
 ```
 
 物理位置会随窄屏和布局调整变化；操作入口由按钮和可访问名称说明。
+
+### 3.4 上下文引导
+
+AppShell 的上下文引导在页面底部提供 route-level 的概念提示，回答“这里是什么”以及
+“下一步可以做什么或需要注意什么”。壳层中的三类信息各自承担单一职责：
+
+- TopBar 说明当前用户并承载全局动作；
+- Sidebar 说明用户位于哪些工作入口；
+- ContextGuide 说明当前页面的对象语义和下一步。
+
+上下文引导不得写成依赖控件位置的点击手册，也不重复页面标题或虚构当前不存在的入口。
+第一版只按 ProductRoutes 的六个 route 呈现稳定文案：
+
+| Route                       | 权威文案                                                                              |
+| :-------------------------- | :------------------------------------------------------------------------------------ |
+| `/`                         | 从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。              |
+| `/user-groups/:userGroupId` | 在这里管理成员，并进入关联的 Project 与配置；协作内容保留在各自对象中。               |
+| `/workspaces/:workspaceId`  | 这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。                     |
+| `/projects/:projectId`      | 当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。 |
+| `/versions/:versionId`      | 这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。                 |
+| `/runs/:runId`              | 这里展示当前 Run 的状态、日志和产物；后续修改不会回写其运行快照。                     |
+
+这些文案只呈现现有产品概念，不声明新的领域规则。根据 loading、empty、error 或对象状态
+变化的提示，以及可配置的 guide engine，留到出现独立需求时再设计。
+
+### 3.5 User Group 创建表单
+
+创建入口与弹窗统一使用 `创建 User Group`，不再使用 Workspace 或“协作空间”作为公开名称。
+名称字段保持简短示例；说明字段明确标记为可选，并分别承担示例与用途提示：
+
+```text
+名称
+例如：计算物理课题组
+
+说明（可选）
+例如：用于计算物理课题组的课程项目
+简要写明这个 User Group 用于哪些 Project 或协作任务。
+```
+
+已保留个人数据的入口使用 `个人资源` / `查看个人资源`；不得显示 Legacy、兼容或旧
+Workspace 等实现迁移措辞。
+
+### 3.6 全局导航 Drawer
+
+AppShell 的全局导航 Drawer 与 Home 常驻 Sidebar 使用同一份首页数据，但承担不同的
+信息架构。Drawer 标题使用品牌名 `107 Workspace`，关闭按钮的可访问名称为`关闭导航`。
+内容按以下顺序呈现：
+
+1. `首页`；
+2. 后端提供个人资源上下文时显示`个人资源`；
+3. `你的 User Group`；
+4. `最近使用的 Project`。
+
+User Group 和 Project 默认分别显示前 5 个，保持后端返回顺序；仍有条目时使用
+`显示其余 N 个`展开当前响应中的剩余内容。Project 的次级文案显示所属 User Group，
+个人资源中的 Project 显示`个人资源`。Drawer 不使用“最近”“常用”等标签描述
+User Group，也不虚构“全部”入口。
+
+加载和失败文案统一使用：
+
+```text
+正在加载全局导航…
+全局导航加载失败。
+请检查网络连接后重试。
+```
 
 ## 四. 状态与反馈
 
@@ -252,7 +318,15 @@ slurmrestd 协议细节
 - 为显得友好而牺牲技术准确性；
 - 用文案掩盖缺失的 loading、empty、error 或权限状态。
 
-## 七. Review 检查
+## 七. 代码组织约束
+
+- 稳定产品文案按 surface 就近集中；跨组件共享的稳定语义归对应功能模块维护，不建立全局字典、key lookup 或平行 i18n 层；
+- 动态对象名称、后端返回的事实和时间、容量、算力等 formatter 输出不进入文案字典；
+- `AsyncState` 的 `loadingText` 必须由调用方提供，并描述正在执行的具体动作；
+- 文案集中化只调整表达和代码归属，不改变领域模型、API、权限或状态语义；
+- 涉及正式产品术语的迁移必须单独对齐，不能借文案整理顺带改名。
+
+## 八. Review 检查
 
 新增或迁移页面至少检查：
 

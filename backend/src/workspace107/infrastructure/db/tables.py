@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -178,7 +179,20 @@ class EnvironmentRow(Base):
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(Text, default="")
-    owner_workspace_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    owner_user_group_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("user_groups.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "((owner_user_id IS NOT NULL AND owner_user_group_id IS NULL) "
+            "OR (owner_user_id IS NULL AND owner_user_group_id IS NOT NULL))",
+            name="ck_environments_exactly_one_owner",
+        ),
+    )
 
 
 class EnvironmentVersionRow(Base):
@@ -420,20 +434,28 @@ class ForkRelationRow(Base):
 
 
 class SharedResourceRow(Base):
-    """共享资源（设计稿 §3.1.3）。
-
-    ``owner_workspace_id`` 为 NULL 表示 Platform 持有的公共资源，
-    全平台可见；否则归属某个 Workspace，对其成员可见。当前 Core 子集
-    不实现跨 Workspace Asset Grant（M4 单独 Issue），所以可见性只分两层。
-    """
+    """共享资源；owner 只能是一个 User 或一个 UserGroup。"""
 
     __tablename__ = "shared_resources"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(Text, default="")
-    owner_workspace_id: Mapped[str | None] = mapped_column(ID, nullable=True, index=True)
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    owner_user_group_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("user_groups.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "((owner_user_id IS NOT NULL AND owner_user_group_id IS NULL) "
+            "OR (owner_user_id IS NULL AND owner_user_group_id IS NOT NULL))",
+            name="ck_shared_resources_exactly_one_owner",
+        ),
+    )
 
 
 class SharedResourceVersionRow(Base):

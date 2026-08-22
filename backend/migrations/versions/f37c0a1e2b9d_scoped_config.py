@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f37c0a1e2b9d"
-down_revision: str | None = "e35a1d7c9b20"
+down_revision: str | None = "c471ac39f002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -179,7 +179,7 @@ def _backfill_redactions(bind: sa.Connection) -> None:
     rows = (
         bind.execute(
             sa.text(
-                "SELECT r.id, r.submitted_at, s.payload, p.workspace_id "
+                "SELECT r.id, r.created_at, s.payload, p.workspace_id "
                 "FROM runs r JOIN run_snapshots s ON s.id=r.snapshot_id "
                 "JOIN projects p ON p.id=r.project_id WHERE r.submitted_at IS NOT NULL"
             )
@@ -203,9 +203,9 @@ def _backfill_redactions(bind: sa.Connection) -> None:
             secret = bind.execute(
                 sa.text(
                     "SELECT value FROM workspace_secrets WHERE workspace_id=:workspace "
-                    "AND name=:name AND updated_at <= :submitted"
+                    "AND name=:name AND updated_at <= :created"
                 ),
-                {"workspace": row["workspace_id"], "name": name, "submitted": row["submitted_at"]},
+                {"workspace": row["workspace_id"], "name": name, "created": row["created_at"]},
             ).scalar_one_or_none()
             if secret is None or not secret:
                 continue

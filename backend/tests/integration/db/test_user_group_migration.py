@@ -81,7 +81,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         [
             ("ws_personal", "TOKEN", "personal-secret", now),
             ("ws_collab", "TOKEN", "collab-secret", now),
-            ("ws_personal", "LATE", "late-secret", "2026-08-22 00:00:00+00:00"),
+            ("ws_personal", "LATE", "late-secret", "2026-08-17 00:00:01+00:00"),
         ],
     )
     connection.execute(
@@ -93,11 +93,11 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     )
     connection.execute(
         "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_1','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run','succeeded','', 'usr_alice',?,?)",  # noqa: E501
-        (now, now),
+        ("2026-08-17 00:00:00+00:00", "2026-08-17 00:00:02+00:00"),
     )
     connection.execute(
         "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_2','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run2','succeeded','', 'usr_alice',?,NULL)",  # noqa: E501
-        (now,),
+        ("2026-08-17 00:00:00+00:00",),
     )
     connection.commit()
     connection.close()

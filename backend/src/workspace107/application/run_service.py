@@ -50,6 +50,7 @@ from ..domain.models import (
     RunLogChunk,
     SharedResourceVersion,
 )
+from ..domain.ownership import OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
@@ -60,6 +61,10 @@ from ..domain.run_snapshot import RunSnapshot, build_snapshot
 from ..domain.secrets import ResolvedEnv, redact
 from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
+from .asset_use import (
+    environment_version_for_owner_use,
+    shared_resource_version_for_owner_use,
+)
 from .notifier import Notifier
 from .scoped_config_resolver import ScopedConfigResolver
 
@@ -239,7 +244,11 @@ class RunService:
             problems.append("Project 还没有保存过版本，请先保存一个 Project Version")
 
         environment_version = await self._resolve_environment_version(
-            access.project, configuration, problems
+            user_id,
+            access.project,
+            configuration,
+            access.workspace.owner_reference,
+            problems,
         )
 
         plan = await self._repos.compute_plans.get(configuration.compute_plan_id)
@@ -268,7 +277,14 @@ class RunService:
         )
         problems.extend(resolved.problems)
 
-        problems.extend(await self._check_inputs(configuration, access.workspace.id))
+        problems.extend(
+            await self._check_inputs(
+                user_id,
+                configuration,
+                access.workspace.id,
+                access.workspace.owner_reference,
+            )
+        )
 
         return PreflightResult(
             problems=problems,
@@ -407,8 +423,11 @@ class RunService:
         if problems:
             raise PreflightRejected(problems)
 
-        environment_version = await self._repos.environments.get_version(
-            source_snapshot.environment_version_id
+        environment_version = await environment_version_for_owner_use(
+            self._repos,
+            user_id,
+            source_snapshot.environment_version_id,
+            access.workspace.owner_reference,
         )
         plan = await self._repos.compute_plans.get(source_snapshot.compute_plan_id)
         project_version = await self._repos.project_versions.get(source_snapshot.project_version_id)
@@ -594,7 +613,12 @@ class RunService:
         return version
 
     async def _resolve_environment_version(
-        self, project: Project, configuration: RunConfiguration, problems: list[str]
+        self,
+        user_id: str,
+        project: Project,
+        configuration: RunConfiguration,
+        project_owner: OwnerReference,
+        problems: list[str],
     ) -> EnvironmentVersion | None:
         """按 运行方案 -> Project -> Workspace 默认 的顺序解析实际环境。"""
         workspace = await self._repos.legacy_workspaces.get(project.workspace_id)
@@ -607,9 +631,11 @@ class RunService:
             problems.append("没有可用的运行环境，请为 Project 或 Workspace 选择默认环境")
             return None
 
-        version = await self._repos.environments.get_version(candidate_id)
+        version = await environment_version_for_owner_use(
+            self._repos, user_id, candidate_id, project_owner
+        )
         if version is None:
-            problems.append("引用的运行环境版本已不存在")
+            problems.append("引用的运行环境版本不存在或无权供当前 Project 使用")
             return None
         if not version.available:
             problems.append(f"运行环境版本 {version.version} 当前不可用")
@@ -710,7 +736,13 @@ class RunService:
             f"达到并发上限 {entitlement.max_concurrent_runs}"
         ]
 
-    async def _check_inputs(self, configuration: RunConfiguration, workspace_id: str) -> list[str]:
+    async def _check_inputs(
+        self,
+        user_id: str,
+        configuration: RunConfiguration,
+        workspace_id: str,
+        project_owner: OwnerReference,
+    ) -> list[str]:
         problems: list[str] = []
         for binding in configuration.input_bindings:
             if binding.source_type is InputSourceType.ARTIFACT:
@@ -722,41 +754,30 @@ class RunService:
                     problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 problem = await self._check_shared_resource_version_input(
+                    user_id,
                     binding.source_id,
                     binding.access_path,
-                    workspace_id,
                     binding.source_subpath,
+                    project_owner,
                 )
                 if problem is not None:
                     problems.append(problem)
         return problems
 
     async def _check_shared_resource_version_input(
-        self, version_id: str, access_path: str, workspace_id: str, subpath: str = ""
+        self,
+        user_id: str,
+        version_id: str,
+        access_path: str,
+        subpath: str,
+        project_owner: OwnerReference,
     ) -> str | None:
-        """校验 Shared Resource Version 输入引用。
-
-        Platform 持有的资源可以浏览，但作为 Run 输入消费需要有效的 Workspace
-        Asset Grant（GR-401）；Asset Grant 在 M4 实现，本 Core 阶段一律拒绝
-        Platform 资源作 Run 输入。Workspace 持有的资源只对该 Workspace 可见，
-        仓储层不内置可见性判断，所以这里通过 ``shared_resources.get`` 取出资源
-        再判断 ``owner_workspace_id``。
-
-        ``subpath`` 非空时还要校验该子路径在版本文件中确实存在，否则物化会落空。
-        """
-        version = await self._repos.shared_resources.get_version(version_id)
+        """Validate actor discovery and exact Project-owner asset use."""
+        version = await shared_resource_version_for_owner_use(
+            self._repos, user_id, version_id, project_owner
+        )
         if version is None:
-            return f"输入 {access_path} 引用的 Shared Resource Version 不存在"
-        resource = await self._repos.shared_resources.get(version.shared_resource_id)
-        if resource is None:  # pragma: no cover - 版本存在则资源必存在
-            return f"输入 {access_path} 引用的 Shared Resource 不存在"
-        if resource.is_platform_owned:
-            return (
-                f"输入 {access_path} 引用的 Platform Shared Resource 需要 M4 "
-                "Workspace Asset Grant，暂不可作为 Run 输入"
-            )
-        if resource.owner_workspace_id != workspace_id:
-            return f"输入 {access_path} 引用的 Shared Resource 不存在或无权访问"
+            return f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
         if subpath and not _subpath_exists_in_version(subpath, version):
             return f"输入 {access_path} 引用的子路径 {subpath!r} 不存在"
         return None
@@ -780,7 +801,7 @@ class RunService:
                     )
                 )
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
-                version = await self._repos.shared_resources.get_version(binding.source_id)
+                version = await self._repos.shared_resources.get_version_by_id(binding.source_id)
                 if version is None:  # pragma: no cover - 提交前检查已校验过
                     raise SchedulerError(
                         f"输入 {binding.access_path} 引用的 Shared Resource Version 不存在"
@@ -801,17 +822,19 @@ class RunService:
     ) -> list[str]:
         """重跑之前按当前权限和资源资格重新校验历史快照中的每一个引用。"""
         workspace_id = access.workspace.id
+        user_id = initiated_by_user_id
+        project_owner = access.workspace.owner_reference
         problems: list[str] = []
 
         version = await self._repos.project_versions.get(snapshot.project_version_id)
         if version is None:
             problems.append("来源 Project Version 已不存在")
 
-        environment_version = await self._repos.environments.get_version(
-            snapshot.environment_version_id
+        environment_version = await environment_version_for_owner_use(
+            self._repos, user_id, snapshot.environment_version_id, project_owner
         )
         if environment_version is None:
-            problems.append("来源运行环境版本已不存在")
+            problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
         elif not environment_version.available:
             problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
 
@@ -841,10 +864,11 @@ class RunService:
                     problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 problem = await self._check_shared_resource_version_input(
+                    user_id,
                     binding.source_id,
                     binding.access_path,
-                    workspace_id,
                     binding.source_subpath,
+                    project_owner,
                 )
                 if problem is not None:
                     problems.append(problem)

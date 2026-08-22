@@ -21,6 +21,7 @@ from ..domain.models import (
     SharedResourceVersion,
     UserGroup,
 )
+from ..domain.ownership import OwnerKind
 from ..domain.ports.repositories import Repositories
 
 
@@ -99,22 +100,13 @@ class RunAccess:
 
 @dataclass(frozen=True, slots=True)
 class SharedResourceAccess:
-    """当前用户对某个 Shared Resource 的访问上下文。
-
-    Platform 资源（``owner_workspace_id is None``）对全平台可见，
-    ``role=None``——只允许读，所有写能力 ``require`` 均失败。
-    Platform 资源通过 §2.6 D V2 公共发布申请 → 平台管理员审核流程产生，
-    本 Core 子集仅预留数据结构与读路径。
-    """
+    """Current User's role-derived access to a repository-visible resource."""
 
     resource: SharedResource
-    workspace: LegacyWorkspace | None
-    role: MembershipRole | None
+    role: MembershipRole
 
     @property
     def capabilities(self) -> frozenset[Capability]:
-        if self.role is None:
-            return frozenset()
         return capabilities_of(self.role)
 
     def can(self, capability: Capability) -> bool:
@@ -122,9 +114,7 @@ class SharedResourceAccess:
 
     def require(self, capability: Capability) -> None:
         if not self.can(capability):
-            raise PermissionDenied(
-                f"当前角色（{self.role.value if self.role else '匿名'}）无权{describe(capability)}"
-            )
+            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
 
 
 class AccessGuard:
@@ -214,37 +204,22 @@ class AccessGuard:
     async def shared_resource(
         self, user_id: str, resource_id: str, *, needs: Capability | None = None
     ) -> SharedResourceAccess:
-        """解析 Shared Resource 访问上下文。
-
-        Platform 持有的资源对全平台可见，``role`` 为 ``None``——
-        上层只能做读操作，不能调用 ``require`` 任何写能力。
-
-        Workspace 持有的资源走 Workspace 成员校验：成员看不见就视为不存在，
-        和现有 Project 路径一致。
-        """
-        resource = await self._repos.shared_resources.get(resource_id)
+        resource = await self._repos.shared_resources.get_discoverable_for_user(
+            user_id, resource_id
+        )
         if resource is None:
             raise ObjectNotFound("Shared Resource", resource_id)
 
-        if resource.is_platform_owned:
-            access = SharedResourceAccess(resource=resource, workspace=None, role=None)
-            if needs is not None:
-                # Platform 资源当前 Core 子集只允许读，没有任何写能力可以 require。
-                access.require(needs)
-            return access
+        if resource.owner.kind is OwnerKind.USER:
+            # Repository visibility already proved the exact User owner is the actor.
+            role = MembershipRole.OWNER
+        else:
+            membership = await self._repos.memberships.get(resource.owner.id, user_id)
+            if membership is None or not membership.is_active:  # pragma: no cover - SQL guard
+                raise ObjectNotFound("Shared Resource", resource_id)
+            role = membership.role
 
-        try:
-            workspace_access = await self.legacy_workspace(
-                user_id, resource.owner_workspace_id or ""
-            )
-        except ObjectNotFound as exc:
-            raise ObjectNotFound("Shared Resource", resource_id) from exc
-
-        access = SharedResourceAccess(
-            resource=resource,
-            workspace=workspace_access.workspace,
-            role=workspace_access.role,
-        )
+        access = SharedResourceAccess(resource=resource, role=role)
         if needs is not None:
             access.require(needs)
         return access
@@ -252,12 +227,9 @@ class AccessGuard:
     async def shared_resource_version(
         self, user_id: str, version_id: str, *, needs: Capability | None = None
     ) -> tuple[SharedResourceVersion, SharedResourceAccess]:
-        """解析 Shared Resource Version 访问上下文。
-
-        版本归属其 Shared Resource，可见性跟着资源走；找不到版本或无权访问
-        归属资源时统一抛 ``ObjectNotFound``。
-        """
-        version = await self._repos.shared_resources.get_version(version_id)
+        version = await self._repos.shared_resources.get_version_discoverable_for_user(
+            user_id, version_id
+        )
         if version is None:
             raise ObjectNotFound("Shared Resource Version", version_id)
         access = await self.shared_resource(user_id, version.shared_resource_id, needs=needs)
