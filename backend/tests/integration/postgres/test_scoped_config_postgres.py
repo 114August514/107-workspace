@@ -122,7 +122,7 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
             assert (
                 await connection.execute(
                     text(
-                        "SELECT scope_kind,scope_id,name FROM secrets ORDER BY scope_kind,scope_id"
+                        "SELECT scope_kind,scope_id,name FROM secrets ORDER BY scope_kind,scope_id,name"
                     )
                 )
             ).all() == [

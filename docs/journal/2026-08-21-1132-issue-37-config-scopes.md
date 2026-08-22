@@ -47,4 +47,4 @@ Use `git revert <commit>` per exact commit; no stash/reset/clean used.
 ## Main merge / cutoff follow-up
 - Merged `origin/main` at `e35043b4d3831db41444df0560939c0cb93a7f92`; main-authoritative #58 asset-owner and #56 AppShell/Home/Primer changes retained; f37 directly follows `c471ac39f002` with one Alembic head.
 - Merged verification: focused asset/config tests passed; SQLite migration tests passed; `make smoke` passed; full `make check` passed with merged frontend **116 tests**, backend suite green, and all lint/format/typecheck/build/workflow/API contract checks green.
-- Execution fixtures use merged exact-owner default Environment (no hardcoded stale Environment ID). Final code commit `da03c67`; fresh post-merge PG17 rerun remains a separate evidence gap.
+- Execution fixtures use merged exact-owner default Environment (no hardcoded stale Environment ID). Fresh merged PG17 `test_scoped_config_postgres.py` passed **2/2, 0 skipped**; container cleanup verified. Cutoff regression uses `created_at < Secret.updated_at <= submitted_at` and excludes that value from redaction backfill.
