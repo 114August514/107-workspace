@@ -31,3 +31,9 @@ Use `git revert <commit>` per exact commit; no stash/reset/clean used.
 - `3805a99` restored rerun concurrency/plan checks, fixed submit-failure notification `run_id`, removed stale frontend scope-availability heuristic, and added name-pattern validation.
 - `ec28a46` added real rerun-limit and scheduler-submit-failure regressions and removed dead unresolved helper/test files.
 - `5a40e40` records complete remediation evidence; final `make check` is green with the counts above; no stale pending-check claim remains。
+
+## Historical redaction backfill
+- f37 backfills only submitted Runs with legacy Secret `updated_at <= submitted_at`; it deduplicates `(run_id, sha256(value))` and skips empty, missing, malformed, later-rotated, or unsubmitted refs without guessing.
+- SQLite migration fixture proves duplicate TOKEN dedupe, digest/value retention, LATE/MISSING skip, unsubmitted Run skip, plaintext-free Snapshot, and downgrade/re-upgrade safety.
+- PostgreSQL 17 fresh evidence: `test_scoped_config_postgres.py` 2 passed/0 skipped; JSON object/exact refs, scoped rows, redaction schema, refusal preservation verified; container cleanup confirmed.
+- Frontend wrappers were already absent; `resolve_env` and Workspace semantics are removed. Pre-migration rotations cannot be reconstructed.
