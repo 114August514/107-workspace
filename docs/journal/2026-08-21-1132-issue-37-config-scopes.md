@@ -37,3 +37,9 @@ Use `git revert <commit>` per exact commit; no stash/reset/clean used.
 - SQLite migration fixture proves duplicate TOKEN dedupe, digest/value retention, LATE/MISSING skip, unsubmitted Run skip, plaintext-free Snapshot, and downgrade/re-upgrade safety.
 - PostgreSQL 17 fresh evidence: `test_scoped_config_postgres.py` 2 passed/0 skipped; JSON object/exact refs, scoped rows, redaction schema, refusal preservation verified; container cleanup confirmed.
 - Frontend wrappers were already absent; `resolve_env` and Workspace semantics are removed. Pre-migration rotations cannot be reconstructed.
+
+## Final historical backfill evidence
+- Reviewed code HEAD for this remediation: `e9d3e07` (backfill implementation `118ad9b`, SQLite cutoff fixture `e9d3e07`, PostgreSQL fixture `3276153`).
+- Final targeted migration/domain set: 101 passed, 2 PostgreSQL URL-absent skips; SQLite migration suite 7 passed; frontend 60 tests/typecheck/format/lint/build pass; contract check and `make smoke` pass.
+- Final `make check`: backend **241 passed/4 skipped**; all backend/frontend/workflow/API contract checks pass. Historical limitation: pre-migration Secret rotations/deletions without timestamp-provable current values cannot be reconstructed.
+- PostgreSQL 17 fresh evidence remains 2 passed/0 skipped with container cleanup verified. Historical limitation: pre-migration Secret rotations/deletions without timestamp-provable current values cannot be reconstructed.
