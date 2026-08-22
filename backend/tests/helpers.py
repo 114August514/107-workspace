@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from workspace107.domain import ids
 from workspace107.domain.compute import ResourceEntitlement
 from workspace107.infrastructure.db.repositories import SqlRepositories
+from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
 
 RUN_WAIT_TIMEOUT = 30.0
 TERMINAL = {"succeeded", "failed", "cancelled", "submit_failed"}
@@ -107,13 +108,39 @@ async def create_project_with_version(
 
 
 async def use_default_environment(
-    client: httpx.AsyncClient, *, headers: dict[str, str] | None = None
+    session: AsyncSession,
+    client: httpx.AsyncClient,
+    *,
+    headers: dict[str, str] | None = None,
 ) -> str:
-    """Set the group's legacy default environment and return its compatibility ID."""
+    """Create the group's own default environment and return its compatibility ID."""
     workspace_id = await ensure_user_group(client, headers=headers)
-    await client.patch(
+    environment_id = ids.new_id(ids.ENVIRONMENT)
+    version_id = ids.new_id(ids.ENVIRONMENT_VERSION)
+    session.add(
+        EnvironmentRow(
+            id=environment_id,
+            name="Test Environment",
+            description="测试环境",
+            owner_user_group_id=workspace_id,
+        )
+    )
+    await session.flush()
+    session.add(
+        EnvironmentVersionRow(
+            id=version_id,
+            environment_id=environment_id,
+            version="3.12",
+            description="Python 3.12 标准库环境。",
+            image="python:3.12-slim",
+            setup_command="",
+        )
+    )
+    await session.commit()
+    response = await client.patch(
         f"/api/v1/workspaces/{workspace_id}",
-        json={"default_environment_version_id": "ev_python_312"},
+        json={"default_environment_version_id": version_id},
         headers=headers,
     )
+    response.raise_for_status()
     return workspace_id

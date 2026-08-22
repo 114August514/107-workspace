@@ -117,10 +117,27 @@ describe('publishSharedResourceVersion', () => {
   })
 })
 
-describe('listPlatformSharedResources / getSharedResourceVersion', () => {
-  it('平台资源走 catalog 路径，不带 workspace 前缀', async () => {
-    await api.listPlatformSharedResources()
-    expect(new URL(lastRequest().url).pathname).toBe('/api/v1/catalog/shared-resources')
+describe('canonical Shared Resource API / getSharedResourceVersion', () => {
+  it('actor discovery uses the canonical owner-scoped path', async () => {
+    await api.listSharedResources()
+    expect(new URL(lastRequest().url).pathname).toBe('/api/v1/shared-resources')
+  })
+
+  it('creation sends the explicit legal owner in the canonical request body', async () => {
+    await api.createSharedResource({
+      name: '权重',
+      description: '',
+      owner: { kind: 'user_group', id: 'grp_lab' },
+    })
+
+    const request = lastRequest()
+    expect(request.method).toBe('POST')
+    expect(new URL(request.url).pathname).toBe('/api/v1/shared-resources')
+    expect(await request.json()).toEqual({
+      name: '权重',
+      description: '',
+      owner: { kind: 'user_group', id: 'grp_lab' },
+    })
   })
 
   it('版本详情和文件读取用各自的路径参数', async () => {

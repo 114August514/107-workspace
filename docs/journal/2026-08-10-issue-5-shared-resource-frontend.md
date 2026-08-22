@@ -168,5 +168,3 @@ build），`contract check` 通过。未改后端、migrations、认证授权代
    与 `CreateProjectModal` 单 toast 约定不符。去掉面板里那条，只保留刷新+跳转。
 
 修正后 `workspace.py check frontend` 仍全绿（20 tests），`contract check` 通过。
-
-

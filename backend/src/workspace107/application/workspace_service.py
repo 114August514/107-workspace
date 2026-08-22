@@ -15,6 +15,7 @@ from ..domain.models import LegacyWorkspace, WorkspaceVariable
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.secret_vault import SecretVault
 from .access import AccessGuard
+from .asset_use import environment_version_for_owner_use
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +55,12 @@ class LegacyWorkspaceService:
             user_id, workspace_id, needs=Capability.USER_GROUP_UPDATE
         )
         if environment_version_id is not None:
-            version = await self._repos.environments.get_version(environment_version_id)
+            version = await environment_version_for_owner_use(
+                self._repos,
+                user_id,
+                environment_version_id,
+                access.workspace.owner_reference,
+            )
             if version is None or not version.available:
                 raise ObjectNotFound("Environment Version", environment_version_id)
         access.workspace.default_environment_version_id = environment_version_id

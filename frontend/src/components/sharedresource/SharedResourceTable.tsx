@@ -1,4 +1,4 @@
-import { Label, Text } from '@primer/react'
+import { Text } from '@primer/react'
 import { Link } from 'react-router-dom'
 
 import type { SharedResource } from '../../api/types'
@@ -40,13 +40,7 @@ export function SharedResourceTable({ resources }: Props) {
                 {resource.description || '—'}
               </Text>
             </td>
-            <td className={styles.td}>
-              {resource.is_platform_owned ? (
-                <Label variant="attention">平台</Label>
-              ) : (
-                <Label variant="done">本空间</Label>
-              )}
-            </td>
+            <td className={styles.td}>{resource.owner.display_name}</td>
             <td className={styles.td}>
               <PrimerRelativeTime value={resource.created_at} />
             </td>

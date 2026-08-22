@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { LegacyWorkspaceContext, SharedResource } from '../../api/types'
+import type { LegacyWorkspaceContext, OwnerReference, SharedResource } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
 import { normalizeError } from '../common/asyncStateError'
@@ -29,14 +29,16 @@ interface Props {
 export function SharedResourcePanel({ workspace }: Props) {
   const navigate = useNavigate()
   const canManage = can(workspace, 'shared_resource.manage')
-
-  const ownResources = useAsync<SharedResource[]>(
-    () => api.listWorkspaceSharedResources(workspace.id),
-    [workspace.id],
+  const owner = {
+    kind: workspace.kind === 'personal' ? 'user' : 'user_group',
+    id: workspace.kind === 'personal' ? workspace.owner_id : workspace.id,
+  } satisfies OwnerReference
+  const resources = useAsync<SharedResource[]>(() => api.listSharedResources(), [])
+  const ownerResources = (resources.data ?? []).filter(
+    (resource) => resource.owner.kind === owner.kind && resource.owner.id === owner.id,
   )
-  const platformResources = useAsync<SharedResource[]>(() => api.listPlatformSharedResources(), [])
   const [creating, setCreating] = useState(false)
-  const [tab, setTab] = useState('own')
+  const [tab, setTab] = useState('owner')
 
   return (
     <PrimerRoot>
@@ -51,27 +53,27 @@ export function SharedResourcePanel({ workspace }: Props) {
 
         <UnderlineNav aria-label="共享资源">
           <UnderlineNav.Item
-            aria-current={tab === 'own' ? 'page' : undefined}
-            onSelect={() => setTab('own')}
+            aria-current={tab === 'owner' ? 'page' : undefined}
+            onSelect={() => setTab('owner')}
           >
-            本空间
+            此归属
           </UnderlineNav.Item>
           <UnderlineNav.Item
-            aria-current={tab === 'platform' ? 'page' : undefined}
-            onSelect={() => setTab('platform')}
+            aria-current={tab === 'all' ? 'page' : undefined}
+            onSelect={() => setTab('all')}
           >
-            平台公共
+            全部可发现
           </UnderlineNav.Item>
         </UnderlineNav>
 
-        {tab === 'own' && (
+        {tab === 'owner' && (
           <PrimerListCard>
             <AsyncState
-              loading={ownResources.loading}
+              loading={resources.loading}
               loadingText="正在加载共享资源…"
-              error={normalizeError(ownResources.error)}
-              empty={(ownResources.data ?? []).length === 0}
-              emptyText="这里还没有共享资源。"
+              error={normalizeError(resources.error)}
+              empty={ownerResources.length === 0}
+              emptyText="此归属下还没有共享资源。"
               emptyDescription={
                 canManage
                   ? '创建共享资源后，可以在多个 Project 中复用同一份版本化内容。'
@@ -80,31 +82,31 @@ export function SharedResourcePanel({ workspace }: Props) {
               emptyAction={canManage ? '创建共享资源' : null}
               onEmptyAction={canManage ? () => setCreating(true) : undefined}
             >
-              <SharedResourceTable resources={ownResources.data ?? []} />
+              <SharedResourceTable resources={ownerResources} />
             </AsyncState>
           </PrimerListCard>
         )}
 
-        {tab === 'platform' && (
+        {tab === 'all' && (
           <PrimerListCard>
             <AsyncState
-              loading={platformResources.loading}
+              loading={resources.loading}
               loadingText="正在加载共享资源…"
-              error={normalizeError(platformResources.error)}
-              empty={(platformResources.data ?? []).length === 0}
-              emptyText="平台还没有公共共享资源。"
+              error={normalizeError(resources.error)}
+              empty={(resources.data ?? []).length === 0}
+              emptyText="还没有可发现的共享资源。"
             >
-              <SharedResourceTable resources={platformResources.data ?? []} />
+              <SharedResourceTable resources={resources.data ?? []} />
             </AsyncState>
           </PrimerListCard>
         )}
 
         <CreateSharedResourceModal
           open={creating}
-          workspaceId={workspace.id}
+          owner={owner}
           onClose={() => setCreating(false)}
           onCreated={(resource) => {
-            ownResources.reload()
+            resources.reload()
             navigate(`/shared-resources/${resource.id}`)
           }}
         />

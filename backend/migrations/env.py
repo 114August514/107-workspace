@@ -10,9 +10,9 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import event, pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 
 from workspace107.config import get_settings
 from workspace107.infrastructure.db.tables import Base
@@ -29,6 +29,19 @@ settings.ensure_local_directories()
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection: object, _connection_record: object) -> None:
+    cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
+
+
+def _configure_connection_events(connectable: AsyncEngine) -> None:
+    if connectable.sync_engine.dialect.name == "sqlite":
+        event.listen(connectable.sync_engine, "connect", _enable_sqlite_foreign_keys)
 
 
 def run_migrations_offline() -> None:
@@ -60,6 +73,7 @@ async def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    _configure_connection_events(connectable)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()

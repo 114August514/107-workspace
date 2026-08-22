@@ -83,9 +83,9 @@ class Capability(StrEnum):
 
     # -- Shared Resource --------------------------------------------------
     SHARED_RESOURCE_VIEW = "shared_resource.view"
-    """看 Workspace 内持有的 Shared Resource 及其版本。Platform 资源全平台可见，不靠这条。"""
+    """看 User Group 持有的 Shared Resource 及其版本；User-owned 资源由 owner 本人管理。"""
     SHARED_RESOURCE_MANAGE = "shared_resource.manage"
-    """在 Workspace 中创建 Shared Resource、修改名称与说明。"""
+    """创建或修改当前 User / User Group Owner 范围内的 Shared Resource。"""
     SHARED_RESOURCE_VERSION_CREATE = "shared_resource.version.create"
     """为 Shared Resource 上传文件形成新的不可变版本。"""
 

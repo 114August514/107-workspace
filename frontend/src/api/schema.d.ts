@@ -73,32 +73,9 @@ export interface paths {
         };
         /**
          * 列出运行环境
-         * @description 登录后只读返回平台统一维护的运行环境及其全部已发布版本，不按用户区分。
+         * @description 返回当前 User 作为 Owner 或 owning UserGroup active member 可发现的环境。
          */
         get: operations["list_environments_api_v1_catalog_environments_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/catalog/shared-resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 列出 Platform 持有的共享资源
-         * @description 登录后只读返回 Platform 持有的 Shared Resource，不按用户区分。
-         *
-         *     Workspace 持有的资源请走 ``GET /workspaces/{id}/shared-resources``；
-         *     跨 Workspace Asset Grant 在 M4 单独 Issue。
-         */
-        get: operations["list_platform_shared_resources_api_v1_catalog_shared_resources_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -756,6 +733,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shared-resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出当前用户可发现的共享资源
+         * @description Return resources owned by the actor or by an owning UserGroup with active membership.
+         */
+        get: operations["list_shared_resources_api_v1_shared_resources_get"];
+        put?: never;
+        /**
+         * 创建 Shared Resource
+         * @description Create with explicit User/UserGroup owner.
+         *
+         *     User owner must be the actor; UserGroup owner requires active membership with
+         *     Shared Resource management capability. Cross-owner attempts are concealed.
+         */
+        post: operations["create_canonical_shared_resource_api_v1_shared_resources_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shared-resources/{resource_id}": {
         parameters: {
             query?: never;
@@ -775,9 +779,7 @@ export interface paths {
         head?: never;
         /**
          * 更新 Shared Resource 元信息
-         * @description 需要 Shared Resource 管理权限；仅修改 Workspace 持有资源的名称与说明。
-         *
-         *     Platform 持有的资源由平台维护，不接受 API 修改。
+         * @description 需要 Shared Resource 管理权限；仅修改当前 actor 可发现资源的名称与说明。
          */
         patch: operations["update_shared_resource_api_v1_shared_resources__resource_id__patch"];
         trace?: never;
@@ -1170,38 +1172,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}/shared-resources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 列出 Workspace 持有的共享资源
-         * @deprecated
-         * @description 需要 Shared Resource 查看权限；返回当前 Workspace 持有的资源。
-         *
-         *     Platform 持有的资源请走 ``GET /catalog/shared-resources``；跨 Workspace
-         *     可见的资源在 M4 Asset Grant 实现后单独提供。
-         */
-        get: operations["list_workspace_shared_resources_api_v1_workspaces__workspace_id__shared_resources_get"];
-        put?: never;
-        /**
-         * 创建 Workspace 共享资源
-         * @deprecated
-         * @description 需要 Shared Resource 管理权限；在当前 Workspace 下创建一个空的资源对象。
-         *
-         *     资源创建后内容为空，需通过 ``POST /shared-resources/{id}/versions`` 上传文件
-         *     形成首个版本，才能在 Input Binding 中引用。
-         */
-        post: operations["create_shared_resource_api_v1_workspaces__workspace_id__shared_resources_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workspaces/{workspace_id}/variables": {
         parameters: {
             query?: never;
@@ -1360,6 +1330,20 @@ export interface components {
             files: string[];
         };
         /**
+         * CanonicalSharedResourceCreateIn
+         * @description Canonical creation payload with an explicit legal owner.
+         */
+        CanonicalSharedResourceCreateIn: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+            owner: components["schemas"]["OwnerReferenceIn"];
+        };
+        /**
          * Capability
          * @description 一个具体的操作许可。
          *
@@ -1453,8 +1437,7 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Owner Workspace Id */
-            owner_workspace_id: string | null;
+            owner: components["schemas"]["OwnerSummaryOut"];
             /** Versions */
             versions: components["schemas"]["EnvironmentVersionOut"][];
         };
@@ -1759,6 +1742,31 @@ export interface components {
          * @enum {string}
          */
         NotificationType: "workspace_invited" | "user_group_invited" | "member_removed" | "role_changed" | "ownership_received" | "run_succeeded" | "run_failed" | "run_submit_failed";
+        /**
+         * OwnerKind
+         * @enum {string}
+         */
+        OwnerKind: "user" | "user_group";
+        /**
+         * OwnerReferenceIn
+         * @description Canonical owner selection for asset creation.
+         */
+        OwnerReferenceIn: {
+            /** Id */
+            id: string;
+            kind: components["schemas"]["OwnerKind"];
+        };
+        /**
+         * OwnerSummaryOut
+         * @description Canonical display-ready ownership summary.
+         */
+        OwnerSummaryOut: {
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id: string;
+            kind: components["schemas"]["OwnerKind"];
+        };
         /** PageOut[ActivityOut] */
         PageOut_ActivityOut_: {
             /** Has More */
@@ -2227,16 +2235,6 @@ export interface components {
             /** Value */
             value: string;
         };
-        /** SharedResourceCreateIn */
-        SharedResourceCreateIn: {
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Name */
-            name: string;
-        };
         /** SharedResourceDetailOut */
         SharedResourceDetailOut: {
             /**
@@ -2248,12 +2246,9 @@ export interface components {
             description: string;
             /** Id */
             id: string;
-            /** Is Platform Owned */
-            is_platform_owned: boolean;
             /** Name */
             name: string;
-            /** Owner Workspace Id */
-            owner_workspace_id: string | null;
+            owner: components["schemas"]["OwnerSummaryOut"];
             /** Versions */
             versions: components["schemas"]["SharedResourceVersionOut"][];
         };
@@ -2268,12 +2263,9 @@ export interface components {
             description: string;
             /** Id */
             id: string;
-            /** Is Platform Owned */
-            is_platform_owned: boolean;
             /** Name */
             name: string;
-            /** Owner Workspace Id */
-            owner_workspace_id: string | null;
+            owner: components["schemas"]["OwnerSummaryOut"];
         };
         /** SharedResourceUpdateIn */
         SharedResourceUpdateIn: {
@@ -2705,82 +2697,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvironmentOut"][];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    list_platform_shared_resources_api_v1_catalog_shared_resources_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SharedResourceOut"][];
                 };
             };
             /** @description 请求不合法 */
@@ -5719,6 +5635,162 @@ export interface operations {
             };
         };
     };
+    list_shared_resources_api_v1_shared_resources_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_canonical_shared_resource_api_v1_shared_resources_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CanonicalSharedResourceCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourceOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     get_shared_resource_api_v1_shared_resources__resource_id__get: {
         parameters: {
             query?: never;
@@ -7894,166 +7966,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    list_workspace_shared_resources_api_v1_workspaces__workspace_id__shared_resources_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SharedResourceOut"][];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    create_shared_resource_api_v1_workspaces__workspace_id__shared_resources_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SharedResourceCreateIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SharedResourceOut"];
-                };
             };
             /** @description 请求不合法 */
             400: {

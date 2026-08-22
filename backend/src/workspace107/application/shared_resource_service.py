@@ -1,21 +1,9 @@
-"""Shared Resource 用例。
+"""Shared Resource use cases with typed User/UserGroup ownership.
 
-Shared Resource 是独立于 Project 存在的内容资源（设计稿 §2.6 / §3.1.3）：
-数据集、预训练权重、语料库等。资源对象可变（名称、说明），
-版本一旦发布即不可变（GR-201）。
-
-可见性分两层：
-
-* Workspace 持有——成员可见可写；写入需要 ``SHARED_RESOURCE_MANAGE`` /
-  ``SHARED_RESOURCE_VERSION_CREATE`` 能力。
-* Platform 持有（``owner_workspace_id is None``）——数据结构已预留（§2.6 D V2），
-  Platform 资源通过公共发布申请 → 平台管理员审核流程产生，本 Core 子集不实现该流程，
-  当前 API 仅提供读路径（``GET /catalog/shared-resources``），不接受写操作。
-
-跨 Workspace Asset Grant 在 M4 单独 Issue，本服务不实现。
-
-文件内容存储复用 Project Version 已在用的 blob store——按内容寻址，
-多个 Shared Resource Version 引用同一份内容不会重复占用空间。
+Resources are mutable metadata with immutable content versions (GR-201). Discovery is
+repository-scoped to the exact User owner or active Membership of the owning UserGroup;
+#40 may later add USE Grant discovery. Content storage continues to use the shared
+content-addressed blob store.
 """
 
 from __future__ import annotations
@@ -24,7 +12,7 @@ import posixpath
 from dataclasses import dataclass
 
 from ..domain import ids
-from ..domain.capabilities import Capability
+from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.enums import ActivityAction, TargetType
 from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
 from ..domain.models import (
@@ -32,11 +20,13 @@ from ..domain.models import (
     SharedResourceFile,
     SharedResourceVersion,
 )
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, SharedResourceAccess
 from .activity import ActivityRecorder
+from .ownership import OwnerSummary, owner_summaries
 
 MAX_RESOURCE_NAME_LEN = 128
 MAX_RESOURCE_DESCRIPTION_LEN = 4096
@@ -55,6 +45,22 @@ def _normalize_path(raw: str) -> str:
     if normalized in {".", ".."} or normalized.startswith("../"):
         raise ValidationFailed(f"路径 {raw!r} 越出了资源根目录")
     return normalized
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceView:
+    resource: SharedResource
+    owner: OwnerSummary
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceAccessView:
+    access: SharedResourceAccess
+    owner: OwnerSummary
+
+    @property
+    def resource(self) -> SharedResource:
+        return self.access.resource
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,26 +91,20 @@ class SharedResourceService:
 
     # -- 查询 -----------------------------------------------------------
 
-    async def list_platform(self, user_id: str) -> list[SharedResource]:
-        """列出 Platform 持有的 Shared Resource。
+    async def list_discoverable(self, user_id: str) -> list[SharedResourceView]:
+        """Canonical actor-scoped list for ``GET /shared-resources``."""
+        resources = await self._repos.shared_resources.list_discoverable_for_user(user_id)
+        return await self._views(resources)
 
-        任意登录用户可读。当前 Core 子集不做资源搜索、预览（§2.6 V1）。
-        """
-        _ = user_id  # 校验已登录由路由层保证；这里没有额外权限门槛。
-        return await self._repos.shared_resources.list_platform()
-
-    async def list_for_workspace(self, user_id: str, workspace_id: str) -> list[SharedResource]:
-        await self._guard.legacy_workspace(
-            user_id, workspace_id, needs=Capability.SHARED_RESOURCE_VIEW
-        )
-        return await self._repos.shared_resources.list_for_workspace(workspace_id)
-
-    async def get(self, user_id: str, resource_id: str) -> SharedResourceAccess:
-        return await self._guard.shared_resource(user_id, resource_id)
+    async def get(self, user_id: str, resource_id: str) -> SharedResourceAccessView:
+        access = await self._guard.shared_resource(user_id, resource_id)
+        owner = await self._owner(access.resource.owner)
+        return SharedResourceAccessView(access=access, owner=owner)
 
     async def list_versions(self, user_id: str, resource_id: str) -> list[SharedResourceVersion]:
-        await self._guard.shared_resource(user_id, resource_id)
-        return await self._repos.shared_resources.list_versions(resource_id)
+        return await self._repos.shared_resources.list_versions_discoverable_for_user(
+            user_id, resource_id
+        )
 
     async def get_version(
         self, user_id: str, version_id: str
@@ -116,41 +116,20 @@ class SharedResourceService:
     async def create(
         self,
         user_id: str,
-        workspace_id: str,
         *,
+        owner: OwnerReference,
         name: str,
         description: str = "",
-    ) -> SharedResource:
-        await self._guard.legacy_workspace(
-            user_id, workspace_id, needs=Capability.SHARED_RESOURCE_MANAGE
-        )
-        name = name.strip()
-        if not name:
-            raise ValidationFailed("Shared Resource 名称不能为空")
-        if len(name) > MAX_RESOURCE_NAME_LEN:
-            raise ValidationFailed(f"Shared Resource 名称超过 {MAX_RESOURCE_NAME_LEN} 个字符")
-        if len(description) > MAX_RESOURCE_DESCRIPTION_LEN:
-            raise ValidationFailed(
-                f"Shared Resource 说明超过 {MAX_RESOURCE_DESCRIPTION_LEN} 个字符"
-            )
+    ) -> SharedResourceView:
+        """Canonical create with explicit legal owner.
 
-        resource = SharedResource(
-            id=ids.new_id(ids.SHARED_RESOURCE),
-            name=name,
-            description=description,
-            owner_workspace_id=workspace_id,
-            created_at=self._clock.now(),
-        )
-        await self._repos.shared_resources.add(resource)
-        await self._activity.record(
-            actor_id=user_id,
-            workspace_id=workspace_id,
-            action=ActivityAction.SHARED_RESOURCE_CREATED,
-            target_type=TargetType.SHARED_RESOURCE,
-            target_id=resource.id,
-            target_name=resource.name,
-        )
-        return resource
+        A User owner must be the actor; a UserGroup owner must exist and the actor
+        must be an active member with ``SHARED_RESOURCE_MANAGE``. Cross-owner or
+        unknown-owner attempts fail before any row is created.
+        """
+        await self._require_owner_authority(user_id, owner)
+        resource = await self._create_with_owner(user_id, owner, name, description)
+        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
 
     async def update(
         self,
@@ -159,16 +138,12 @@ class SharedResourceService:
         *,
         name: str | None = None,
         description: str | None = None,
-    ) -> SharedResource:
+    ) -> SharedResourceView:
         access = await self._guard.shared_resource(
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_MANAGE
         )
         resource = access.resource
-        # Platform 资源当前 Core 子集不接受 API 改写——平台维护走运维通道。
-        if resource.is_platform_owned:
-            raise PermissionDenied(
-                "Platform 公共资源通过 §2.6 D V2 公共发布审核流程产生，本 Core 子集仅预留读路径"
-            )
+        activity_workspace_id = self._activity_user_group_id(resource.owner)
         if name is not None:
             name = name.strip()
             if not name:
@@ -183,15 +158,16 @@ class SharedResourceService:
                 )
             resource.description = description
         await self._repos.shared_resources.update(resource)
-        await self._activity.record(
-            actor_id=user_id,
-            workspace_id=resource.owner_workspace_id or "",
-            action=ActivityAction.SHARED_RESOURCE_UPDATED,
-            target_type=TargetType.SHARED_RESOURCE,
-            target_id=resource.id,
-            target_name=resource.name,
-        )
-        return resource
+        if activity_workspace_id is not None:
+            await self._activity.record(
+                actor_id=user_id,
+                workspace_id=activity_workspace_id,
+                action=ActivityAction.SHARED_RESOURCE_UPDATED,
+                target_type=TargetType.SHARED_RESOURCE,
+                target_id=resource.id,
+                target_name=resource.name,
+            )
+        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
 
     async def publish_version(
         self,
@@ -210,10 +186,7 @@ class SharedResourceService:
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_VERSION_CREATE
         )
         resource = access.resource
-        if resource.is_platform_owned:
-            raise PermissionDenied(
-                "Platform 公共资源通过 §2.6 D V2 公共发布审核流程产生，本 Core 子集仅预留读路径"
-            )
+        activity_workspace_id = self._activity_user_group_id(resource.owner)
         if not uploads:
             raise ValidationFailed("版本必须至少包含一个文件")
         if len(description) > MAX_VERSION_DESCRIPTION_LEN:
@@ -251,15 +224,16 @@ class SharedResourceService:
             created_at=self._clock.now(),
         )
         await self._repos.shared_resources.add_version(version)
-        await self._activity.record(
-            actor_id=user_id,
-            workspace_id=resource.owner_workspace_id or "",
-            action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
-            target_type=TargetType.SHARED_RESOURCE_VERSION,
-            target_id=version.id,
-            target_name=f"{resource.name} · {version.label}",
-            detail=version.description,
-        )
+        if activity_workspace_id is not None:
+            await self._activity.record(
+                actor_id=user_id,
+                workspace_id=activity_workspace_id,
+                action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
+                target_type=TargetType.SHARED_RESOURCE_VERSION,
+                target_id=version.id,
+                target_name=f"{resource.name} · {version.label}",
+                detail=version.description,
+            )
         return version
 
     async def read_version_file(self, user_id: str, version_id: str, path: str) -> bytes:
@@ -270,3 +244,70 @@ class SharedResourceService:
             if entry.path == normalized:
                 return await self._storage.read_blob(entry.content_hash)
         raise ObjectNotFound("文件", normalized)
+
+    async def _require_owner_authority(self, user_id: str, owner: OwnerReference) -> None:
+        if owner.kind is OwnerKind.USER:
+            if owner.id != user_id or await self._repos.users.get(owner.id) is None:
+                raise ObjectNotFound("Owner", owner.id)
+            return
+        access = await self._guard.user_group(user_id, owner.id)
+        role = access.role
+        if Capability.SHARED_RESOURCE_MANAGE not in capabilities_of(role):
+            raise PermissionDenied(
+                f"当前角色（{role.value}）无权{describe(Capability.SHARED_RESOURCE_MANAGE)}"
+            )
+
+    async def _create_with_owner(
+        self,
+        user_id: str,
+        owner: OwnerReference,
+        name: str,
+        description: str,
+    ) -> SharedResource:
+        name = name.strip()
+        if not name:
+            raise ValidationFailed("Shared Resource 名称不能为空")
+        if len(name) > MAX_RESOURCE_NAME_LEN:
+            raise ValidationFailed(f"Shared Resource 名称超过 {MAX_RESOURCE_NAME_LEN} 个字符")
+        if len(description) > MAX_RESOURCE_DESCRIPTION_LEN:
+            raise ValidationFailed(
+                f"Shared Resource 说明超过 {MAX_RESOURCE_DESCRIPTION_LEN} 个字符"
+            )
+
+        resource = SharedResource(
+            id=ids.new_id(ids.SHARED_RESOURCE),
+            name=name,
+            owner=owner,
+            description=description,
+            created_at=self._clock.now(),
+        )
+        await self._repos.shared_resources.add(resource)
+        activity_workspace_id = self._activity_user_group_id(owner)
+        if activity_workspace_id is not None:
+            await self._activity.record(
+                actor_id=user_id,
+                workspace_id=activity_workspace_id,
+                action=ActivityAction.SHARED_RESOURCE_CREATED,
+                target_type=TargetType.SHARED_RESOURCE,
+                target_id=resource.id,
+                target_name=resource.name,
+            )
+        return resource
+
+    @staticmethod
+    def _activity_user_group_id(owner: OwnerReference) -> str | None:
+        """Activity is UserGroup-scoped; User-owned assets have no fake Workspace feed."""
+        return owner.id if owner.kind is OwnerKind.USER_GROUP else None
+
+    async def _views(self, resources: list[SharedResource]) -> list[SharedResourceView]:
+        owners = await owner_summaries(self._repos, (resource.owner for resource in resources))
+        return [
+            SharedResourceView(
+                resource=resource,
+                owner=owners[(resource.owner.kind, resource.owner.id)],
+            )
+            for resource in resources
+        ]
+
+    async def _owner(self, owner: OwnerReference) -> OwnerSummary:
+        return (await owner_summaries(self._repos, (owner,)))[(owner.kind, owner.id)]

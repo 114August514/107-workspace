@@ -2,17 +2,17 @@ import { Dialog, Flash, FormControl, Stack, TextInput } from '@primer/react'
 import { useState } from 'react'
 
 import { api } from '../../api/client'
-import type { SharedResource } from '../../api/types'
+import type { OwnerReference, SharedResource } from '../../api/types'
 import styles from './formControls.module.css'
 
 interface Props {
   open: boolean
-  workspaceId: string
+  owner: OwnerReference
   onClose: () => void
   onCreated: (resource: SharedResource) => void
 }
 
-export function CreateSharedResourceModal({ open, workspaceId, onClose, onCreated }: Props) {
+export function CreateSharedResourceModal({ open, owner, onClose, onCreated }: Props) {
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState('')
   const [description, setDescription] = useState('')
@@ -45,7 +45,11 @@ export function CreateSharedResourceModal({ open, workspaceId, onClose, onCreate
     setSubmitting(true)
     setFeedback(null)
     try {
-      const resource = await api.createSharedResource(workspaceId, trimmed, description.trim())
+      const resource = await api.createSharedResource({
+        name: trimmed,
+        description: description.trim(),
+        owner,
+      })
       reset()
       onCreated(resource)
     } catch (err) {
