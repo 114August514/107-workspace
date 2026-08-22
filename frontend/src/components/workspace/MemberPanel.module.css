@@ -1,0 +1,117 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-8);
+}
+
+.summary {
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+}
+
+.memberList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  overflow: hidden;
+}
+
+.memberRow {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(8rem, 10rem) 6rem auto;
+  align-items: center;
+  gap: var(--base-size-16);
+  padding: var(--base-size-12) var(--base-size-16);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.memberRow:last-child {
+  border-bottom: none;
+}
+
+.memberRow:hover {
+  background: var(--bgColor-muted);
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-4);
+}
+
+.displayName {
+  overflow: hidden;
+  color: var(--fgColor-default);
+  font-weight: var(--base-text-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.username {
+  overflow: hidden;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role,
+.status {
+  min-width: 0;
+}
+
+.role select {
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--base-size-8);
+}
+
+@media (max-width: 48rem) {
+  .memberRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--base-size-8);
+  }
+
+  .identity {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .status {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .role {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .role select {
+    width: min(100%, 14rem);
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-content: flex-start;
+  }
+}
