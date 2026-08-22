@@ -1,5 +1,6 @@
 """Remove Viewer from Membership roles without granting additional access.
 
+The canonical Membership roles after this revision are Owner, Admin, and Member.
 Existing Viewer rows are converted to removed Member rows. This preserves the
 membership record while revoking access; silently promoting Viewer to active Member
 would increase privileges. Downgrade cannot reconstruct the removed Viewer role.
