@@ -140,14 +140,15 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
             "user_group.view",
         ],
         "member": ["member.view", "user_group.view"],
-        "viewer": ["member.view", "user_group.view"],
     }
     assert group["capabilities"] == expected["owner"]
+
+    rejected_viewer = await _invite(client, group_id, "dave", role="viewer")
+    assert rejected_viewer.status_code == 422
 
     for username, role, headers in (
         ("bob", "admin", BOB),
         ("carol", "member", CAROL),
-        ("dave", "viewer", DAVE),
     ):
         assert (await _invite(client, group_id, username, role=role)).status_code == 201
         assert (
@@ -162,7 +163,6 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
         ("owner", ALICE),
         ("admin", BOB),
         ("member", CAROL),
-        ("viewer", DAVE),
     ):
         visible = (await client.get(f"/api/v1/user-groups/{group_id}", headers=headers)).json()
         assert visible["role"] == role
@@ -377,7 +377,7 @@ async def test_concurrent_transfer_and_role_change_preserve_an_active_owner(
         client.post(f"/api/v1/user-groups/{group_id}/transfer-ownership/{bob_id}", headers=ALICE),
         client.patch(
             f"/api/v1/user-groups/{group_id}/members/{bob_id}",
-            json={"role": "viewer"},
+            json={"role": "admin"},
             headers=ALICE,
         ),
     )
