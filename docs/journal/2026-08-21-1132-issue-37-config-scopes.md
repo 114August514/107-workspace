@@ -43,3 +43,8 @@ Use `git revert <commit>` per exact commit; no stash/reset/clean used.
 - Final targeted migration/domain set: 101 passed, 2 PostgreSQL URL-absent skips; SQLite migration suite 7 passed; frontend 60 tests/typecheck/format/lint/build pass; contract check and `make smoke` pass.
 - Final `make check`: backend **241 passed/4 skipped**; all backend/frontend/workflow/API contract checks pass. Historical limitation: pre-migration Secret rotations/deletions without timestamp-provable current values cannot be reconstructed.
 - PostgreSQL 17 fresh evidence remains 2 passed/0 skipped with container cleanup verified.
+
+## Main merge / cutoff follow-up
+- Merged `origin/main` at `e35043b4d3831db41444df0560939c0cb93a7f92`; main-authoritative #58 asset-owner and #56 AppShell/Home/Primer changes were retained, while scoped config/exact Secret behavior remained.
+- Reparented f37 directly after `c471ac39f002`; Alembic has one head. Generated contracts were regenerated canonically after conflict resolution.
+- Historical backfill cutoff is conservative: submitted Run required and `legacy Secret updated_at <= run.created_at`; the in-window `created_at < updated_at <= submitted_at` case is skipped. Pre-migration lost rotations cannot be reconstructed.
