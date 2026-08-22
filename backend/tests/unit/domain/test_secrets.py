@@ -6,13 +6,7 @@ import pytest
 
 from workspace107.domain.enums import EnvValueKind
 from workspace107.domain.errors import ValidationFailed
-from workspace107.domain.secrets import (
-    REDACTED,
-    parse_env_map,
-    parse_env_value,
-    redact,
-    resolve_env,
-)
+from workspace107.domain.secrets import REDACTED, parse_env_map, parse_env_value, redact
 
 
 @pytest.mark.parametrize(
@@ -22,6 +16,8 @@ from workspace107.domain.secrets import (
         ("${{ vars.LOG_LEVEL }}", EnvValueKind.VARIABLE, "LOG_LEVEL"),
         ("${{vars.LOG_LEVEL}}", EnvValueKind.VARIABLE, "LOG_LEVEL"),
         ("${{ secrets.HF_TOKEN }}", EnvValueKind.SECRET, "HF_TOKEN"),
+        ("${{ user.vars.LOG_LEVEL }}", EnvValueKind.VARIABLE, "LOG_LEVEL"),
+        ("${{ user.secrets.HF_TOKEN }}", EnvValueKind.SECRET, "HF_TOKEN"),
     ],
 )
 def test_parses_environment_value_expression(raw: str, kind: EnvValueKind, value: str) -> None:
@@ -33,43 +29,16 @@ def test_parses_environment_value_expression(raw: str, kind: EnvValueKind, value
 def test_expression_round_trips_to_original_form() -> None:
     assert parse_env_value("${{ secrets.HF_TOKEN }}").expression == "${{ secrets.HF_TOKEN }}"
     assert parse_env_value("${{ vars.EPOCHS }}").expression == "${{ vars.EPOCHS }}"
+    assert parse_env_value("${{ user.vars.EPOCHS }}").expression == "${{ user.vars.EPOCHS }}"
+    assert (
+        parse_env_value("${{ user.secrets.HF_TOKEN }}").expression == "${{ user.secrets.HF_TOKEN }}"
+    )
     assert parse_env_value("32").expression == "32"
 
 
 def test_invalid_environment_variable_name_is_rejected() -> None:
     with pytest.raises(ValidationFailed):
         parse_env_map({"3INVALID": "1"})
-
-
-def test_resolution_inlines_variable_and_preserves_secret_reference() -> None:
-    env = parse_env_map(
-        {
-            "BATCH_SIZE": "32",
-            "LOG_LEVEL": "${{ vars.LOG_LEVEL }}",
-            "TOKEN": "${{ secrets.HF_TOKEN }}",
-        }
-    )
-    resolved, problems = resolve_env(
-        env,
-        variables={"LOG_LEVEL": "INFO"},
-        available_secrets={"HF_TOKEN"},
-    )
-
-    assert problems == []
-    assert resolved.literals == {"BATCH_SIZE": "32", "LOG_LEVEL": "INFO"}
-    # GR-304：Secret 只保存引用关系，值不出现在解析结果里。
-    assert resolved.secret_refs == {"TOKEN": "HF_TOKEN"}
-    assert "TOKEN" not in resolved.literals
-
-
-def test_missing_variable_or_secret_reports_problem() -> None:
-    env = parse_env_map({"A": "${{ vars.MISSING }}", "B": "${{ secrets.MISSING }}"})
-    resolved, problems = resolve_env(env, variables={}, available_secrets=set())
-
-    assert len(problems) == 2
-    assert "MISSING" in problems[0]
-    assert resolved.literals == {}
-    assert resolved.secret_refs == {}
 
 
 def test_redact_removes_known_secret_values() -> None:

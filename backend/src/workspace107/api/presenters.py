@@ -305,7 +305,7 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
         environment_image=snapshot.environment_image,
         environment_setup_command=snapshot.environment_setup_command,
         environment_variables=dict(snapshot.env_literals),
-        secret_references=dict(snapshot.env_secret_refs),
+        secret_references={name: ref.as_key() for name, ref in snapshot.env_secret_refs.items()},
         input_bindings=[input_binding_out(b) for b in snapshot.input_bindings],
         compute_plan_id=snapshot.compute_plan_id,
         compute_request=s.ComputeRequestModel(**snapshot.compute_request.as_payload()),

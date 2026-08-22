@@ -22,6 +22,7 @@ from ..domain.compute import (
     check_request_against_plan,
     resolve_scheduler_configuration,
 )
+from ..domain.config_scope import SecretReference
 from ..domain.enums import (
     ActivityAction,
     InputSourceType,
@@ -57,14 +58,15 @@ from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import ArtifactEntry, RunInput, StoragePort
 from ..domain.run_snapshot import RunSnapshot, build_snapshot
-from ..domain.secrets import ResolvedEnv, redact, resolve_env
-from .access import AccessGuard
+from ..domain.secrets import ResolvedEnv, redact
+from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
 from .asset_use import (
     environment_version_for_owner_use,
     shared_resource_version_for_owner_use,
 )
 from .notifier import Notifier
+from .scoped_config_resolver import ScopedConfigResolver
 
 MAX_LOG_BYTES = 256 * 1024
 
@@ -92,7 +94,7 @@ class PreflightResult:
     compute_plan: ComputePlan | None = None
     compute_request: ComputeRequest | None = None
     resolved_env_literals: dict[str, str] = field(default_factory=dict)
-    resolved_env_secret_refs: dict[str, str] = field(default_factory=dict)
+    resolved_env_secret_refs: dict[str, SecretReference] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -130,6 +132,7 @@ class RunService:
         secrets: SecretVault,
         activity: ActivityRecorder,
         notifier: Notifier,
+        config_resolver: ScopedConfigResolver,
     ) -> None:
         self._repos = repos
         self._guard = guard
@@ -137,6 +140,7 @@ class RunService:
         self._storage = storage
         self._scheduler = scheduler
         self._secrets = secrets
+        self._config_resolver = config_resolver
         self._activity = activity
         self._notifier = notifier
 
@@ -170,11 +174,11 @@ class RunService:
         access = await self._guard.run(user_id, run_id)
         snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
         secret_values: list[str] = []
-        if snapshot is not None and snapshot.env_secret_refs:
-            resolved = await self._secrets.resolve(
-                access.workspace.id, sorted(set(snapshot.env_secret_refs.values()))
-            )
-            secret_values = list(resolved.values())
+        if snapshot is not None:
+            secret_values = await self._secrets.redaction_values(access.run.id)
+            if not secret_values and snapshot.env_secret_refs:
+                refs = list(set(snapshot.env_secret_refs.values()))
+                secret_values = list((await self._secrets.resolve(refs)).values())
 
         chunks: list[RunLogChunk] = []
         for stream in (LogStream.STDOUT, LogStream.STDERR):
@@ -266,17 +270,12 @@ class RunService:
         command = (draft.command_override or configuration.command).strip()
         if not command:
             problems.append("执行命令不能为空")
-
-        variables = {
-            v.name: v.value
-            for v in await self._repos.variables.list_for_workspace(access.workspace.id)
-        }
-        resolved_env, env_problems = resolve_env(
+        resolved = await self._config_resolver.resolve(
+            access,
+            user_id,
             configuration.environment_variables,
-            variables=variables,
-            available_secrets=await self._secrets.list_names(access.workspace.id),
         )
-        problems.extend(env_problems)
+        problems.extend(resolved.problems)
 
         problems.extend(
             await self._check_inputs(
@@ -293,8 +292,8 @@ class RunService:
             environment_version=environment_version,
             compute_plan=plan,
             compute_request=request,
-            resolved_env_literals=resolved_env.literals,
-            resolved_env_secret_refs=resolved_env.secret_refs,
+            resolved_env_literals=resolved.literals,
+            resolved_env_secret_refs=resolved.secret_refs,
         )
 
     # -- 创建与提交 -----------------------------------------------------
@@ -386,7 +385,7 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, result.project_version, access.workspace.id)
+        await self._submit(run, snapshot, result.project_version, access, user_id)
         await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
         return RunSubmission(run=run, created=True)
 
@@ -420,12 +419,7 @@ class RunService:
             access.workspace.id, source_snapshot.compute_plan_id
         )
 
-        problems = await self._revalidate_snapshot(
-            user_id,
-            source_snapshot,
-            access.workspace.id,
-            access.workspace.owner_reference,
-        )
+        problems = await self._revalidate_snapshot(source_snapshot, access, user_id)
         if problems:
             raise PreflightRejected(problems)
 
@@ -482,7 +476,7 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, project_version, access.workspace.id)
+        await self._submit(run, snapshot, project_version, access, user_id)
         await self._record_run_activity(
             user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
         )
@@ -509,9 +503,22 @@ class RunService:
     # -- 内部 -----------------------------------------------------------
 
     async def _submit(
-        self, run: Run, snapshot: RunSnapshot, version: ProjectVersion, workspace_id: str
+        self,
+        run: Run,
+        snapshot: RunSnapshot,
+        version: ProjectVersion,
+        access: ProjectAccess,
+        initiated_by_user_id: str,
     ) -> None:
         try:
+            values: dict[str, str] = {}
+            if snapshot.env_secret_refs:
+                values, problems = await self._config_resolver.validate_and_resolve(
+                    access, initiated_by_user_id, snapshot.env_secret_refs
+                )
+                if problems:
+                    raise ValidationFailed("; ".join(problems))
+                await self._secrets.retain_for_redaction(run.id, list(values.values()))
             inputs = await self._materialize_inputs(snapshot.input_bindings)
             paths = await self._storage.prepare_run_directory(
                 run.id,
@@ -522,14 +529,8 @@ class RunService:
             # 输入内容在执行环境中的根目录。Input Binding 的 access_path 是
             # 相对于它的绝对路径，例如 /inputs/train -> $WORKSPACE107_INPUTS_DIR/inputs/train。
             environment.setdefault("WORKSPACE107_INPUTS_DIR", str(paths.inputs))
-            if snapshot.env_secret_refs:
-                # Secret 值只在这条路径上出现，用完随进程环境交给调度器，不落库。
-                values = await self._secrets.resolve(
-                    workspace_id, sorted(set(snapshot.env_secret_refs.values()))
-                )
-                for env_name, secret_name in snapshot.env_secret_refs.items():
-                    if secret_name in values:
-                        environment[env_name] = values[secret_name]
+            for env_name in snapshot.env_secret_refs:
+                environment[env_name] = values[env_name]
 
             work_dir = paths.work
             if snapshot.working_directory not in {"", "."}:
@@ -559,9 +560,9 @@ class RunService:
             # 收件人是 Run 的创建人——即使就是当前操作者也要发。
             await self._notifier.run_submit_failed(
                 recipient_id=run.created_by,
+                workspace_id=access.workspace.id,
                 run_id=run.id,
                 run_name=run.name,
-                workspace_id=workspace_id,
                 reason=str(exc),
             )
             return
@@ -817,13 +818,12 @@ class RunService:
         return inputs
 
     async def _revalidate_snapshot(
-        self,
-        user_id: str,
-        snapshot: RunSnapshot,
-        workspace_id: str,
-        project_owner: OwnerReference,
+        self, snapshot: RunSnapshot, access: ProjectAccess, initiated_by_user_id: str
     ) -> list[str]:
         """重跑之前按当前权限和资源资格重新校验历史快照中的每一个引用。"""
+        workspace_id = access.workspace.id
+        user_id = initiated_by_user_id
+        project_owner = access.workspace.owner_reference
         problems: list[str] = []
 
         version = await self._repos.project_versions.get(snapshot.project_version_id)
@@ -848,15 +848,12 @@ class RunService:
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
             else:
-                # 重跑同样要占并发名额。漏掉这一条，用户就能靠反复点「重新运行」
-                # 绕过上限——权益检查在最容易被反复触发的路径上失效。
                 problems.extend(await self._check_concurrency(workspace_id, entitlement))
             problems.extend(check_request_against_plan(plan, snapshot.compute_request))
-
-        available_secrets = await self._secrets.list_names(workspace_id)
-        for env_name, secret_name in snapshot.env_secret_refs.items():
-            if secret_name not in available_secrets:
-                problems.append(f"环境变量 {env_name} 引用的 Workspace Secret {secret_name} 不存在")
+        _, secret_problems = await self._config_resolver.validate_and_resolve(
+            access, initiated_by_user_id, snapshot.env_secret_refs
+        )
+        problems.extend(secret_problems)
 
         for binding in snapshot.input_bindings:
             if binding.source_type is InputSourceType.ARTIFACT:
@@ -879,7 +876,9 @@ class RunService:
         return problems
 
 
-def _as_resolved_env(literals: dict[str, str], secret_refs: dict[str, str]) -> ResolvedEnv:
+def _as_resolved_env(
+    literals: dict[str, str], secret_refs: dict[str, SecretReference]
+) -> ResolvedEnv:
     return ResolvedEnv(literals=dict(literals), secret_refs=dict(secret_refs))
 
 
