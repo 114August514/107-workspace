@@ -21,7 +21,7 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     me = await client.get("/api/v1/me")
     me.raise_for_status()
     user_id = me.json()["user"]["id"]
-    group_id = await use_default_environment(client)
+    group_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="run-config-evidence")
     await grant_test_entitlement(session, group_id)
 
@@ -57,7 +57,6 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
             "name": "execution-evidence",
             "command": command,
             "compute_plan_id": "plan_cpu_quick",
-            "environment_version_id": "ev_python_312",
             "environment_variables": {
                 "LEVEL": "${{ vars.LEVEL }}",
                 "OWNER_ONLY": "${{ vars.OWNER_ONLY }}",
@@ -154,7 +153,7 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
 @pytest.mark.asyncio
 async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> None:
     await client.get("/api/v1/me")
-    group_id = await use_default_environment(client)
+    group_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="rerun-guards")
     await grant_test_entitlement(session, group_id)
     config = await client.post(
@@ -163,7 +162,6 @@ async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> No
             "name": "guard",
             "command": "echo ok",
             "compute_plan_id": "plan_cpu_quick",
-            "environment_version_id": "ev_python_312",
             "compute_request": {
                 "nodes": 1,
                 "cpus": 2,
@@ -212,7 +210,7 @@ async def test_scheduler_submit_failure_persists_run_and_notification(
 ) -> None:
     context.scheduler = _FailingScheduler()
     await client.get("/api/v1/me")
-    group_id = await use_default_environment(client)
+    group_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="submit-failure")
     await grant_test_entitlement(session, group_id)
     config = await client.post(
@@ -221,7 +219,6 @@ async def test_scheduler_submit_failure_persists_run_and_notification(
             "name": "failure",
             "command": "echo ok",
             "compute_plan_id": "plan_cpu_quick",
-            "environment_version_id": "ev_python_312",
         },
     )
     assert config.status_code == 201
