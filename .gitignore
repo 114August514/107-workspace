@@ -50,3 +50,4 @@ backend/.alembic-test/
 
 # Local notes and scratch data kept outside the shared project tree
 /.local/
+.qoder/
