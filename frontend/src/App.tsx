@@ -1,9 +1,11 @@
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { getCurrentUser, setCurrentUser } from './api/client'
+import { api, getCurrentUser, setCurrentUser } from './api/client'
+import type { Home } from './api/types'
+import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
 import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
 import { LegacyWorkspacePage } from './pages/LegacyWorkspacePage'
@@ -13,6 +15,7 @@ import { SharedResourcePage } from './pages/SharedResourcePage'
 import { SharedResourceVersionPage } from './pages/SharedResourceVersionPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
 import { UserGroupPage } from './pages/UserGroupPage'
+import { PrimerRoot } from './primer/setup'
 import { theme } from './theme'
 
 const USER_KEY = 'workspace107.devUser'
@@ -24,17 +27,19 @@ const DesignSystemPage = lazy(() =>
 
 export function App() {
   return (
-    <Routes>
-      <Route
-        path="/design-system"
-        element={
-          <Suspense fallback={<div role="status">正在加载交互参考台…</div>}>
-            <DesignSystemPage />
-          </Suspense>
-        }
-      />
-      <Route path="*" element={<ProductApp />} />
-    </Routes>
+    <PrimerRoot>
+      <Routes>
+        <Route
+          path="/design-system"
+          element={
+            <Suspense fallback={<div role="status">正在加载交互参考台…</div>}>
+              <DesignSystemPage />
+            </Suspense>
+          }
+        />
+        <Route path="*" element={<ProductApp />} />
+      </Routes>
+    </PrimerRoot>
   )
 }
 
@@ -54,19 +59,43 @@ function ProductApp() {
   return (
     <ConfigProvider locale={zhCN} theme={theme}>
       <AntdApp>
-        <AppShell username={username} onUsernameChange={changeUser}>
-          <ProductRoutes username={username} />
-        </AppShell>
+        <ProductSession key={username} username={username} onUsernameChange={changeUser} />
       </AntdApp>
     </ConfigProvider>
   )
 }
 
-export function ProductRoutes({ username }: { username: string }) {
+function ProductSession({
+  username,
+  onUsernameChange,
+}: {
+  username: string
+  onUsernameChange: (username: string) => void
+}) {
+  const homeRequest = useRef<Promise<Home> | null>(null)
+  const loadHome = () => {
+    if (homeRequest.current) return homeRequest.current
+    const request = api.home()
+    homeRequest.current = request
+    const clear = () => {
+      if (homeRequest.current === request) homeRequest.current = null
+    }
+    void request.then(clear, clear)
+    return request
+  }
+  const home = useAsync<Home>(loadHome, [username])
+
+  return (
+    <AppShell username={username} onUsernameChange={onUsernameChange} home={home}>
+      <ProductRoutes username={username} home={home} />
+    </AppShell>
+  )
+}
+
+export function ProductRoutes({ username, home }: { username: string; home: AsyncResource<Home> }) {
   return (
     <Routes>
-      {/* key=username：切换身份后重新挂载，避免看到上一个人的数据 */}
-      <Route path="/" element={<HomePage key={username} username={username} />} />
+      <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
       <Route path="/workspaces/:workspaceId" element={<LegacyWorkspacePage key={username} />} />
       <Route

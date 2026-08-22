@@ -1,50 +1,111 @@
-import { Layout, Space, Typography } from 'antd'
-import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { PlusIcon, ThreeBarsIcon } from '@primer/octicons-react'
+import { defaultPaneWidth, IconButton, PageLayout } from '@primer/react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 
-import { colors } from '../../theme'
+import type { Home } from '../../api/types'
+import type { AsyncState as AsyncResource } from '../../api/useAsync'
+import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
+import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
+import { ContextGuide } from './ContextGuide'
+import { appShellCopy } from './copy'
 import { UserSwitcher } from './UserSwitcher'
-
-const { Header, Content, Footer } = Layout
+import { WorkNavigation } from './WorkNavigation'
+import styles from './AppShell.module.css'
 
 interface Props {
   username: string
   onUsernameChange: (username: string) => void
+  home: AsyncResource<Home>
   children: ReactNode
 }
 
-export function AppShell({ username, onUsernameChange, children }: Props) {
+type AppShellStyle = CSSProperties & { '--app-shell-sidebar-width': string }
+
+const appShellStyle: AppShellStyle = {
+  '--app-shell-sidebar-width': `${defaultPaneWidth.medium}px`,
+}
+
+export function AppShell({ username, onUsernameChange, home, children }: Props) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const navigationId = useId()
+  const navigationButtonRef = useRef<HTMLButtonElement>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [navigationOpen, setNavigationOpen] = useState(false)
+
+  useEffect(() => {
+    setNavigationOpen(false)
+  }, [location.pathname, username])
+
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
+    <div className={styles.shell} style={appShellStyle}>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <div className={styles.headerStart}>
+            <IconButton
+              ref={navigationButtonRef}
+              icon={ThreeBarsIcon}
+              variant="default"
+              aria-label={appShellCopy.openNavigation}
+              aria-expanded={navigationOpen}
+              aria-controls={navigationId}
+              onClick={() => setNavigationOpen(true)}
+            />
+            <RouterLink to="/" className={styles.brand}>
+              {appShellCopy.brand}
+            </RouterLink>
+          </div>
+          <div className={styles.actions}>
+            <IconButton
+              icon={PlusIcon}
+              variant="default"
+              aria-label={appShellCopy.createUserGroup}
+              onClick={() => setCreateOpen(true)}
+            />
+            {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
+                避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
+            <NotificationBell key={username} username={username} />
+            <UserSwitcher value={username} onChange={onUsernameChange} />
+          </div>
+        </div>
+      </header>
+
+      <div className={styles.body}>
+        {location.pathname === '/' ? (
+          <aside className={styles.persistentSidebar} aria-label={appShellCopy.sidebarLabel}>
+            {home.data ? <WorkNavigation home={home.data} /> : null}
+          </aside>
+        ) : null}
+        <main className={styles.main}>
+          <PageLayout containerWidth="full" padding="none" rowGap="none" columnGap="none">
+            <PageLayout.Content as="div" width="xlarge" padding="normal">
+              {children}
+            </PageLayout.Content>
+          </PageLayout>
+        </main>
+      </div>
+
+      <ContextGuide pathname={location.pathname} />
+
+      {navigationOpen ? (
+        <GlobalNavigationDrawer
+          id={navigationId}
+          home={home}
+          returnFocusRef={navigationButtonRef}
+          onClose={() => setNavigationOpen(false)}
+        />
+      ) : null}
+
+      <CreateUserGroupDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(userGroup) => {
+          home.reload()
+          navigate(`/user-groups/${userGroup.id}`)
         }}
-      >
-        <Link to="/">
-          <Typography.Text style={{ color: colors.onDark, fontSize: 16, fontWeight: 600 }}>
-            107 Workspace
-          </Typography.Text>
-        </Link>
-        <Space size={4}>
-          <NotificationBell username={username} />
-          <UserSwitcher value={username} onChange={onUsernameChange} />
-        </Space>
-      </Header>
-
-      <Content style={{ padding: '24px 32px', maxWidth: 1280, width: '100%', margin: '0 auto' }}>
-        {children}
-      </Content>
-
-      <Footer style={{ borderTop: `1px solid ${colors.border}`, marginTop: 24 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          GPU 型号、分区、QoS 和配额等信息以平台页面为准。
-        </Typography.Text>
-      </Footer>
-    </Layout>
+      />
+    </div>
   )
 }

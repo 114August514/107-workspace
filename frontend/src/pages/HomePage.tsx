@@ -1,87 +1,241 @@
-import { PlusOutlined } from '@ant-design/icons'
-import { Button } from 'antd'
+import { Banner, Button, Link, Text } from '@primer/react'
+import { Card } from '@primer/react/experimental'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router-dom'
 
 import { api } from '../api/client'
-import type { Home } from '../api/types'
+import type { AsyncErrorView } from '../api/errors'
+import { toAsyncError } from '../api/errors'
+import type { ComputePlan, Home, Invitation } from '../api/types'
+import type { AsyncState as AsyncResource } from '../api/useAsync'
 import { useAsync } from '../api/useAsync'
-import { AsyncSection } from '../components/common/AsyncSection'
-import { ListCard } from '../components/layout/ListCard'
-import { PageHeader } from '../components/layout/PageHeader'
-import { Stack } from '../components/layout/Stack'
-import { ProjectTable } from '../components/project/ProjectTable'
-import { RunTable } from '../components/run/RunTable'
-import { CreateUserGroupModal } from '../components/workspace/CreateUserGroupModal'
-import { InvitationList } from '../components/workspace/InvitationList'
-import { UserGroupTable } from '../components/workspace/UserGroupTable'
+import { AsyncState } from '../components/common/AsyncState'
+import { describeComputeRequest, formatRelative, formatTime } from '../utils/format'
+import { roleLabel } from '../utils/roles'
+import { runStatusLabel } from '../utils/runStatus'
+import { homeCopy, homeTitle, invitationFailureTitle, invitationKind } from './homeCopy'
+import styles from './HomePage.module.css'
 
-/** 个人首页：我的 User Group、最近的 Project 和最近发起的 Run。 */
-export function HomePage({ username }: { username: string }) {
-  const home = useAsync<Home>(() => api.home(), [username])
-  const [creating, setCreating] = useState(false)
+interface Props {
+  username: string
+  home: AsyncResource<Home>
+}
+
+/** 个人首页：待处理邀请、个人资源、最近 Run 和算力方案目录。 */
+export function HomePage({ username, home }: Props) {
+  const user = home.data?.user
+  const runs = home.data?.recent_runs ?? []
 
   return (
-    <Stack gap="large">
-      <PageHeader
-        title={home.data ? `${home.data.user.display_name}，欢迎回来` : '首页'}
-        description="从这里进入 Project，配置运行方案，提交计算作业——不需要自己写 sbatch。"
-        actions={
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-            创建 User Group
-          </Button>
-        }
-      />
+    <div className={styles.page}>
+      <header>
+        <h1 className={styles.title}>{homeTitle(user?.display_name)}</h1>
+        <p className={styles.subtitle}>{homeCopy.subtitle}</p>
+      </header>
 
-      {/* 邀请排在空间列表前面：它是需要用户做决定的事，
-          而下面几块只是「已经有什么」。没有邀请时整块不渲染。 */}
-      <InvitationList username={username} onResponded={() => home.reload()} />
+      <AsyncState
+        loading={home.loading}
+        loadingText={homeCopy.loading}
+        error={toAsyncError(home.error)}
+        onRetry={home.reload}
+      >
+        {home.data ? (
+          <div className={styles.dashboard}>
+            <div className={styles.main}>
+              <Invitations username={username} onResponded={home.reload} />
+              {home.data.personal_resource_context_id ? (
+                <Card
+                  as="section"
+                  padding="normal"
+                  className={styles.card}
+                  aria-label={homeCopy.personalResource.title}
+                >
+                  <h2 className={styles.cardTitle}>{homeCopy.personalResource.title}</h2>
+                  <p className={styles.cardDescription}>{homeCopy.personalResource.description}</p>
+                  <Link
+                    as={RouterLink}
+                    to={`/workspaces/${home.data.personal_resource_context_id}`}
+                  >
+                    {homeCopy.personalResource.action}
+                  </Link>
+                </Card>
+              ) : null}
+              <Card
+                as="section"
+                padding="normal"
+                className={styles.card}
+                aria-label={homeCopy.recentRuns.title}
+              >
+                <h2 className={styles.cardTitle}>{homeCopy.recentRuns.title}</h2>
+                <AsyncState
+                  loading={false}
+                  loadingText={homeCopy.loading}
+                  empty={runs.length === 0}
+                  emptyText={homeCopy.recentRuns.empty}
+                >
+                  <ul className={styles.list}>
+                    {runs.map((run) => (
+                      <li key={run.id} className={styles.item}>
+                        <div className={styles.itemMain}>
+                          <Link as={RouterLink} to={`/runs/${run.id}`} className={styles.itemTitle}>
+                            {run.name}
+                          </Link>
+                          <span className={styles.itemDesc}>{runStatusLabel(run.status)}</span>
+                        </div>
+                        <time
+                          className={styles.itemTime}
+                          dateTime={run.created_at ?? undefined}
+                          title={formatTime(run.created_at)}
+                        >
+                          {formatRelative(run.created_at)}
+                        </time>
+                      </li>
+                    ))}
+                  </ul>
+                </AsyncState>
+              </Card>
+            </div>
+            <aside className={styles.side}>
+              <ComputePlanCatalog />
+              <p className={styles.clusterNote}>{homeCopy.compute.realtimeUnavailable}</p>
+            </aside>
+          </div>
+        ) : null}
+      </AsyncState>
+    </div>
+  )
+}
 
-      {home.data?.personal_resource_context_id && (
-        <ListCard title="个人资源" padded>
-          <Link to={`/workspaces/${home.data.personal_resource_context_id}`}>
-            <Button>查看个人资源</Button>
-          </Link>
-        </ListCard>
-      )}
+/**
+ * 待处理的 User Group 邀请。
+ *
+ * 被邀请的人尚未形成有效 Membership；主次操作并排，拒绝不是危险操作。
+ */
+function Invitations({ username, onResponded }: { username: string; onResponded: () => void }) {
+  const invitations = useAsync<Invitation[]>(() => api.listInvitations(), [username])
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  const [respondError, setRespondError] = useState<{ name: string; view: AsyncErrorView } | null>(
+    null,
+  )
 
-      <ListCard title="我的 User Group">
-        <AsyncSection
-          loading={home.loading}
-          error={home.error}
-          empty={(home.data?.user_groups ?? []).length === 0}
-        >
-          <UserGroupTable userGroups={home.data?.user_groups ?? []} />
-        </AsyncSection>
-      </ListCard>
+  const respond = async (invitation: Invitation, accept: boolean) => {
+    setPendingId(invitation.user_group_id)
+    setRespondError(null)
+    try {
+      await api.respondToInvitation(invitation.user_group_id, accept)
+      invitations.reload()
+      onResponded()
+    } catch (error) {
+      setRespondError({
+        name: invitation.user_group_name,
+        view: toAsyncError(error as Error) ?? { message: homeCopy.invitations.fallbackError },
+      })
+    } finally {
+      setPendingId(null)
+    }
+  }
 
-      <ListCard title="最近使用的 Project">
-        <AsyncSection
-          loading={home.loading}
-          error={home.error}
-          empty={(home.data?.recent_projects ?? []).length === 0}
-          emptyText="还没有 Project。进入一个 User Group 创建第一个吧。"
-        >
-          <ProjectTable projects={home.data?.recent_projects ?? []} />
-        </AsyncSection>
-      </ListCard>
+  const items = invitations.data ?? []
+  if (!invitations.loading && !invitations.error && items.length === 0) return null
 
-      <ListCard title="最近提交的 Run">
-        <AsyncSection
-          loading={home.loading}
-          error={home.error}
-          empty={(home.data?.recent_runs ?? []).length === 0}
-          emptyText="还没有提交过 Run"
-        >
-          <RunTable runs={home.data?.recent_runs ?? []} />
-        </AsyncSection>
-      </ListCard>
+  return (
+    <Card
+      as="section"
+      padding="normal"
+      className={styles.card}
+      aria-label={homeCopy.invitations.title}
+    >
+      <h2 className={styles.cardTitle}>{homeCopy.invitations.title}</h2>
+      <AsyncState
+        loading={invitations.loading}
+        loadingText={homeCopy.invitations.loading}
+        error={toAsyncError(invitations.error)}
+        onRetry={invitations.reload}
+      >
+        <ul className={styles.list}>
+          {items.map((invitation) => (
+            <li key={invitation.user_group_id} className={styles.invitationItem}>
+              <div className={styles.invitationMain}>
+                <div className={styles.invitationTitle}>{invitation.user_group_name}</div>
+                <div className={styles.invitationMeta}>
+                  {invitationKind(roleLabel(invitation.role))}
+                </div>
+                {invitation.user_group_description ? (
+                  <div className={styles.invitationMeta}>{invitation.user_group_description}</div>
+                ) : null}
+              </div>
+              <div className={styles.invitationActions}>
+                <Button
+                  variant="primary"
+                  disabled={pendingId !== null}
+                  loading={pendingId === invitation.user_group_id}
+                  onClick={() => void respond(invitation, true)}
+                >
+                  {homeCopy.invitations.accept}
+                </Button>
+                <Button
+                  disabled={pendingId !== null}
+                  onClick={() => void respond(invitation, false)}
+                >
+                  {homeCopy.invitations.reject}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {respondError && (
+          <div className={styles.invitationError}>
+            <Banner variant="critical">
+              <Banner.Title>
+                {invitationFailureTitle(respondError.name, respondError.view.message)}
+              </Banner.Title>
+              <Banner.Description>
+                {respondError.view.problems?.join(' ') ?? homeCopy.invitations.fallbackNextStep}
+              </Banner.Description>
+            </Banner>
+          </div>
+        )}
+      </AsyncState>
+    </Card>
+  )
+}
 
-      <CreateUserGroupModal
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={() => home.reload()}
-      />
-    </Stack>
+/** 算力方案目录只展示平台真实返回的预设，不代表当前用户已获得对应权益。 */
+function ComputePlanCatalog() {
+  const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
+
+  return (
+    <Card as="section" padding="normal" className={styles.card} aria-label={homeCopy.compute.title}>
+      <h2 className={styles.cardTitle}>{homeCopy.compute.title}</h2>
+      <p className={styles.cardDescription}>{homeCopy.compute.description}</p>
+      <AsyncState
+        loading={plans.loading}
+        loadingText={homeCopy.compute.loading}
+        error={toAsyncError(plans.error)}
+        onRetry={plans.reload}
+        empty={(plans.data ?? []).length === 0}
+        emptyText={homeCopy.compute.empty}
+      >
+        <ul className={styles.planList}>
+          {(plans.data ?? []).map((plan) => (
+            <li key={plan.id}>
+              <div className={styles.planName}>{plan.code}</div>
+              {plan.description && <div className={styles.planDesc}>{plan.description}</div>}
+              <div className={styles.planSpec}>
+                <Text size="small">
+                  {describeComputeRequest({
+                    nodes: plan.default_nodes,
+                    cpus: plan.default_cpus,
+                    memory_mb: plan.default_memory_mb,
+                    gpus: plan.default_gpus,
+                    time_limit_minutes: plan.default_time_limit_minutes,
+                  })}
+                </Text>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </AsyncState>
+    </Card>
   )
 }

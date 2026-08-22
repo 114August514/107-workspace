@@ -22,8 +22,7 @@ import type { ReactNode } from 'react'
  * 页面不会覆盖其主题；BaseStyles 的元素级排版规则（body 字号、链接颜色）
  * 对旧页面的影响由浏览器回归验证兜底。
  *
- * 全局 App root 的切换由 #18 在 AppShell 迁移时完成；
- * 在此之前，每个 Primer surface 在自己的路由根部使用 <PrimerRoot>。
+ * App 根（App.tsx）已接入唯一一层 PrimerRoot；任何 surface 都不要再自行包一层。
  */
 export function PrimerRoot({ children }: { children: ReactNode }) {
   return (
