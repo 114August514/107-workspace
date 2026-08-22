@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from ..application.access import AccessGuard
 from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
-from ..application.configuration_service import ConfigurationService
+ @both
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
 from ..application.notifier import NotificationService, Notifier
@@ -82,6 +82,7 @@ class Services:
     activities: ActivityService
     notifications: NotificationService
     shared_resources: SharedResourceService
+    grants: GrantService
 
 
 def build_services(context: AppContext, session: AsyncSession) -> Services:
@@ -141,6 +142,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             activity,
             max_file_bytes=context.settings.max_file_bytes,
         ),
+        grants=GrantService(repos, guard, context.clock, activity),
     )
 
 

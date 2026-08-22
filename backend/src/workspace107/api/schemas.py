@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -329,6 +330,25 @@ class CanonicalSharedResourceCreateIn(Model):
 class SharedResourceUpdateIn(Model):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     description: str | None = Field(default=None, max_length=4096)
+
+
+# -- Grant ------------------------------------------------------------------
+
+
+class GrantOut(Model):
+    id: str
+    grantee: OwnerSummaryOut
+    target_kind: Literal["environment", "shared_resource"]
+    target_id: str
+    action: Literal["use"]
+    granted_by: OwnerSummaryOut
+    created_at: datetime
+
+
+class GrantCreateIn(Model):
+    target_kind: Literal["environment", "shared_resource"]
+    target_id: str
+    grantee: OwnerReferenceIn
 
 
 # -- 运行方案 ---------------------------------------------------------------

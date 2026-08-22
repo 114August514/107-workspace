@@ -29,6 +29,7 @@ from ...domain.enums import (
     TargetType,
 )
 from ...domain.errors import ConflictError
+from ...domain.grant import Grant, GrantAction, GrantTargetKind
 from ...domain.models import (
     Activity,
     Artifact,
@@ -707,6 +708,16 @@ class EnvironmentRepositoryImpl:
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
+
+    async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.EnvironmentVersionRow, version_id)
+        return _to_environment_version(row) if row else None
+
+    async def get_by_id(self, environment_id: str) -> Environment | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.EnvironmentRow, environment_id)
+        return _to_environment(row) if row else None
 
 
 class ComputePlanRepositoryImpl:
@@ -1410,6 +1421,11 @@ class SharedResourceRepositoryImpl:
         row = await self._session.get(t.SharedResourceVersionRow, version_id)
         return await self._hydrate_version(row) if row else None
 
+    async def get_by_id(self, resource_id: str) -> SharedResource | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.SharedResourceRow, resource_id)
+        return _to_shared_resource(row) if row else None
+
     async def list_versions_discoverable_for_user(
         self, user_id: str, resource_id: str
     ) -> list[SharedResourceVersion]:
@@ -1460,6 +1476,79 @@ class SharedResourceRepositoryImpl:
         )
 
 
+class GrantRepositoryImpl:
+    """Grant persistence with discriminated-union grantee/target columns."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, grant: Grant) -> None:
+        self._session.add(
+            t.GrantRow(
+                id=grant.id,
+                grantee_kind=grant.grantee.kind.value,
+                grantee_id=grant.grantee.id,
+                target_kind=grant.target_kind.value,
+                target_id=grant.target_id,
+                action=grant.action.value,
+                granted_by_id=grant.granted_by,
+                created_at=grant.created_at,
+            )
+        )
+        await _flush(self._session)
+
+    async def get(self, grant_id: str) -> Grant | None:
+        row = await self._session.get(t.GrantRow, grant_id)
+        return _to_grant(row) if row else None
+
+    async def list_for_target(self, target_kind: GrantTargetKind, target_id: str) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.target_kind == target_kind.value,
+                t.GrantRow.target_id == target_id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.grantee_kind == grantee.kind.value,
+                t.GrantRow.grantee_id == grantee.id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def delete(self, grant_id: str) -> bool:
+        stmt = delete(t.GrantRow).where(t.GrantRow.id == grant_id)
+        result = await self._session.execute(stmt)
+        await _flush(self._session)
+        return result.rowcount > 0
+
+    async def exists_use_grant(
+        self, grantee: OwnerReference, target_kind: GrantTargetKind, target_id: str
+    ) -> bool:
+        stmt = (
+            select(t.GrantRow.id)
+            .where(
+                t.GrantRow.grantee_kind == grantee.kind.value,
+                t.GrantRow.grantee_id == grantee.id,
+                t.GrantRow.target_kind == target_kind.value,
+                t.GrantRow.target_id == target_id,
+                t.GrantRow.action == GrantAction.USE.value,
+            )
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return row is not None
+
+
 class SqlRepositories:
     """一次工作单元内的全部仓储。"""
 
@@ -1486,6 +1575,7 @@ class SqlRepositories:
         self.notifications = NotificationRepositoryImpl(session)
         self.fork_relations = ForkRelationRepositoryImpl(session)
         self.shared_resources = SharedResourceRepositoryImpl(session)
+        self.grants = GrantRepositoryImpl(session)
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -1753,5 +1843,17 @@ def _to_shared_resource(row: t.SharedResourceRow) -> SharedResource:
         name=row.name,
         owner=_owner_reference(row.owner_user_id, row.owner_user_group_id),
         description=row.description,
+        created_at=_aware(row.created_at),
+    )
+
+
+def _to_grant(row: t.GrantRow) -> Grant:
+    return Grant(
+        id=row.id,
+        grantee=OwnerReference(OwnerKind(row.grantee_kind), row.grantee_id),
+        target_kind=GrantTargetKind(row.target_kind),
+        target_id=row.target_id,
+        action=GrantAction(row.action),
+        granted_by=row.granted_by_id,
         created_at=_aware(row.created_at),
     )
