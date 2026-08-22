@@ -189,7 +189,9 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "SELECT payload FROM run_snapshots WHERE id='snap_1'"
     ).fetchone()[0]
     assert '"literals": {"A": "1"}' in str(downgraded_snapshot)
-    assert '"secret_refs": {"T": "TOKEN", "U": "TOKEN", "L": "LATE", "M": "MISSING"}' in str(downgraded_snapshot)
+    assert '"secret_refs": {"T": "TOKEN", "U": "TOKEN", "L": "LATE", "M": "MISSING"}' in str(
+        downgraded_snapshot
+    )
     assert _rows(
         connection,
         "SELECT id, name, owner_id FROM workspaces WHERE kind='collaborative' ORDER BY id",
@@ -234,5 +236,8 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "SELECT payload FROM run_snapshots WHERE id='snap_1'"
     ).fetchone()[0]
     assert '"literals": {"A": "1"}' in str(upgraded_snapshot)
-    assert '"secret_refs": {"T": "user:usr_alice:TOKEN", "U": "user:usr_alice:TOKEN", "L": "user:usr_alice:LATE", "M": "user:usr_alice:MISSING"}' in str(upgraded_snapshot)
+    assert (
+        '"secret_refs": {"T": "user:usr_alice:TOKEN", "U": "user:usr_alice:TOKEN", "L": "user:usr_alice:LATE", "M": "user:usr_alice:MISSING"}'
+        in str(upgraded_snapshot)
+    )
     connection.close()
