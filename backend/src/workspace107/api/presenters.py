@@ -428,6 +428,6 @@ def grant_out(view: GrantView) -> s.GrantOut:
         target_kind=view.grant.target_kind.value,
         target_id=view.grant.target_id,
         action=view.grant.action.value,
-        granted_by=owner_summary_out(view.target_owner),
+        granted_by=owner_summary_out(view.granted_by),
         created_at=view.grant.created_at,
     )

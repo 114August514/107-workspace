@@ -29,7 +29,12 @@ class GrantTargetKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Grant:
-    """跨 Owner 使用许可。Target 为顶层 Environment 或 Shared Resource。"""
+    """跨 Owner 使用许可。Target 为顶层 Environment 或 Shared Resource。
+
+    ``grantor_owner`` 记录创建此 Grant 时的资产 Owner。GR-408：资产
+    Ownership 转移后，旧 Owner 建立的 Grant 失效——``exists_use_grant``
+    校验 ``grantor_owner == asset.current_owner``。
+    """
 
     id: str
     grantee: OwnerReference
@@ -37,4 +42,5 @@ class Grant:
     target_id: str
     action: GrantAction
     granted_by: str
+    grantor_owner: OwnerReference
     created_at: datetime

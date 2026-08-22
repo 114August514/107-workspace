@@ -156,8 +156,6 @@ class ActivityAction(StrEnum):
     SHARED_RESOURCE_CREATED = "shared_resource_created"
     SHARED_RESOURCE_UPDATED = "shared_resource_updated"
     SHARED_RESOURCE_VERSION_PUBLISHED = "shared_resource_version_published"
-    GRANT_CREATED = "grant_created"
-    GRANT_REVOKED = "grant_revoked"
 
 
 class TargetType(StrEnum):
@@ -175,7 +173,6 @@ class TargetType(StrEnum):
     RUN = "run"
     SHARED_RESOURCE = "shared_resource"
     SHARED_RESOURCE_VERSION = "shared_resource_version"
-    GRANT = "grant"
 
 
 class NotificationType(StrEnum):

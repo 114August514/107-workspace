@@ -515,6 +515,8 @@ class GrantRow(Base):
     target_id: Mapped[str] = mapped_column(ID)
     action: Mapped[str] = mapped_column(String(16))  # 'use'
     granted_by_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="RESTRICT"))
+    grantor_owner_kind: Mapped[str] = mapped_column(String(16))  # 'user' | 'user_group'
+    grantor_owner_id: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (

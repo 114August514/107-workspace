@@ -83,6 +83,8 @@ def test_grants_migration_creates_table_and_round_trips(
             "target_id",
             "action",
             "granted_by_id",
+            "grantor_owner_kind",
+            "grantor_owner_id",
             "created_at",
         }
         assert expected_columns <= _columns(conn, "grants")

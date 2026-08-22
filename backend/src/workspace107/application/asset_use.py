@@ -74,11 +74,17 @@ async def _environment_version_for_grant_use(
     environment = await repos.environments.get_by_id(version.environment_id)  # trusted lookup
     if environment is None:
         return None
+    # Cross-owner use only: if the asset Owner IS the target_owner, discovery
+    # should have found it in the same-owner path above.  Fail closed here.
     if environment.owner == target_owner:
-        # Same-owner but discovery failed — conservatively allow.
-        return version
+        return None
     if await _has_use_grant(
-        repos, user_id, target_owner, GrantTargetKind.ENVIRONMENT, environment.id
+        repos,
+        user_id,
+        target_owner,
+        GrantTargetKind.ENVIRONMENT,
+        environment.id,
+        environment.owner,
     ):
         return version
     return None
@@ -96,11 +102,16 @@ async def _shared_resource_version_for_grant_use(
     resource = await repos.shared_resources.get_by_id(version.shared_resource_id)  # trusted lookup
     if resource is None:
         return None
+    # Cross-owner use only: same-owner discovery should have succeeded above.
     if resource.owner == target_owner:
-        # Same-owner but discovery failed — conservatively allow.
-        return version
+        return None
     if await _has_use_grant(
-        repos, user_id, target_owner, GrantTargetKind.SHARED_RESOURCE, resource.id
+        repos,
+        user_id,
+        target_owner,
+        GrantTargetKind.SHARED_RESOURCE,
+        resource.id,
+        resource.owner,
     ):
         return version
     return None
@@ -112,10 +123,13 @@ async def _has_use_grant(
     target_owner: OwnerReference,
     target_kind: GrantTargetKind,
     target_id: str,
+    asset_owner: OwnerReference,
 ) -> bool:
-    """Check for a USE Grant matching either the consuming Owner or the acting User."""
-    if await repos.grants.exists_use_grant(target_owner, target_kind, target_id):
+    """Check for a valid USE Grant matching either the consuming Owner or the
+    acting User, issued under the asset's current Owner (GR-408).
+    """
+    if await repos.grants.exists_use_grant(target_owner, target_kind, target_id, asset_owner):
         return True
     # A personal User-level Grant for the acting user also authorizes use.
     user_grantee = OwnerReference(kind=OwnerKind.USER, id=user_id)
-    return await repos.grants.exists_use_grant(user_grantee, target_kind, target_id)
+    return await repos.grants.exists_use_grant(user_grantee, target_kind, target_id, asset_owner)

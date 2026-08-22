@@ -288,9 +288,13 @@ class GrantRepository(Protocol):
     async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]: ...
     async def delete(self, grant_id: str) -> bool: ...
     async def exists_use_grant(
-        self, grantee: OwnerReference, target_kind: GrantTargetKind, target_id: str
+        self,
+        grantee: OwnerReference,
+        target_kind: GrantTargetKind,
+        target_id: str,
+        grantor_owner: OwnerReference,
     ) -> bool:
-        """检查是否存在指向 (grantee, target) 的 USE Grant。"""
+        """Check for a valid USE Grant (grantee, target) issued under ``grantor_owner``."""
         ...
 
 

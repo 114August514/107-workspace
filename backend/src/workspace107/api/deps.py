@@ -142,7 +142,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             activity,
             max_file_bytes=context.settings.max_file_bytes,
         ),
-        grants=GrantService(repos, guard, context.clock, activity),
+        grants=GrantService(repos, guard, context.clock),
     )
 
 
