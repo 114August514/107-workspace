@@ -17,7 +17,7 @@ import { RoleTag } from '../common/RoleTag'
  * Owner 不在其中：换所有者是一次明确的交接，走转让流程，
  * 不能靠改角色造出第二个所有者。
  */
-const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const satisfies readonly MembershipRole[]
+const ASSIGNABLE_ROLES = ['admin', 'member'] as const satisfies readonly MembershipRole[]
 
 interface Props {
   userGroup: UserGroup
