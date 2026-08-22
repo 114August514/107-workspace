@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -89,11 +90,22 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
                 ),
                 {"now": now},
             )
+            snapshot_payload = (
+                '{"project_id":"p","env":{"literals":{"A":"1"},'
+                '"secret_refs":{"T":"TOKEN","U":"TOKEN"}}}'
+            )
             await connection.execute(
                 text("INSERT INTO run_snapshots (id,payload) VALUES ('s',CAST(:payload AS json))"),
-                {
-                    "payload": '{"project_id":"p","env":{"literals":{"A":"1"},"secret_refs":{"T":"TOKEN"}}}'  # noqa: E501
-                },
+                {"payload": snapshot_payload},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,"
+                    "project_version_id,project_version_label,name,status,failure_reason,"
+                    "created_by,created_at,submitted_at) VALUES ('r','p','w','s','plan_cpu_quick',"
+                    "'pv','v1','R','succeeded','', 'u',:now,:now)"
+                ),
+                {"now": now},
             )
         await _migrate(config, "head")
         async with engine.connect() as connection:
@@ -120,6 +132,14 @@ async def test_postgresql_scoped_config_roundtrip() -> None:
                     )
                 )
             ).one() == ("object", "user:u:TOKEN")
+            assert (
+                await connection.execute(
+                    text("SELECT run_id,value,value_digest FROM run_secret_redactions")
+                )
+            ).all() == [("r", "secret-w", hashlib.sha256(b"secret-w").hexdigest())]
+            assert (
+                await connection.execute(text("SELECT payload::text FROM run_snapshots"))
+            ).scalar_one().find("secret-w") == -1
             constraints = (
                 (
                     await connection.execute(
