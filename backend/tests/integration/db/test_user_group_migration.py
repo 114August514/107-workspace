@@ -92,11 +92,11 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         ),
     )
     connection.execute(
-        "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_1','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run','succeeded','', 'usr_alice',?,?)",
+        "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_1','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run','succeeded','', 'usr_alice',?,?)",  # noqa: E501
         (now, now),
     )
     connection.execute(
-        "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_2','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run2','succeeded','', 'usr_alice',?,NULL)",
+        "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_2','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run2','succeeded','', 'usr_alice',?,NULL)",  # noqa: E501
         (now,),
     )
     connection.commit()
@@ -237,7 +237,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     ).fetchone()[0]
     assert '"literals": {"A": "1"}' in str(upgraded_snapshot)
     assert (
-        '"secret_refs": {"T": "user:usr_alice:TOKEN", "U": "user:usr_alice:TOKEN", "L": "user:usr_alice:LATE", "M": "user:usr_alice:MISSING"}'
+        '"secret_refs": {"T": "user:usr_alice:TOKEN", "U": "user:usr_alice:TOKEN", "L": "user:usr_alice:LATE", "M": "user:usr_alice:MISSING"}'  # noqa: E501
         in str(upgraded_snapshot)
     )
     connection.close()
