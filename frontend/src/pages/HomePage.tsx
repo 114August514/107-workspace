@@ -10,8 +10,8 @@ import type { ComputePlan, Home, Invitation } from '../api/types'
 import type { AsyncState as AsyncResource } from '../api/useAsync'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
+import { membershipRoleLabel } from '../components/workspace/memberCopy'
 import { describeComputeRequest, formatRelative, formatTime } from '../utils/format'
-import { roleLabel } from '../utils/roles'
 import { runStatusLabel } from '../utils/runStatus'
 import { homeCopy, homeTitle, invitationFailureTitle, invitationKind } from './homeCopy'
 import styles from './HomePage.module.css'
@@ -158,7 +158,7 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
               <div className={styles.invitationMain}>
                 <div className={styles.invitationTitle}>{invitation.user_group_name}</div>
                 <div className={styles.invitationMeta}>
-                  {invitationKind(roleLabel(invitation.role))}
+                  {invitationKind(membershipRoleLabel(invitation.role))}
                 </div>
                 {invitation.user_group_description ? (
                   <div className={styles.invitationMeta}>{invitation.user_group_description}</div>

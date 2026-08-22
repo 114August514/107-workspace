@@ -255,6 +255,14 @@ export const api = {
     )
   },
 
+  transferUserGroupOwnership: async (id: string, userId: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/user-groups/{user_group_id}/transfer-ownership/{target_user_id}', {
+        params: { path: { user_group_id: id, target_user_id: userId } },
+      }),
+    )
+  },
+
   /** 我收到的、还没处理的邀请。 */
   listInvitations: async (): Promise<Invitation[]> => unwrap(await http.GET('/api/v1/invitations')),
 
