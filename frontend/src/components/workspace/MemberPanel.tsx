@@ -1,12 +1,13 @@
 import { PersonAddIcon } from '@primer/octicons-react'
 import {
+  ActionList,
+  ActionMenu,
   Banner,
   Button,
   ConfirmationDialog,
   Dialog,
   FormControl,
   Label,
-  Select,
   Stack,
   TextInput,
 } from '@primer/react'
@@ -158,20 +159,12 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
                 </div>
                 <div className={styles.role}>
                   {canChangeRole ? (
-                    <Select
-                      aria-label={copy.role.controlLabel(member.username)}
+                    <RoleMenu
                       value={member.role}
+                      label={`${copy.role.controlLabel(member.username)}，当前${membershipRoleLabel(member.role)}`}
                       disabled={pending !== null}
-                      onChange={(event) =>
-                        void changeRole(member, event.target.value as MembershipRole)
-                      }
-                    >
-                      {ASSIGNABLE_ROLES.map((role) => (
-                        <Select.Option key={role} value={role}>
-                          {membershipRoleLabel(role)}
-                        </Select.Option>
-                      ))}
-                    </Select>
+                      onChange={(role) => void changeRole(member, role)}
+                    />
                   ) : (
                     <Label size="small" variant={roleVariant(member.role)}>
                       {membershipRoleLabel(member.role)}
@@ -329,22 +322,60 @@ function InviteMemberDialog({
           </FormControl>
           <FormControl disabled={submitting} id="invite-member-role">
             <FormControl.Label>{copy.invite.roleLabel}</FormControl.Label>
-            <Select
-              block
+            <RoleMenu
               value={role}
-              onChange={(event) => setRole(event.target.value as MembershipRole)}
-            >
-              {ASSIGNABLE_ROLES.map((assignableRole) => (
-                <Select.Option key={assignableRole} value={assignableRole}>
-                  {membershipRoleLabel(assignableRole)}
-                </Select.Option>
-              ))}
-            </Select>
+              label={`选择邀请角色，当前${membershipRoleLabel(role)}`}
+              disabled={submitting}
+              onChange={setRole}
+              block
+            />
             <FormControl.Caption>{copy.invite.ownerCaption}</FormControl.Caption>
           </FormControl>
         </Stack>
       </form>
     </Dialog>
+  )
+}
+
+function RoleMenu({
+  value,
+  label,
+  disabled,
+  onChange,
+  block = false,
+}: {
+  value: MembershipRole
+  label: string
+  disabled: boolean
+  onChange: (role: MembershipRole) => void
+  block?: boolean
+}) {
+  return (
+    <ActionMenu>
+      <ActionMenu.Button
+        aria-label={label}
+        disabled={disabled}
+        className={block ? styles.roleMenuButtonBlock : styles.roleMenuButton}
+      >
+        {membershipRoleLabel(value)}
+      </ActionMenu.Button>
+      <ActionMenu.Overlay>
+        <ActionList selectionVariant="single">
+          {ASSIGNABLE_ROLES.map((role) => (
+            <ActionList.Item
+              key={role}
+              selected={role === value}
+              disabled={disabled}
+              onSelect={() => {
+                if (role !== value) onChange(role)
+              }}
+            >
+              {membershipRoleLabel(role)}
+            </ActionList.Item>
+          ))}
+        </ActionList>
+      </ActionMenu.Overlay>
+    </ActionMenu>
   )
 }
 

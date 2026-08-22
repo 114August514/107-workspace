@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -97,6 +97,9 @@ describe('UserGroupPage governance boundary', () => {
     expect(screen.getAllByText('所有者').length).toBeGreaterThan(0)
     expect(screen.getByText('Governance only')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '成员' })).toBeInTheDocument()
+    const identityRail = screen.getByRole('complementary', { name: 'User Group 身份' })
+    expect(within(identityRail).getByText('成员')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'User Group 内容' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '查看 Project 与配置' })).not.toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容/)
   })

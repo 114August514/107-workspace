@@ -34,6 +34,7 @@ export const userGroupGovernanceCopy = {
     fallbackDescription: '这个 User Group 还没有填写说明。',
     kind: 'User Group',
     breadcrumbLabel: '面包屑',
+    identityLabel: 'User Group 身份',
     home: '首页',
     membersTitle: '成员',
     membersDescription: '查看 Membership 的 Role 与 Status，并按后端授权治理成员。',

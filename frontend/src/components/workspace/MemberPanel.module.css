@@ -72,8 +72,10 @@
   min-width: 0;
 }
 
-.role select {
+.roleMenuButton,
+.roleMenuButtonBlock {
   width: 100%;
+  justify-content: space-between;
 }
 
 .actions {
@@ -105,7 +107,7 @@
     grid-row: 2;
   }
 
-  .role select {
+  .roleMenuButton {
     width: min(100%, 14rem);
   }
 

@@ -63,10 +63,11 @@ describe('MemberPanel governance', () => {
 
     expect(within(alice).getByText('所有者')).toBeInTheDocument()
     expect(within(alice).getByText('已加入')).toBeInTheDocument()
-    expect(within(alice).queryByRole('combobox')).not.toBeInTheDocument()
-    expect(within(bob).getByRole('combobox', { name: '修改 bob 的角色' })).toHaveValue('member')
-    expect(within(carol).getByText('待确认')).toBeInTheDocument()
-    expect(within(carol).queryByRole('combobox')).not.toBeInTheDocument()
+    expect(within(alice).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
+    expect(
+      within(bob).getByRole('button', { name: '修改 bob 的角色，当前成员' }),
+    ).toBeInTheDocument()
+    expect(within(carol).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
     expect(within(carol).queryByRole('button', { name: /转让给/ })).not.toBeInTheDocument()
     expect(within(carol).getByRole('button', { name: '移除 carol' })).toBeInTheDocument()
   })
@@ -80,12 +81,14 @@ describe('MemberPanel governance', () => {
     await screen.findByText('Alice')
     fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
     fireEvent.change(screen.getByLabelText(/用户名/), { target: { value: 'carol' } })
+    fireEvent.click(screen.getByRole('button', { name: '选择邀请角色，当前成员' }))
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
     fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
 
     expect(await screen.findByText('邀请发送失败。')).toBeInTheDocument()
     expect(screen.getByText('请确认用户名和角色后重试。')).toBeInTheDocument()
     expect(screen.queryByText('carol 已经是该 User Group 的成员或已被邀请')).not.toBeInTheDocument()
-    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'carol', 'member')
+    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'carol', 'admin')
   })
 
   it('keeps focus on an empty invite username and does not call the API', async () => {
@@ -117,8 +120,9 @@ describe('MemberPanel governance', () => {
   it('REQ-63-05 changes an active non-owner role and reloads server-authoritative data', async () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
-    const role = await screen.findByRole('combobox', { name: '修改 bob 的角色' })
-    fireEvent.change(role, { target: { value: 'admin' } })
+    const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
+    fireEvent.click(role)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
 
     await waitFor(() =>
       expect(api.changeMemberRole).toHaveBeenCalledWith('ugrp_lab', 'usr_bob', 'admin'),
@@ -127,14 +131,40 @@ describe('MemberPanel governance', () => {
     expect(api.listMembers).toHaveBeenCalledTimes(2)
   })
 
+  it('disables role menus while a server-authoritative role mutation is pending', async () => {
+    let resolveChange!: (member: Member) => void
+    vi.mocked(api.changeMemberRole).mockImplementationOnce(
+      () =>
+        new Promise<Member>((resolve) => {
+          resolveChange = resolve
+        }),
+    )
+    render(<MemberPanel userGroup={ownerGroup} />)
+
+    const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
+    fireEvent.click(role)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
+
+    expect(role).toBeDisabled()
+    resolveChange({
+      display_name: 'Bob',
+      role: 'admin',
+      status: 'active',
+      user_id: 'usr_bob',
+      username: 'bob',
+    })
+    await waitFor(() => expect(role).toBeEnabled())
+  })
+
   it('uses stable action copy when a role change fails and lets the user try again', async () => {
     vi.mocked(api.changeMemberRole).mockRejectedValueOnce(
       new ApiError(409, 'conflict', 'unstable backend role message', []),
     )
     render(<MemberPanel userGroup={ownerGroup} />)
 
-    const role = await screen.findByRole('combobox', { name: '修改 bob 的角色' })
-    fireEvent.change(role, { target: { value: 'admin' } })
+    const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
+    fireEvent.click(role)
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
 
     expect(await screen.findByText('角色修改失败。')).toBeInTheDocument()
     expect(screen.getByText('请确认成员仍在 User Group 中并重试。')).toBeInTheDocument()
@@ -183,7 +213,7 @@ describe('MemberPanel governance', () => {
 
     await screen.findByText('Alice')
     expect(screen.queryByRole('button', { name: '邀请成员' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /移除|转让/ })).not.toBeInTheDocument()
   })
 
