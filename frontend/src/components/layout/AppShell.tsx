@@ -1,5 +1,5 @@
 import { PlusIcon, ThreeBarsIcon } from '@primer/octicons-react'
-import { Button, defaultPaneWidth, IconButton, PageLayout } from '@primer/react'
+import { defaultPaneWidth, IconButton, PageLayout } from '@primer/react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 
@@ -58,15 +58,12 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
             </RouterLink>
           </div>
           <div className={styles.actions}>
-            <Button
-              className={styles.createButton}
+            <IconButton
+              icon={PlusIcon}
               variant="default"
-              leadingVisual={PlusIcon}
               aria-label={appShellCopy.createUserGroup}
               onClick={() => setCreateOpen(true)}
-            >
-              <span className={styles.createLabel}>{appShellCopy.createUserGroup}</span>
-            </Button>
+            />
             {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
                 避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
             <NotificationBell key={username} username={username} />

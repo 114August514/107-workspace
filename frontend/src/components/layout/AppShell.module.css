@@ -105,14 +105,4 @@
   .actions {
     gap: var(--base-size-4);
   }
-
-  .createButton {
-    width: var(--control-medium-size);
-    min-width: var(--control-medium-size);
-    padding-inline: 0;
-  }
-
-  .createLabel {
-    display: none;
-  }
 }
