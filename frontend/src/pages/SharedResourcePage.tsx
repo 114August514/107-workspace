@@ -17,7 +17,6 @@ import { PublishVersionModal } from '../components/sharedresource/PublishVersion
 import { loadSharedResourceOwnerContext } from '../components/sharedresource/ownerContext'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
-import { PrimerRoot } from '../primer/setup'
 
 export function SharedResourcePage() {
   const { resourceId = '' } = useParams()
@@ -50,131 +49,129 @@ export function SharedResourcePage() {
     : versions[0]?.id
 
   return (
-    <PrimerRoot>
-      <PrimerStack gap="large">
-        <AsyncState
-          loading={resource.loading}
-          loadingText="正在加载共享资源…"
-          error={normalizeError(resource.error)}
-        >
-          {resource.data && (
-            <header className={styles.header}>
-              {/* GitHub 仓库头式样：面包屑独占一行，标题（图标 + h1 + 归属标签）
+    <PrimerStack gap="large">
+      <AsyncState
+        loading={resource.loading}
+        loadingText="正在加载共享资源…"
+        error={normalizeError(resource.error)}
+      >
+        {resource.data && (
+          <header className={styles.header}>
+            {/* GitHub 仓库头式样：面包屑独占一行，标题（图标 + h1 + 归属标签）
                   换到第二行，操作按钮放在标题行右侧。 */}
-              <Breadcrumbs>
-                <Breadcrumbs.Item as={Link} to="/">
-                  首页
+            <Breadcrumbs>
+              <Breadcrumbs.Item as={Link} to="/">
+                首页
+              </Breadcrumbs.Item>
+              {workspace.data ? (
+                <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+                  {resource.data.owner.display_name}
                 </Breadcrumbs.Item>
-                {workspace.data ? (
-                  <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
-                    {resource.data.owner.display_name}
-                  </Breadcrumbs.Item>
-                ) : (
-                  <Breadcrumbs.Item>{resource.data.owner.display_name}</Breadcrumbs.Item>
+              ) : (
+                <Breadcrumbs.Item>{resource.data.owner.display_name}</Breadcrumbs.Item>
+              )}
+              {workspace.data ? (
+                <Breadcrumbs.Item
+                  as={Link}
+                  to={`/workspaces/${workspace.data.id}/shared-resources`}
+                >
+                  共享资源
+                </Breadcrumbs.Item>
+              ) : (
+                <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
+              )}
+            </Breadcrumbs>
+            <div className={styles.titleRow}>
+              <PackageIcon className={styles.titleIcon} size={24} />
+              <h1 className={styles.title}>{resource.data.name}</h1>
+              <Label>归属：{resource.data.owner.display_name}</Label>
+              <div className={styles.actions}>
+                {canManage && (
+                  <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
+                    修改共享资源
+                  </Button>
                 )}
-                {workspace.data ? (
-                  <Breadcrumbs.Item
-                    as={Link}
-                    to={`/workspaces/${workspace.data.id}/shared-resources`}
+                {canPublish && (
+                  <Button
+                    variant="primary"
+                    leadingVisual={PlusIcon}
+                    onClick={() => setPublishing(true)}
                   >
-                    共享资源
-                  </Breadcrumbs.Item>
-                ) : (
-                  <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
+                    发布版本
+                  </Button>
                 )}
-              </Breadcrumbs>
-              <div className={styles.titleRow}>
-                <PackageIcon className={styles.titleIcon} size={24} />
-                <h1 className={styles.title}>{resource.data.name}</h1>
-                <Label>归属：{resource.data.owner.display_name}</Label>
-                <div className={styles.actions}>
-                  {canManage && (
-                    <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
-                      修改共享资源
-                    </Button>
-                  )}
-                  {canPublish && (
-                    <Button
-                      variant="primary"
-                      leadingVisual={PlusIcon}
-                      onClick={() => setPublishing(true)}
-                    >
-                      发布版本
-                    </Button>
-                  )}
-                </div>
               </div>
-              <Text as="p" className={styles.headerDescription}>
-                {resource.data.description || '这个共享资源还没有填写说明。'}
-              </Text>
-            </header>
-          )}
-        </AsyncState>
-
-        {versions.length === 0 ? (
-          <PrimerListCard title="版本">
-            <AsyncState
-              loading={resource.loading}
-              loadingText="正在加载共享资源…"
-              error={normalizeError(resource.error)}
-              empty={resource.data !== undefined}
-              emptyText="这个共享资源还没有已发布版本。"
-              emptyDescription={
-                canPublish ? '发布首个版本后，Project 才能引用这个共享资源。' : undefined
-              }
-              emptyAction={canPublish ? '发布版本' : null}
-              onEmptyAction={canPublish ? () => setPublishing(true) : undefined}
-            >
-              {null}
-            </AsyncState>
-          </PrimerListCard>
-        ) : (
-          <div className={styles.splitLayout}>
-            {/* GitHub Releases 式样：左侧版本列表，右侧选中版本详情。 */}
-            <nav className={styles.versionNav} aria-label="版本列表">
-              {versions.map((version) => {
-                const selected = version.id === selectedVersionId
-                return (
-                  <button
-                    key={version.id}
-                    type="button"
-                    aria-current={selected ? 'true' : undefined}
-                    className={
-                      selected
-                        ? `${styles.versionItem} ${styles.versionItemSelected}`
-                        : styles.versionItem
-                    }
-                    onClick={() => setSearchParams({ version: version.id }, { replace: true })}
-                  >
-                    <span className={styles.versionItemLabel}>
-                      {version.label}
-                      {version.id === latestVersionId && <Label>最新</Label>}
-                    </span>
-                    <Text size="small" className={styles.desc}>
-                      <PrimerRelativeTime value={version.created_at} />
-                    </Text>
-                  </button>
-                )
-              })}
-            </nav>
-            {selectedVersionId && <SharedResourceVersionBody versionId={selectedVersionId} />}
-          </div>
+            </div>
+            <Text as="p" className={styles.headerDescription}>
+              {resource.data.description || '这个共享资源还没有填写说明。'}
+            </Text>
+          </header>
         )}
+      </AsyncState>
 
-        <EditSharedResourceModal
-          open={editing}
-          resource={resource.data}
-          onClose={() => setEditing(false)}
-          onUpdated={bump}
-        />
+      {versions.length === 0 ? (
+        <PrimerListCard title="版本">
+          <AsyncState
+            loading={resource.loading}
+            loadingText="正在加载共享资源…"
+            error={normalizeError(resource.error)}
+            empty={resource.data !== undefined}
+            emptyText="这个共享资源还没有已发布版本。"
+            emptyDescription={
+              canPublish ? '发布首个版本后，Project 才能引用这个共享资源。' : undefined
+            }
+            emptyAction={canPublish ? '发布版本' : null}
+            onEmptyAction={canPublish ? () => setPublishing(true) : undefined}
+          >
+            {null}
+          </AsyncState>
+        </PrimerListCard>
+      ) : (
+        <div className={styles.splitLayout}>
+          {/* GitHub Releases 式样：左侧版本列表，右侧选中版本详情。 */}
+          <nav className={styles.versionNav} aria-label="版本列表">
+            {versions.map((version) => {
+              const selected = version.id === selectedVersionId
+              return (
+                <button
+                  key={version.id}
+                  type="button"
+                  aria-current={selected ? 'true' : undefined}
+                  className={
+                    selected
+                      ? `${styles.versionItem} ${styles.versionItemSelected}`
+                      : styles.versionItem
+                  }
+                  onClick={() => setSearchParams({ version: version.id }, { replace: true })}
+                >
+                  <span className={styles.versionItemLabel}>
+                    {version.label}
+                    {version.id === latestVersionId && <Label>最新</Label>}
+                  </span>
+                  <Text size="small" className={styles.desc}>
+                    <PrimerRelativeTime value={version.created_at} />
+                  </Text>
+                </button>
+              )
+            })}
+          </nav>
+          {selectedVersionId && <SharedResourceVersionBody versionId={selectedVersionId} />}
+        </div>
+      )}
 
-        <PublishVersionModal
-          open={publishing}
-          resourceId={resourceId}
-          onClose={() => setPublishing(false)}
-          onPublished={() => bump()}
-        />
-      </PrimerStack>
-    </PrimerRoot>
+      <EditSharedResourceModal
+        open={editing}
+        resource={resource.data}
+        onClose={() => setEditing(false)}
+        onUpdated={bump}
+      />
+
+      <PublishVersionModal
+        open={publishing}
+        resourceId={resourceId}
+        onClose={() => setPublishing(false)}
+        onPublished={() => bump()}
+      />
+    </PrimerStack>
   )
 }
