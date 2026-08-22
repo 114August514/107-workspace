@@ -1488,6 +1488,8 @@ class GrantRepositoryImpl:
                 target_id=grant.target_id,
                 action=grant.action.value,
                 granted_by_id=grant.granted_by,
+                grantor_owner_kind=grant.grantor_owner.kind.value,
+                grantor_owner_id=grant.grantor_owner.id,
                 created_at=grant.created_at,
             )
         )
@@ -1528,8 +1530,17 @@ class GrantRepositoryImpl:
         return result.rowcount > 0
 
     async def exists_use_grant(
-        self, grantee: OwnerReference, target_kind: GrantTargetKind, target_id: str
+        self,
+        grantee: OwnerReference,
+        target_kind: GrantTargetKind,
+        target_id: str,
+        grantor_owner: OwnerReference,
     ) -> bool:
+        """Check for a valid USE Grant (grantee, target) issued under ``grantor_owner``.
+
+        GR-408: a Grant is only valid while the asset Owner matches the Owner
+        that issued it.  After Ownership transfer, stale Grants are rejected.
+        """
         stmt = (
             select(t.GrantRow.id)
             .where(
@@ -1538,6 +1549,8 @@ class GrantRepositoryImpl:
                 t.GrantRow.target_kind == target_kind.value,
                 t.GrantRow.target_id == target_id,
                 t.GrantRow.action == GrantAction.USE.value,
+                t.GrantRow.grantor_owner_kind == grantor_owner.kind.value,
+                t.GrantRow.grantor_owner_id == grantor_owner.id,
             )
             .limit(1)
         )
@@ -1851,5 +1864,6 @@ def _to_grant(row: t.GrantRow) -> Grant:
         target_id=row.target_id,
         action=GrantAction(row.action),
         granted_by=row.granted_by_id,
+        grantor_owner=OwnerReference(OwnerKind(row.grantor_owner_kind), row.grantor_owner_id),
         created_at=_aware(row.created_at),
     )

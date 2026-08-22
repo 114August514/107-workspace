@@ -1278,7 +1278,7 @@ export interface components {
          *     取值只增不改。已经写进库的活动会一直用旧值，改名等于让历史记录读不出来。
          * @enum {string}
          */
-        ActivityAction: "workspace_created" | "workspace_updated" | "user_group_created" | "user_group_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published" | "grant_created" | "grant_revoked";
+        ActivityAction: "workspace_created" | "workspace_updated" | "user_group_created" | "user_group_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published";
         /**
          * ActivityOut
          * @description 活动流里的一条。
@@ -2434,7 +2434,7 @@ export interface components {
          *     分成两个枚举只会让前端的跳转逻辑写两遍。
          * @enum {string}
          */
-        TargetType: "workspace" | "user_group" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version" | "grant";
+        TargetType: "workspace" | "user_group" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version";
         /** UnreadCountOut */
         UnreadCountOut: {
             /** Unread */

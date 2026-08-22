@@ -43,6 +43,8 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="RESTRICT"),
             nullable=False,
         ),
+        sa.Column("grantor_owner_kind", sa.String(length=16), nullable=False),
+        sa.Column("grantor_owner_id", _ID, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint(
             "grantee_kind",

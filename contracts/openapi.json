@@ -24,9 +24,7 @@
           "run_finished",
           "shared_resource_created",
           "shared_resource_updated",
-          "shared_resource_version_published",
-          "grant_created",
-          "grant_revoked"
+          "shared_resource_version_published"
         ],
         "title": "ActivityAction",
         "type": "string"
@@ -2908,8 +2906,7 @@
           "project_version",
           "run",
           "shared_resource",
-          "shared_resource_version",
-          "grant"
+          "shared_resource_version"
         ],
         "title": "TargetType",
         "type": "string"

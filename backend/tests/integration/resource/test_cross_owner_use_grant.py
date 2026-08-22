@@ -135,6 +135,8 @@ async def _insert_grant(
     target_kind: str,
     target_id: str,
     granted_by_id: str,
+    grantor_owner_kind: str,
+    grantor_owner_id: str,
 ) -> str:
     """Insert a GrantRow directly."""
     grant_id = ids.new_id(ids.GRANT)
@@ -147,6 +149,8 @@ async def _insert_grant(
             target_id=target_id,
             action="use",
             granted_by_id=granted_by_id,
+            grantor_owner_kind=grantor_owner_kind,
+            grantor_owner_id=grantor_owner_id,
             created_at=datetime.now(UTC),
         )
     )
@@ -206,6 +210,8 @@ async def test_user_grant_enables_cross_owner_shared_resource_use(
         target_kind="shared_resource",
         target_id=resource_b_id,
         granted_by_id=alice_id,
+        grantor_owner_kind="user_group",
+        grantor_owner_id=group_b,
     )
 
     # With Grant: same request succeeds.
@@ -254,8 +260,6 @@ async def test_user_group_grant_enables_cross_owner_environment_use(
         headers=ALICE,
     )
     assert response.status_code == 404, response.text
-
-    # Insert a UserGroup(A) → B-environment USE Grant.
     await _insert_grant(
         session,
         grantee_kind="user_group",
@@ -263,6 +267,8 @@ async def test_user_group_grant_enables_cross_owner_environment_use(
         target_kind="environment",
         target_id=env_b_id,
         granted_by_id=alice_id,
+        grantor_owner_kind="user_group",
+        grantor_owner_id=group_b,
     )
 
     # With Grant: assignment succeeds.
@@ -302,6 +308,8 @@ async def test_user_group_grant_inactive_member_cannot_use(
         target_kind="shared_resource",
         target_id=resource_b_id,
         granted_by_id=alice_id,
+        grantor_owner_kind="user_group",
+        grantor_owner_id=group_b,
     )
 
     # Remove Alice from Group A (set membership status to REMOVED).
@@ -548,3 +556,124 @@ async def test_same_owner_use_requires_no_grant(
         headers=ALICE,
     )
     assert response.status_code == 201, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 8: Ownership transfer invalidates grants issued under old owner (GR-408)
+# ---------------------------------------------------------------------------
+
+
+async def test_ownership_transfer_invalidates_grant(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """After asset Ownership transfers to a new Owner, grants issued under the
+    old Owner no longer authorize use (GR-408).
+    """
+    group_a = await _create_group(client, "Transfer Group A")
+    group_b = await _create_group(client, "Transfer Group B")
+    group_c = await _create_group(client, "Transfer Group C")
+    await _set_group_environment(session, client, group_a)
+    await grant_test_entitlement(session, group_a)
+    project = await _create_project_with_version(client, group_a, name="A project")
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+
+    alice_id = await _get_user_id(client, ALICE)
+
+    # Create a UserGroup(A) → B-resource USE Grant issued under group_b's ownership.
+    await _insert_grant(
+        session,
+        grantee_kind="user_group",
+        grantee_id=group_a,
+        target_kind="shared_resource",
+        target_id=resource_b_id,
+        granted_by_id=alice_id,
+        grantor_owner_kind="user_group",
+        grantor_owner_id=group_b,
+    )
+
+    # With grant: run-configuration creation succeeds.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "before-transfer",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+    # Transfer ownership of resource_b from group_b to group_c.
+    from workspace107.infrastructure.db.tables import SharedResourceRow
+
+    resource_row = (
+        await session.execute(
+            select(SharedResourceRow).where(SharedResourceRow.id == resource_b_id)
+        )
+    ).scalar_one()
+    resource_row.owner_user_group_id = group_c
+    resource_row.owner_user_id = None
+    await session.commit()
+
+    # After transfer: the grant issued under group_b is now invalid → 404.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "after-transfer",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 404, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 9: Grant to nonexistent grantee is rejected (404)
+# ---------------------------------------------------------------------------
+
+
+async def test_grant_to_nonexistent_grantee_rejected(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """Creating a grant for a nonexistent User or UserGroup returns 404."""
+    group_b = await _create_group(client, "Grantee Validation Group B")
+    resource_b_id, _ = await _create_resource_version(client, group_b)
+
+    # Grant to a nonexistent User.
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "shared_resource",
+            "target_id": resource_b_id,
+            "grantee": {"kind": "user", "id": "usr_nonexistent0000000000001"},
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 404, response.text
+
+    # Grant to a nonexistent UserGroup.
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "shared_resource",
+            "target_id": resource_b_id,
+            "grantee": {"kind": "user_group", "id": "ugp_nonexistent0000000000001"},
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 404, response.text
