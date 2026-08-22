@@ -484,3 +484,38 @@ class SharedResourceVersionFileRow(Base):
     path: Mapped[str] = mapped_column(String(1024), primary_key=True)
     size: Mapped[int] = mapped_column(Integer)
     content_hash: Mapped[str] = mapped_column(String(64))
+
+
+class GrantRow(Base):
+    """跨 Owner 使用许可（Issue #40）。
+
+    Grantee 是 "User 或 UserGroup" 的判别联合，用 ``grantee_kind``+``grantee_id``
+    两列表示，与 Activity 表的 ``target_type``+``target_id`` 模式一致。
+
+    Grant target 可能引用未来被删除的资产，因此不对 environments/shared_resources
+    加 FK——删除资产时需在应用层清理指向该资产的 Grant 行。
+    """
+
+    __tablename__ = "grants"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    grantee_kind: Mapped[str] = mapped_column(String(16))  # 'user' | 'user_group'
+    grantee_id: Mapped[str] = mapped_column(ID)
+    target_kind: Mapped[str] = mapped_column(String(32))  # 'environment' | 'shared_resource'
+    target_id: Mapped[str] = mapped_column(ID)
+    action: Mapped[str] = mapped_column(String(16))  # 'use'
+    granted_by_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "grantee_kind",
+            "grantee_id",
+            "target_kind",
+            "target_id",
+            "action",
+            name="uq_grant_grantee_target_action",
+        ),
+        Index("ix_grants_target", "target_kind", "target_id"),
+        Index("ix_grants_grantee", "grantee_kind", "grantee_id"),
+    )

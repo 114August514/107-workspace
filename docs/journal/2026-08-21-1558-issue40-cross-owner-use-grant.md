@@ -1,6 +1,5 @@
 # issue40-cross-owner-use-grant
-
-- 状态：已认领 Issue #40，建立分支与初始 PR；实现尚未开始
+- 状态：实现完成，`make check backend` + contract check 通过
 - 认领：zxb3；本 worktree 的 sole writer
 - 写入边界：`/home/zxbq/107-workspace`（分支 `feat/40-cross-owner-use-grant`）
 - 分支：`feat/40-cross-owner-use-grant`
@@ -57,3 +56,26 @@ Grant 语义（来自 `docs/product/design.md` GR-401 ~ GR-404）：
 ## 仓外副作用
 
 无；只使用隔离临时 SQLite / test storage。
+
+## 实现完成（2026-08-22）
+
+### 已实现
+
+- **Domain** (`domain/grant.py`): `Grant` 聚合、`GrantAction.USE`、`GrantTargetKind.ENVIRONMENT/SHARED_RESOURCE`；`ids.GRANT="gnt"` 前缀；`ActivityAction.GRANT_CREATED/GRANT_REVOKED`、`TargetType.GRANT` 枚举值。
+- **Migration** (`1f61cd1dc3ac_grants.py`): `grants` 表，`uq_grant_grantee_target_action` 唯一约束，`ix_grants_target`/`ix_grants_grantee` 索引，`granted_by_id` FK→`users.id` (RESTRICT)。无 target FK（Grant 可引用已删除资产）。
+- **Repository**: `GrantRepository` port + `GrantRepositoryImpl`（`add`/`get`/`list_for_target`/`list_for_grantee`/`delete`/`exists_use_grant`）；`EnvironmentRepository.get_by_id`/`get_version_by_id`、`SharedResourceRepository.get_by_id` trusted lookups。
+- **AssetUse** (`application/asset_use.py`): 双路径授权——same-owner discovery (Issue #39) + Grant 路径。Grant 路径检查 `target_owner`（Project Owner）或 acting `user_id`（User-level Grant）的 USE Grant。
+- **Service+API**: `GrantService`（create/list_for_target/revoke）；`AccessGuard.environment()`；`POST/GET/DELETE /api/v1/grants` 路由；`GrantOut`/`GrantCreateIn` schemas；`grant_out` presenter；`Services.grants` 注入。
+- **Contract**: `contracts/openapi.json` + `frontend/src/api/schema.d.ts` 已重新生成。
+- **Tests**: `test_cross_owner_use_grant.py`（7 个行为测试）+ `test_grants_migration.py`（迁移 round-trip 测试）全部通过；`test_asset_owner_use.py`（Issue #39 回归）全部通过。
+
+### 修复的遗留问题
+
+- 恢复 `ids.SHARED_RESOURCE_VERSION`（被前序编辑误删）。
+- 恢复 `repositories.py` 的 `ComputePlan` import（被前序编辑误替换）。
+- 恢复 `schemas.SharedResourceUpdateIn.description` 字段（被前序编辑误删）。
+
+### 验证结果
+
+- `make check backend`：lint + format + 221 tests passed（2 skipped）。
+- Contract check：OpenAPI 与 frontend types 匹配。

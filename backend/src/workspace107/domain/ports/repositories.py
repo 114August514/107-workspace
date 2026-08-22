@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
+from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
     Artifact,
@@ -34,6 +35,7 @@ from ..models import (
     UserGroup,
     WorkspaceVariable,
 )
+from ..ownership import OwnerReference
 from ..pagination import Page, PageRequest
 from ..run_snapshot import RunSnapshot
 
@@ -122,6 +124,13 @@ class EnvironmentRepository(Protocol):
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
     ) -> EnvironmentVersion | None: ...
+    async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
+        """Trusted exact lookup for grant-authorized use."""
+        ...
+
+    async def get_by_id(self, environment_id: str) -> Environment | None:
+        """Trusted exact lookup for grant-authorized use."""
+        ...
 
 
 class ComputePlanRepository(Protocol):
@@ -262,7 +271,26 @@ class SharedResourceRepository(Protocol):
         """Trusted exact lookup for execution of an already-fixed snapshot."""
         ...
 
+    async def get_by_id(self, resource_id: str) -> SharedResource | None:
+        """Trusted exact lookup for grant-authorized use."""
+        ...
+
     async def next_version_sequence(self, resource_id: str) -> int: ...
+
+
+class GrantRepository(Protocol):
+    async def add(self, grant: Grant) -> None: ...
+    async def get(self, grant_id: str) -> Grant | None: ...
+    async def list_for_target(
+        self, target_kind: GrantTargetKind, target_id: str
+    ) -> list[Grant]: ...
+    async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]: ...
+    async def delete(self, grant_id: str) -> bool: ...
+    async def exists_use_grant(
+        self, grantee: OwnerReference, target_kind: GrantTargetKind, target_id: str
+    ) -> bool:
+        """检查是否存在指向 (grantee, target) 的 USE Grant。"""
+        ...
 
 
 class Repositories(Protocol):
@@ -289,6 +317,7 @@ class Repositories(Protocol):
     notifications: NotificationRepository
     fork_relations: ForkRelationRepository
     shared_resources: SharedResourceRepository
+    grants: GrantRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

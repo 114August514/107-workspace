@@ -84,6 +84,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出指向某资产的 Grant
+         * @description List all Grants for a target asset.  Only the asset Owner may list.
+         */
+        get: operations["list_grants_api_v1_grants_get"];
+        put?: never;
+        /**
+         * 创建跨 Owner USE Grant
+         * @description Create a USE Grant allowing ``grantee`` to reference the target asset.
+         *
+         *     Only the target asset's Owner may create a Grant.  The target must be a
+         *     top-level Environment or Shared Resource (not a version).
+         */
+        post: operations["create_grant_api_v1_grants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/grants/{grant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 撤销 USE Grant
+         * @description Revoke a Grant.  Only the target asset's Owner may revoke.
+         */
+        delete: operations["revoke_grant_api_v1_grants__grant_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -1231,7 +1278,7 @@ export interface components {
          *     取值只增不改。已经写进库的活动会一直用旧值，改名等于让历史记录读不出来。
          * @enum {string}
          */
-        ActivityAction: "workspace_created" | "workspace_updated" | "user_group_created" | "user_group_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published";
+        ActivityAction: "workspace_created" | "workspace_updated" | "user_group_created" | "user_group_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published" | "grant_created" | "grant_revoked";
         /**
          * ActivityOut
          * @description 活动流里的一条。
@@ -1547,6 +1594,47 @@ export interface components {
             /** Source Workspace Id */
             source_workspace_id: string;
         };
+        /** GrantCreateIn */
+        GrantCreateIn: {
+            grantee: components["schemas"]["OwnerReferenceIn"];
+            /** Target Id */
+            target_id: string;
+            /**
+             * Target Kind
+             * @enum {string}
+             */
+            target_kind: "environment" | "shared_resource";
+        };
+        /** GrantOut */
+        GrantOut: {
+            /**
+             * Action
+             * @constant
+             */
+            action: "use";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            granted_by: components["schemas"]["OwnerSummaryOut"];
+            grantee: components["schemas"]["OwnerSummaryOut"];
+            /** Id */
+            id: string;
+            /** Target Id */
+            target_id: string;
+            /**
+             * Target Kind
+             * @enum {string}
+             */
+            target_kind: "environment" | "shared_resource";
+        };
+        /**
+         * GrantTargetKind
+         * @description Grant 指向的资产种类。仅限顶层资产，不包含 version。
+         * @enum {string}
+         */
+        GrantTargetKind: "environment" | "shared_resource";
         /** HealthOut */
         HealthOut: {
             /** Env */
@@ -2346,7 +2434,7 @@ export interface components {
          *     分成两个枚举只会让前端的跳转逻辑写两遍。
          * @enum {string}
          */
-        TargetType: "workspace" | "user_group" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version";
+        TargetType: "workspace" | "user_group" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version" | "grant";
         /** UnreadCountOut */
         UnreadCountOut: {
             /** Unread */
@@ -2698,6 +2786,243 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EnvironmentOut"][];
                 };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_grants_api_v1_grants_get: {
+        parameters: {
+            query: {
+                /** @description 资产种类：environment 或 shared_resource */
+                target_kind: components["schemas"]["GrantTargetKind"];
+                /** @description 顶层资产 ID */
+                target_id: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_grant_api_v1_grants_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    revoke_grant_api_v1_grants__grant_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                grant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description 请求不合法 */
             400: {
