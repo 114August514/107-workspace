@@ -1,0 +1,197 @@
+name: Temporary Viewer Removal Builder
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.12.0"
+  UV_PYTHON: "3.12"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.18.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.UV_PYTHON }}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install locked dependencies
+        run: make setup
+      - name: Build the intended Viewer-removal patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if old not in text:
+                  raise RuntimeError(f"expected text not found in {path}: {old!r}")
+              file.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace(
+              "backend/src/workspace107/domain/enums.py",
+              '    MEMBER = "member"\n    VIEWER = "viewer"\n',
+              '    MEMBER = "member"\n',
+          )
+          replace(
+              "backend/src/workspace107/domain/capabilities.py",
+              '    MembershipRole.MEMBER: _USER_GROUP_VIEW,\n    MembershipRole.VIEWER: _USER_GROUP_VIEW,\n',
+              '    MembershipRole.MEMBER: _USER_GROUP_VIEW,\n',
+          )
+          replace(
+              "backend/src/workspace107/domain/capabilities.py",
+              '    MembershipRole.MEMBER: _CONTRIBUTE,\n    MembershipRole.VIEWER: _VIEW_ONLY,\n',
+              '    MembershipRole.MEMBER: _CONTRIBUTE,\n',
+          )
+          replace(
+              "docs/product/design.md",
+              '│   ├── [V1] Admin / Viewer 扩展角色\n',
+              '│   ├── [V1] Admin 扩展角色\n',
+          )
+          replace(
+              "frontend/src/utils/roles.ts",
+              "  member: { color: 'default', label: '成员' },\n  viewer: { color: 'default', label: '只读' },\n",
+              "  member: { color: 'default', label: '成员' },\n",
+          )
+          replace(
+              "frontend/src/components/workspace/MemberPanel.tsx",
+              "const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const satisfies readonly MembershipRole[]",
+              "const ASSIGNABLE_ROLES = ['admin', 'member'] as const satisfies readonly MembershipRole[]",
+          )
+          replace(
+              "backend/src/workspace107/application/activity.py",
+              "    能看见这个空间的人就该看得见——包括 Viewer，他们本来就是来观摩的。\n",
+              "    能看见这个空间的人就该看得见；活动读取不额外引入一套角色语义。\n",
+          )
+          replace(
+              "frontend/src/pages/RunPage.tsx",
+              "  // 取消和重跑都是写操作。不按能力收敛的话，Viewer 看得到按钮、\n",
+              "  // 取消和重跑都是写操作。不按能力收敛的话，无对应能力的用户会看到按钮、\n",
+          )
+          replace(
+              "frontend/src/components/project/VersionPanel.tsx",
+              "            所以这里不看 canWrite，否则 Viewer 就没法把别人的东西 Fork\n",
+              "            所以这里不看 canWrite，否则只有查看能力的用户就没法把可读内容 Fork\n",
+          )
+          replace(
+              "frontend/tests/component/ForkModal.test.tsx",
+              "    id: 'grp_viewer',\n    name: 'Viewer Lab',\n",
+              "    id: 'grp_read_only',\n    name: 'Read-only Lab',\n",
+          )
+          replace(
+              "frontend/tests/component/ForkModal.test.tsx",
+              "    role: 'viewer',\n",
+              "    role: 'member',\n",
+          )
+          replace(
+              "frontend/tests/component/ForkModal.test.tsx",
+              "    expect(screen.queryByText('Viewer Lab')).not.toBeInTheDocument()\n",
+              "    expect(screen.queryByText('Read-only Lab')).not.toBeInTheDocument()\n",
+          )
+          replace(
+              "frontend/tests/component/VersionDetailPage.test.tsx",
+              " * 守的是 Issue #12 §5 的要求：Viewer / 无对应权限用户不应该看到\n",
+              " * 守的是 Issue #12 §5 的要求：无对应权限用户不应该看到\n",
+          )
+          replace(
+              "frontend/tests/component/VersionDetailPage.test.tsx",
+              "    role: 'viewer',\n",
+              "    role: 'member',\n",
+          )
+          replace(
+              "frontend/tests/component/VersionDetailPage.test.tsx",
+              "  it('Viewer 看不到「运行此版本」和「恢复到此版本」，但能看到「派生」', async () => {\n",
+              "  it('无对应能力的成员看不到「运行此版本」和「恢复到此版本」，但能看到「派生」', async () => {\n",
+          )
+          replace(
+              "frontend/tests/component/VersionDetailPage.test.tsx",
+              "    // Viewer 只有 view 权限，没有 run.submit 和 project.content.write\n",
+              "    // 这里刻意只下发 view 权限，没有 run.submit 和 project.content.write。\n",
+          )
+
+          test_path = Path("backend/tests/integration/identity/test_user_groups.py")
+          text = test_path.read_text(encoding="utf-8")
+          text = text.replace(
+              '        "member": ["member.view", "user_group.view"],\n        "viewer": ["member.view", "user_group.view"],\n',
+              '        "member": ["member.view", "user_group.view"],\n',
+          )
+          text = text.replace(
+              '        ("carol", "member", CAROL),\n        ("dave", "viewer", DAVE),\n',
+              '        ("carol", "member", CAROL),\n',
+          )
+          text = text.replace(
+              '        ("member", CAROL),\n        ("viewer", DAVE),\n',
+              '        ("member", CAROL),\n',
+          )
+          marker = '    assert group["capabilities"] == expected["owner"]\n\n'
+          if marker not in text:
+              raise RuntimeError("capability test marker missing")
+          text = text.replace(
+              marker,
+              marker
+              + '    rejected_viewer = await _invite(client, group_id, "dave", role="viewer")\n'
+              + '    assert rejected_viewer.status_code == 422\n\n',
+              1,
+          )
+          test_path.write_text(text, encoding="utf-8")
+
+          migration = Path("backend/migrations/versions/b65d9e27a4c1_remove_viewer_membership_role.py")
+          migration.write_text(
+              '''"""Remove Viewer from Membership roles without granting additional access.\n\nExisting Viewer rows are converted to removed Member rows. This preserves the\nmembership record while revoking access; silently promoting Viewer to active Member\nwould increase privileges. Downgrade cannot reconstruct the removed Viewer role.\n"""\n\nfrom collections.abc import Sequence\n\nimport sqlalchemy as sa\nfrom alembic import op\n\nrevision: str = "b65d9e27a4c1"\ndown_revision: str | None = "c471ac39f002"\nbranch_labels: str | Sequence[str] | None = None\ndepends_on: str | Sequence[str] | None = None\n\n\ndef upgrade() -> None:\n    op.execute(\n        sa.text(\n            "UPDATE memberships SET role='member', status='removed' "\n            "WHERE role='viewer'"\n        )\n    )\n\n\ndef downgrade() -> None:\n    # Viewer was intentionally removed from the product model. There is no truthful\n    # way to distinguish rows that used to be Viewer after upgrade, so do not invent it.\n    pass\n''',
+              encoding="utf-8",
+          )
+
+          migration_test = Path(
+              "backend/tests/integration/db/test_remove_viewer_membership_role_migration.py"
+          )
+          migration_test.write_text(
+              '''from __future__ import annotations\n\nimport sqlite3\nfrom pathlib import Path\n\nimport pytest\nfrom alembic import command\nfrom alembic.config import Config\n\nfrom workspace107.config import get_settings\n\nPREVIOUS_REVISION = "c471ac39f002"\n\n\ndef _config(database: Path) -> Config:\n    backend = Path(__file__).resolve().parents[3]\n    config = Config(str(backend / "alembic.ini"))\n    config.set_main_option("script_location", str(backend / "migrations"))\n    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")\n    return config\n\n\ndef test_viewer_rows_are_revoked_without_privilege_escalation(\n    tmp_path: Path, monkeypatch: pytest.MonkeyPatch\n) -> None:\n    database = tmp_path / "viewer-role.db"\n    monkeypatch.setenv("WORKSPACE107_DATABASE_URL", f"sqlite+aiosqlite:///{database}")\n    get_settings.cache_clear()\n    config = _config(database)\n    command.upgrade(config, PREVIOUS_REVISION)\n\n    connection = sqlite3.connect(database)\n    now = "2026-08-22 00:00:00+00:00"\n    connection.execute(\n        "INSERT INTO users (id, username, display_name, email, created_at) "\n        "VALUES ('usr_viewer', 'viewer-user', 'Viewer User', NULL, ?)",\n        (now,),\n    )\n    connection.execute(\n        "INSERT INTO user_groups (id, name, description, created_by_id, created_at) "\n        "VALUES ('grp_viewer', 'Viewer Group', '', NULL, ?)",\n        (now,),\n    )\n    connection.execute(\n        "INSERT INTO memberships (id, user_group_id, user_id, role, status, created_at) "\n        "VALUES ('mbr_viewer', 'grp_viewer', 'usr_viewer', 'viewer', 'active', ?)",\n        (now,),\n    )\n    connection.commit()\n    connection.close()\n\n    command.upgrade(config, "head")\n    connection = sqlite3.connect(database)\n    assert connection.execute(\n        "SELECT role, status FROM memberships WHERE id='mbr_viewer'"\n    ).fetchone() == ("member", "removed")\n    connection.close()\n\n    command.downgrade(config, PREVIOUS_REVISION)\n    connection = sqlite3.connect(database)\n    assert connection.execute(\n        "SELECT role, status FROM memberships WHERE id='mbr_viewer'"\n    ).fetchone() == ("member", "removed")\n    connection.close()\n''',
+              encoding="utf-8",
+          )
+      - name: Regenerate API contract
+        run: make contract
+      - name: Verify intended patch
+        run: make check
+      - name: Upload generated patch files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewer-removal-files
+          if-no-files-found: error
+          path: |
+            docs/product/design.md
+            backend/src/workspace107/domain/enums.py
+            backend/src/workspace107/domain/capabilities.py
+            backend/src/workspace107/application/activity.py
+            backend/migrations/versions/b65d9e27a4c1_remove_viewer_membership_role.py
+            backend/tests/integration/db/test_remove_viewer_membership_role_migration.py
+            backend/tests/integration/identity/test_user_groups.py
+            contracts/openapi.json
+            frontend/src/api/schema.d.ts
+            frontend/src/utils/roles.ts
+            frontend/src/components/workspace/MemberPanel.tsx
+            frontend/src/pages/RunPage.tsx
+            frontend/src/components/project/VersionPanel.tsx
+            frontend/tests/component/ForkModal.test.tsx
+            frontend/tests/component/VersionDetailPage.test.tsx
