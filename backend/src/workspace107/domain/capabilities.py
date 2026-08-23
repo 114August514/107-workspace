@@ -33,7 +33,6 @@ USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability
     MembershipRole.OWNER: _USER_GROUP_ADMINISTER | {UserGroupCapability.OWNERSHIP_TRANSFER},
     MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
     MembershipRole.MEMBER: _USER_GROUP_VIEW,
-    MembershipRole.VIEWER: _USER_GROUP_VIEW,
 }
 
 
@@ -126,7 +125,6 @@ ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
     MembershipRole.OWNER: _ADMINISTER | {Capability.OWNERSHIP_TRANSFER},
     MembershipRole.ADMIN: _ADMINISTER,
     MembershipRole.MEMBER: _CONTRIBUTE,
-    MembershipRole.VIEWER: _VIEW_ONLY,
 }
 
 # 面向用户的说明，用在权限不足的错误信息里。

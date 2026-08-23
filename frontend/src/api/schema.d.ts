@@ -1814,7 +1814,7 @@ export interface components {
          * @description A User's role in one exact User Group.
          * @enum {string}
          */
-        MembershipRole: "owner" | "admin" | "member" | "viewer";
+        MembershipRole: "owner" | "admin" | "member";
         /**
          * MembershipStatus
          * @description Membership 生命周期：Invited -> Active -> Left / Removed。

@@ -10,7 +10,7 @@ import type { Project, ProjectVersionDetail, LegacyWorkspaceContext } from '../.
 /**
  * VersionDetailPage 权限可见性。
  *
- * 守的是 Issue #12 §5 的要求：Viewer / 无对应权限用户不应该看到
+ * 守的是 Issue #12 §5 的要求：无对应权限用户不应该看到
  * 「运行此版本」和「恢复到此版本」入口。
  * 「派生」按钮始终可见——派生只需要能看见版本，写权限是目标空间的事。
  */
@@ -67,7 +67,7 @@ function makeWorkspace(caps: string[]): LegacyWorkspaceContext {
     owner_id: 'owner',
     default_environment_version_id: null,
     capabilities: caps as LegacyWorkspaceContext['capabilities'],
-    role: 'viewer',
+    role: 'member',
   }
 }
 
@@ -99,10 +99,10 @@ describe('VersionDetailPage 权限可见性', () => {
     mockDiffVersions.mockResolvedValue([])
   })
 
-  it('Viewer 看不到「运行此版本」和「恢复到此版本」，但能看到「派生」', async () => {
+  it('无对应能力的成员看不到「运行此版本」和「恢复到此版本」，但能看到「派生」', async () => {
     mockGetVersion.mockResolvedValue(version)
     mockGetProject.mockResolvedValue(project)
-    // Viewer 只有 view 权限，没有 run.submit 和 project.content.write
+    // 这里刻意只下发 view 权限，没有 run.submit 和 project.content.write。
     mockGetLegacyWorkspaceContext.mockResolvedValue(
       makeWorkspace(['user_group.view', 'project.view', 'run.view']),
     )

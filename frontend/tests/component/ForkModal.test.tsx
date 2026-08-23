@@ -35,12 +35,12 @@ const groups: UserGroup[] = [
     capabilities: ['user_group.view', 'member.view'],
   },
   {
-    id: 'grp_viewer',
-    name: 'Viewer Lab',
+    id: 'grp_read_only',
+    name: 'Read-only Lab',
     description: '',
     created_by_id: 'usr_bob',
     created_at: '2026-08-17T00:00:00Z',
-    role: 'viewer',
+    role: 'member',
     capabilities: ['user_group.view', 'member.view'],
   },
 ]
@@ -106,7 +106,7 @@ describe('ForkModal target eligibility', () => {
     const target = await screen.findByRole('combobox', { name: '创建到哪个 User Group' })
     fireEvent.mouseDown(target)
     fireEvent.click(await screen.findByText('Writer Lab'))
-    expect(screen.queryByText('Viewer Lab')).not.toBeInTheDocument()
+    expect(screen.queryByText('Read-only Lab')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }))
     await waitFor(() =>

@@ -28,21 +28,15 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 
 ## 快速开始
 
-需要 Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 24 LTS 和 pnpm 11。
-GNU Make 是方便的薄入口，不是 Windows 的前置条件。
+需要 Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 24 LTS、pnpm 11 和 GNU Make。
+支持 Linux 开发环境；Windows 主机只支持在 WSL2 中使用 Linux toolchain，并将仓库放在
+WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持，部署与运行目标
+均为 Linux。
 
 ```bash
-# POSIX
 ./scripts/platform/posix/bootstrap.sh
 make migrate
 make dev
-```
-
-```powershell
-# Windows PowerShell
-.\scripts\platform\windows\bootstrap.ps1
-uv run --no-project python scripts/workspace.py migrate
-uv run --no-project python scripts/workspace.py dev
 ```
 
 后端接口文档默认位于 <http://127.0.0.1:8000/docs>，前端默认位于
@@ -52,12 +46,6 @@ uv run --no-project python scripts/workspace.py dev
 
 ```bash
 make check
-```
-
-没有 Make 时运行同一实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py check
 ```
 
 任务入口、可选目标和平台边界见 [`scripts/README.md`](scripts/README.md)。
@@ -74,7 +62,7 @@ api -> application -> domain ports <- infrastructure
 - `frontend/`：React、TypeScript、Vite 和从 OpenAPI 生成的接口类型。
 - `contracts/`：后端导出、前端消费的 OpenAPI 机器契约。
 - `deploy/`：可执行的容器编排和部署入口，不存放服务自己的镜像构建文件。
-- `scripts/`：跨平台 Python 任务实现，以及位于平台边缘的引导脚本。
+- `scripts/`：仓库公共 Python 任务实现和 Linux 引导脚本。
 - `docs/operations/`：当前容器部署方式和上线前仍需满足的约束。
 
 本地 `mock` 调度器会通过宿主机 shell **真实执行用户命令**，仅适合开发、测试和

@@ -1036,8 +1036,7 @@
         "enum": [
           "owner",
           "admin",
-          "member",
-          "viewer"
+          "member"
         ],
         "title": "MembershipRole",
         "type": "string"
