@@ -65,7 +65,10 @@ function readyHome(data = homeData): AsyncState<Home> {
 
 const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
-  ['/user-groups/grp-1', '这里用于管理成员与协作关系。Project、资源和运行配置可以从各自页面进入。'],
+  [
+    '/user-groups/grp-1',
+    '这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。',
+  ],
   ['/workspaces/ws-1', '这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。'],
   [
     '/projects/p-1',

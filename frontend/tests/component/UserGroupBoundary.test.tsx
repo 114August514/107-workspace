@@ -96,8 +96,14 @@ describe('UserGroupPage governance boundary', () => {
     expect(screen.getByText('User Group')).toBeInTheDocument()
     expect(screen.getAllByText('所有者').length).toBeGreaterThan(0)
     expect(screen.getByText('Governance only')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '成员' })).toBeInTheDocument()
-    expect(screen.getByText('管理成员及其在这个 User Group 中的权限。')).toBeInTheDocument()
+    const membersSection = screen.getByRole('region', { name: '成员' })
+    const membersHeading = within(membersSection).getByRole('heading', { name: '成员' })
+    expect(
+      within(membersHeading.parentElement!).getByRole('button', { name: '邀请成员' }),
+    ).toBeVisible()
+    expect(
+      within(membersSection).getByText('管理成员及其在这个 User Group 中的权限。'),
+    ).toBeVisible()
     const identityRail = screen.getByRole('complementary', { name: 'User Group 身份' })
     expect(within(identityRail).getByText('成员')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'User Group 内容' })).not.toBeInTheDocument()
@@ -115,7 +121,7 @@ describe('UserGroupPage governance boundary', () => {
     await screen.findByRole('heading', { name: 'Research Lab' })
     expect(screen.getAllByRole('main')).toHaveLength(1)
     expect(screen.getByRole('complementary', { name: '页面引导' })).toHaveTextContent(
-      '这里用于管理成员与协作关系。Project、资源和运行配置可以从各自页面进入。',
+      '这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。',
     )
   })
 

@@ -58,15 +58,7 @@ export function UserGroupPage() {
                 </div>
               </aside>
 
-              <section className={styles.membersSurface} aria-labelledby="user-group-members-title">
-                <div className={styles.sectionHeader}>
-                  <h2 id="user-group-members-title" className={styles.sectionTitle}>
-                    {copy.page.membersTitle}
-                  </h2>
-                  <p className={styles.sectionDescription}>{copy.page.membersDescription}</p>
-                </div>
-                <MemberPanel userGroup={userGroup.data} onUserGroupChanged={userGroup.reload} />
-              </section>
+              <MemberPanel userGroup={userGroup.data} onUserGroupChanged={userGroup.reload} />
             </div>
           </>
         ) : null}

@@ -117,15 +117,24 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
   const items = members.data ?? []
 
   return (
-    <div className={styles.panel}>
-      <div className={styles.toolbar}>
-        <span className={styles.summary}>{copy.members.summary(items.length)}</span>
+    <section className={styles.panel} aria-labelledby="user-group-members-title">
+      <header className={styles.sectionHeader}>
+        <h2 id="user-group-members-title" className={styles.sectionTitle}>
+          {copy.page.membersTitle}
+        </h2>
+        <p className={styles.sectionDescription}>{copy.page.membersDescription}</p>
         {canManage ? (
-          <Button leadingVisual={PersonAddIcon} onClick={() => setInviteOpen(true)}>
+          <Button
+            className={styles.inviteAction}
+            leadingVisual={PersonAddIcon}
+            onClick={() => setInviteOpen(true)}
+          >
             {copy.invite.action}
           </Button>
         ) : null}
-      </div>
+      </header>
+
+      <span className={styles.summary}>{copy.members.summary(items.length)}</span>
 
       {feedback ? (
         <Banner variant={feedback.variant} onDismiss={() => setFeedback(null)}>
@@ -163,36 +172,38 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
                   </span>
                   <span className={styles.username}>@{member.username}</span>
                 </div>
-                <div className={styles.role}>
-                  {canChangeRole ? (
-                    <RoleMenu
-                      value={member.role}
-                      label={`${copy.role.controlLabel(member.username)}，当前${membershipRoleLabel(member.role)}`}
-                      disabled={pending !== null}
-                      onChange={(role) => void changeRole(member, role)}
-                    />
-                  ) : (
-                    <Label size="small" variant={roleVariant(member.role)}>
-                      {membershipRoleLabel(member.role)}
+                <div className={styles.governance}>
+                  <div className={styles.role}>
+                    {canChangeRole ? (
+                      <RoleMenu
+                        value={member.role}
+                        label={`${copy.role.controlLabel(member.username)}，当前${membershipRoleLabel(member.role)}`}
+                        disabled={pending !== null}
+                        onChange={(role) => void changeRole(member, role)}
+                      />
+                    ) : (
+                      <Label size="small" variant={roleVariant(member.role)}>
+                        {membershipRoleLabel(member.role)}
+                      </Label>
+                    )}
+                  </div>
+                  <div className={styles.status}>
+                    <Label size="small" variant={statusVariant(member.status)}>
+                      {membershipStatusLabel(member.status)}
                     </Label>
-                  )}
-                </div>
-                <div className={styles.status}>
-                  <Label size="small" variant={statusVariant(member.status)}>
-                    {membershipStatusLabel(member.status)}
-                  </Label>
-                </div>
-                <div className={styles.actions}>
-                  {canTransferOwnership || canRemove ? (
-                    <MemberActionsMenu
-                      member={member}
-                      canTransfer={canTransferOwnership}
-                      canRemove={canRemove}
-                      disabled={pending !== null}
-                      onTransfer={() => setConfirmation({ kind: 'transfer', member })}
-                      onRemove={() => setConfirmation({ kind: 'remove', member })}
-                    />
-                  ) : null}
+                  </div>
+                  <div className={styles.actions}>
+                    {canTransferOwnership || canRemove ? (
+                      <MemberActionsMenu
+                        member={member}
+                        canTransfer={canTransferOwnership}
+                        canRemove={canRemove}
+                        disabled={pending !== null}
+                        onTransfer={() => setConfirmation({ kind: 'transfer', member })}
+                        onRemove={() => setConfirmation({ kind: 'remove', member })}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               </li>
             )
@@ -233,7 +244,7 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
           {confirmation.kind === 'remove' ? copy.remove.consequence : copy.transfer.consequence}
         </ConfirmationDialog>
       ) : null}
-    </div>
+    </section>
   )
 }
 
@@ -404,7 +415,7 @@ function RoleMenu({
 }) {
   return (
     <ActionMenu>
-      <ActionMenu.Button aria-label={label} disabled={disabled}>
+      <ActionMenu.Button variant="invisible" aria-label={label} disabled={disabled}>
         {membershipRoleLabel(value)}
       </ActionMenu.Button>
       <ActionMenu.Overlay width="auto">

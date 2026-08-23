@@ -5,12 +5,33 @@
   min-width: 0;
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--base-size-8);
+.sectionHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--base-size-16);
+}
+
+.sectionTitle {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  color: var(--fgColor-default);
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-title-lineHeight-medium);
+}
+
+.inviteAction {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.sectionDescription {
+  margin: var(--base-size-4) 0 0;
+  color: var(--fgColor-muted);
+  grid-column: 1;
+  grid-row: 2;
 }
 
 .summary {
@@ -28,10 +49,10 @@
 }
 
 .memberRow {
-  display: grid;
-  grid-template-columns: minmax(10rem, 1fr) 8rem 6rem var(--control-medium-size);
+  display: flex;
   align-items: center;
-  gap: var(--base-size-16);
+  justify-content: space-between;
+  gap: var(--base-size-24);
   padding: var(--base-size-12) var(--base-size-16);
   border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
 }
@@ -46,6 +67,7 @@
 
 .identity {
   display: flex;
+  flex: 1;
   min-width: 0;
   flex-direction: column;
   gap: var(--base-size-4);
@@ -67,9 +89,18 @@
   white-space: nowrap;
 }
 
+.governance {
+  display: grid;
+  flex: none;
+  grid-template-columns: 6rem 5rem var(--control-medium-size);
+  align-items: center;
+  gap: var(--base-size-12);
+}
+
 .role,
 .status {
   min-width: 0;
+  white-space: nowrap;
 }
 
 .actions {
@@ -80,31 +111,17 @@
 
 @media (max-width: 48rem) {
   .memberRow {
-    grid-template-columns: minmax(0, 1fr) auto;
+    flex-direction: column;
+    align-items: stretch;
     gap: var(--base-size-8);
   }
 
-  .identity {
-    grid-column: 1;
-    grid-row: 1;
+  .governance {
+    grid-template-columns: minmax(0, 1fr) auto var(--control-medium-size);
+    gap: var(--base-size-8);
   }
 
   .status {
-    grid-column: 2;
-    grid-row: 1;
     justify-self: end;
-  }
-
-  .role {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    justify-self: start;
-  }
-
-  .actions {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    justify-self: start;
-    justify-content: flex-start;
   }
 }

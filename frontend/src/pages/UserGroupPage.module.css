@@ -78,27 +78,6 @@
   font-weight: var(--base-text-weight-semibold);
 }
 
-.membersSurface {
-  min-width: 0;
-}
-
-.sectionHeader {
-  margin-bottom: var(--base-size-16);
-}
-
-.sectionTitle {
-  margin: 0;
-  color: var(--fgColor-default);
-  font-size: var(--text-title-size-medium);
-  font-weight: var(--base-text-weight-semibold);
-  line-height: var(--text-title-lineHeight-medium);
-}
-
-.sectionDescription {
-  margin: var(--base-size-4) 0 0;
-  color: var(--fgColor-muted);
-}
-
 @media (max-width: 48rem) {
   .page {
     gap: var(--base-size-16);

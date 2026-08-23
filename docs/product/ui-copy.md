@@ -107,7 +107,7 @@ AppShell 的上下文引导在页面底部提供 route-level 的概念提示，�
 | Route                       | 权威文案                                                                              |
 | :-------------------------- | :------------------------------------------------------------------------------------ |
 | `/`                         | 从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。              |
-| `/user-groups/:userGroupId` | 这里用于管理成员与协作关系。Project、资源和运行配置可以从各自页面进入。               |
+| `/user-groups/:userGroupId` | 这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。       |
 | `/workspaces/:workspaceId`  | 这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。                     |
 | `/projects/:projectId`      | 当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。 |
 | `/versions/:versionId`      | 这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。                 |
