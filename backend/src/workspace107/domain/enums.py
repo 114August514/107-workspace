@@ -21,7 +21,6 @@ class MembershipRole(StrEnum):
     OWNER = "owner"
     ADMIN = "admin"
     MEMBER = "member"
-    VIEWER = "viewer"
 
 
 class MembershipStatus(StrEnum):
