@@ -6,6 +6,8 @@ import '@primer/primitives/dist/css/functional/size/size.css'
 import '@primer/primitives/dist/css/functional/typography/typography.css'
 import '@primer/primitives/dist/css/functional/themes/light.css'
 
+import './brand.css'
+
 import { BaseStyles, ThemeProvider } from '@primer/react'
 import type { ReactNode } from 'react'
 

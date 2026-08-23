@@ -1,0 +1,14 @@
+:root {
+  /*
+   * Provisional 107 Workspace web colors for the Issue #64 visual gate.
+   * These are product UI adaptations, not official USTC RGB/HEX values.
+   * The official print input and selection method are recorded in
+   * docs/references/brand/ustc-vis.md.
+   */
+  --brandColor-primary: #0057b8;
+  --brandColor-primary-hover: #00458f;
+  --brandColor-on-primary: #ffffff;
+  --brandColor-subtle: #ddebff;
+  --brandColor-foreground: #003b78;
+  --brandColor-border: #4f83be;
+}

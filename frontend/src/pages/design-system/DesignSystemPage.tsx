@@ -2,6 +2,12 @@ import { ArrowLeftIcon, BookIcon } from '@primer/octicons-react'
 import { Heading, IconButton, PageHeader, Stack, Text } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 
+import {
+  ColorOwnership,
+  IdentityBoundary,
+  MarkCandidates,
+  ProductIconMapping,
+} from './BrandReference'
 import { CompositionRecipes } from './CompositionRecipes'
 import { StatusGallery } from './StatusExamples'
 import styles from './DesignSystemPage.module.css'
@@ -166,7 +172,8 @@ export function DesignSystemPage() {
                 <span className={styles.headerSource}>
                   规范来源：<code>docs/product/ui-copy.md</code>{' '}
                   <span className={styles.sourceItem}>
-                    <span aria-hidden="true">·</span> <code>frontend/README.md</code>
+                    <span aria-hidden="true">·</span> <code>frontend/README.md</code>{' '}
+                    <span aria-hidden="true">·</span> <code>docs/references/brand/ustc-vis.md</code>
                   </span>
                 </span>
               </div>
@@ -188,6 +195,42 @@ export function DesignSystemPage() {
             description="语气、术语与 token 的使用边界，来自 docs/product/ui-copy.md 与 frontend/README.md。"
           />
           <Foundations />
+        </section>
+
+        <section aria-labelledby="brand-identity-heading">
+          <SectionHeading
+            id="brand-identity-heading"
+            title="Brand"
+            description="区分 USTC 学校归属、107 产品身份与 Primer 功能图标；当前 Mark 候选只供人工视觉门比较。"
+          />
+          <IdentityBoundary />
+        </section>
+
+        <section aria-labelledby="brand-marks-heading">
+          <SectionHeading
+            id="brand-marks-heading"
+            title="Marks"
+            description="三个候选共享同一 neutral TopBar、wordmark 与 16 / 24 / 32 px 样本，不预先替换真实 AppShell。"
+          />
+          <MarkCandidates />
+        </section>
+
+        <section aria-labelledby="brand-colors-heading">
+          <SectionHeading
+            id="brand-colors-heading"
+            title="Colors"
+            description="官方 CMYK 输入、临时 web adaptation 与 Primer semantic colors 的职责边界。"
+          />
+          <ColorOwnership />
+        </section>
+
+        <section aria-labelledby="brand-icons-heading">
+          <SectionHeading
+            id="brand-icons-heading"
+            title="Icons"
+            description="真实产品对象优先使用 Primer Octicons；Brand Mark 不充当功能或状态图标。"
+          />
+          <ProductIconMapping />
         </section>
 
         <section aria-labelledby="states-heading">
