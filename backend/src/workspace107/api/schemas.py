@@ -121,12 +121,12 @@ class VariableOut(Model):
 
 
 class VariableIn(Model):
-    name: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     value: str
 
 
 class SecretIn(Model):
-    name: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     value: str = Field(min_length=1)
 
 

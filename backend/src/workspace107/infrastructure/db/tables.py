@@ -103,24 +103,22 @@ class MembershipRow(Base):
     )
 
 
-class WorkspaceVariableRow(Base):
-    __tablename__ = "workspace_variables"
+class VariableRow(Base):
+    __tablename__ = "variables"
 
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), primary_key=True)
+    scope_kind: Mapped[str] = mapped_column(String(32), primary_key=True)
+    scope_id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
 
 
-class WorkspaceSecretRow(Base):
-    """Secret 存储。
+class SecretRow(Base):
+    """Scoped secret storage; values are read only at execution boundaries."""
 
-    ``value`` 只有 :class:`SecretVault` 会读，且只在提交任务的执行边界上使用。
-    生产部署应把这张表换成 KMS 或 Vault 之类的外部密钥服务。
-    """
+    __tablename__ = "secrets"
 
-    __tablename__ = "workspace_secrets"
-
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), primary_key=True)
+    scope_kind: Mapped[str] = mapped_column(String(32), primary_key=True)
+    scope_id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -303,6 +301,18 @@ class RunRow(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunSecretRedactionRow(Base):
+    """Internal SecretVault retention for historical log redaction only."""
+
+    __tablename__ = "run_secret_redactions"
+
+    run_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    value_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
 
 
 class IdempotencyKeyRow(Base):

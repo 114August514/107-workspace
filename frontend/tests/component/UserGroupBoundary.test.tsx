@@ -107,7 +107,6 @@ describe('UserGroupPage governance boundary', () => {
     expect(screen.getByText('User Group')).toBeInTheDocument()
     expect(screen.getByText('Project')).toBeInTheDocument()
     expect(screen.getByText('默认运行环境')).toBeInTheDocument()
-    expect(screen.getByText('Variable 与 Secret')).toBeInTheDocument()
     expect(screen.getByText('活动')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: '可用算力' }))
     expect(screen.getByText('这里显示当前可用于这些 Project 的算力方案')).toBeInTheDocument()

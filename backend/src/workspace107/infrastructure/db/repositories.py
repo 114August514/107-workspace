@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.compute import ComputePlan, ComputeRequest, ResourceEntitlement, SchedulerMapping
+from ...domain.config_scope import ConfigScope
 from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
@@ -52,7 +53,7 @@ from ...domain.models import (
     SharedResourceVersion,
     User,
     UserGroup,
-    WorkspaceVariable,
+    Variable,
 )
 from ...domain.ownership import OwnerKind, OwnerReference
 from ...domain.pagination import Page, PageRequest
@@ -367,25 +368,27 @@ class VariableRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceVariable]:
+    async def list_for_scope(self, scope: ConfigScope) -> list[Variable]:
         stmt = (
-            select(t.WorkspaceVariableRow)
-            .where(t.WorkspaceVariableRow.workspace_id == workspace_id)
-            .order_by(t.WorkspaceVariableRow.name)
+            select(t.VariableRow)
+            .where(t.VariableRow.scope_kind == scope.kind.value, t.VariableRow.scope_id == scope.id)
+            .order_by(t.VariableRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [
-            WorkspaceVariable(workspace_id=r.workspace_id, name=r.name, value=r.value) for r in rows
-        ]
+        return [Variable(scope=scope, name=r.name, value=r.value) for r in rows]
 
-    async def upsert(self, variable: WorkspaceVariable) -> None:
-        row = await self._session.get(
-            t.WorkspaceVariableRow, (variable.workspace_id, variable.name)
-        )
+    async def get(self, scope: ConfigScope, name: str) -> Variable | None:
+        row = await self._session.get(t.VariableRow, (scope.kind.value, scope.id, name))
+        return Variable(scope=scope, name=row.name, value=row.value) if row else None
+
+    async def upsert(self, variable: Variable) -> None:
+        key = (variable.scope.kind.value, variable.scope.id, variable.name)
+        row = await self._session.get(t.VariableRow, key)
         if row is None:
             self._session.add(
-                t.WorkspaceVariableRow(
-                    workspace_id=variable.workspace_id,
+                t.VariableRow(
+                    scope_kind=variable.scope.kind.value,
+                    scope_id=variable.scope.id,
                     name=variable.name,
                     value=variable.value,
                 )
@@ -394,11 +397,12 @@ class VariableRepositoryImpl:
             row.value = variable.value
         await _flush(self._session)
 
-    async def delete(self, workspace_id: str, name: str) -> None:
+    async def delete(self, scope: ConfigScope, name: str) -> None:
         await self._session.execute(
-            delete(t.WorkspaceVariableRow).where(
-                t.WorkspaceVariableRow.workspace_id == workspace_id,
-                t.WorkspaceVariableRow.name == name,
+            delete(t.VariableRow).where(
+                t.VariableRow.scope_kind == scope.kind.value,
+                t.VariableRow.scope_id == scope.id,
+                t.VariableRow.name == name,
             )
         )
         await _flush(self._session)
