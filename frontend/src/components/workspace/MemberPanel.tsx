@@ -182,9 +182,7 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
                         onChange={(role) => void changeRole(member, role)}
                       />
                     ) : (
-                      <Label size="small" variant={roleVariant(member.role)}>
-                        {membershipRoleLabel(member.role)}
-                      </Label>
+                      <span className={styles.roleText}>{membershipRoleLabel(member.role)}</span>
                     )}
                   </div>
                   <div className={styles.status}>
@@ -436,12 +434,6 @@ function RoleMenu({
       </ActionMenu.Overlay>
     </ActionMenu>
   )
-}
-
-function roleVariant(role: MembershipRole): 'attention' | 'accent' | 'default' {
-  if (role === 'owner') return 'attention'
-  if (role === 'admin') return 'accent'
-  return 'default'
 }
 
 function statusVariant(status: MembershipStatus): 'success' | 'attention' | 'secondary' | 'danger' {

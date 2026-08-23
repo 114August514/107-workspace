@@ -103,6 +103,14 @@
   white-space: nowrap;
 }
 
+.roleText {
+  display: inline-flex;
+  min-height: var(--control-medium-size);
+  align-items: center;
+  font-size: var(--text-body-size-medium);
+  line-height: var(--text-body-lineHeight-medium);
+}
+
 .actions {
   display: flex;
   width: var(--control-medium-size);
