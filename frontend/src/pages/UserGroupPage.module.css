@@ -80,11 +80,6 @@
 
 .membersSurface {
   min-width: 0;
-  padding: var(--base-size-24);
-  overflow: hidden;
-  border: var(--borderWidth-thin) solid var(--borderColor-default);
-  border-radius: var(--borderRadius-medium);
-  background: var(--bgColor-default);
 }
 
 .sectionHeader {
@@ -123,12 +118,5 @@
 
   .sectionIndicator {
     display: none;
-  }
-
-  .membersSurface {
-    margin-inline: calc(var(--base-size-16) * -1);
-    padding: var(--base-size-16);
-    border-inline: none;
-    border-radius: 0;
   }
 }

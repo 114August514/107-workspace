@@ -107,7 +107,7 @@ AppShell 的上下文引导在页面底部提供 route-level 的概念提示，�
 | Route                       | 权威文案                                                                              |
 | :-------------------------- | :------------------------------------------------------------------------------------ |
 | `/`                         | 从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。              |
-| `/user-groups/:userGroupId` | 在这里管理成员，并进入关联的 Project 与配置；协作内容保留在各自对象中。               |
+| `/user-groups/:userGroupId` | 这里用于管理成员与协作关系。Project、资源和运行配置可以从各自页面进入。               |
 | `/workspaces/:workspaceId`  | 这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。                     |
 | `/projects/:projectId`      | 当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。 |
 | `/versions/:versionId`      | 这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。                 |
@@ -276,16 +276,18 @@ Run 已提交
 User Group 身份与 Membership 治理使用以下稳定文案。Role 和 Status 只展示后端返回的事实，
 操作入口仍由后端 capability 决定。
 
-| 类型        | 权威文案                                                                                               |
-| :---------- | :----------------------------------------------------------------------------------------------------- |
-| Role        | `所有者`、`管理员`、`成员`                                                                             |
-| Status      | `待确认`、`已加入`、`已退出`、`已移除`                                                                 |
-| Loading     | `正在加载 User Group…`、`正在加载成员…`                                                                |
-| Empty       | `这个 User Group 还没有成员。`；有管理权限时补充`邀请成员后，他们会在接受邀请后加入。`                 |
-| Invite      | `邀请成员`、`发送邀请`；成功使用`已向 {username} 发送邀请`                                             |
-| Change Role | 成功使用`{username} 的角色已改为{role}`                                                                |
-| Remove      | `移除 {username}`；确认后果为`移除后，该成员会立刻失去这个 User Group 的访问权。`                      |
-| Transfer    | `转让给 {username}`；确认后果为`转让后，你将变为管理员，新 Owner 将获得转让所有权与全部成员治理权限。` |
+| 类型        | 权威文案                                                                                                |
+| :---------- | :------------------------------------------------------------------------------------------------------ |
+| Description | `管理成员及其在这个 User Group 中的权限。`                                                              |
+| Role        | `所有者`、`管理员`、`成员`                                                                              |
+| Status      | `待确认`、`已加入`、`已退出`、`已移除`                                                                  |
+| Loading     | `正在加载 User Group…`、`正在加载成员…`                                                                 |
+| Summary     | `{count} 位成员`，包含 0                                                                                |
+| Empty       | `这个 User Group 还没有成员。`；有管理权限时补充`邀请成员后，他们会在接受邀请后加入。`                  |
+| Invite      | `邀请成员`、`发送邀请`；成功使用`已向 {username} 发送邀请`                                              |
+| Change Role | 成功使用`{username} 的角色已改为{role}`                                                                 |
+| Remove      | 菜单使用`移除成员`；确认后果为`移除后，该成员会立刻失去这个 User Group 的访问权。`                      |
+| Transfer    | 菜单使用`转让所有权`；确认后果为`转让后，你将变为管理员，新 Owner 将获得转让所有权与全部成员治理权限。` |
 
 邀请中的 Role 直接展示两项选择及其稳定说明，不把 Owner 放入普通邀请选项：
 
@@ -294,7 +296,8 @@ User Group 身份与 Membership 治理使用以下稳定文案。Role 和 Status
 | 成员      | `可以参与 User Group 中的项目、资源与计算工作` |
 | 管理员    | `具有成员能力，并可以管理成员和 User Group`    |
 
-Owner 只能通过明确的所有权转让产生；active non-owner 成员的普通 Role 修改只提供管理员和成员。
+RadioGroup 末尾 caption 固定为：`Owner 只能通过所有权转让产生。`
+active non-owner 成员的普通 Role 修改只提供管理员和成员。
 
 失败反馈不直接显示后端 `message`，主标题和下一步固定为：
 

@@ -54,7 +54,7 @@ describe('MemberPanel governance', () => {
     vi.restoreAllMocks()
   })
 
-  it('REQ-63-03 shows only canonical roles without exposing owner/invited mutation', async () => {
+  it('REQ-63-03 keeps owner and invited boundaries behind capability-aware row actions', async () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
     const alice = await screen.findByTestId('member-usr_alice')
@@ -64,11 +64,17 @@ describe('MemberPanel governance', () => {
     expect(within(alice).getByText('所有者')).toBeInTheDocument()
     expect(within(alice).getByText('已加入')).toBeInTheDocument()
     expect(within(alice).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
-    const bobRole = within(bob).getByRole('button', { name: '修改 bob 的角色，当前成员' })
-    expect(bobRole).toBeInTheDocument()
+    expect(
+      within(alice).queryByRole('button', { name: 'alice 的更多操作' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(bob).getByRole('button', { name: '修改 bob 的角色，当前成员' }),
+    ).toBeInTheDocument()
     expect(within(carol).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
-    expect(within(carol).queryByRole('button', { name: /转让给/ })).not.toBeInTheDocument()
-    expect(within(carol).getByRole('button', { name: '移除 carol' })).toBeInTheDocument()
+
+    fireEvent.click(within(carol).getByRole('button', { name: 'carol 的更多操作' }))
+    expect(await screen.findByRole('menuitem', { name: '移除成员' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
   })
 
   it('REQ-63-04 invites a member and reports a server failure in the dialog', async () => {
@@ -83,10 +89,15 @@ describe('MemberPanel governance', () => {
 
     await screen.findByText('Alice')
     fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
-    expect(screen.getAllByRole('radio')).toHaveLength(2)
-    expect(screen.getByRole('radio', { name: '成员' })).toBeChecked()
+    const inviteRoles = screen.getAllByRole('radio')
+    expect(inviteRoles).toHaveLength(2)
+    expect(inviteRoles[0]).toHaveAccessibleName('成员')
+    expect(inviteRoles[0]).toBeChecked()
+    expect(inviteRoles[1]).toHaveAccessibleName('管理员')
+    expect(inviteRoles[1]).not.toBeChecked()
     expect(screen.getByText('可以参与 User Group 中的项目、资源与计算工作')).toBeInTheDocument()
     expect(screen.getByText('具有成员能力，并可以管理成员和 User Group')).toBeInTheDocument()
+    expect(screen.getByText('Owner 只能通过所有权转让产生。')).toBeInTheDocument()
     const username = screen.getByLabelText(/用户名/)
     fireEvent.change(username, { target: { value: 'carol' } })
     fireEvent.click(screen.getByRole('radio', { name: '管理员' }))
@@ -191,8 +202,12 @@ describe('MemberPanel governance', () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
     const bob = await screen.findByTestId('member-usr_bob')
-    fireEvent.click(within(bob).getByRole('button', { name: '移除 bob' }))
+    fireEvent.click(within(bob).getByRole('button', { name: 'bob 的更多操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '移除成员' }))
     expect(api.removeMember).not.toHaveBeenCalled()
+    expect(
+      screen.getByText('移除后，该成员会立刻失去这个 User Group 的访问权。'),
+    ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '移除成员' }))
 
     await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('ugrp_lab', 'usr_bob'))
@@ -204,7 +219,8 @@ describe('MemberPanel governance', () => {
     render(<MemberPanel userGroup={ownerGroup} onUserGroupChanged={onUserGroupChanged} />)
 
     const bob = await screen.findByTestId('member-usr_bob')
-    fireEvent.click(within(bob).getByRole('button', { name: '转让给 bob' }))
+    fireEvent.click(within(bob).getByRole('button', { name: 'bob 的更多操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '转让所有权' }))
     expect(api.transferUserGroupOwnership).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '转让所有权' }))
 
@@ -229,7 +245,7 @@ describe('MemberPanel governance', () => {
     await screen.findByText('Alice')
     expect(screen.queryByRole('button', { name: '邀请成员' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /移除|转让/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /的更多操作/ })).not.toBeInTheDocument()
   })
 
   it('REQ-63-08 gives an actionable empty state', async () => {

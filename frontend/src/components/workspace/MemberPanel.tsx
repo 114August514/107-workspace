@@ -1,4 +1,4 @@
-import { PersonAddIcon } from '@primer/octicons-react'
+import { KebabHorizontalIcon, PersonAddIcon } from '@primer/octicons-react'
 import {
   ActionList,
   ActionMenu,
@@ -8,6 +8,7 @@ import {
   Dialog,
   FormControl,
   Label,
+  IconButton,
   Radio,
   RadioGroup,
   Stack,
@@ -33,6 +34,7 @@ import styles from './MemberPanel.module.css'
  * 用例改变，前端不提供制造第二个 Owner 的入口。
  */
 const ASSIGNABLE_ROLES = ['admin', 'member'] as const satisfies readonly MembershipRole[]
+const INVITABLE_ROLES = ['member', 'admin'] as const satisfies readonly MembershipRole[]
 
 interface Props {
   userGroup: UserGroup
@@ -147,6 +149,8 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
           {items.map((member) => {
             const isOwner = member.role === 'owner'
             const canChangeRole = canManage && member.status === 'active' && !isOwner
+            const canRemove = canManage && !isOwner
+            const canTransferOwnership = canTransfer && member.status === 'active' && !isOwner
             return (
               <li
                 key={member.user_id}
@@ -179,24 +183,15 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
                   </Label>
                 </div>
                 <div className={styles.actions}>
-                  {canTransfer && member.status === 'active' && !isOwner ? (
-                    <Button
-                      size="small"
+                  {canTransferOwnership || canRemove ? (
+                    <MemberActionsMenu
+                      member={member}
+                      canTransfer={canTransferOwnership}
+                      canRemove={canRemove}
                       disabled={pending !== null}
-                      onClick={() => setConfirmation({ kind: 'transfer', member })}
-                    >
-                      {copy.transfer.action(member.username)}
-                    </Button>
-                  ) : null}
-                  {canManage && !isOwner ? (
-                    <Button
-                      size="small"
-                      variant="danger"
-                      disabled={pending !== null}
-                      onClick={() => setConfirmation({ kind: 'remove', member })}
-                    >
-                      {copy.remove.action(member.username)}
-                    </Button>
+                      onTransfer={() => setConfirmation({ kind: 'transfer', member })}
+                      onRemove={() => setConfirmation({ kind: 'remove', member })}
+                    />
                   ) : null}
                 </div>
               </li>
@@ -331,7 +326,7 @@ function InviteMemberDialog({
             }}
           >
             <RadioGroup.Label>{copy.invite.roleLabel}</RadioGroup.Label>
-            {ASSIGNABLE_ROLES.map((assignableRole) => (
+            {INVITABLE_ROLES.map((assignableRole) => (
               <FormControl
                 key={assignableRole}
                 disabled={submitting}
@@ -352,6 +347,50 @@ function InviteMemberDialog({
   )
 }
 
+function MemberActionsMenu({
+  member,
+  canTransfer,
+  canRemove,
+  disabled,
+  onTransfer,
+  onRemove,
+}: {
+  member: Member
+  canTransfer: boolean
+  canRemove: boolean
+  disabled: boolean
+  onTransfer: () => void
+  onRemove: () => void
+}) {
+  return (
+    <ActionMenu>
+      <ActionMenu.Anchor>
+        <IconButton
+          icon={KebabHorizontalIcon}
+          variant="invisible"
+          aria-label={copy.actions.more(member.username)}
+          disabled={disabled}
+        />
+      </ActionMenu.Anchor>
+      <ActionMenu.Overlay align="end" width="auto">
+        <ActionList>
+          {canTransfer ? (
+            <ActionList.Item disabled={disabled} onSelect={onTransfer}>
+              {copy.transfer.confirm}
+            </ActionList.Item>
+          ) : null}
+          {canTransfer && canRemove ? <ActionList.Divider /> : null}
+          {canRemove ? (
+            <ActionList.Item variant="danger" disabled={disabled} onSelect={onRemove}>
+              {copy.remove.confirm}
+            </ActionList.Item>
+          ) : null}
+        </ActionList>
+      </ActionMenu.Overlay>
+    </ActionMenu>
+  )
+}
+
 function RoleMenu({
   value,
   label,
@@ -365,10 +404,10 @@ function RoleMenu({
 }) {
   return (
     <ActionMenu>
-      <ActionMenu.Button aria-label={label} disabled={disabled} className={styles.roleMenuButton}>
+      <ActionMenu.Button aria-label={label} disabled={disabled}>
         {membershipRoleLabel(value)}
       </ActionMenu.Button>
-      <ActionMenu.Overlay>
+      <ActionMenu.Overlay width="auto">
         <ActionList selectionVariant="single">
           {ASSIGNABLE_ROLES.map((role) => (
             <ActionList.Item

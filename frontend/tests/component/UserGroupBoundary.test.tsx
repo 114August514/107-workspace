@@ -97,6 +97,7 @@ describe('UserGroupPage governance boundary', () => {
     expect(screen.getAllByText('所有者').length).toBeGreaterThan(0)
     expect(screen.getByText('Governance only')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '成员' })).toBeInTheDocument()
+    expect(screen.getByText('管理成员及其在这个 User Group 中的权限。')).toBeInTheDocument()
     const identityRail = screen.getByRole('complementary', { name: 'User Group 身份' })
     expect(within(identityRail).getByText('成员')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'User Group 内容' })).not.toBeInTheDocument()
@@ -113,6 +114,9 @@ describe('UserGroupPage governance boundary', () => {
 
     await screen.findByRole('heading', { name: 'Research Lab' })
     expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('complementary', { name: '页面引导' })).toHaveTextContent(
+      '这里用于管理成员与协作关系。Project、资源和运行配置可以从各自页面进入。',
+    )
   })
 
   it('renders a collaborative resource context with normal product labels', async () => {

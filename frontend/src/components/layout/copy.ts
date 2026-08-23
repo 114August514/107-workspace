@@ -27,7 +27,7 @@ export const globalNavigationCopy = {
 export const contextGuideCopy = {
   ariaLabel: '页面引导',
   home: '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。',
-  userGroup: '在这里管理成员，并进入关联的 Project 与配置；协作内容保留在各自对象中。',
+  userGroup: '这里用于管理成员与协作关系。Project、资源和运行配置可以从各自页面进入。',
   personalResource: '这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。',
   project: '当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。',
   version: '这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。',
