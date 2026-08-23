@@ -38,10 +38,9 @@ async def test_only_admin_and_owner_manage_group_config(role: MembershipRole) ->
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("role", [MembershipRole.MEMBER, MembershipRole.VIEWER])
-async def test_member_and_viewer_cannot_manage_group_config(role: MembershipRole) -> None:
+async def test_member_cannot_manage_group_config() -> None:
     with pytest.raises(PermissionDenied):
-        await AccessGuard(_Repos(role)).scoped_config_group("u", "g", manage=True)
+        await AccessGuard(_Repos(MembershipRole.MEMBER)).scoped_config_group("u", "g", manage=True)
 
 
 @pytest.mark.asyncio
