@@ -82,7 +82,7 @@ def test_unauthorized_request_is_not_resolved_to_scheduler_config() -> None:
 def test_entitlement_reports_expiration() -> None:
     entitlement = ResourceEntitlement(
         id="ent_1",
-        workspace_id="ws_1",
+        user_id="usr_1",
         compute_plan_id=PLAN.id,
         max_concurrent_runs=2,
         expires_at="2026-01-01T00:00:00+00:00",
@@ -93,6 +93,6 @@ def test_entitlement_reports_expiration() -> None:
 
 def test_entitlement_without_expiration_never_expires() -> None:
     entitlement = ResourceEntitlement(
-        id="ent_1", workspace_id="ws_1", compute_plan_id=PLAN.id, max_concurrent_runs=2
+        id="ent_1", user_id="usr_1", compute_plan_id=PLAN.id, max_concurrent_runs=2
     )
     assert not entitlement.is_expired("2099-01-01T00:00:00+00:00")

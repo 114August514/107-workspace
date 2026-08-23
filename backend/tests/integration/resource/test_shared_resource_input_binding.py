@@ -136,8 +136,8 @@ async def test_shared_resource_version_可以作为_run_输入(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """最关键的闭环：上传文件 → 引用 → Run 真的读到。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    await use_default_environment(session, client, headers=ALICE)
+    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client, name="预训练权重", files=[("weights.txt", b"model-params")]
     )
@@ -171,8 +171,8 @@ async def test_shared_resource_输入以只读方式提供(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """GR-404：输入只读，Run 不得原地修改。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    await use_default_environment(session, client, headers=ALICE)
+    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client, name="只读验证", files=[("weights.txt", b"original")]
     )
@@ -201,8 +201,8 @@ async def test_shared_resource_支持多文件和子目录(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """版本里多文件 + 子目录结构，物化到 inputs 后保持原相对路径。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    await use_default_environment(session, client, headers=ALICE)
+    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
         name="多文件资源",

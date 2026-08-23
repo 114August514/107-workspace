@@ -103,24 +103,22 @@ class MembershipRow(Base):
     )
 
 
-class WorkspaceVariableRow(Base):
-    __tablename__ = "workspace_variables"
+class VariableRow(Base):
+    __tablename__ = "variables"
 
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), primary_key=True)
+    scope_kind: Mapped[str] = mapped_column(String(32), primary_key=True)
+    scope_id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
 
 
-class WorkspaceSecretRow(Base):
-    """Secret 存储。
+class SecretRow(Base):
+    """Scoped secret storage; values are read only at execution boundaries."""
 
-    ``value`` 只有 :class:`SecretVault` 会读，且只在提交任务的执行边界上使用。
-    生产部署应把这张表换成 KMS 或 Vault 之类的外部密钥服务。
-    """
+    __tablename__ = "secrets"
 
-    __tablename__ = "workspace_secrets"
-
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), primary_key=True)
+    scope_kind: Mapped[str] = mapped_column(String(32), primary_key=True)
+    scope_id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -236,12 +234,12 @@ class ResourceEntitlementRow(Base):
     __tablename__ = "resource_entitlements"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), index=True)
     compute_plan_id: Mapped[str] = mapped_column(ID, ForeignKey("compute_plans.id"))
     max_concurrent_runs: Mapped[int] = mapped_column(Integer)
     expires_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
-    __table_args__ = (UniqueConstraint("workspace_id", "compute_plan_id", name="uq_entitlement"),)
+    __table_args__ = (UniqueConstraint("user_id", "compute_plan_id", name="uq_entitlement"),)
 
 
 class RunConfigurationRow(Base):
@@ -303,6 +301,18 @@ class RunRow(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunSecretRedactionRow(Base):
+    """Internal SecretVault retention for historical log redaction only."""
+
+    __tablename__ = "run_secret_redactions"
+
+    run_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    value_digest: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
 
 
 class IdempotencyKeyRow(Base):
@@ -484,3 +494,49 @@ class SharedResourceVersionFileRow(Base):
     path: Mapped[str] = mapped_column(String(1024), primary_key=True)
     size: Mapped[int] = mapped_column(Integer)
     content_hash: Mapped[str] = mapped_column(String(64))
+
+
+class GrantRow(Base):
+    """跨 Owner 使用许可（Issue #40）。
+
+    Grantor 和 Grantee 都是 "User 或 UserGroup" 的判别联合，用 ``kind``+``id``
+    两列表示，与 Activity 表的 ``target_type``+``target_id`` 模式一致。
+
+    ``target_kind`` 可以是 ``"all"``、``"environment"`` 或 ``"shared_resource"``。
+    当 ``target_kind == "all"`` 时 ``target_id`` 为空字符串，表示授权 Grantor
+    当前及未来拥有的全部可授权资产。
+
+    Grant target 可能引用未来被删除的资产，因此不对 environments/shared_resources
+    加 FK——删除资产时需在应用层清理指向该资产的 Grant 行。
+    """
+
+    __tablename__ = "grants"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    grantor_kind: Mapped[str] = mapped_column(String(16))  # 'user' | 'user_group'
+    grantor_id: Mapped[str] = mapped_column(ID)
+    grantee_kind: Mapped[str] = mapped_column(String(16))  # 'user' | 'user_group'
+    grantee_id: Mapped[str] = mapped_column(ID)
+    target_kind: Mapped[str] = mapped_column(
+        String(32)
+    )  # 'all' | 'environment' | 'shared_resource'
+    target_id: Mapped[str] = mapped_column(ID, default="")  # '' when target_kind == 'all'
+    action: Mapped[str] = mapped_column(String(16))  # 'use'
+    granted_by_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="RESTRICT"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "grantor_kind",
+            "grantor_id",
+            "grantee_kind",
+            "grantee_id",
+            "target_kind",
+            "target_id",
+            "action",
+            name="uq_grant_grantor_grantee_target_action",
+        ),
+        Index("ix_grants_target", "target_kind", "target_id"),
+        Index("ix_grants_grantee", "grantee_kind", "grantee_id"),
+        Index("ix_grants_grantor", "grantor_kind", "grantor_id"),
+    )

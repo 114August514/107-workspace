@@ -9,11 +9,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.compute import ComputePlan, ComputeRequest, ResourceEntitlement, SchedulerMapping
+from ...domain.config_scope import ConfigScope
 from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
@@ -28,6 +29,7 @@ from ...domain.enums import (
     TargetType,
 )
 from ...domain.errors import ConflictError
+from ...domain.grant import Grant, GrantAction, GrantTargetKind
 from ...domain.models import (
     Activity,
     Artifact,
@@ -52,7 +54,7 @@ from ...domain.models import (
     SharedResourceVersion,
     User,
     UserGroup,
-    WorkspaceVariable,
+    Variable,
 )
 from ...domain.ownership import OwnerKind, OwnerReference
 from ...domain.pagination import Page, PageRequest
@@ -79,7 +81,7 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("uq_membership_active_owner", "memberships.user_group_id"), "User Group 已有有效 Owner"),
     (
         ("uq_entitlement", "resource_entitlements.compute_plan_id"),
-        "该 Workspace 已经拥有这个算力方案的资源权益",
+        "该 User 已经拥有这个算力方案的资源权益",
     ),
     (
         ("idempotency_keys_pkey", "idempotency_keys.key"),
@@ -88,6 +90,10 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("uq_shared_resource_version_seq", "shared_resource_versions.sequence"),
         "有其他人同时发布了这个 Shared Resource 的版本，请刷新后重试",
+    ),
+    (
+        ("uq_grant_grantor_grantee_target_action", "grants.grantor_id"),
+        "该 Grantee 已拥有此 Grantor 的相应 USE Grant",
     ),
 )
 
@@ -367,25 +373,27 @@ class VariableRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceVariable]:
+    async def list_for_scope(self, scope: ConfigScope) -> list[Variable]:
         stmt = (
-            select(t.WorkspaceVariableRow)
-            .where(t.WorkspaceVariableRow.workspace_id == workspace_id)
-            .order_by(t.WorkspaceVariableRow.name)
+            select(t.VariableRow)
+            .where(t.VariableRow.scope_kind == scope.kind.value, t.VariableRow.scope_id == scope.id)
+            .order_by(t.VariableRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [
-            WorkspaceVariable(workspace_id=r.workspace_id, name=r.name, value=r.value) for r in rows
-        ]
+        return [Variable(scope=scope, name=r.name, value=r.value) for r in rows]
 
-    async def upsert(self, variable: WorkspaceVariable) -> None:
-        row = await self._session.get(
-            t.WorkspaceVariableRow, (variable.workspace_id, variable.name)
-        )
+    async def get(self, scope: ConfigScope, name: str) -> Variable | None:
+        row = await self._session.get(t.VariableRow, (scope.kind.value, scope.id, name))
+        return Variable(scope=scope, name=row.name, value=row.value) if row else None
+
+    async def upsert(self, variable: Variable) -> None:
+        key = (variable.scope.kind.value, variable.scope.id, variable.name)
+        row = await self._session.get(t.VariableRow, key)
         if row is None:
             self._session.add(
-                t.WorkspaceVariableRow(
-                    workspace_id=variable.workspace_id,
+                t.VariableRow(
+                    scope_kind=variable.scope.kind.value,
+                    scope_id=variable.scope.id,
                     name=variable.name,
                     value=variable.value,
                 )
@@ -394,11 +402,12 @@ class VariableRepositoryImpl:
             row.value = variable.value
         await _flush(self._session)
 
-    async def delete(self, workspace_id: str, name: str) -> None:
+    async def delete(self, scope: ConfigScope, name: str) -> None:
         await self._session.execute(
-            delete(t.WorkspaceVariableRow).where(
-                t.WorkspaceVariableRow.workspace_id == workspace_id,
-                t.WorkspaceVariableRow.name == name,
+            delete(t.VariableRow).where(
+                t.VariableRow.scope_kind == scope.kind.value,
+                t.VariableRow.scope_id == scope.id,
+                t.VariableRow.name == name,
             )
         )
         await _flush(self._session)
@@ -704,6 +713,16 @@ class EnvironmentRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
 
+    async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.EnvironmentVersionRow, version_id)
+        return _to_environment_version(row) if row else None
+
+    async def get_by_id(self, environment_id: str) -> Environment | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.EnvironmentRow, environment_id)
+        return _to_environment(row) if row else None
+
 
 class ComputePlanRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
@@ -723,18 +742,14 @@ class EntitlementRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_for_workspace(self, workspace_id: str) -> list[ResourceEntitlement]:
-        stmt = select(t.ResourceEntitlementRow).where(
-            t.ResourceEntitlementRow.workspace_id == workspace_id
-        )
+    async def list_for_user(self, user_id: str) -> list[ResourceEntitlement]:
+        stmt = select(t.ResourceEntitlementRow).where(t.ResourceEntitlementRow.user_id == user_id)
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_entitlement(r) for r in rows]
 
-    async def get_for_plan(
-        self, workspace_id: str, compute_plan_id: str
-    ) -> ResourceEntitlement | None:
+    async def get_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
         stmt = select(t.ResourceEntitlementRow).where(
-            t.ResourceEntitlementRow.workspace_id == workspace_id,
+            t.ResourceEntitlementRow.user_id == user_id,
             t.ResourceEntitlementRow.compute_plan_id == compute_plan_id,
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -744,7 +759,7 @@ class EntitlementRepositoryImpl:
         self._session.add(
             t.ResourceEntitlementRow(
                 id=entitlement.id,
-                workspace_id=entitlement.workspace_id,
+                user_id=entitlement.user_id,
                 compute_plan_id=entitlement.compute_plan_id,
                 max_concurrent_runs=entitlement.max_concurrent_runs,
                 expires_at=entitlement.expires_at,
@@ -752,9 +767,7 @@ class EntitlementRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def lock_for_plan(
-        self, workspace_id: str, compute_plan_id: str
-    ) -> ResourceEntitlement | None:
+    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
         """SELECT ... FOR UPDATE，锁到事务结束。
 
         PostgreSQL 上这行会被真正独占，第二个并发请求阻塞到第一个提交为止。
@@ -764,7 +777,7 @@ class EntitlementRepositoryImpl:
         stmt = (
             select(t.ResourceEntitlementRow)
             .where(
-                t.ResourceEntitlementRow.workspace_id == workspace_id,
+                t.ResourceEntitlementRow.user_id == user_id,
                 t.ResourceEntitlementRow.compute_plan_id == compute_plan_id,
             )
             .with_for_update()
@@ -957,19 +970,19 @@ class RunRepositoryImpl:
         )
         return int(result.rowcount or 0) == 1
 
-    async def count_unfinished_for_plan(self, workspace_id: str, compute_plan_id: str) -> int:
-        """数「这个 Workspace 在这个算力方案上」还有几个未结束的 Run。
+    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int:
+        """数「这个 User 在这个算力方案上」还有几个未结束的 Run。
 
-        必须带 compute_plan_id：当前实现按「Workspace × 方案」授予并发额度，
-        锁的也是那一条权益行。**计数范围大于加锁范围就等于没锁**——
-        两个请求提交到不同方案时锁的是不同的行，谁都不阻塞谁，
-        却都读到同一个更大范围的计数，双双通过。
+        并发额度按「User × 方案」授予，锁的也是那个 User 的那一条权益行，
+        所以只数该 User 发起（created_by）的 Run。**计数范围大于加锁范围
+        就等于没锁**——计数范围里混进别人的 Run，会读出一个比实际大的数，
+        让本来还有名额的请求被误拒，或反过来。
         """
         stmt = (
             select(func.count())
             .select_from(t.RunRow)
             .where(
-                t.RunRow.workspace_id == workspace_id,
+                t.RunRow.created_by == user_id,
                 t.RunRow.compute_plan_id == compute_plan_id,
                 t.RunRow.status.in_([RunStatus.QUEUED.value, RunStatus.RUNNING.value]),
             )
@@ -1406,6 +1419,11 @@ class SharedResourceRepositoryImpl:
         row = await self._session.get(t.SharedResourceVersionRow, version_id)
         return await self._hydrate_version(row) if row else None
 
+    async def get_by_id(self, resource_id: str) -> SharedResource | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.SharedResourceRow, resource_id)
+        return _to_shared_resource(row) if row else None
+
     async def list_versions_discoverable_for_user(
         self, user_id: str, resource_id: str
     ) -> list[SharedResourceVersion]:
@@ -1456,6 +1474,110 @@ class SharedResourceRepositoryImpl:
         )
 
 
+class GrantRepositoryImpl:
+    """Grant persistence with discriminated-union grantee/target columns."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, grant: Grant) -> None:
+        self._session.add(
+            t.GrantRow(
+                id=grant.id,
+                grantor_kind=grant.grantor.kind.value,
+                grantor_id=grant.grantor.id,
+                grantee_kind=grant.grantee.kind.value,
+                grantee_id=grant.grantee.id,
+                target_kind=grant.target_kind.value,
+                target_id=grant.target_id,
+                action=grant.action.value,
+                granted_by_id=grant.granted_by,
+                created_at=grant.created_at,
+            )
+        )
+        await _flush(self._session)
+
+    async def get(self, grant_id: str) -> Grant | None:
+        row = await self._session.get(t.GrantRow, grant_id)
+        return _to_grant(row) if row else None
+
+    async def list_for_target(self, target_kind: GrantTargetKind, target_id: str) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.target_kind == target_kind.value,
+                t.GrantRow.target_id == target_id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.grantee_kind == grantee.kind.value,
+                t.GrantRow.grantee_id == grantee.id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def list_for_grantor(self, grantor: OwnerReference) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.grantor_kind == grantor.kind.value,
+                t.GrantRow.grantor_id == grantor.id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def delete(self, grant_id: str) -> bool:
+        stmt = delete(t.GrantRow).where(t.GrantRow.id == grant_id)
+        result = await self._session.execute(stmt)
+        await _flush(self._session)
+        return result.rowcount > 0
+
+    async def exists_use_grant(
+        self,
+        grantee: OwnerReference,
+        target_kind: GrantTargetKind,
+        target_id: str,
+        grantor: OwnerReference,
+    ) -> bool:
+        """Check for a USE Grant from ``grantor`` to ``grantee`` for ``target``.
+
+        Matches either Target == ALL (covering all Grantor assets) or an exact
+        (target_kind, target_id) match. The ``grantor`` must equal the asset's
+        current Owner — after Ownership transfer, old Grants no longer match.
+        """
+        stmt = (
+            select(t.GrantRow.id)
+            .where(
+                t.GrantRow.grantor_kind == grantor.kind.value,
+                t.GrantRow.grantor_id == grantor.id,
+                t.GrantRow.grantee_kind == grantee.kind.value,
+                t.GrantRow.grantee_id == grantee.id,
+                t.GrantRow.action == GrantAction.USE.value,
+                or_(
+                    t.GrantRow.target_kind == GrantTargetKind.ALL.value,
+                    and_(
+                        t.GrantRow.target_kind == target_kind.value,
+                        t.GrantRow.target_id == target_id,
+                    ),
+                ),
+            )
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return row is not None
+
+
 class SqlRepositories:
     """一次工作单元内的全部仓储。"""
 
@@ -1482,6 +1604,7 @@ class SqlRepositories:
         self.notifications = NotificationRepositoryImpl(session)
         self.fork_relations = ForkRelationRepositoryImpl(session)
         self.shared_resources = SharedResourceRepositoryImpl(session)
+        self.grants = GrantRepositoryImpl(session)
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -1655,7 +1778,7 @@ def _to_compute_plan(row: t.ComputePlanRow) -> ComputePlan:
 def _to_entitlement(row: t.ResourceEntitlementRow) -> ResourceEntitlement:
     return ResourceEntitlement(
         id=row.id,
-        workspace_id=row.workspace_id,
+        user_id=row.user_id,
         compute_plan_id=row.compute_plan_id,
         max_concurrent_runs=row.max_concurrent_runs,
         expires_at=row.expires_at,
@@ -1749,5 +1872,18 @@ def _to_shared_resource(row: t.SharedResourceRow) -> SharedResource:
         name=row.name,
         owner=_owner_reference(row.owner_user_id, row.owner_user_group_id),
         description=row.description,
+        created_at=_aware(row.created_at),
+    )
+
+
+def _to_grant(row: t.GrantRow) -> Grant:
+    return Grant(
+        id=row.id,
+        grantor=OwnerReference(OwnerKind(row.grantor_kind), row.grantor_id),
+        grantee=OwnerReference(OwnerKind(row.grantee_kind), row.grantee_id),
+        target_kind=GrantTargetKind(row.target_kind),
+        target_id=row.target_id,
+        action=GrantAction(row.action),
+        granted_by=row.granted_by_id,
         created_at=_aware(row.created_at),
     )

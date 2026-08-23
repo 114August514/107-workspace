@@ -51,7 +51,6 @@ import type {
   SharedResourceUpdate,
   SharedResourceVersion,
   SharedResourceVersionDetail,
-  Variable,
   VersionDiff,
   WorkingChange,
   UserGroup,
@@ -275,60 +274,8 @@ export const api = {
     )
   },
 
-  listEntitlements: async (id: string): Promise<Entitlement[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/entitlements', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  listVariables: async (id: string): Promise<Variable[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/variables', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setVariable: async (id: string, name: string, value: string): Promise<Variable> =>
-    unwrap(
-      await http.PUT('/api/v1/workspaces/{workspace_id}/variables', {
-        params: { path: { workspace_id: id } },
-        body: { name, value },
-      }),
-    ),
-
-  deleteVariable: async (id: string, name: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/variables/{name}', {
-        params: { path: { workspace_id: id, name } },
-      }),
-    )
-  },
-
-  /** 只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。 */
-  listSecretNames: async (id: string): Promise<string[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/secrets', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setSecret: async (id: string, name: string, value: string): Promise<void> => {
-    unwrap(
-      await http.PUT('/api/v1/workspaces/{workspace_id}/secrets', {
-        params: { path: { workspace_id: id } },
-        body: { name, value },
-      }),
-    )
-  },
-
-  deleteSecret: async (id: string, name: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/secrets/{name}', {
-        params: { path: { workspace_id: id, name } },
-      }),
-    )
-  },
+  listEntitlements: async (): Promise<Entitlement[]> =>
+    unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
   listProjects: async (workspaceId: string, query: PageQuery = {}): Promise<ProjectPage> =>
@@ -454,6 +401,20 @@ export const api = {
     unwrap(
       await http.POST('/api/v1/versions/{version_id}/restore', {
         params: { path: { version_id: versionId } },
+      }),
+    ),
+
+  listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/variables', {
+        params: { path: { project_id: projectId } },
+      }),
+    ),
+
+  listProjectSecrets: async (projectId: string): Promise<string[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/secrets', {
+        params: { path: { project_id: projectId } },
       }),
     ),
 

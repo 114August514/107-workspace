@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
+from ..config_scope import ConfigScope
+from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
     Artifact,
@@ -32,8 +34,9 @@ from ..models import (
     SharedResourceVersion,
     User,
     UserGroup,
-    WorkspaceVariable,
+    Variable,
 )
+from ..ownership import OwnerReference
 from ..pagination import Page, PageRequest
 from ..run_snapshot import RunSnapshot
 
@@ -74,9 +77,10 @@ class MembershipRepository(Protocol):
 
 
 class VariableRepository(Protocol):
-    async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceVariable]: ...
-    async def upsert(self, variable: WorkspaceVariable) -> None: ...
-    async def delete(self, workspace_id: str, name: str) -> None: ...
+    async def list_for_scope(self, scope: ConfigScope) -> list[Variable]: ...
+    async def get(self, scope: ConfigScope, name: str) -> Variable | None: ...
+    async def upsert(self, variable: Variable) -> None: ...
+    async def delete(self, scope: ConfigScope, name: str) -> None: ...
 
 
 class ProjectRepository(Protocol):
@@ -122,6 +126,13 @@ class EnvironmentRepository(Protocol):
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
     ) -> EnvironmentVersion | None: ...
+    async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
+        """Trusted exact lookup for grant-authorized use."""
+        ...
+
+    async def get_by_id(self, environment_id: str) -> Environment | None:
+        """Trusted exact lookup for grant-authorized use."""
+        ...
 
 
 class ComputePlanRepository(Protocol):
@@ -130,15 +141,13 @@ class ComputePlanRepository(Protocol):
 
 
 class EntitlementRepository(Protocol):
-    async def list_for_workspace(self, workspace_id: str) -> list[ResourceEntitlement]: ...
+    async def list_for_user(self, user_id: str) -> list[ResourceEntitlement]: ...
     async def get_for_plan(
-        self, workspace_id: str, compute_plan_id: str
+        self, user_id: str, compute_plan_id: str
     ) -> ResourceEntitlement | None: ...
     async def add(self, entitlement: ResourceEntitlement) -> None: ...
 
-    async def lock_for_plan(
-        self, workspace_id: str, compute_plan_id: str
-    ) -> ResourceEntitlement | None:
+    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
         """取权益并在当前事务内独占它，直到事务结束。
 
         用于把「数一数还剩几个并发名额，然后创建 Run」这一段串行化。
@@ -177,7 +186,7 @@ class RunRepository(Protocol):
         """条件更新把 Run 推进到终态。抢到返回 True，别人已推进过返回 False。"""
         ...
 
-    async def count_unfinished_for_plan(self, workspace_id: str, compute_plan_id: str) -> int: ...
+    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int: ...
 
 
 class IdempotencyRepository(Protocol):
@@ -262,7 +271,31 @@ class SharedResourceRepository(Protocol):
         """Trusted exact lookup for execution of an already-fixed snapshot."""
         ...
 
+    async def get_by_id(self, resource_id: str) -> SharedResource | None:
+        """Trusted exact lookup for grant-authorized use."""
+        ...
+
     async def next_version_sequence(self, resource_id: str) -> int: ...
+
+
+class GrantRepository(Protocol):
+    async def add(self, grant: Grant) -> None: ...
+    async def get(self, grant_id: str) -> Grant | None: ...
+    async def list_for_target(
+        self, target_kind: GrantTargetKind, target_id: str
+    ) -> list[Grant]: ...
+    async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]: ...
+    async def list_for_grantor(self, grantor: OwnerReference) -> list[Grant]: ...
+    async def delete(self, grant_id: str) -> bool: ...
+    async def exists_use_grant(
+        self,
+        grantee: OwnerReference,
+        target_kind: GrantTargetKind,
+        target_id: str,
+        grantor: OwnerReference,
+    ) -> bool:
+        """Check for a USE Grant from ``grantor`` to ``grantee`` for ``target``."""
+        ...
 
 
 class Repositories(Protocol):
@@ -289,6 +322,7 @@ class Repositories(Protocol):
     notifications: NotificationRepository
     fork_relations: ForkRelationRepository
     shared_resources: SharedResourceRepository
+    grants: GrantRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

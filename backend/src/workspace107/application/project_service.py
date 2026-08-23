@@ -447,9 +447,7 @@ class ProjectService:
         **权益、凭据、成员权限、Run 历史一律不复制**——那些属于源 Workspace，
         跟着复制过来就是越权。
 
-        Secret 只复制引用表达式，不复制值（GR-407）。值存在
-        WorkspaceSecret 里，本来就不在复制路径上；目标空间没有同名 Secret 时
-        提交前检查会拦下，这是**正确行为**，比静默降级好。
+        Secret values are never copied; target exact scopes are re-resolved at preflight.
         """
         # 1. 源版本可读
         source_version = await self.get_version(user_id, version_id)

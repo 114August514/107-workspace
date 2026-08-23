@@ -103,7 +103,7 @@ jobs:
           uv run --no-project python scripts/workspace.py setup backend
           test -n "$WORKSPACE107_TEST_POSTGRESQL_URL"
           cd backend
-          uv run pytest -q tests/integration/postgres/test_user_group_postgres.py
+          uv run pytest -q tests/integration/postgres/test_user_group_postgres.py tests/integration/postgres/test_scoped_config_postgres.py
 
 
   docker-build:

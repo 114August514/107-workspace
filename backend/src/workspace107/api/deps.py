@@ -16,6 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from ..application.access import AccessGuard
 from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
+from ..application.configuration_service import ConfigurationService
+from ..application.entitlement_service import EntitlementService
+from ..application.grant_service import GrantService
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
 from ..application.notifier import NotificationService, Notifier
@@ -23,6 +26,7 @@ from ..application.project_service import ProjectService
 from ..application.run_configuration_service import RunConfigurationService
 from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
+from ..application.scoped_config_resolver import ScopedConfigResolver
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
 from ..application.workspace_service import LegacyWorkspaceService
@@ -69,7 +73,9 @@ class Services:
 
     identity: IdentityService
     user_groups: UserGroupService
+    configuration: ConfigurationService
     legacy_workspaces: LegacyWorkspaceService
+    entitlements: EntitlementService
     projects: ProjectService
     run_configurations: RunConfigurationService
     runs: RunService
@@ -79,6 +85,7 @@ class Services:
     activities: ActivityService
     notifications: NotificationService
     shared_resources: SharedResourceService
+    grants: GrantService
 
 
 def build_services(context: AppContext, session: AsyncSession) -> Services:
@@ -101,7 +108,9 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
     return Services(
         identity=IdentityService(repos, context.clock, session),
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
-        legacy_workspaces=LegacyWorkspaceService(repos, guard, vault),
+        configuration=ConfigurationService(repos, guard, vault),
+        legacy_workspaces=LegacyWorkspaceService(repos, guard),
+        entitlements=EntitlementService(repos),
         projects=ProjectService(
             repos,
             guard,
@@ -120,6 +129,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             vault,
             activity,
             notifier,
+            config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
         catalog=CatalogService(repos),
         health=HealthService(repos),
@@ -136,6 +146,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             activity,
             max_file_bytes=context.settings.max_file_bytes,
         ),
+        grants=GrantService(repos, guard, context.clock),
     )
 
 

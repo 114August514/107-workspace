@@ -22,6 +22,7 @@ from ..api.deps import build_services
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
 from ..domain import ids
+from ..domain.config_scope import ConfigScope
 from ..domain.enums import LegacyWorkspaceKind, MembershipRole, MembershipStatus
 from ..domain.pagination import PageRequest
 from ..infrastructure.db import tables as t
@@ -368,18 +369,19 @@ async def seed_demo(
     entitlement = (
         await session.execute(
             select(t.ResourceEntitlementRow).where(
-                t.ResourceEntitlementRow.workspace_id == DEMO_USER_GROUP_ID,
+                t.ResourceEntitlementRow.user_id == user.id,
                 t.ResourceEntitlementRow.compute_plan_id == "plan_cpu_quick",
             )
         )
     ).scalar_one_or_none()
     if entitlement is None:
-        # Demo data explicitly opts into the still-legacy Run qualification model.
-        # Creating a real User Group grants no Workspace-scoped entitlement.
+        # Resource Entitlement 属于 User（Issue #38）。正式发放走 Entitlement
+        # Request 审批（V1）；这里只是本地演示 fixture，不代表创建
+        # User Group / Workspace 会自动获得算力资格。
         session.add(
             t.ResourceEntitlementRow(
                 id=ids.new_id(ids.ENTITLEMENT),
-                workspace_id=DEMO_USER_GROUP_ID,
+                user_id=user.id,
                 compute_plan_id="plan_cpu_quick",
                 max_concurrent_runs=2,
                 expires_at=None,
@@ -408,7 +410,9 @@ async def seed_demo(
     )
     await services.projects.save_version(user.id, project.id, "初始版本")
 
-    await services.legacy_workspaces.set_variable(user.id, DEMO_USER_GROUP_ID, "EPOCHS", "5")
+    await services.configuration.set_variable(
+        ConfigScope.user_group(DEMO_USER_GROUP_ID), "EPOCHS", "5"
+    )
     await services.run_configurations.create(
         user.id,
         project.id,

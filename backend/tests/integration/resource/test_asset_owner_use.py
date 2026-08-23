@@ -125,7 +125,7 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
     group_a = await _create_group(client, "Group A")
     group_b = await _create_group(client, "Group B")
     environment_version_id = await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_version_id = await _create_resource_version(client, group_b)
 
@@ -273,7 +273,7 @@ async def test_issue_39_environment_assignment_requires_exact_project_owner(
     assert same_owner.status_code == 201, same_owner.text
 
     # A bypassed exact Environment reference is rejected again during Run resolution.
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     bypass_id = "rc_environment_owner_bypass"
     session.add(
         RunConfigurationRow(
@@ -374,7 +374,7 @@ async def test_issue_39_rerun_revalidates_snapshot_asset_owners(
     group_a = await _create_group(client, "Rerun Group A")
     group_b = await _create_group(client, "Rerun Group B")
     environment_a = await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="Rerun source")
     resource_a = await _create_resource_version(client, group_a)
     configuration = await client.post(

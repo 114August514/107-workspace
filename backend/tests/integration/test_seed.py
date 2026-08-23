@@ -213,8 +213,8 @@ async def test_issue_35_demo_seed_uses_only_its_deterministic_group(context, ses
     )
 
     entitlements = list((await session.execute(select(t.ResourceEntitlementRow))).scalars())
-    assert {(item.workspace_id, item.compute_plan_id) for item in entitlements} == {
-        (DEMO_USER_GROUP_ID, "plan_cpu_quick")
+    assert {(item.user_id, item.compute_plan_id) for item in entitlements} == {
+        (user.id, "plan_cpu_quick")
     }
 
     unrelated_after = await session.get(t.UserGroupRow, unrelated.id)

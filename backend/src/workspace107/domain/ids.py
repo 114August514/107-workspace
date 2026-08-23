@@ -26,6 +26,7 @@ NOTIFICATION = "ntf"
 FORK_RELATION = "fork"
 SHARED_RESOURCE = "shr"
 SHARED_RESOURCE_VERSION = "shrv"
+GRANT = "gnt"
 
 
 def new_id(prefix: str) -> str:

@@ -14,6 +14,7 @@ from ..domain.capabilities import (
 from ..domain.enums import MembershipRole
 from ..domain.errors import ObjectNotFound, PermissionDenied
 from ..domain.models import (
+    Environment,
     LegacyWorkspace,
     Project,
     Run,
@@ -117,6 +118,25 @@ class SharedResourceAccess:
             raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
 
 
+@dataclass(frozen=True, slots=True)
+class EnvironmentAccess:
+    """Current User's role-derived access to a repository-visible environment."""
+
+    environment: Environment
+    role: MembershipRole
+
+    @property
+    def capabilities(self) -> frozenset[Capability]:
+        return capabilities_of(self.role)
+
+    def can(self, capability: Capability) -> bool:
+        return capability in self.capabilities
+
+    def require(self, capability: Capability) -> None:
+        if not self.can(capability):
+            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
+
+
 class AccessGuard:
     def __init__(self, repos: Repositories) -> None:
         self._repos = repos
@@ -138,6 +158,16 @@ class AccessGuard:
         if needs is not None:
             access.require(needs)
         return access
+
+    async def scoped_config_group(self, user_id: str, user_group_id: str, *, manage: bool) -> None:
+        """Authorize config without exposing governance capability projections."""
+        group = await self._repos.user_groups.get_for_active_member(user_group_id, user_id)
+        membership = await self._repos.memberships.get(user_group_id, user_id)
+        if group is None or membership is None or not membership.is_active:
+            raise ObjectNotFound("User Group", user_group_id)
+        required = Capability.CONFIG_MANAGE if manage else Capability.CONFIG_VIEW
+        if required not in capabilities_of(membership.role):
+            raise PermissionDenied(f"当前角色（{membership.role.value}）无权{describe(required)}")
 
     async def legacy_workspace(
         self, user_id: str, workspace_id: str, *, needs: Capability | None = None
@@ -210,6 +240,29 @@ class AccessGuard:
             role = membership.role
 
         access = SharedResourceAccess(resource=resource, role=role)
+        if needs is not None:
+            access.require(needs)
+        return access
+
+    async def environment(
+        self, user_id: str, environment_id: str, *, needs: Capability | None = None
+    ) -> EnvironmentAccess:
+        environment = await self._repos.environments.get_discoverable_for_user(
+            user_id, environment_id
+        )
+        if environment is None:
+            raise ObjectNotFound("Environment", environment_id)
+
+        if environment.owner.kind is OwnerKind.USER:
+            # Repository visibility already proved the exact User owner is the actor.
+            role = MembershipRole.OWNER
+        else:
+            membership = await self._repos.memberships.get(environment.owner.id, user_id)
+            if membership is None or not membership.is_active:  # pragma: no cover - SQL guard
+                raise ObjectNotFound("Environment", environment_id)
+            role = membership.role
+
+        access = EnvironmentAccess(environment=environment, role=role)
         if needs is not None:
             access.require(needs)
         return access

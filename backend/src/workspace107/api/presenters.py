@@ -8,10 +8,12 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ..application.catalog_service import EnvironmentView
+from ..application.entitlement_service import EntitlementView
+from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
 from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
-from ..application.workspace_service import EntitlementView, LegacyWorkspaceView
+from ..application.workspace_service import LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
 from ..domain.models import (
     Activity,
@@ -305,7 +307,7 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
         environment_image=snapshot.environment_image,
         environment_setup_command=snapshot.environment_setup_command,
         environment_variables=dict(snapshot.env_literals),
-        secret_references=dict(snapshot.env_secret_refs),
+        secret_references={name: ref.as_key() for name, ref in snapshot.env_secret_refs.items()},
         input_bindings=[input_binding_out(b) for b in snapshot.input_bindings],
         compute_plan_id=snapshot.compute_plan_id,
         compute_request=s.ComputeRequestModel(**snapshot.compute_request.as_payload()),
@@ -417,4 +419,17 @@ def shared_resource_version_detail_out(
             s.SharedResourceVersionFileOut(path=f.path, size=f.size, content_hash=f.content_hash)
             for f in version.files
         ],
+    )
+
+
+def grant_out(view: GrantView) -> s.GrantOut:
+    return s.GrantOut(
+        id=view.grant.id,
+        grantor=owner_summary_out(view.grantor),
+        grantee=owner_summary_out(view.grantee),
+        target_kind=view.grant.target_kind.value,
+        target_id=view.grant.target_id,
+        action=view.grant.action.value,
+        granted_by=owner_summary_out(view.granted_by),
+        created_at=view.grant.created_at,
     )

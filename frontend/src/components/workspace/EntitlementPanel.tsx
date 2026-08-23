@@ -8,12 +8,9 @@ import { field } from '../../utils/field'
 import { describeComputeRequest, formatMemory } from '../../utils/format'
 import { AsyncSection } from '../common/AsyncSection'
 
-/** 当前 Project 可用的算力方案与并发上限。 */
-export function EntitlementPanel({ workspaceId }: { workspaceId: string }) {
-  const entitlements = useAsync<Entitlement[]>(
-    () => api.listEntitlements(workspaceId),
-    [workspaceId],
-  )
+/** 当前用户拥有的算力方案使用资格（Resource Entitlement 属于 User 本人）。 */
+export function EntitlementPanel() {
+  const entitlements = useAsync<Entitlement[]>(() => api.listEntitlements(), [])
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
 
   const planById = new Map((plans.data ?? []).map((plan) => [plan.id, plan]))
@@ -64,14 +61,14 @@ export function EntitlementPanel({ workspaceId }: { workspaceId: string }) {
       <Alert
         type="info"
         showIcon
-        message="这里显示当前可用于这些 Project 的算力方案"
-        description="算力方案由平台分配；如果当前没有可用方案，相关 Project 就无法提交 Run。"
+        message="这里显示你本人拥有的算力方案使用资格"
+        description="Resource Entitlement 属于用户本人，提交 Run 时按发起用户的资格校验；成员身份不会转移算力资格。"
       />
       <AsyncSection
         loading={entitlements.loading || plans.loading}
         error={entitlements.error ?? plans.error}
         empty={(entitlements.data ?? []).length === 0}
-        emptyText="当前没有可用的算力方案"
+        emptyText="你当前没有可用的算力方案资格"
       >
         <Table
           rowKey="id"

@@ -30,6 +30,16 @@ async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
     )
 
 
+@router.get(
+    "/me/entitlements",
+    response_model=list[s.EntitlementOut],
+    summary="查看我的资源权益",
+)
+async def list_my_entitlements(user: CurrentUser, services: ServicesDep) -> list[s.EntitlementOut]:
+    """Resource Entitlement 属于 User 本人，按发起 User 校验 Run 资格。"""
+    return [p.entitlement_out(view) for view in await services.entitlements.list_for_user(user.id)]
+
+
 @router.get("/invitations", response_model=list[s.InvitationOut], summary="我收到的邀请")
 async def list_invitations(user: CurrentUser, services: ServicesDep) -> list[s.InvitationOut]:
     """Pending User Group invitations; an invited user cannot read group content yet."""
