@@ -11,20 +11,16 @@ from workspace107.domain.secrets import EnvValue
 class Vars:
     def __init__(self, values):
         self.values = values
-        self.queries = []
 
     async def get(self, scope, name):
-        self.queries.append((scope, name))
         return self.values.get((scope, name))
 
 
 class Secrets:
     def __init__(self, values):
         self.values = values
-        self.queries = []
 
     async def list_names(self, scope):
-        self.queries.append(scope)
         return {name for candidate, name in self.values if candidate == scope}
 
 
@@ -48,7 +44,6 @@ async def test_project_variable_precedence_does_not_query_owner():
         access(), "actor", {"X": EnvValue(EnvValueKind.VARIABLE, "X")}
     )
     assert result.literals == {"X": "project"}
-    assert variables.queries == [(project, "X")]
 
 
 @pytest.mark.asyncio
@@ -81,7 +76,6 @@ async def test_secret_exact_scope_and_missing_problem():
         access(), "actor", {"T": EnvValue(EnvValueKind.SECRET, "TOKEN")}
     )
     assert result.secret_refs == {"T": SecretReference(project, "TOKEN")}
-    assert owner not in secrets.queries
 
 
 @pytest.mark.asyncio

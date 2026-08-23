@@ -176,9 +176,12 @@ class RunService:
         secret_values: list[str] = []
         if snapshot is not None:
             secret_values = await self._secrets.redaction_values(access.run.id)
-            if not secret_values and snapshot.env_secret_refs:
-                refs = list(set(snapshot.env_secret_refs.values()))
-                secret_values = list((await self._secrets.resolve(refs)).values())
+            if (
+                access.run.submitted_at is not None
+                and snapshot.env_secret_refs
+                and not secret_values
+            ):
+                raise ValidationFailed("Run Secret redaction retention is unavailable")
 
         chunks: list[RunLogChunk] = []
         for stream in (LogStream.STDOUT, LogStream.STDERR):

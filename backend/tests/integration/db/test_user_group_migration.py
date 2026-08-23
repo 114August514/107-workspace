@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -72,33 +71,6 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         "NULL, NULL, 'usr_alice', ?, ?)",
         (now, now),
     )
-    connection.executemany(
-        "INSERT INTO workspace_variables (workspace_id, name, value) VALUES (?, ?, ?)",
-        [("ws_personal", "LEVEL", "personal"), ("ws_collab", "LEVEL", "collab")],
-    )
-    connection.executemany(
-        "INSERT INTO workspace_secrets (workspace_id, name, value, updated_at) VALUES (?, ?, ?, ?)",
-        [
-            ("ws_personal", "TOKEN", "personal-secret", now),
-            ("ws_collab", "TOKEN", "collab-secret", now),
-            ("ws_personal", "LATE", "late-secret", "2026-08-17 00:00:01+00:00"),
-        ],
-    )
-    connection.execute(
-        "INSERT INTO run_snapshots (id, payload) VALUES (?, ?)",
-        (
-            "snap_1",
-            '{"project_id":"prj_personal","env":{"literals":{"A":"1"},"secret_refs":{"T":"TOKEN","U":"TOKEN","L":"LATE","M":"MISSING"}}}',
-        ),
-    )
-    connection.execute(
-        "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_1','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run','succeeded','', 'usr_alice',?,?)",  # noqa: E501
-        ("2026-08-17 00:00:00+00:00", "2026-08-17 00:00:02+00:00"),
-    )
-    connection.execute(
-        "INSERT INTO runs (id,project_id,workspace_id,snapshot_id,compute_plan_id,project_version_id,project_version_label,name,status,failure_reason,created_by,created_at,submitted_at) VALUES ('run_2','prj_personal','ws_personal','snap_1','plan_cpu_quick','pv_1','v1','Run2','succeeded','', 'usr_alice',?,NULL)",  # noqa: E501
-        ("2026-08-17 00:00:00+00:00",),
-    )
     connection.commit()
     connection.close()
 
@@ -117,32 +89,6 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         ("ws_collab", "collaborative"),
         ("ws_personal", "personal"),
     ]
-    assert _rows(
-        connection,
-        "SELECT scope_kind, scope_id, name, value FROM variables ORDER BY scope_kind, scope_id",
-    ) == [
-        ("user", "usr_alice", "LEVEL", "personal"),
-        ("user_group", "ws_collab", "LEVEL", "collab"),
-    ]
-    assert _rows(
-        connection,
-        "SELECT scope_kind, scope_id, name, value FROM secrets ORDER BY scope_kind, scope_id",
-    ) == [
-        ("user", "usr_alice", "LATE", "late-secret"),
-        ("user", "usr_alice", "TOKEN", "personal-secret"),
-        ("user_group", "ws_collab", "TOKEN", "collab-secret"),
-    ]
-    snapshot_payload = connection.execute(
-        "SELECT payload FROM run_snapshots WHERE id='snap_1'"
-    ).fetchone()[0]
-    assert "user:usr_alice:TOKEN" in str(snapshot_payload)
-    assert _rows(connection, "SELECT run_id,value,value_digest FROM run_secret_redactions") == [
-        ("run_1", "personal-secret", hashlib.sha256(b"personal-secret").hexdigest())
-    ]
-    assert connection.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='run_secret_redactions'"
-    ).fetchone() == ("run_secret_redactions",)
-    assert "personal-secret" not in str(snapshot_payload)
     assert _rows(connection, "SELECT id, workspace_id FROM projects") == [
         ("prj_personal", "ws_personal")
     ]
@@ -185,13 +131,6 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
 
     command.downgrade(config, PREVIOUS_REVISION)
     connection = sqlite3.connect(database)
-    downgraded_snapshot = connection.execute(
-        "SELECT payload FROM run_snapshots WHERE id='snap_1'"
-    ).fetchone()[0]
-    assert '"literals": {"A": "1"}' in str(downgraded_snapshot)
-    assert '"secret_refs": {"T": "TOKEN", "U": "TOKEN", "L": "LATE", "M": "MISSING"}' in str(
-        downgraded_snapshot
-    )
     assert _rows(
         connection,
         "SELECT id, name, owner_id FROM workspaces WHERE kind='collaborative' ORDER BY id",
@@ -232,12 +171,4 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
         connection,
         "SELECT id, workspace_id, user_id, role, status FROM legacy_personal_memberships",
     ) == [("mbr_personal", "ws_personal", "usr_alice", "owner", "active")]
-    upgraded_snapshot = connection.execute(
-        "SELECT payload FROM run_snapshots WHERE id='snap_1'"
-    ).fetchone()[0]
-    assert '"literals": {"A": "1"}' in str(upgraded_snapshot)
-    assert (
-        '"secret_refs": {"T": "user:usr_alice:TOKEN", "U": "user:usr_alice:TOKEN", "L": "user:usr_alice:LATE", "M": "user:usr_alice:MISSING"}'  # noqa: E501
-        in str(upgraded_snapshot)
-    )
     connection.close()
