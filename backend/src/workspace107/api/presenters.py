@@ -424,6 +424,7 @@ def shared_resource_version_detail_out(
 def grant_out(view: GrantView) -> s.GrantOut:
     return s.GrantOut(
         id=view.grant.id,
+        grantor=owner_summary_out(view.grantor),
         grantee=owner_summary_out(view.grantee),
         target_kind=view.grant.target_kind.value,
         target_id=view.grant.target_id,

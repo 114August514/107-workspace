@@ -135,22 +135,22 @@ async def _insert_grant(
     target_kind: str,
     target_id: str,
     granted_by_id: str,
-    grantor_owner_kind: str,
-    grantor_owner_id: str,
+    grantor_kind: str,
+    grantor_id: str,
 ) -> str:
     """Insert a GrantRow directly."""
     grant_id = ids.new_id(ids.GRANT)
     session.add(
         GrantRow(
             id=grant_id,
+            grantor_kind=grantor_kind,
+            grantor_id=grantor_id,
             grantee_kind=grantee_kind,
             grantee_id=grantee_id,
             target_kind=target_kind,
             target_id=target_id,
             action="use",
             granted_by_id=granted_by_id,
-            grantor_owner_kind=grantor_owner_kind,
-            grantor_owner_id=grantor_owner_id,
             created_at=datetime.now(UTC),
         )
     )
@@ -210,8 +210,8 @@ async def test_user_grant_enables_cross_owner_shared_resource_use(
         target_kind="shared_resource",
         target_id=resource_b_id,
         granted_by_id=alice_id,
-        grantor_owner_kind="user_group",
-        grantor_owner_id=group_b,
+        grantor_kind="user_group",
+        grantor_id=group_b,
     )
 
     # With Grant: same request succeeds.
@@ -267,8 +267,8 @@ async def test_user_group_grant_enables_cross_owner_environment_use(
         target_kind="environment",
         target_id=env_b_id,
         granted_by_id=alice_id,
-        grantor_owner_kind="user_group",
-        grantor_owner_id=group_b,
+        grantor_kind="user_group",
+        grantor_id=group_b,
     )
 
     # With Grant: assignment succeeds.
@@ -308,8 +308,8 @@ async def test_user_group_grant_inactive_member_cannot_use(
         target_kind="shared_resource",
         target_id=resource_b_id,
         granted_by_id=alice_id,
-        grantor_owner_kind="user_group",
-        grantor_owner_id=group_b,
+        grantor_kind="user_group",
+        grantor_id=group_b,
     )
 
     # Remove Alice from Group A (set membership status to REMOVED).
@@ -587,8 +587,8 @@ async def test_ownership_transfer_invalidates_grant(
         target_kind="shared_resource",
         target_id=resource_b_id,
         granted_by_id=alice_id,
-        grantor_owner_kind="user_group",
-        grantor_owner_id=group_b,
+        grantor_kind="user_group",
+        grantor_id=group_b,
     )
 
     # With grant: run-configuration creation succeeds.
@@ -677,3 +677,316 @@ async def test_grant_to_nonexistent_grantee_rejected(
         headers=ALICE,
     )
     assert response.status_code == 404, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 10: ALL grant covers current and future assets (GR-401)
+# ---------------------------------------------------------------------------
+
+
+async def test_all_grant_covers_current_and_future_assets(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """An ALL grant from a Grantor covers all current and future assets."""
+    group_a = await _create_group(client, "ALL Grant Group A")
+    group_b = await _create_group(client, "ALL Grant Group B")
+    await _set_group_environment(session, client, group_a)
+    await grant_test_entitlement(session, group_a)
+    project = await _create_project_with_version(client, group_a, name="A project")
+    _resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+
+    alice_id = await _get_user_id(client, ALICE)
+
+    # Without grant: referencing B's resource → 404.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "no-grant",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 404, response.text
+
+    # Create an ALL grant: Group B → Group A.
+    await _insert_grant(
+        session,
+        grantee_kind="user_group",
+        grantee_id=group_a,
+        target_kind="all",
+        target_id="",
+        granted_by_id=alice_id,
+        grantor_kind="user_group",
+        grantor_id=group_b,
+    )
+
+    # With ALL grant: same resource now works.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "all-grant-existing",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+    # Create a NEW resource under Group B — ALL grant should cover it too.
+    _resource_b2_id, resource_b2_version_id = await _create_resource_version(client, group_b)
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "all-grant-future",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b2_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+    # Create an environment under Group B — ALL grant should cover it too.
+    _env_b_id, env_b_version_id = await _create_environment_version(
+        session, owner_user_group_id=group_b
+    )
+    response = await client.patch(
+        f"/api/v1/projects/{project['id']}",
+        json={"environment_version_id": env_b_version_id},
+        headers=ALICE,
+    )
+    assert response.status_code == 200, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 11: New owner can re-grant after ownership transfer (GR-408)
+# ---------------------------------------------------------------------------
+
+
+async def test_new_owner_can_re_grant_after_transfer(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """After asset ownership transfers, the new owner can issue a fresh grant."""
+    group_a = await _create_group(client, "ReGrant Group A")
+    group_b = await _create_group(client, "ReGrant Group B")
+    group_c = await _create_group(client, "ReGrant Group C")
+    await _set_group_environment(session, client, group_a)
+    await grant_test_entitlement(session, group_a)
+    project = await _create_project_with_version(client, group_a, name="A project")
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+
+    alice_id = await _get_user_id(client, ALICE)
+
+    # Grant under group_b → works.
+    await _insert_grant(
+        session,
+        grantee_kind="user_group",
+        grantee_id=group_a,
+        target_kind="shared_resource",
+        target_id=resource_b_id,
+        granted_by_id=alice_id,
+        grantor_kind="user_group",
+        grantor_id=group_b,
+    )
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "before-transfer",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+    # Transfer ownership: group_b → group_c.
+    from workspace107.infrastructure.db.tables import SharedResourceRow
+
+    resource_row = (
+        await session.execute(
+            select(SharedResourceRow).where(SharedResourceRow.id == resource_b_id)
+        )
+    ).scalar_one()
+    resource_row.owner_user_group_id = group_c
+    resource_row.owner_user_id = None
+    await session.commit()
+
+    # Old grant no longer works.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "after-transfer-old-grant",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 404, response.text
+
+    # New owner (group_c) re-grants to group_a.
+    await _insert_grant(
+        session,
+        grantee_kind="user_group",
+        grantee_id=group_a,
+        target_kind="shared_resource",
+        target_id=resource_b_id,
+        granted_by_id=alice_id,
+        grantor_kind="user_group",
+        grantor_id=group_c,
+    )
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "after-transfer-regrant",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 12: UserGroup internal OWNER role transfer does not invalidate grants
+# ---------------------------------------------------------------------------
+
+
+async def test_usergroup_owner_role_transfer_preserves_grant(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """Transferring the UserGroup OWNER role does not affect asset grants;
+    the asset still belongs to the same UserGroup."""
+    group_a = await _create_group(client, "RoleTransfer Group A")
+    group_b = await _create_group(client, "RoleTransfer Group B")
+    await _set_group_environment(session, client, group_a)
+    await grant_test_entitlement(session, group_a)
+    project = await _create_project_with_version(client, group_a, name="A project")
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+
+    alice_id = await _get_user_id(client, ALICE)
+
+    # Grant: Group B → Group A.
+    await _insert_grant(
+        session,
+        grantee_kind="user_group",
+        grantee_id=group_a,
+        target_kind="shared_resource",
+        target_id=resource_b_id,
+        granted_by_id=alice_id,
+        grantor_kind="user_group",
+        grantor_id=group_b,
+    )
+
+    # Grant works.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "before-role-transfer",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+    # Transfer OWNER role within Group B: Alice → Bob.
+    from workspace107.domain.enums import MembershipStatus
+    from workspace107.infrastructure.db.tables import MembershipRow
+
+    # Ensure Bob exists (API call) before opening a write transaction on the
+    # test session — SQLite file-level lock would otherwise block the API.
+    bob_id = await _get_user_id(client, BOB)
+
+    # Demote Alice from OWNER to ADMIN in Group B first (uq_membership_active_owner
+    # allows only one active owner per group).
+    alice_membership = (
+        await session.execute(
+            select(MembershipRow).where(
+                MembershipRow.user_group_id == group_b,
+                MembershipRow.user_id == alice_id,
+            )
+        )
+    ).scalar_one()
+    alice_membership.role = "admin"
+    await session.flush()
+
+    # Add Bob as the new OWNER of Group B.
+    session.add(
+        MembershipRow(
+            id=ids.new_id("mbr"),
+            user_group_id=group_b,
+            user_id=bob_id,
+            role="owner",
+            status=MembershipStatus.ACTIVE.value,
+            created_at=datetime.now(UTC),
+        )
+    )
+    await session.commit()
+
+    # Grant still works — asset is still owned by Group B.
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "after-role-transfer",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_b_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text

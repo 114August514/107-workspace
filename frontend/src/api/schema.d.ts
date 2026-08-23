@@ -92,17 +92,21 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 列出指向某资产的 Grant
-         * @description List all Grants for a target asset.  Only the asset Owner may list.
+         * 列出 Grant
+         * @description List Grants.
+         *
+         *     Filter by target asset (``target_kind`` + ``target_id``) or by Grantor
+         *     (``grantor_kind`` + ``grantor_id``).  Exactly one filter pair must be given.
          */
         get: operations["list_grants_api_v1_grants_get"];
         put?: never;
         /**
          * 创建跨 Owner USE Grant
-         * @description Create a USE Grant allowing ``grantee`` to reference the target asset.
+         * @description Create a USE Grant allowing ``grantee`` to reference the Grantor's asset(s).
          *
-         *     Only the target asset's Owner may create a Grant.  The target must be a
-         *     top-level Environment or Shared Resource (not a version).
+         *     For asset grants (environment/shared_resource), the Grantor is derived from
+         *     the target asset's current owner.  For ALL grants, ``grantor`` must be
+         *     supplied explicitly and the caller must have GRANT_MANAGE on that Grantor.
          */
         post: operations["create_grant_api_v1_grants_post"];
         delete?: never;
@@ -123,7 +127,7 @@ export interface paths {
         post?: never;
         /**
          * 撤销 USE Grant
-         * @description Revoke a Grant.  Only the target asset's Owner may revoke.
+         * @description Revoke a Grant.  Requires GRANT_MANAGE on the Grant's Grantor.
          */
         delete: operations["revoke_grant_api_v1_grants__grant_id__delete"];
         options?: never;
@@ -1519,7 +1523,7 @@ export interface components {
          *     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
          * @enum {string}
          */
-        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "entitlement.view" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create";
+        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "entitlement.view" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
         /**
          * ChangeKind
          * @description 文件在两次快照之间的变化类型。
@@ -1719,13 +1723,21 @@ export interface components {
         /** GrantCreateIn */
         GrantCreateIn: {
             grantee: components["schemas"]["OwnerReferenceIn"];
-            /** Target Id */
+            /**
+             * @description Required for ALL grants (who issues the grant); omitted for asset grants
+             *     (derived from the target asset's current owner).
+             */
+            grantor?: components["schemas"]["OwnerReferenceIn"] | null;
+            /**
+             * Target Id
+             * @default
+             */
             target_id: string;
             /**
              * Target Kind
              * @enum {string}
              */
-            target_kind: "environment" | "shared_resource";
+            target_kind: "environment" | "shared_resource" | "all";
         };
         /** GrantOut */
         GrantOut: {
@@ -1741,6 +1753,7 @@ export interface components {
             created_at: string;
             granted_by: components["schemas"]["OwnerSummaryOut"];
             grantee: components["schemas"]["OwnerSummaryOut"];
+            grantor: components["schemas"]["OwnerSummaryOut"];
             /** Id */
             id: string;
             /** Target Id */
@@ -1749,14 +1762,18 @@ export interface components {
              * Target Kind
              * @enum {string}
              */
-            target_kind: "environment" | "shared_resource";
+            target_kind: "environment" | "shared_resource" | "all";
         };
         /**
          * GrantTargetKind
-         * @description Grant 指向的资产种类。仅限顶层资产，不包含 version。
+         * @description Grant 指向的资产范围。
+         *
+         *     ``ALL`` 表示授权 Grantor 当前及未来拥有的全部可授权 Environment /
+         *     Shared Resource；此时 ``target_id`` 为空字符串。
+         *     ``ENVIRONMENT`` / ``SHARED_RESOURCE`` 表示仅授权具体顶层资产。
          * @enum {string}
          */
-        GrantTargetKind: "environment" | "shared_resource";
+        GrantTargetKind: "all" | "environment" | "shared_resource";
         /** HealthOut */
         HealthOut: {
             /** Env */
@@ -2967,11 +2984,15 @@ export interface operations {
     };
     list_grants_api_v1_grants_get: {
         parameters: {
-            query: {
-                /** @description 资产种类：environment 或 shared_resource */
-                target_kind: components["schemas"]["GrantTargetKind"];
+            query?: {
+                /** @description 按资产种类过滤：environment 或 shared_resource */
+                target_kind?: components["schemas"]["GrantTargetKind"] | null;
                 /** @description 顶层资产 ID */
-                target_id: string;
+                target_id?: string | null;
+                /** @description 按 Grantor 种类过滤 */
+                grantor_kind?: components["schemas"]["OwnerKind"] | null;
+                /** @description Grantor ID */
+                grantor_id?: string | null;
             };
             header?: {
                 "X-User"?: string | null;

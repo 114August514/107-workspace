@@ -286,15 +286,16 @@ class GrantRepository(Protocol):
         self, target_kind: GrantTargetKind, target_id: str
     ) -> list[Grant]: ...
     async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]: ...
+    async def list_for_grantor(self, grantor: OwnerReference) -> list[Grant]: ...
     async def delete(self, grant_id: str) -> bool: ...
     async def exists_use_grant(
         self,
         grantee: OwnerReference,
         target_kind: GrantTargetKind,
         target_id: str,
-        grantor_owner: OwnerReference,
+        grantor: OwnerReference,
     ) -> bool:
-        """Check for a valid USE Grant (grantee, target) issued under ``grantor_owner``."""
+        """Check for a USE Grant from ``grantor`` to ``grantee`` for ``target``."""
         ...
 
 

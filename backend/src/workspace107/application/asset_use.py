@@ -3,7 +3,8 @@
 Repository reads keep actor-scoped discovery.  This boundary additionally requires the
 asset owner to be the consuming Project owner.  Issue #40 extends this seam with an
 explicit USE Grant: when the asset Owner differs from the consuming Project Owner, a
-valid USE Grant pointing at the consuming Owner allows use.
+valid USE Grant from the asset's current Owner (Grantor) to the consuming Owner or
+acting User (Grantee) allows use.  A Grant with Target = ALL covers all Grantor assets.
 """
 
 from __future__ import annotations

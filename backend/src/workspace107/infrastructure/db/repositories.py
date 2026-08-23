@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,6 +90,10 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("uq_shared_resource_version_seq", "shared_resource_versions.sequence"),
         "有其他人同时发布了这个 Shared Resource 的版本，请刷新后重试",
+    ),
+    (
+        ("uq_grant_grantor_grantee_target_action", "grants.grantor_id"),
+        "该 Grantee 已拥有此 Grantor 的相应 USE Grant",
     ),
 )
 
@@ -1486,14 +1490,14 @@ class GrantRepositoryImpl:
         self._session.add(
             t.GrantRow(
                 id=grant.id,
+                grantor_kind=grant.grantor.kind.value,
+                grantor_id=grant.grantor.id,
                 grantee_kind=grant.grantee.kind.value,
                 grantee_id=grant.grantee.id,
                 target_kind=grant.target_kind.value,
                 target_id=grant.target_id,
                 action=grant.action.value,
                 granted_by_id=grant.granted_by,
-                grantor_owner_kind=grant.grantor_owner.kind.value,
-                grantor_owner_id=grant.grantor_owner.id,
                 created_at=grant.created_at,
             )
         )
@@ -1527,6 +1531,18 @@ class GrantRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_grant(row) for row in rows]
 
+    async def list_for_grantor(self, grantor: OwnerReference) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.grantor_kind == grantor.kind.value,
+                t.GrantRow.grantor_id == grantor.id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
     async def delete(self, grant_id: str) -> bool:
         stmt = delete(t.GrantRow).where(t.GrantRow.id == grant_id)
         result = await self._session.execute(stmt)
@@ -1538,23 +1554,29 @@ class GrantRepositoryImpl:
         grantee: OwnerReference,
         target_kind: GrantTargetKind,
         target_id: str,
-        grantor_owner: OwnerReference,
+        grantor: OwnerReference,
     ) -> bool:
-        """Check for a valid USE Grant (grantee, target) issued under ``grantor_owner``.
+        """Check for a USE Grant from ``grantor`` to ``grantee`` for ``target``.
 
-        GR-408: a Grant is only valid while the asset Owner matches the Owner
-        that issued it.  After Ownership transfer, stale Grants are rejected.
+        Matches either Target == ALL (covering all Grantor assets) or an exact
+        (target_kind, target_id) match. The ``grantor`` must equal the asset's
+        current Owner — after Ownership transfer, old Grants no longer match.
         """
         stmt = (
             select(t.GrantRow.id)
             .where(
+                t.GrantRow.grantor_kind == grantor.kind.value,
+                t.GrantRow.grantor_id == grantor.id,
                 t.GrantRow.grantee_kind == grantee.kind.value,
                 t.GrantRow.grantee_id == grantee.id,
-                t.GrantRow.target_kind == target_kind.value,
-                t.GrantRow.target_id == target_id,
                 t.GrantRow.action == GrantAction.USE.value,
-                t.GrantRow.grantor_owner_kind == grantor_owner.kind.value,
-                t.GrantRow.grantor_owner_id == grantor_owner.id,
+                or_(
+                    t.GrantRow.target_kind == GrantTargetKind.ALL.value,
+                    and_(
+                        t.GrantRow.target_kind == target_kind.value,
+                        t.GrantRow.target_id == target_id,
+                    ),
+                ),
             )
             .limit(1)
         )
@@ -1863,11 +1885,11 @@ def _to_shared_resource(row: t.SharedResourceRow) -> SharedResource:
 def _to_grant(row: t.GrantRow) -> Grant:
     return Grant(
         id=row.id,
+        grantor=OwnerReference(OwnerKind(row.grantor_kind), row.grantor_id),
         grantee=OwnerReference(OwnerKind(row.grantee_kind), row.grantee_id),
         target_kind=GrantTargetKind(row.target_kind),
         target_id=row.target_id,
         action=GrantAction(row.action),
         granted_by=row.granted_by_id,
-        grantor_owner=OwnerReference(OwnerKind(row.grantor_owner_kind), row.grantor_owner_id),
         created_at=_aware(row.created_at),
     )

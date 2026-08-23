@@ -77,14 +77,14 @@ def test_grants_migration_creates_table_and_round_trips(
         # Table exists with expected columns.
         expected_columns = {
             "id",
+            "grantor_kind",
+            "grantor_id",
             "grantee_kind",
             "grantee_id",
             "target_kind",
             "target_id",
             "action",
             "granted_by_id",
-            "grantor_owner_kind",
-            "grantor_owner_id",
             "created_at",
         }
         assert expected_columns <= _columns(conn, "grants")
@@ -93,20 +93,30 @@ def test_grants_migration_creates_table_and_round_trips(
         fks = _foreign_keys(conn, "grants")
         assert ("granted_by_id", "users", "RESTRICT") in fks
 
-        # Unique constraint over (grantee_kind, grantee_id, target_kind, target_id, action).
-        # SQLite names these sqlite_autoindex_*; verify by column set instead of name.
+        # Unique constraint over (grantor_kind, grantor_id, grantee_kind,
+        # grantee_id, target_kind, target_id, action).
+        # SQLite names these sqlite_autoindex_*; verify by column set.
         unique_index_names = _unique_constraints(conn, "grants")
         unique_col_sets: list[list[str]] = []
         for idx_name in unique_index_names:
             unique_col_sets.append(_index_columns(conn, "grants", idx_name))
-        assert sorted(["grantee_kind", "grantee_id", "target_kind", "target_id", "action"]) in (
-            sorted(cols) for cols in unique_col_sets
-        )
+        assert sorted(
+            [
+                "grantor_kind",
+                "grantor_id",
+                "grantee_kind",
+                "grantee_id",
+                "target_kind",
+                "target_id",
+                "action",
+            ]
+        ) in (sorted(cols) for cols in unique_col_sets)
 
-        # Indexes: ix_grants_target, ix_grants_grantee.
+        # Indexes: ix_grants_target, ix_grants_grantee, ix_grants_grantor.
         indexes = _indexes(conn, "grants")
         assert "ix_grants_target" in indexes
         assert "ix_grants_grantee" in indexes
+        assert "ix_grants_grantor" in indexes
 
     # Downgrade back to previous revision.
     command.downgrade(config, PREVIOUS_REVISION)

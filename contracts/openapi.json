@@ -295,7 +295,8 @@
           "run.cancel",
           "shared_resource.view",
           "shared_resource.manage",
-          "shared_resource.version.create"
+          "shared_resource.version.create",
+          "grant.manage"
         ],
         "title": "Capability",
         "type": "string"
@@ -697,14 +698,27 @@
           "grantee": {
             "$ref": "#/components/schemas/OwnerReferenceIn"
           },
+          "grantor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnerReferenceIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for ALL grants (who issues the grant); omitted for asset grants\n(derived from the target asset's current owner)."
+          },
           "target_id": {
+            "default": "",
             "title": "Target Id",
             "type": "string"
           },
           "target_kind": {
             "enum": [
               "environment",
-              "shared_resource"
+              "shared_resource",
+              "all"
             ],
             "title": "Target Kind",
             "type": "string"
@@ -712,7 +726,6 @@
         },
         "required": [
           "target_kind",
-          "target_id",
           "grantee"
         ],
         "title": "GrantCreateIn",
@@ -736,6 +749,9 @@
           "grantee": {
             "$ref": "#/components/schemas/OwnerSummaryOut"
           },
+          "grantor": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -747,7 +763,8 @@
           "target_kind": {
             "enum": [
               "environment",
-              "shared_resource"
+              "shared_resource",
+              "all"
             ],
             "title": "Target Kind",
             "type": "string"
@@ -755,6 +772,7 @@
         },
         "required": [
           "id",
+          "grantor",
           "grantee",
           "target_kind",
           "target_id",
@@ -766,8 +784,9 @@
         "type": "object"
       },
       "GrantTargetKind": {
-        "description": "Grant 指向的资产种类。仅限顶层资产，不包含 version。",
+        "description": "Grant 指向的资产范围。\n\n``ALL`` 表示授权 Grantor 当前及未来拥有的全部可授权 Environment /\nShared Resource；此时 ``target_id`` 为空字符串。\n``ENVIRONMENT`` / ``SHARED_RESOURCE`` 表示仅授权具体顶层资产。",
         "enum": [
+          "all",
           "environment",
           "shared_resource"
         ],
@@ -3615,28 +3634,79 @@
     },
     "/api/v1/grants": {
       "get": {
-        "description": "List all Grants for a target asset.  Only the asset Owner may list.",
+        "description": "List Grants.\n\nFilter by target asset (``target_kind`` + ``target_id``) or by Grantor\n(``grantor_kind`` + ``grantor_id``).  Exactly one filter pair must be given.",
         "operationId": "list_grants_api_v1_grants_get",
         "parameters": [
           {
-            "description": "资产种类：environment 或 shared_resource",
+            "description": "按资产种类过滤：environment 或 shared_resource",
             "in": "query",
             "name": "target_kind",
-            "required": true,
+            "required": false,
             "schema": {
-              "$ref": "#/components/schemas/GrantTargetKind",
-              "description": "资产种类：environment 或 shared_resource"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/GrantTargetKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按资产种类过滤：environment 或 shared_resource",
+              "title": "Target Kind"
             }
           },
           {
             "description": "顶层资产 ID",
             "in": "query",
             "name": "target_id",
-            "required": true,
+            "required": false,
             "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "顶层资产 ID",
-              "title": "Target Id",
-              "type": "string"
+              "title": "Target Id"
+            }
+          },
+          {
+            "description": "按 Grantor 种类过滤",
+            "in": "query",
+            "name": "grantor_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OwnerKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按 Grantor 种类过滤",
+              "title": "Grantor Kind"
+            }
+          },
+          {
+            "description": "Grantor ID",
+            "in": "query",
+            "name": "grantor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Grantor ID",
+              "title": "Grantor Id"
             }
           },
           {
@@ -3732,13 +3802,13 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "列出指向某资产的 Grant",
+        "summary": "列出 Grant",
         "tags": [
           "grant"
         ]
       },
       "post": {
-        "description": "Create a USE Grant allowing ``grantee`` to reference the target asset.\n\nOnly the target asset's Owner may create a Grant.  The target must be a\ntop-level Environment or Shared Resource (not a version).",
+        "description": "Create a USE Grant allowing ``grantee`` to reference the Grantor's asset(s).\n\nFor asset grants (environment/shared_resource), the Grantor is derived from\nthe target asset's current owner.  For ALL grants, ``grantor`` must be\nsupplied explicitly and the caller must have GRANT_MANAGE on that Grantor.",
         "operationId": "create_grant_api_v1_grants_post",
         "parameters": [
           {
@@ -3848,7 +3918,7 @@
     },
     "/api/v1/grants/{grant_id}": {
       "delete": {
-        "description": "Revoke a Grant.  Only the target asset's Owner may revoke.",
+        "description": "Revoke a Grant.  Requires GRANT_MANAGE on the Grant's Grantor.",
         "operationId": "revoke_grant_api_v1_grants__grant_id__delete",
         "parameters": [
           {

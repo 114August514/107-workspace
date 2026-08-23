@@ -1,14 +1,14 @@
 """Cross-owner USE Grant use cases.
 
-An asset Owner creates a USE Grant to let another User or User Group reference a
-top-level Environment or Shared Resource from their own Project.  Grants do not
-confer management permission — only the Owner role on the target asset may create
-or revoke a Grant.
+A Grantor (User or User Group) creates a USE Grant to let another User or User
+Group (Grantee) reference the Grantor's top-level Environment or Shared Resource
+from their own Project.  Target can also be ALL to cover all current and future
+Grantor assets.
 
-``grantor_owner`` (the asset Owner at creation time) is persisted on the Grant row.
-GR-408: after an asset Ownership transfer, Grants issued under the old Owner are
-automatically invalid because ``exists_use_grant`` checks ``grantor_owner == current
-asset owner``.
+Grant management requires the ``GRANT_MANAGE`` capability, which is available to
+ADMIN and OWNER roles in UserGroup-owned assets, and to the exact User for
+User-owned assets.  This deliberately does not hardcode ``MembershipRole.OWNER``
+as the asset-Owner check.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..domain import ids
-from ..domain.enums import MembershipRole
+from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied
 from ..domain.grant import Grant, GrantAction, GrantTargetKind
 from ..domain.ownership import OwnerKind, OwnerReference
@@ -29,8 +29,8 @@ from .ownership import OwnerSummary, owner_summaries
 @dataclass(frozen=True, slots=True)
 class GrantView:
     grant: Grant
+    grantor: OwnerSummary
     grantee: OwnerSummary
-    target_owner: OwnerSummary
     granted_by: OwnerSummary
 
 
@@ -52,58 +52,93 @@ class GrantService:
         target_kind: GrantTargetKind,
         target_id: str,
         grantee: OwnerReference,
+        grantor: OwnerReference | None = None,
     ) -> GrantView:
-        """Create a USE Grant.  Only the target asset's Owner may grant."""
-        asset_owner = await self._resolve_target_owner(user_id, target_kind, target_id)
+        """Create a USE Grant.
+
+        For asset grants the grantor is derived from the target asset's owner.
+        For ALL grants the grantor must be supplied explicitly and the caller
+        must have GRANT_MANAGE capability on that grantor (User or UserGroup).
+        """
+        if grantor is None:
+            grantor = await self._resolve_grantor(user_id, target_kind, target_id)
+        else:
+            await self._require_grant_manage(user_id, grantor)
         await self._validate_grantee_exists(grantee)
-        if await self._repos.grants.exists_use_grant(grantee, target_kind, target_id, asset_owner):
-            raise ConflictError("该 Grantee 已拥有此资产的 USE Grant")
+        if await self._repos.grants.exists_use_grant(grantee, target_kind, target_id, grantor):
+            raise ConflictError("该 Grantee 已拥有此 Grantor 的相应 USE Grant")
         grant = Grant(
             id=ids.new_id(ids.GRANT),
+            grantor=grantor,
             grantee=grantee,
             target_kind=target_kind,
             target_id=target_id,
             action=GrantAction.USE,
             granted_by=user_id,
-            grantor_owner=asset_owner,
             created_at=self._clock.now(),
         )
         await self._repos.grants.add(grant)
-        return await self._view(grant, asset_owner)
+        return await self._view(grant)
 
     async def list_for_target(
         self, user_id: str, target_kind: GrantTargetKind, target_id: str
     ) -> list[GrantView]:
-        """List all Grants for a target asset.  Only the asset Owner may list."""
-        asset_owner = await self._resolve_target_owner(user_id, target_kind, target_id)
+        """List all Grants for a target asset. Requires GRANT_MANAGE capability."""
+        grantor = await self._resolve_grantor(user_id, target_kind, target_id)
         grants = await self._repos.grants.list_for_target(target_kind, target_id)
-        return [await self._view(g, asset_owner) for g in grants]
+        return [await self._view(g) for g in grants if g.grantor == grantor]
+
+    async def list_for_grantor(self, user_id: str, grantor: OwnerReference) -> list[GrantView]:
+        """List all Grants issued by ``grantor`` (ALL + asset). Requires GRANT_MANAGE."""
+        await self._require_grant_manage(user_id, grantor)
+        grants = await self._repos.grants.list_for_grantor(grantor)
+        return [await self._view(g) for g in grants]
 
     async def revoke(self, user_id: str, grant_id: str) -> None:
-        """Revoke a Grant.  Only the target asset's Owner may revoke."""
+        """Revoke a Grant. Requires GRANT_MANAGE capability on the grant's grantor."""
         grant = await self._repos.grants.get(grant_id)
         if grant is None:
             raise ObjectNotFound("Grant", grant_id)
-        await self._resolve_target_owner(user_id, grant.target_kind, grant.target_id)
+        await self._require_grant_manage(user_id, grant.grantor)
         await self._repos.grants.delete(grant_id)
 
     # -- internals ------------------------------------------------------
 
-    async def _resolve_target_owner(
+    async def _resolve_grantor(
         self, user_id: str, target_kind: GrantTargetKind, target_id: str
     ) -> OwnerReference:
-        """Verify the caller is the Owner of the target asset and return its owner."""
+        """Verify the caller can manage Grants on the target and return its owner.
+
+        For User-owned assets the exact owning User is the Grantor.
+        For UserGroup-owned assets the caller must be an active member with the
+        ``GRANT_MANAGE`` capability (ADMIN or OWNER role).
+        """
+        if target_kind is GrantTargetKind.ALL:
+            raise ObjectNotFound("Grant target", target_id)
         if target_kind is GrantTargetKind.SHARED_RESOURCE:
-            access = await self._guard.shared_resource(user_id, target_id)
+            access = await self._guard.shared_resource(
+                user_id, target_id, needs=Capability.GRANT_MANAGE
+            )
+            return access.resource.owner
+        access = await self._guard.environment(user_id, target_id, needs=Capability.GRANT_MANAGE)
+        return access.environment.owner
+
+    async def _require_grant_manage(self, user_id: str, grantor: OwnerReference) -> None:
+        """Verify the caller has GRANT_MANAGE on ``grantor`` (User or UserGroup).
+
+        For a User grantor, the caller must be that exact User.
+        For a UserGroup grantor, the caller must be an active member with
+        GRANT_MANAGE capability (ADMIN or OWNER role).
+        """
+        if grantor.kind is OwnerKind.USER:
+            if grantor.id != user_id:
+                raise ObjectNotFound("User", grantor.id)
         else:
-            access = await self._guard.environment(user_id, target_id)
-        if access.role != MembershipRole.OWNER:
-            raise PermissionDenied("只有资产 Owner 可以管理 USE Grant")
-        return (
-            access.resource.owner
-            if target_kind is GrantTargetKind.SHARED_RESOURCE
-            else access.environment.owner
-        )
+            access = await self._guard.user_group(user_id, grantor.id)
+            if Capability.GRANT_MANAGE not in capabilities_of(access.role):
+                raise PermissionDenied(
+                    f"当前角色（{access.role.value}）无权{describe(Capability.GRANT_MANAGE)}"
+                )
 
     async def _validate_grantee_exists(self, grantee: OwnerReference) -> None:
         """Reject grants to nonexistent Users or UserGroups (stable 404)."""
@@ -116,12 +151,14 @@ class GrantService:
             if group is None:
                 raise ObjectNotFound("UserGroup", grantee.id)
 
-    async def _view(self, grant: Grant, asset_owner: OwnerReference) -> GrantView:
+    async def _view(self, grant: Grant) -> GrantView:
         granted_by_ref = OwnerReference(kind=OwnerKind.USER, id=grant.granted_by)
-        summaries = await owner_summaries(self._repos, (grant.grantee, asset_owner, granted_by_ref))
+        summaries = await owner_summaries(
+            self._repos, (grant.grantor, grant.grantee, granted_by_ref)
+        )
         return GrantView(
             grant=grant,
+            grantor=summaries[(grant.grantor.kind, grant.grantor.id)],
             grantee=summaries[(grant.grantee.kind, grant.grantee.id)],
-            target_owner=summaries[(asset_owner.kind, asset_owner.id)],
             granted_by=summaries[(granted_by_ref.kind, granted_by_ref.id)],
         )
