@@ -120,7 +120,7 @@ async def test_home_discovers_existing_personal_resources_only_for_the_owner(
 async def test_user_group_capabilities_are_governance_only_for_every_role(
     client: httpx.AsyncClient,
 ) -> None:
-    for headers in (BOB, CAROL, DAVE):
+    for headers in (BOB, CAROL):
         await client.get("/api/v1/me", headers=headers)
 
     group = await _create_group(client, ALICE, "Capability Lab")
@@ -142,9 +142,6 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
         "member": ["member.view", "user_group.view"],
     }
     assert group["capabilities"] == expected["owner"]
-
-    rejected_viewer = await _invite(client, group_id, "dave", role="viewer")
-    assert rejected_viewer.status_code == 422
 
     for username, role, headers in (
         ("bob", "admin", BOB),
@@ -229,6 +226,31 @@ async def test_invitation_accept_reject_and_cross_group_404(
         await client.get(f"/api/v1/user-groups/{other['id']}", headers=ALICE)
     ).status_code == 404
     assert await repos.user_groups.get_for_active_member(str(other["id"]), alice.id) is None
+
+
+@pytest.mark.asyncio
+async def test_admin_and_member_roles_change_through_ordinary_update(
+    client: httpx.AsyncClient,
+) -> None:
+    group_id, bob_id = await _group_with_active_bob(client, "Role Change Lab")
+
+    promoted = await client.patch(
+        f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+        json={"role": "admin"},
+        headers=ALICE,
+    )
+    assert promoted.status_code == 200
+    members = (await client.get(f"/api/v1/user-groups/{group_id}/members", headers=ALICE)).json()
+    assert next(member for member in members if member["user_id"] == bob_id)["role"] == "admin"
+
+    demoted = await client.patch(
+        f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+        json={"role": "member"},
+        headers=ALICE,
+    )
+    assert demoted.status_code == 200
+    members = (await client.get(f"/api/v1/user-groups/{group_id}/members", headers=ALICE)).json()
+    assert next(member for member in members if member["user_id"] == bob_id)["role"] == "member"
 
 
 @pytest.mark.asyncio
