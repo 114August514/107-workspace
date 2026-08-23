@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from ..application.access import AccessGuard
 from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
- @both
+from ..application.configuration_service import ConfigurationService
+from ..application.grant_service import GrantService
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
 from ..application.notifier import NotificationService, Notifier

@@ -7,7 +7,8 @@ from fastapi import APIRouter
 from ..schemas import ErrorOut
 from . import (
     catalog,
- @both
+    configuration,
+    grants,
     health,
     home,
     notifications,

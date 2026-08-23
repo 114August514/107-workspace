@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
 
+from ...domain.errors import ValidationFailed
 from ...domain.grant import GrantTargetKind
 from ...domain.ownership import OwnerKind, OwnerReference
 from .. import presenters as p
@@ -69,19 +70,32 @@ async def list_grants(
     """List Grants.
 
     Filter by target asset (``target_kind`` + ``target_id``) or by Grantor
-    (``grantor_kind`` + ``grantor_id``).  Exactly one filter pair must be given.
+    (``grantor_kind`` + ``grantor_id``).  Exactly one complete filter pair must
+    be given; partial pairs or both pairs simultaneously are rejected with 422.
     """
-    if target_kind is not None and target_id is not None:
+    has_target = target_kind is not None and target_id is not None
+    has_grantor = grantor_kind is not None and grantor_id is not None
+    partial_target = (target_kind is not None) != (target_id is not None)
+    partial_grantor = (grantor_kind is not None) != (grantor_id is not None)
+    if (
+        partial_target
+        or partial_grantor
+        or (has_target and has_grantor)
+        or (not has_target and not has_grantor)
+    ):
+        raise ValidationFailed(
+            "必须且只能提供一组完整的过滤条件："
+            "(target_kind + target_id) 或 (grantor_kind + grantor_id)"
+        )
+    if has_target:
         views = await services.grants.list_for_target(
             user.id,
             target_kind=GrantTargetKind(target_kind),
             target_id=target_id,
         )
-    elif grantor_kind is not None and grantor_id is not None:
+    else:
         grantor = OwnerReference(grantor_kind, grantor_id)
         views = await services.grants.list_for_grantor(user.id, grantor)
-    else:
-        views = []
     return [p.grant_out(view) for view in views]
 
 

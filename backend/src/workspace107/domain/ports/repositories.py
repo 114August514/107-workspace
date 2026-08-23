@@ -12,7 +12,8 @@ from datetime import datetime
 from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
- @both
+from ..config_scope import ConfigScope
+from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
     Artifact,

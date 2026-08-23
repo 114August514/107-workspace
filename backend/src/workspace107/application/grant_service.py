@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
-from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied
+from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied, ValidationFailed
 from ..domain.grant import Grant, GrantAction, GrantTargetKind
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.clock import Clock
@@ -56,14 +56,28 @@ class GrantService:
     ) -> GrantView:
         """Create a USE Grant.
 
-        For asset grants the grantor is derived from the target asset's owner.
-        For ALL grants the grantor must be supplied explicitly and the caller
-        must have GRANT_MANAGE capability on that grantor (User or UserGroup).
+        Cross-field invariants:
+        - ALL target: ``target_id`` must be empty, ``grantor`` must be supplied
+          explicitly, and the caller must have GRANT_MANAGE on that grantor.
+        - Environment/SharedResource target: ``target_id`` must be non-empty,
+          ``grantor`` is always derived from the target asset's current owner
+          (explicit grantor is rejected to prevent cross-owner spoofing).
         """
-        if grantor is None:
-            grantor = await self._resolve_grantor(user_id, target_kind, target_id)
-        else:
+        if target_kind is GrantTargetKind.ALL:
+            if target_id:
+                raise ValidationFailed("target_id must be empty when target_kind is 'all'")
+            if grantor is None:
+                raise ValidationFailed("grantor is required when target_kind is 'all'")
             await self._require_grant_manage(user_id, grantor)
+        else:
+            if not target_id:
+                raise ValidationFailed("target_id is required for asset-specific grants")
+            if grantor is not None:
+                raise ValidationFailed(
+                    "grantor must not be specified for asset-specific grants; "
+                    "it is derived from the target asset's owner"
+                )
+            grantor = await self._resolve_grantor(user_id, target_kind, target_id)
         await self._validate_grantee_exists(grantee)
         if await self._repos.grants.exists_use_grant(grantee, target_kind, target_id, grantor):
             raise ConflictError("该 Grantee 已拥有此 Grantor 的相应 USE Grant")
@@ -83,7 +97,13 @@ class GrantService:
     async def list_for_target(
         self, user_id: str, target_kind: GrantTargetKind, target_id: str
     ) -> list[GrantView]:
-        """List all Grants for a target asset. Requires GRANT_MANAGE capability."""
+        """List Grants directly pointing at a specific target asset.
+
+        Requires GRANT_MANAGE capability on the target asset's current owner.
+        Only returns grants with an exact ``(target_kind, target_id)`` match;
+        ALL-type grants that also cover this asset are NOT included.  Use the
+        grantor view (``list_for_grantor``) for a complete authorization picture.
+        """
         grantor = await self._resolve_grantor(user_id, target_kind, target_id)
         grants = await self._repos.grants.list_for_target(target_kind, target_id)
         return [await self._view(g) for g in grants if g.grantor == grantor]

@@ -3634,7 +3634,7 @@
     },
     "/api/v1/grants": {
       "get": {
-        "description": "List Grants.\n\nFilter by target asset (``target_kind`` + ``target_id``) or by Grantor\n(``grantor_kind`` + ``grantor_id``).  Exactly one filter pair must be given.",
+        "description": "List Grants.\n\nFilter by target asset (``target_kind`` + ``target_id``) or by Grantor\n(``grantor_kind`` + ``grantor_id``).  Exactly one complete filter pair must\nbe given; partial pairs or both pairs simultaneously are rejected with 422.",
         "operationId": "list_grants_api_v1_grants_get",
         "parameters": [
           {

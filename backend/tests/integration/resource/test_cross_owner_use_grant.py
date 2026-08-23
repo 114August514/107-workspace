@@ -695,8 +695,6 @@ async def test_all_grant_covers_current_and_future_assets(
     project = await _create_project_with_version(client, group_a, name="A project")
     _resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
-    alice_id = await _get_user_id(client, ALICE)
-
     # Without grant: referencing B's resource → 404.
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
@@ -716,17 +714,18 @@ async def test_all_grant_covers_current_and_future_assets(
     )
     assert response.status_code == 404, response.text
 
-    # Create an ALL grant: Group B → Group A.
-    await _insert_grant(
-        session,
-        grantee_kind="user_group",
-        grantee_id=group_a,
-        target_kind="all",
-        target_id="",
-        granted_by_id=alice_id,
-        grantor_kind="user_group",
-        grantor_id=group_b,
+    # Create an ALL grant: Group B → Group A via the Grant API.
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "all",
+            "target_id": "",
+            "grantee": {"kind": "user_group", "id": group_a},
+            "grantor": {"kind": "user_group", "id": group_b},
+        },
+        headers=ALICE,
     )
+    assert response.status_code == 201, response.text
 
     # With ALL grant: same resource now works.
     response = await client.post(
@@ -796,19 +795,17 @@ async def test_new_owner_can_re_grant_after_transfer(
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
-    alice_id = await _get_user_id(client, ALICE)
-
-    # Grant under group_b → works.
-    await _insert_grant(
-        session,
-        grantee_kind="user_group",
-        grantee_id=group_a,
-        target_kind="shared_resource",
-        target_id=resource_b_id,
-        granted_by_id=alice_id,
-        grantor_kind="user_group",
-        grantor_id=group_b,
+    # Grant: Group B → Group A via the Grant API (grantor derived from resource owner).
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "shared_resource",
+            "target_id": resource_b_id,
+            "grantee": {"kind": "user_group", "id": group_a},
+        },
+        headers=ALICE,
     )
+    assert response.status_code == 201, response.text
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={
@@ -858,17 +855,18 @@ async def test_new_owner_can_re_grant_after_transfer(
     )
     assert response.status_code == 404, response.text
 
-    # New owner (group_c) re-grants to group_a.
-    await _insert_grant(
-        session,
-        grantee_kind="user_group",
-        grantee_id=group_a,
-        target_kind="shared_resource",
-        target_id=resource_b_id,
-        granted_by_id=alice_id,
-        grantor_kind="user_group",
-        grantor_id=group_c,
+    # New owner (group_c) re-grants to group_a via the Grant API.
+    # Alice is an OWNER of group_c, so she has GRANT_MANAGE on the new owner.
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "shared_resource",
+            "target_id": resource_b_id,
+            "grantee": {"kind": "user_group", "id": group_a},
+        },
+        headers=ALICE,
     )
+    assert response.status_code == 201, response.text
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={
@@ -990,3 +988,60 @@ async def test_usergroup_owner_role_transfer_preserves_grant(
         headers=ALICE,
     )
     assert response.status_code == 201, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 13: ALL grant with non-empty target_id is rejected
+# ---------------------------------------------------------------------------
+
+
+async def test_all_grant_with_nonempty_target_id_rejected(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """ALL grant must have empty target_id; non-empty → 422."""
+    group_a = await _create_group(client, "RejectAllA")
+    group_b = await _create_group(client, "RejectAllB")
+    await _set_group_environment(session, client, group_a)
+    await grant_test_entitlement(session, group_a)
+    _resource_b_id, _ = await _create_resource_version(client, group_b)
+
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "all",
+            "target_id": "shr_should_be_empty",
+            "grantee": {"kind": "user_group", "id": group_a},
+            "grantor": {"kind": "user_group", "id": group_b},
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 422, response.text
+
+
+# ---------------------------------------------------------------------------
+# Test 14: Explicit grantor for asset-specific grant is rejected
+# ---------------------------------------------------------------------------
+
+
+async def test_explicit_grantor_for_asset_grant_rejected(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """Asset-specific grants must not carry an explicit grantor; it is derived
+    from the target asset's current owner.  An explicit grantor → 422."""
+    group_a = await _create_group(client, "RejectExplicitA")
+    group_b = await _create_group(client, "RejectExplicitB")
+    await _set_group_environment(session, client, group_a)
+    await grant_test_entitlement(session, group_a)
+    resource_b_id, _ = await _create_resource_version(client, group_b)
+
+    response = await client.post(
+        "/api/v1/grants",
+        json={
+            "target_kind": "shared_resource",
+            "target_id": resource_b_id,
+            "grantee": {"kind": "user_group", "id": group_a},
+            "grantor": {"kind": "user_group", "id": group_a},
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 422, response.text

@@ -96,7 +96,8 @@ export interface paths {
          * @description List Grants.
          *
          *     Filter by target asset (``target_kind`` + ``target_id``) or by Grantor
-         *     (``grantor_kind`` + ``grantor_id``).  Exactly one filter pair must be given.
+         *     (``grantor_kind`` + ``grantor_id``).  Exactly one complete filter pair must
+         *     be given; partial pairs or both pairs simultaneously are rejected with 422.
          */
         get: operations["list_grants_api_v1_grants_get"];
         put?: never;
