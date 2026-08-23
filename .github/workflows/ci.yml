@@ -105,36 +105,6 @@ jobs:
           cd backend
           uv run pytest -q tests/integration/postgres/test_user_group_postgres.py
 
-  windows-check:
-    name: windows-canonical-check-and-smoke
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      PYTHONUTF8: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.UV_PYTHON }}
-      - uses: astral-sh/setup-uv@v6
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-      - name: Exercise the Make-free Windows entry point
-        run: uv run --no-project python scripts/workspace.py setup
-      - name: Run the full check, including scheduler and storage Windows tests
-        run: uv run --no-project python scripts/workspace.py check
-      - name: Exercise an actual mock Run over HTTP
-        run: uv run --no-project python scripts/workspace.py smoke
 
   docker-build:
     name: compose-build-and-smoke

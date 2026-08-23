@@ -2509,7 +2509,9 @@ make test
 make check
 ```
 
-具体前后端工具可以不同，但本地开发、CI 和自动化统一通过项目级命令执行。`Makefile`是薄入口；原生 Windows 没有 Make 时，使用 `uv run --no-project python scripts/workspace.py check` 执行同一份任务实现。
+具体前后端工具可以不同，但本地开发、CI 和自动化统一通过项目级命令执行。`Makefile`
+是薄入口。开发环境支持 Linux，以及使用 Linux toolchain 与 Linux filesystem 的
+WSL2；不支持原生 Windows / PowerShell runtime。部署与运行目标是 Linux。
 
 ### 5.5 工程协作与状态记录
 

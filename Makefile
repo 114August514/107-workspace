@@ -1,4 +1,4 @@
-# Thin convenience wrapper. Windows contributors can invoke WORKSPACE_CLI directly.
+# Thin convenience wrapper around the canonical Python task implementation.
 
 UV ?= uv
 WORKSPACE_CLI ?= $(UV) run --no-project python scripts/workspace.py

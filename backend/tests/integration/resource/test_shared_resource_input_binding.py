@@ -6,18 +6,14 @@
 对应设计稿 §2.6 与 §3.1.3：Shared Resource 是独立于 Project 的内容资源，
 通过 InputBinding 统一引用，Run 执行时物化到 inputs/ 下、只读（GR-404）。
 
-闭环测试需要 Mock 调度器以子进程真实执行脚本。在 Windows 上 subprocess
-的行为差异较大（权限模型、PATH、shell 约定），不适合在 CI 上跑闭环；
-实际部署也是 Slurm Linux 集群，Windows 只用于开发。
+闭环测试使用 Mock 调度器以子进程真实执行脚本，覆盖 Linux 开发、测试和部署目标。
 """
 
 from __future__ import annotations
 
 import os
-import sys
 
 import httpx
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import (
@@ -26,11 +22,6 @@ from tests.helpers import (
     grant_test_entitlement,
     use_default_environment,
     wait_for_run,
-)
-
-pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Mock 调度器的子进程执行在 Windows 上行为不稳定，跳过闭环测试",
 )
 
 ALICE = {"X-User": "alice"}

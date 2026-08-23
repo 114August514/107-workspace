@@ -1,11 +1,8 @@
 # 仓库任务入口
 
-`workspace.py` 是任务的唯一实现，`Makefile` 只是方便使用的薄入口。没有 Make 的协作者，
-包括使用原生 Windows 的协作者，直接运行同一个 Python CLI：
-
-```powershell
-uv run --no-project python scripts/workspace.py check
-```
+`workspace.py` 是任务的唯一实现，`Makefile` 是方便使用的薄入口。仓库支持 Linux，
+以及 Windows 主机上使用 Linux toolchain 与 Linux filesystem 的 WSL2 环境；不支持
+原生 Windows / PowerShell runtime。
 
 前端工具链统一使用 Node.js 24 LTS 与 pnpm 11。仓库只提交
 `frontend/pnpm-lock.yaml` 这一份前端依赖锁文件；同目录的 `pnpm-workspace.yaml` 只允许
@@ -38,13 +35,9 @@ scripts/
 │   ├── contract.py
 │   └── project.py
 └── platform/
-    ├── windows/bootstrap.ps1
     └── posix/bootstrap.sh
 ```
 
-各平台的 bootstrap 文件只检查前置条件并进入公共 Python 工作流。质量检查、契约、迁移
-和演示逻辑都不在 shell 或 PowerShell 中重复实现。
-
-公共 CLI 不包含按平台复制的任务逻辑。CI 会在 Windows runner 上实际运行不依赖 Make
-的入口，防止跨平台支持静默退化；Windows 兼容性以该 runner 的结果为准，不从 Linux
-环境推测。
+bootstrap 文件只检查 Linux 前置条件并进入公共 Python 工作流。质量检查、契约、迁移
+和演示逻辑不在 shell 中重复实现。公共 CLI 不包含按平台复制的任务逻辑，CI 只在实际
+支持的 Linux 环境中验证这些入口。
