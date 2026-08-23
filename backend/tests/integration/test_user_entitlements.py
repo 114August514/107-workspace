@@ -20,10 +20,10 @@ BOB = {"X-User": "bob"}
 
 
 async def _prepare_submission(
-    client: httpx.AsyncClient, headers: dict[str, str]
+    session: AsyncSession, client: httpx.AsyncClient, headers: dict[str, str]
 ) -> tuple[str, str]:
     """建好默认环境、带版本的 Project 和运行方案，返回 (project_id, configuration_id)。"""
-    await use_default_environment(client, headers=headers)
+    await use_default_environment(session, client, headers=headers)
     project = await create_project_with_version(client, headers=headers)
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
@@ -49,8 +49,8 @@ async def _submit(
 
 
 @pytest.mark.asyncio
-async def test_没有权益的用户不能提交_run(client: httpx.AsyncClient) -> None:
-    project_id, configuration_id = await _prepare_submission(client, ALICE)
+async def test_没有权益的用户不能提交_run(client: httpx.AsyncClient, session: AsyncSession) -> None:
+    project_id, configuration_id = await _prepare_submission(session, client, ALICE)
 
     response = await _submit(client, project_id, configuration_id, ALICE)
 
@@ -62,8 +62,8 @@ async def test_没有权益的用户不能提交_run(client: httpx.AsyncClient) 
 async def test_权益属于发起用户而不是_user_group(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    alice_project, alice_config = await _prepare_submission(client, ALICE)
-    bob_project, bob_config = await _prepare_submission(client, BOB)
+    alice_project, alice_config = await _prepare_submission(session, client, ALICE)
+    bob_project, bob_config = await _prepare_submission(session, client, BOB)
     await grant_test_entitlement(session, "alice")
 
     # alice 本人可以提交。
@@ -78,7 +78,7 @@ async def test_权益属于发起用户而不是_user_group(
 
 @pytest.mark.asyncio
 async def test_过期权益阻止提交(client: httpx.AsyncClient, session: AsyncSession) -> None:
-    project_id, configuration_id = await _prepare_submission(client, ALICE)
+    project_id, configuration_id = await _prepare_submission(session, client, ALICE)
     await grant_test_entitlement(session, "alice", expires_at="2020-01-01T00:00:00+00:00")
 
     response = await _submit(client, project_id, configuration_id, ALICE)
@@ -89,8 +89,8 @@ async def test_过期权益阻止提交(client: httpx.AsyncClient, session: Asyn
 
 @pytest.mark.asyncio
 async def test_并发上限按发起用户统计(client: httpx.AsyncClient, session: AsyncSession) -> None:
-    alice_project, alice_config = await _prepare_submission(client, ALICE)
-    bob_project, bob_config = await _prepare_submission(client, BOB)
+    alice_project, alice_config = await _prepare_submission(session, client, ALICE)
+    bob_project, bob_config = await _prepare_submission(session, client, BOB)
     await grant_test_entitlement(session, "alice", max_concurrent_runs=1)
     await grant_test_entitlement(session, "bob", max_concurrent_runs=1)
 

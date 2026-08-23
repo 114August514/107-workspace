@@ -111,7 +111,7 @@ class ActivityService:
     SAVEPOINT，读侧不需要），职责也不同，合成一个类只会让构造函数变长。
 
     **没有单独的「查看活动」能力。** 活动回答的是「这个空间里发生了什么」，
-    能看见这个空间的人就该看得见——包括 Viewer，他们本来就是来观摩的。
+    能看见这个空间的人就该看得见；活动读取不额外引入一套角色语义。
     所以复用 ``USER_GROUP_VIEW`` / ``PROJECT_VIEW``；能力矩阵定义在
     :mod:`workspace107.domain.capabilities`，并由单元测试完整锁定。
     """

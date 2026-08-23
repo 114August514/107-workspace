@@ -1,19 +1,19 @@
-"""载入平台目录数据和演示项目。
+"""载入本地开发 Compute Plans，以及显式请求的演示资产和 Project。
 
-    uv run python -m workspace107.tools.seed           只载入平台目录
-    uv run python -m workspace107.tools.seed --demo    额外创建演示 Project
+    uv run python -m workspace107.tools.seed
+    uv run python -m workspace107.tools.seed --demo
+    uv run python -m workspace107.tools.seed --demo --platform-owner-username <username>
 
-平台目录（运行环境、算力方案）在真实部署里由平台管理员维护（设计稿 2.13 E）。
-本地开发和演示用这个脚本载入一份可用的初始数据。
-
-**注意**：这里的 GPU 型号、分区、QoS 和配额都是演示值。
-真实取值以平台页面和集群实际配置为准，不要当成固定结论。
+不带 ``--demo`` 时只创建 Compute Plans。演示模式另建平台资产 User Group、平台
+Environment/Version、演示 User Group 专用 Environment 和演示 Project；这些均不是
+production provisioning。GPU 型号、分区、QoS 和配额都是演示值，不能当成 107 事实。
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,7 @@ from ..api.deps import build_services
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
 from ..domain import ids
+from ..domain.config_scope import ConfigScope
 from ..domain.enums import LegacyWorkspaceKind, MembershipRole, MembershipStatus
 from ..domain.pagination import PageRequest
 from ..infrastructure.db import tables as t
@@ -31,6 +32,52 @@ DEMO_USER = "student"
 DEMO_PROJECT = "第一个训练任务"
 DEMO_USER_GROUP_ID = "grp_demo"
 DEMO_OWNER_MEMBERSHIP_ID = "mbr_demo_owner"
+PLATFORM_ASSET_GROUP_ID = "grp_platform_assets"
+PLATFORM_ENVIRONMENT_ID = "env_platform_python_base_2026"
+DEMO_ENVIRONMENT_ID = "env_demo_python_2026"
+DEMO_ENVIRONMENT_VERSION_ID = "ev_demo_python_312_2026"
+PLATFORM_ENVIRONMENT_VERSION_ID = "ev_platform_python_312_2026"
+PLATFORM_PYTORCH_ENVIRONMENT_ID = "env_platform_pytorch_2026"
+PLATFORM_PYTORCH_ENVIRONMENT_VERSION_ID = "ev_platform_pytorch_24_2026"
+PLATFORM_OWNER_ENV = "WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME"
+
+_PLATFORM_ENVIRONMENTS = (
+    {
+        "id": PLATFORM_ENVIRONMENT_ID,
+        "name": "Python 基础环境",
+        "description": "通用 Python 运行环境，适合脚本、数据处理和入门实验。",
+        "owner_user_id": None,
+        "owner_user_group_id": PLATFORM_ASSET_GROUP_ID,
+    },
+    {
+        "id": PLATFORM_PYTORCH_ENVIRONMENT_ID,
+        "name": "PyTorch 环境",
+        "description": "预装 PyTorch 的深度学习环境。具体版本以平台页面为准。",
+        "owner_user_id": None,
+        "owner_user_group_id": PLATFORM_ASSET_GROUP_ID,
+    },
+)
+
+_PLATFORM_ENVIRONMENT_VERSIONS = (
+    {
+        "id": PLATFORM_ENVIRONMENT_VERSION_ID,
+        "environment_id": PLATFORM_ENVIRONMENT_ID,
+        "version": "3.12",
+        "description": "Python 3.12 标准库环境。",
+        "image": "python:3.12-slim",
+        "setup_command": "",
+        "available": True,
+    },
+    {
+        "id": PLATFORM_PYTORCH_ENVIRONMENT_VERSION_ID,
+        "environment_id": PLATFORM_PYTORCH_ENVIRONMENT_ID,
+        "version": "2.4-cuda12.1",
+        "description": "PyTorch 2.4 + CUDA 12.1。可用性以平台页面为准。",
+        "image": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
+        "setup_command": "",
+        "available": True,
+    },
+)
 
 DEMO_SCRIPT = '''"""演示训练脚本。
 
@@ -77,51 +124,13 @@ DEMO_README = """# 第一个训练任务
 
 
 async def seed_catalog(session: AsyncSession) -> None:
-    """载入平台运行环境和算力方案。幂等，可以重复执行。"""
+    """幂等载入本地开发使用的 Compute Plans；不创建任何资产。"""
     existing = (
         await session.execute(select(func.count()).select_from(t.ComputePlanRow))
     ).scalar_one()
     if existing:
         return
 
-    session.add_all(
-        [
-            t.EnvironmentRow(
-                id="env_python_base",
-                name="Python 基础环境",
-                description="通用 Python 运行环境，适合脚本、数据处理和入门实验。",
-            ),
-            t.EnvironmentRow(
-                id="env_pytorch",
-                name="PyTorch 环境",
-                description="预装 PyTorch 的深度学习环境。具体版本以平台页面为准。",
-            ),
-        ]
-    )
-    # 环境版本对环境有外键。这两张表之间没有 ORM relationship，
-    # 同一次 flush 里的顺序不保证，所以先把环境落库。
-    await session.flush()
-
-    session.add_all(
-        [
-            t.EnvironmentVersionRow(
-                id="ev_python_312",
-                environment_id="env_python_base",
-                version="3.12",
-                description="Python 3.12 标准库环境。",
-                image="python:3.12-slim",
-                setup_command="",
-            ),
-            t.EnvironmentVersionRow(
-                id="ev_pytorch_24",
-                environment_id="env_pytorch",
-                version="2.4-cuda12.1",
-                description="PyTorch 2.4 + CUDA 12.1。可用性以平台页面为准。",
-                image="pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
-                setup_command="",
-            ),
-        ]
-    )
     session.add_all(
         [
             t.ComputePlanRow(
@@ -189,12 +198,133 @@ async def seed_catalog(session: AsyncSession) -> None:
     await session.flush()
 
 
-async def seed_demo(session: AsyncSession, context) -> str:
-    """创建演示用户、Project、文件、版本和运行方案，返回 Project ID。"""
+def _resolve_platform_owner_username(explicit: str | None) -> str:
+    if explicit is not None:
+        username = explicit.strip()
+        if not username:
+            raise ValueError("--platform-owner-username 不能为空")
+        return username
+    return os.environ.get(PLATFORM_OWNER_ENV, "").strip() or DEMO_USER
+
+
+async def _ensure_platform_asset_group(
+    session: AsyncSession,
+    services,
+    platform_owner_username: str | None,
+    now,
+) -> None:
+    group = await session.get(t.UserGroupRow, PLATFORM_ASSET_GROUP_ID)
+    if group is not None:
+        return
+
+    owner_username = _resolve_platform_owner_username(platform_owner_username)
+    owner = await services.identity.ensure_user(owner_username)
+    session.add(
+        t.UserGroupRow(
+            id=PLATFORM_ASSET_GROUP_ID,
+            name="平台资产",
+            description="平台管理员维护的运行环境和共享资源。",
+            created_by_id=owner.id,
+            created_at=now,
+        )
+    )
+    await session.flush()
+    session.add(
+        t.LegacyWorkspaceRow(
+            id=PLATFORM_ASSET_GROUP_ID,
+            kind=LegacyWorkspaceKind.COLLABORATIVE.value,
+            name="平台资产",
+            description="平台管理员维护的运行环境和共享资源。",
+            owner_id=owner.id,
+            default_environment_version_id=None,
+            created_at=now,
+        )
+    )
+    session.add(
+        t.MembershipRow(
+            id=ids.new_id(ids.MEMBERSHIP),
+            user_group_id=PLATFORM_ASSET_GROUP_ID,
+            user_id=owner.id,
+            role=MembershipRole.OWNER.value,
+            status=MembershipStatus.ACTIVE.value,
+            created_at=now,
+        )
+    )
+    await session.flush()
+
+
+def _assert_fixed_record(row, expected: dict[str, object], record_kind: str) -> None:
+    conflicts = {
+        field: (getattr(row, field), value)
+        for field, value in expected.items()
+        if getattr(row, field) != value
+    }
+    if conflicts:
+        details = ", ".join(
+            f"{field}={actual!r} (expected {wanted!r})"
+            for field, (actual, wanted) in conflicts.items()
+        )
+        raise RuntimeError(f"conflicting fixed {record_kind} {expected['id']}: {details}")
+
+
+async def _seed_platform_environments(session: AsyncSession) -> None:
+    """Insert missing fixed platform assets and reject drift without rewriting it."""
+    for expected in _PLATFORM_ENVIRONMENTS:
+        row = await session.get(t.EnvironmentRow, expected["id"])
+        if row is None:
+            session.add(t.EnvironmentRow(**expected))
+        else:
+            _assert_fixed_record(row, expected, "Environment")
+    await session.flush()
+
+    for expected in _PLATFORM_ENVIRONMENT_VERSIONS:
+        row = await session.get(t.EnvironmentVersionRow, expected["id"])
+        if row is None:
+            session.add(t.EnvironmentVersionRow(**expected))
+        else:
+            _assert_fixed_record(row, expected, "EnvironmentVersion")
+    await session.flush()
+
+
+async def _seed_demo_environment(session: AsyncSession) -> None:
+    existing = await session.get(t.EnvironmentRow, DEMO_ENVIRONMENT_ID)
+    if existing is not None:
+        return
+    session.add(
+        t.EnvironmentRow(
+            id=DEMO_ENVIRONMENT_ID,
+            name="演示 Python 环境",
+            description="演示 User Group 拥有的基础 Python 运行环境。",
+            owner_user_group_id=DEMO_USER_GROUP_ID,
+        )
+    )
+    await session.flush()
+    session.add(
+        t.EnvironmentVersionRow(
+            id=DEMO_ENVIRONMENT_VERSION_ID,
+            environment_id=DEMO_ENVIRONMENT_ID,
+            version="3.12",
+            description="Python 3.12 标准库环境。",
+            image="python:3.12-slim",
+            setup_command="",
+        )
+    )
+    await session.flush()
+
+
+async def seed_demo(
+    session: AsyncSession,
+    context,
+    *,
+    platform_owner_username: str | None = None,
+) -> str:
+    """创建演示用户、资产、Project、文件、版本和运行方案，返回 Project ID。"""
     services = build_services(context, session)
     user = await services.identity.ensure_user(DEMO_USER, "演示同学")
     now = context.clock.now()
 
+    await _ensure_platform_asset_group(session, services, platform_owner_username, now)
+    await _seed_platform_environments(session)
     group = await session.get(t.UserGroupRow, DEMO_USER_GROUP_ID)
     if group is None:
         group = t.UserGroupRow(
@@ -234,6 +364,8 @@ async def seed_demo(session: AsyncSession, context) -> str:
         )
         await session.flush()
 
+    await _seed_demo_environment(session)
+
     entitlement = (
         await session.execute(
             select(t.ResourceEntitlementRow).where(
@@ -266,7 +398,7 @@ async def seed_demo(session: AsyncSession, context) -> str:
             return project.id
 
     await services.legacy_workspaces.set_default_environment(
-        user.id, DEMO_USER_GROUP_ID, "ev_python_312"
+        user.id, DEMO_USER_GROUP_ID, DEMO_ENVIRONMENT_VERSION_ID
     )
 
     project = await services.projects.create(
@@ -278,7 +410,9 @@ async def seed_demo(session: AsyncSession, context) -> str:
     )
     await services.projects.save_version(user.id, project.id, "初始版本")
 
-    await services.legacy_workspaces.set_variable(user.id, DEMO_USER_GROUP_ID, "EPOCHS", "5")
+    await services.configuration.set_variable(
+        ConfigScope.user_group(DEMO_USER_GROUP_ID), "EPOCHS", "5"
+    )
     await services.run_configurations.create(
         user.id,
         project.id,
@@ -294,7 +428,7 @@ async def seed_demo(session: AsyncSession, context) -> str:
     return project.id
 
 
-async def main(with_demo: bool) -> int:
+async def main(with_demo: bool, platform_owner_username: str | None = None) -> int:
     settings = get_settings()
     context = build_context(settings)
     session = context.session_factory()
@@ -302,14 +436,19 @@ async def main(with_demo: bool) -> int:
     try:
         await seed_catalog(session)
         if with_demo:
-            project_id = await seed_demo(session, context)
+            project_id = await seed_demo(
+                session,
+                context,
+                platform_owner_username=platform_owner_username,
+            )
         await session.commit()
     finally:
         await session.close()
         await context.engine.dispose()
 
-    print("平台目录已载入（运行环境与算力方案）")
+    print("本地开发 Compute Plans 已载入")
     if project_id is not None:
+        print("本地演示资产已载入（平台资产 User Group 与演示 User Group 分开持有）")
         print(f"演示 Project：{project_id}")
         print(f"用请求头 {DEMO_USER!r} 访问，例如： curl -H 'X-User: {DEMO_USER}' …/api/v1/me")
     return 0
@@ -318,15 +457,26 @@ async def main(with_demo: bool) -> int:
 def cli() -> int:
     parser = argparse.ArgumentParser(
         prog="python -m workspace107.tools.seed",
-        description="载入平台目录数据；加 --demo 时额外创建演示 Project。",
+        description="载入本地开发 Compute Plans；加 --demo 时再载入演示资产与 Project。",
     )
     parser.add_argument(
         "--demo",
         action="store_true",
-        help="额外创建演示用户、Project、版本和运行方案",
+        help="额外创建本地演示用户、资产、Project、版本和运行方案",
+    )
+    parser.add_argument(
+        "--platform-owner-username",
+        help=(
+            f"平台资产 User Group 首次创建时的 Owner；优先于 {PLATFORM_OWNER_ENV}，默认 {DEMO_USER}"
+        ),
     )
     args = parser.parse_args()
-    return asyncio.run(main(with_demo=args.demo))
+    return asyncio.run(
+        main(
+            with_demo=args.demo,
+            platform_owner_username=args.platform_owner_username,
+        )
+    )
 
 
 if __name__ == "__main__":

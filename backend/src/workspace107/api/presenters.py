@@ -7,14 +7,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..application.catalog_service import EnvironmentView
 from ..application.entitlement_service import EntitlementView
+from ..application.grant_service import GrantView
+from ..application.ownership import OwnerSummary
+from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
 from ..application.workspace_service import LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
 from ..domain.models import (
     Activity,
     Artifact,
-    Environment,
     EnvironmentVersion,
     ForkRelation,
     InputBinding,
@@ -25,7 +28,6 @@ from ..domain.models import (
     Run,
     RunConfiguration,
     RunEvent,
-    SharedResource,
     SharedResourceVersion,
     User,
 )
@@ -150,15 +152,23 @@ def version_detail_out(version: ProjectVersion) -> s.ProjectVersionDetailOut:
     )
 
 
+def owner_summary_out(owner: OwnerSummary) -> s.OwnerSummaryOut:
+    return s.OwnerSummaryOut(
+        kind=owner.kind,
+        id=owner.id,
+        display_name=owner.display_name,
+    )
+
+
 def environment_out(
-    environment: Environment, versions: list[EnvironmentVersion]
+    view: EnvironmentView,
 ) -> s.EnvironmentOut:
     return s.EnvironmentOut(
-        id=environment.id,
-        name=environment.name,
-        description=environment.description,
-        owner_workspace_id=environment.owner_workspace_id,
-        versions=[environment_version_out(v) for v in versions],
+        id=view.environment.id,
+        name=view.environment.name,
+        description=view.environment.description,
+        owner=owner_summary_out(view.owner),
+        versions=[environment_version_out(v) for v in view.versions],
     )
 
 
@@ -297,7 +307,7 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
         environment_image=snapshot.environment_image,
         environment_setup_command=snapshot.environment_setup_command,
         environment_variables=dict(snapshot.env_literals),
-        secret_references=dict(snapshot.env_secret_refs),
+        secret_references={name: ref.as_key() for name, ref in snapshot.env_secret_refs.items()},
         input_bindings=[input_binding_out(b) for b in snapshot.input_bindings],
         compute_plan_id=snapshot.compute_plan_id,
         compute_request=s.ComputeRequestModel(**snapshot.compute_request.as_payload()),
@@ -363,22 +373,25 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
     )
 
 
-def shared_resource_out(resource: SharedResource) -> s.SharedResourceOut:
+def shared_resource_out(view: SharedResourceView) -> s.SharedResourceOut:
     return s.SharedResourceOut(
-        id=resource.id,
-        name=resource.name,
-        description=resource.description,
-        owner_workspace_id=resource.owner_workspace_id,
-        is_platform_owned=resource.is_platform_owned,
-        created_at=resource.created_at,
+        id=view.resource.id,
+        name=view.resource.name,
+        description=view.resource.description,
+        owner=owner_summary_out(view.owner),
+        created_at=view.resource.created_at,
     )
 
 
+def shared_resource_access_out(view: SharedResourceAccessView) -> s.SharedResourceOut:
+    return shared_resource_out(SharedResourceView(resource=view.resource, owner=view.owner))
+
+
 def shared_resource_detail_out(
-    resource: SharedResource, versions: list[SharedResourceVersion]
+    view: SharedResourceAccessView, versions: list[SharedResourceVersion]
 ) -> s.SharedResourceDetailOut:
     return s.SharedResourceDetailOut(
-        **shared_resource_out(resource).model_dump(),
+        **shared_resource_access_out(view).model_dump(),
         versions=[shared_resource_version_out(v) for v in versions],
     )
 
@@ -406,4 +419,17 @@ def shared_resource_version_detail_out(
             s.SharedResourceVersionFileOut(path=f.path, size=f.size, content_hash=f.content_hash)
             for f in version.files
         ],
+    )
+
+
+def grant_out(view: GrantView) -> s.GrantOut:
+    return s.GrantOut(
+        id=view.grant.id,
+        grantor=owner_summary_out(view.grantor),
+        grantee=owner_summary_out(view.grantee),
+        target_kind=view.grant.target_kind.value,
+        target_id=view.grant.target_id,
+        action=view.grant.action.value,
+        granted_by=owner_summary_out(view.granted_by),
+        created_at=view.grant.created_at,
     )

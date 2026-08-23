@@ -17,7 +17,6 @@ import { CreateProjectModal } from '../components/project/CreateProjectModal'
 import { ProjectTable } from '../components/project/ProjectTable'
 import { DefaultEnvironmentPicker } from '../components/workspace/DefaultEnvironmentPicker'
 import { EntitlementPanel } from '../components/workspace/EntitlementPanel'
-import { VariablePanel } from '../components/workspace/VariablePanel'
 import { SharedResourcePanel } from '../components/sharedresource/SharedResourcePanel'
 import { tablePagination } from '../utils/pagination'
 
@@ -140,11 +139,6 @@ export function LegacyWorkspacePage() {
             children: (
               <Card>{workspace.data && <SharedResourcePanel workspace={workspace.data} />}</Card>
             ),
-          },
-          {
-            key: 'config',
-            label: 'Variable 与 Secret',
-            children: <Card>{workspace.data && <VariablePanel workspace={workspace.data} />}</Card>,
           },
           {
             key: 'activities',

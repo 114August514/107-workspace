@@ -1,0 +1,108 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  background: var(--bgColor-muted);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+}
+
+.headerInner {
+  min-height: var(--base-size-48);
+  padding: var(--base-size-8) var(--base-size-24);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-16);
+  box-sizing: border-box;
+}
+
+.headerStart {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  gap: var(--base-size-8);
+}
+
+.brand {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fgColor-default);
+  font-size: var(--text-title-size-small);
+  font-weight: var(--text-title-weight-small);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brand:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
+  outline-offset: 2px;
+}
+
+.brand:hover {
+  color: var(--fgColor-default);
+}
+
+.actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: stretch;
+}
+
+/* AppShell 从 Primer 的 defaultPaneWidth.medium 注入此本地语义变量。 */
+.persistentSidebar {
+  flex: 0 0 var(--app-shell-sidebar-width);
+  padding: var(--base-size-24) var(--base-size-16);
+  border-right: var(--borderWidth-thin) solid var(--borderColor-default);
+  background: var(--bgColor-default);
+  box-sizing: border-box;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.contextGuide {
+  min-height: var(--base-size-44);
+  padding: var(--base-size-8) 50px;
+  border-top: var(--borderWidth-thin) solid var(--borderColor-default);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  font-size: var(--text-body-size-small);
+  color: var(--fgColor-muted);
+}
+
+/* Primer PageLayout narrow 边界：小于 48rem。 */
+@media (max-width: calc(48rem - 0.02px)) {
+  .persistentSidebar {
+    display: none;
+  }
+
+  .headerInner {
+    padding-inline: var(--base-size-8);
+    gap: var(--base-size-8);
+  }
+
+  .contextGuide {
+    padding-inline: var(--base-size-16);
+  }
+
+  .actions {
+    gap: var(--base-size-4);
+  }
+}

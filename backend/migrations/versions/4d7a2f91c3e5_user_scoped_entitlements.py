@@ -5,7 +5,7 @@ Issue #38: entitlement 的业务主键从 ``workspace_id`` 换成 ``user_id``。
 downgrade 同样不恢复数据，只还原表结构。
 
 Revision ID: 4d7a2f91c3e5
-Revises: e35a1d7c9b20
+Revises: 1f61cd1dc3ac
 Create Date: 2026-08-20
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "4d7a2f91c3e5"
-down_revision: str | None = "e35a1d7c9b20"
+down_revision: str | None = "1f61cd1dc3ac"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -25,6 +25,8 @@ _ID = sa.String(length=40)
 
 
 def upgrade() -> None:
+    # 不做数据回填：旧行的 workspace_id 对 User 维度没有意义，直接清空。
+    op.execute(sa.text("DELETE FROM resource_entitlements"))
     with op.batch_alter_table("resource_entitlements", schema=None) as batch_op:
         batch_op.drop_constraint("uq_entitlement", type_="unique")
         batch_op.drop_index(batch_op.f("ix_resource_entitlements_workspace_id"))

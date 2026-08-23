@@ -9,11 +9,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.compute import ComputePlan, ComputeRequest, ResourceEntitlement, SchedulerMapping
+from ...domain.config_scope import ConfigScope
 from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
@@ -28,6 +29,7 @@ from ...domain.enums import (
     TargetType,
 )
 from ...domain.errors import ConflictError
+from ...domain.grant import Grant, GrantAction, GrantTargetKind
 from ...domain.models import (
     Activity,
     Artifact,
@@ -52,8 +54,9 @@ from ...domain.models import (
     SharedResourceVersion,
     User,
     UserGroup,
-    WorkspaceVariable,
+    Variable,
 )
+from ...domain.ownership import OwnerKind, OwnerReference
 from ...domain.pagination import Page, PageRequest
 from ...domain.run_snapshot import RunSnapshot
 from ...domain.secrets import parse_env_value
@@ -87,6 +90,10 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
     (
         ("uq_shared_resource_version_seq", "shared_resource_versions.sequence"),
         "有其他人同时发布了这个 Shared Resource 的版本，请刷新后重试",
+    ),
+    (
+        ("uq_grant_grantor_grantee_target_action", "grants.grantor_id"),
+        "该 Grantee 已拥有此 Grantor 的相应 USE Grant",
     ),
 )
 
@@ -162,6 +169,13 @@ class UserRepositoryImpl:
         stmt = select(t.UserRow).where(t.UserRow.username == username)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_user(row) if row else None
+
+    async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]:
+        if not user_ids:
+            return {}
+        stmt = select(t.UserRow).where(t.UserRow.id.in_(user_ids))
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return {row.id: _to_user(row) for row in rows}
 
 
 class LegacyWorkspaceRepositoryImpl:
@@ -278,6 +292,13 @@ class UserGroupRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_user_group(row) for row in rows]
 
+    async def list_by_ids(self, user_group_ids: set[str]) -> dict[str, UserGroup]:
+        if not user_group_ids:
+            return {}
+        stmt = select(t.UserGroupRow).where(t.UserGroupRow.id.in_(user_group_ids))
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return {row.id: _to_user_group(row) for row in rows}
+
 
 class MembershipRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
@@ -352,25 +373,27 @@ class VariableRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_for_workspace(self, workspace_id: str) -> list[WorkspaceVariable]:
+    async def list_for_scope(self, scope: ConfigScope) -> list[Variable]:
         stmt = (
-            select(t.WorkspaceVariableRow)
-            .where(t.WorkspaceVariableRow.workspace_id == workspace_id)
-            .order_by(t.WorkspaceVariableRow.name)
+            select(t.VariableRow)
+            .where(t.VariableRow.scope_kind == scope.kind.value, t.VariableRow.scope_id == scope.id)
+            .order_by(t.VariableRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [
-            WorkspaceVariable(workspace_id=r.workspace_id, name=r.name, value=r.value) for r in rows
-        ]
+        return [Variable(scope=scope, name=r.name, value=r.value) for r in rows]
 
-    async def upsert(self, variable: WorkspaceVariable) -> None:
-        row = await self._session.get(
-            t.WorkspaceVariableRow, (variable.workspace_id, variable.name)
-        )
+    async def get(self, scope: ConfigScope, name: str) -> Variable | None:
+        row = await self._session.get(t.VariableRow, (scope.kind.value, scope.id, name))
+        return Variable(scope=scope, name=row.name, value=row.value) if row else None
+
+    async def upsert(self, variable: Variable) -> None:
+        key = (variable.scope.kind.value, variable.scope.id, variable.name)
+        row = await self._session.get(t.VariableRow, key)
         if row is None:
             self._session.add(
-                t.WorkspaceVariableRow(
-                    workspace_id=variable.workspace_id,
+                t.VariableRow(
+                    scope_kind=variable.scope.kind.value,
+                    scope_id=variable.scope.id,
                     name=variable.name,
                     value=variable.value,
                 )
@@ -379,11 +402,12 @@ class VariableRepositoryImpl:
             row.value = variable.value
         await _flush(self._session)
 
-    async def delete(self, workspace_id: str, name: str) -> None:
+    async def delete(self, scope: ConfigScope, name: str) -> None:
         await self._session.execute(
-            delete(t.WorkspaceVariableRow).where(
-                t.WorkspaceVariableRow.workspace_id == workspace_id,
-                t.WorkspaceVariableRow.name == name,
+            delete(t.VariableRow).where(
+                t.VariableRow.scope_kind == scope.kind.value,
+                t.VariableRow.scope_id == scope.id,
+                t.VariableRow.name == name,
             )
         )
         await _flush(self._session)
@@ -617,42 +641,87 @@ class EnvironmentRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_environments(self) -> list[Environment]:
-        stmt = select(t.EnvironmentRow).order_by(t.EnvironmentRow.name)
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return [
-            Environment(
-                id=r.id,
-                name=r.name,
-                description=r.description,
-                owner_workspace_id=r.owner_workspace_id,
+    async def list_discoverable_for_user(self, user_id: str) -> list[Environment]:
+        stmt = (
+            select(t.EnvironmentRow)
+            .where(
+                _asset_discovery_predicate(
+                    t.EnvironmentRow.owner_user_id,
+                    t.EnvironmentRow.owner_user_group_id,
+                    user_id,
+                )
             )
-            for r in rows
-        ]
-
-    async def get_environment(self, environment_id: str) -> Environment | None:
-        row = await self._session.get(t.EnvironmentRow, environment_id)
-        if row is None:
-            return None
-        return Environment(
-            id=row.id,
-            name=row.name,
-            description=row.description,
-            owner_workspace_id=row.owner_workspace_id,
+            .order_by(t.EnvironmentRow.name)
         )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment(row) for row in rows]
 
-    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+    async def get_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> Environment | None:
+        stmt = select(t.EnvironmentRow).where(
+            t.EnvironmentRow.id == environment_id,
+            _asset_discovery_predicate(
+                t.EnvironmentRow.owner_user_id,
+                t.EnvironmentRow.owner_user_group_id,
+                user_id,
+            ),
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_environment(row) if row else None
+
+    async def list_versions_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> list[EnvironmentVersion]:
         stmt = (
             select(t.EnvironmentVersionRow)
-            .where(t.EnvironmentVersionRow.environment_id == environment_id)
+            .join(
+                t.EnvironmentRow,
+                t.EnvironmentRow.id == t.EnvironmentVersionRow.environment_id,
+            )
+            .where(
+                t.EnvironmentRow.id == environment_id,
+                _asset_discovery_predicate(
+                    t.EnvironmentRow.owner_user_id,
+                    t.EnvironmentRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
             .order_by(t.EnvironmentVersionRow.version)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_environment_version(r) for r in rows]
+        return [_to_environment_version(row) for row in rows]
 
-    async def get_version(self, version_id: str) -> EnvironmentVersion | None:
+    async def get_version_discoverable_for_user(
+        self, user_id: str, version_id: str
+    ) -> EnvironmentVersion | None:
+        stmt = (
+            select(t.EnvironmentVersionRow)
+            .join(
+                t.EnvironmentRow,
+                t.EnvironmentRow.id == t.EnvironmentVersionRow.environment_id,
+            )
+            .where(
+                t.EnvironmentVersionRow.id == version_id,
+                _asset_discovery_predicate(
+                    t.EnvironmentRow.owner_user_id,
+                    t.EnvironmentRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_environment_version(row) if row else None
+
+    async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
+        """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentVersionRow, version_id)
         return _to_environment_version(row) if row else None
+
+    async def get_by_id(self, environment_id: str) -> Environment | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.EnvironmentRow, environment_id)
+        return _to_environment(row) if row else None
 
 
 class ComputePlanRepositoryImpl:
@@ -1242,31 +1311,24 @@ def _to_fork_relation(row: t.ForkRelationRow) -> ForkRelation:
 
 
 class SharedResourceRepositoryImpl:
-    """Shared Resource 与版本的仓储实现。
-
-    可见性按设计稿 §2.6 分两层：``owner_workspace_id IS NULL`` 为 Platform 资源，
-    全平台可见；否则按 Workspace 归属过滤。跨 Workspace Asset Grant 在 M4 实现。
-    版本仓储只有 ``add_version`` 和读取方法——版本不可变（GR-201）。
-    """
+    """Shared Resource persistence with owner-scoped public discovery."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def add(self, resource: SharedResource) -> None:
+        owner_user_id, owner_user_group_id = _owner_columns(resource.owner)
         self._session.add(
             t.SharedResourceRow(
                 id=resource.id,
                 name=resource.name,
                 description=resource.description,
-                owner_workspace_id=resource.owner_workspace_id,
+                owner_user_id=owner_user_id,
+                owner_user_group_id=owner_user_group_id,
                 created_at=resource.created_at or datetime.now(UTC),
             )
         )
         await _flush(self._session)
-
-    async def get(self, resource_id: str) -> SharedResource | None:
-        row = await self._session.get(t.SharedResourceRow, resource_id)
-        return _to_shared_resource(row) if row else None
 
     async def update(self, resource: SharedResource) -> None:
         row = await self._session.get(t.SharedResourceRow, resource.id)
@@ -1276,23 +1338,34 @@ class SharedResourceRepositoryImpl:
         row.description = resource.description
         await _flush(self._session)
 
-    async def list_platform(self) -> list[SharedResource]:
+    async def list_discoverable_for_user(self, user_id: str) -> list[SharedResource]:
         stmt = (
             select(t.SharedResourceRow)
-            .where(t.SharedResourceRow.owner_workspace_id.is_(None))
+            .where(
+                _asset_discovery_predicate(
+                    t.SharedResourceRow.owner_user_id,
+                    t.SharedResourceRow.owner_user_group_id,
+                    user_id,
+                )
+            )
             .order_by(t.SharedResourceRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_shared_resource(row) for row in rows]
 
-    async def list_for_workspace(self, workspace_id: str) -> list[SharedResource]:
-        stmt = (
-            select(t.SharedResourceRow)
-            .where(t.SharedResourceRow.owner_workspace_id == workspace_id)
-            .order_by(t.SharedResourceRow.name)
+    async def get_discoverable_for_user(
+        self, user_id: str, resource_id: str
+    ) -> SharedResource | None:
+        stmt = select(t.SharedResourceRow).where(
+            t.SharedResourceRow.id == resource_id,
+            _asset_discovery_predicate(
+                t.SharedResourceRow.owner_user_id,
+                t.SharedResourceRow.owner_user_group_id,
+                user_id,
+            ),
         )
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_shared_resource(row) for row in rows]
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_shared_resource(row) if row else None
 
     async def add_version(self, version: SharedResourceVersion) -> None:
         self._session.add(
@@ -1321,30 +1394,57 @@ class SharedResourceRepositoryImpl:
             )
         await _flush(self._session)
 
-    async def get_version(self, version_id: str) -> SharedResourceVersion | None:
-        row = await self._session.get(t.SharedResourceVersionRow, version_id)
-        if row is None:
-            return None
-        return await self._hydrate_version(row)
-
-    async def list_versions(self, resource_id: str) -> list[SharedResourceVersion]:
+    async def get_version_discoverable_for_user(
+        self, user_id: str, version_id: str
+    ) -> SharedResourceVersion | None:
         stmt = (
             select(t.SharedResourceVersionRow)
-            .where(t.SharedResourceVersionRow.shared_resource_id == resource_id)
+            .join(
+                t.SharedResourceRow,
+                t.SharedResourceRow.id == t.SharedResourceVersionRow.shared_resource_id,
+            )
+            .where(
+                t.SharedResourceVersionRow.id == version_id,
+                _asset_discovery_predicate(
+                    t.SharedResourceRow.owner_user_id,
+                    t.SharedResourceRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return await self._hydrate_version(row) if row else None
+
+    async def get_version_by_id(self, version_id: str) -> SharedResourceVersion | None:
+        row = await self._session.get(t.SharedResourceVersionRow, version_id)
+        return await self._hydrate_version(row) if row else None
+
+    async def get_by_id(self, resource_id: str) -> SharedResource | None:
+        """Trusted exact lookup for grant-authorized use."""
+        row = await self._session.get(t.SharedResourceRow, resource_id)
+        return _to_shared_resource(row) if row else None
+
+    async def list_versions_discoverable_for_user(
+        self, user_id: str, resource_id: str
+    ) -> list[SharedResourceVersion]:
+        stmt = (
+            select(t.SharedResourceVersionRow)
+            .join(
+                t.SharedResourceRow,
+                t.SharedResourceRow.id == t.SharedResourceVersionRow.shared_resource_id,
+            )
+            .where(
+                t.SharedResourceRow.id == resource_id,
+                _asset_discovery_predicate(
+                    t.SharedResourceRow.owner_user_id,
+                    t.SharedResourceRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
             .order_by(t.SharedResourceVersionRow.sequence.desc())
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [await self._hydrate_version(row) for row in rows]
-
-    async def latest_version(self, resource_id: str) -> SharedResourceVersion | None:
-        stmt = (
-            select(t.SharedResourceVersionRow)
-            .where(t.SharedResourceVersionRow.shared_resource_id == resource_id)
-            .order_by(t.SharedResourceVersionRow.sequence.desc())
-            .limit(1)
-        )
-        row = (await self._session.execute(stmt)).scalars().first()
-        return await self._hydrate_version(row) if row else None
 
     async def next_version_sequence(self, resource_id: str) -> int:
         stmt = select(func.max(t.SharedResourceVersionRow.sequence)).where(
@@ -1374,6 +1474,110 @@ class SharedResourceRepositoryImpl:
         )
 
 
+class GrantRepositoryImpl:
+    """Grant persistence with discriminated-union grantee/target columns."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, grant: Grant) -> None:
+        self._session.add(
+            t.GrantRow(
+                id=grant.id,
+                grantor_kind=grant.grantor.kind.value,
+                grantor_id=grant.grantor.id,
+                grantee_kind=grant.grantee.kind.value,
+                grantee_id=grant.grantee.id,
+                target_kind=grant.target_kind.value,
+                target_id=grant.target_id,
+                action=grant.action.value,
+                granted_by_id=grant.granted_by,
+                created_at=grant.created_at,
+            )
+        )
+        await _flush(self._session)
+
+    async def get(self, grant_id: str) -> Grant | None:
+        row = await self._session.get(t.GrantRow, grant_id)
+        return _to_grant(row) if row else None
+
+    async def list_for_target(self, target_kind: GrantTargetKind, target_id: str) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.target_kind == target_kind.value,
+                t.GrantRow.target_id == target_id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def list_for_grantee(self, grantee: OwnerReference) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.grantee_kind == grantee.kind.value,
+                t.GrantRow.grantee_id == grantee.id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def list_for_grantor(self, grantor: OwnerReference) -> list[Grant]:
+        stmt = (
+            select(t.GrantRow)
+            .where(
+                t.GrantRow.grantor_kind == grantor.kind.value,
+                t.GrantRow.grantor_id == grantor.id,
+            )
+            .order_by(t.GrantRow.created_at)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_grant(row) for row in rows]
+
+    async def delete(self, grant_id: str) -> bool:
+        stmt = delete(t.GrantRow).where(t.GrantRow.id == grant_id)
+        result = await self._session.execute(stmt)
+        await _flush(self._session)
+        return result.rowcount > 0
+
+    async def exists_use_grant(
+        self,
+        grantee: OwnerReference,
+        target_kind: GrantTargetKind,
+        target_id: str,
+        grantor: OwnerReference,
+    ) -> bool:
+        """Check for a USE Grant from ``grantor`` to ``grantee`` for ``target``.
+
+        Matches either Target == ALL (covering all Grantor assets) or an exact
+        (target_kind, target_id) match. The ``grantor`` must equal the asset's
+        current Owner — after Ownership transfer, old Grants no longer match.
+        """
+        stmt = (
+            select(t.GrantRow.id)
+            .where(
+                t.GrantRow.grantor_kind == grantor.kind.value,
+                t.GrantRow.grantor_id == grantor.id,
+                t.GrantRow.grantee_kind == grantee.kind.value,
+                t.GrantRow.grantee_id == grantee.id,
+                t.GrantRow.action == GrantAction.USE.value,
+                or_(
+                    t.GrantRow.target_kind == GrantTargetKind.ALL.value,
+                    and_(
+                        t.GrantRow.target_kind == target_kind.value,
+                        t.GrantRow.target_id == target_id,
+                    ),
+                ),
+            )
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return row is not None
+
+
 class SqlRepositories:
     """一次工作单元内的全部仓储。"""
 
@@ -1400,6 +1604,7 @@ class SqlRepositories:
         self.notifications = NotificationRepositoryImpl(session)
         self.fork_relations = ForkRelationRepositoryImpl(session)
         self.shared_resources = SharedResourceRepositoryImpl(session)
+        self.grants = GrantRepositoryImpl(session)
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -1414,6 +1619,28 @@ class SqlRepositories:
 # --------------------------------------------------------------------------
 # 行 -> 领域对象
 # --------------------------------------------------------------------------
+
+
+def _asset_discovery_predicate(owner_user_column: Any, owner_group_column: Any, user_id: str):
+    active_group_ids = select(t.MembershipRow.user_group_id).where(
+        t.MembershipRow.user_id == user_id,
+        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+    )
+    return (owner_user_column == user_id) | owner_group_column.in_(active_group_ids)
+
+
+def _owner_reference(owner_user_id: str | None, owner_user_group_id: str | None) -> OwnerReference:
+    if owner_user_id is not None and owner_user_group_id is None:
+        return OwnerReference(OwnerKind.USER, owner_user_id)
+    if owner_user_id is None and owner_user_group_id is not None:
+        return OwnerReference(OwnerKind.USER_GROUP, owner_user_group_id)
+    raise ValueError("asset row must have exactly one owner")
+
+
+def _owner_columns(owner: OwnerReference) -> tuple[str | None, str | None]:
+    if owner.kind is OwnerKind.USER:
+        return owner.id, None
+    return None, owner.id
 
 
 def _visible_workspace_ids(user_id: str):
@@ -1499,6 +1726,15 @@ def _to_project_file(row: t.ProjectFileRow) -> ProjectFile:
         size=row.size,
         content_hash=row.content_hash,
         updated_at=_aware(row.updated_at),
+    )
+
+
+def _to_environment(row: t.EnvironmentRow) -> Environment:
+    return Environment(
+        id=row.id,
+        name=row.name,
+        owner=_owner_reference(row.owner_user_id, row.owner_user_group_id),
+        description=row.description,
     )
 
 
@@ -1634,7 +1870,20 @@ def _to_shared_resource(row: t.SharedResourceRow) -> SharedResource:
     return SharedResource(
         id=row.id,
         name=row.name,
+        owner=_owner_reference(row.owner_user_id, row.owner_user_group_id),
         description=row.description,
-        owner_workspace_id=row.owner_workspace_id,
+        created_at=_aware(row.created_at),
+    )
+
+
+def _to_grant(row: t.GrantRow) -> Grant:
+    return Grant(
+        id=row.id,
+        grantor=OwnerReference(OwnerKind(row.grantor_kind), row.grantor_id),
+        grantee=OwnerReference(OwnerKind(row.grantee_kind), row.grantee_id),
+        target_kind=GrantTargetKind(row.target_kind),
+        target_id=row.target_id,
+        action=GrantAction(row.action),
+        granted_by=row.granted_by_id,
         created_at=_aware(row.created_at),
     )

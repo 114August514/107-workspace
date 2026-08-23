@@ -46,11 +46,11 @@ import type {
   RunDraft,
   RunPage,
   SharedResource,
+  SharedResourceCreate,
   SharedResourceDetail,
   SharedResourceUpdate,
   SharedResourceVersion,
   SharedResourceVersionDetail,
-  Variable,
   VersionDiff,
   WorkingChange,
   UserGroup,
@@ -269,54 +269,6 @@ export const api = {
   listEntitlements: async (): Promise<Entitlement[]> =>
     unwrap(await http.GET('/api/v1/me/entitlements')),
 
-  listVariables: async (id: string): Promise<Variable[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/variables', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setVariable: async (id: string, name: string, value: string): Promise<Variable> =>
-    unwrap(
-      await http.PUT('/api/v1/workspaces/{workspace_id}/variables', {
-        params: { path: { workspace_id: id } },
-        body: { name, value },
-      }),
-    ),
-
-  deleteVariable: async (id: string, name: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/variables/{name}', {
-        params: { path: { workspace_id: id, name } },
-      }),
-    )
-  },
-
-  /** 只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。 */
-  listSecretNames: async (id: string): Promise<string[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/secrets', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setSecret: async (id: string, name: string, value: string): Promise<void> => {
-    unwrap(
-      await http.PUT('/api/v1/workspaces/{workspace_id}/secrets', {
-        params: { path: { workspace_id: id } },
-        body: { name, value },
-      }),
-    )
-  },
-
-  deleteSecret: async (id: string, name: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/secrets/{name}', {
-        params: { path: { workspace_id: id, name } },
-      }),
-    )
-  },
-
   // -- Project -----------------------------------------------------------
   listProjects: async (workspaceId: string, query: PageQuery = {}): Promise<ProjectPage> =>
     unwrap(
@@ -441,6 +393,20 @@ export const api = {
     unwrap(
       await http.POST('/api/v1/versions/{version_id}/restore', {
         params: { path: { version_id: versionId } },
+      }),
+    ),
+
+  listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/variables', {
+        params: { path: { project_id: projectId } },
+      }),
+    ),
+
+  listProjectSecrets: async (projectId: string): Promise<string[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/secrets', {
+        params: { path: { project_id: projectId } },
       }),
     ),
 
@@ -569,16 +535,8 @@ export const api = {
   },
 
   // -- 共享资源 ----------------------------------------------------------
-  listWorkspaceSharedResources: async (workspaceId: string): Promise<SharedResource[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/shared-resources', {
-        params: { path: { workspace_id: workspaceId } },
-      }),
-    ),
-
-  /** Platform 持有的公共资源。读路径，后端预留见 design.md §2.6 D。 */
-  listPlatformSharedResources: async (): Promise<SharedResource[]> =>
-    unwrap(await http.GET('/api/v1/catalog/shared-resources')),
+  listSharedResources: async (): Promise<SharedResource[]> =>
+    unwrap(await http.GET('/api/v1/shared-resources')),
 
   getSharedResource: async (id: string): Promise<SharedResourceDetail> =>
     unwrap(
@@ -587,15 +545,10 @@ export const api = {
       }),
     ),
 
-  createSharedResource: async (
-    workspaceId: string,
-    name: string,
-    description: string,
-  ): Promise<SharedResource> =>
+  createSharedResource: async (payload: SharedResourceCreate): Promise<SharedResource> =>
     unwrap(
-      await http.POST('/api/v1/workspaces/{workspace_id}/shared-resources', {
-        params: { path: { workspace_id: workspaceId } },
-        body: { name, description },
+      await http.POST('/api/v1/shared-resources', {
+        body: payload,
       }),
     ),
 

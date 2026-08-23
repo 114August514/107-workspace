@@ -1,0 +1,84 @@
+.drawer {
+  min-width: 0;
+  max-width: calc(100vw - var(--base-size-16));
+}
+
+.header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--base-size-8);
+  overflow: hidden;
+  font-size: var(--text-title-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closeButton {
+  flex: 0 0 auto;
+  width: var(--base-size-44);
+  height: var(--base-size-44);
+}
+
+.body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.navigation {
+  min-width: 0;
+}
+
+.item > a {
+  min-height: var(--base-size-44);
+  align-content: center;
+  align-items: center;
+}
+
+.itemContent {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+
+.itemText {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemMeta,
+.empty {
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+}
+
+.itemMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: var(--base-size-6) var(--base-size-8);
+  list-style: none;
+}
+
+.expandItem {
+  list-style: none;
+}
+
+.expandButton {
+  width: 100%;
+  min-height: var(--base-size-44);
+  justify-content: flex-start;
+}

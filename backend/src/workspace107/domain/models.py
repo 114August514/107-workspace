@@ -16,6 +16,7 @@ import posixpath
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from .config_scope import ConfigScope
 from .enums import (
     ActivityAction,
     ArtifactStatus,
@@ -85,6 +86,13 @@ class LegacyWorkspace:
     def is_personal(self) -> bool:
         return self.kind is LegacyWorkspaceKind.PERSONAL
 
+    @property
+    def owner_reference(self) -> OwnerReference:
+        """Map the compatibility anchor to its canonical User/UserGroup owner."""
+        if self.is_personal:
+            return OwnerReference(kind=OwnerKind.USER, id=self.owner_id)
+        return OwnerReference(kind=OwnerKind.USER_GROUP, id=self.id)
+
 
 @dataclass(slots=True)
 class Membership:
@@ -103,23 +111,19 @@ class Membership:
 
 
 @dataclass(slots=True)
-class WorkspaceVariable:
-    """由 Workspace 管理、可直接查看和引用的非敏感键值配置。"""
+class Variable:
+    """A non-sensitive value owned by one explicit configuration scope."""
 
-    workspace_id: str
+    scope: ConfigScope
     name: str
     value: str
 
 
 @dataclass(slots=True)
-class WorkspaceSecret:
-    """由 Workspace 安全保存的敏感键值配置。
+class Secret:
+    """Secret metadata; plaintext is never represented in the domain model."""
 
-    领域对象里刻意不携带秘密值：读取路径只暴露名称，
-    值的获取由 ``SecretVault`` 端口在执行阶段完成（设计稿 §3.1.4）。
-    """
-
-    workspace_id: str
+    scope: ConfigScope
     name: str
     updated_at: datetime | None = None
 
@@ -201,13 +205,12 @@ class ProjectVersion:
 
 @dataclass(slots=True)
 class Environment:
-    """可被多个 Project 引用的独立运行基础。"""
+    """可被多个 Project 引用、由一个 User 或 UserGroup 持有的独立运行基础。"""
 
     id: str
     name: str
+    owner: OwnerReference
     description: str = ""
-    owner_workspace_id: str | None = None
-    """None 表示平台提供的公共环境。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -540,28 +543,17 @@ class ForkRelation:
 
 @dataclass(slots=True)
 class SharedResource:
-    """独立于 Project 存在、可版本化、可被多个 Project 引用的内容资源。
+    """独立于 Project、可版本化、由一个 User 或 UserGroup 持有的内容资源。
 
-    典型用途：数据集、预训练权重、语料库、预处理脚本。
-
-    ``owner_workspace_id`` 为 ``None`` 表示 Platform 公共资源（§2.6 D V2），
-    全平台可见；Platform 资源通过公共发布申请 → 平台管理员审核流程产生，
-    不在本 Core 子集范围，当前仅预留数据结构。
-    否则归属某个 Workspace，对该 Workspace 成员可见。
-
-    本对象可变（名称、说明可改），但其中的版本一旦发布即不可变（GR-201）。
+    典型用途：数据集、预训练权重、语料库、预处理脚本。本对象的名称和说明可变，
+    但其中的版本一旦发布即不可变（GR-201）。
     """
 
     id: str
     name: str
+    owner: OwnerReference
     description: str = ""
-    owner_workspace_id: str | None = None
-    """``None`` 表示 Platform 持有。"""
     created_at: datetime | None = None
-
-    @property
-    def is_platform_owned(self) -> bool:
-        return self.owner_workspace_id is None
 
 
 @dataclass(frozen=True, slots=True)

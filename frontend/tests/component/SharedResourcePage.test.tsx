@@ -15,9 +15,9 @@ import type {
 /**
  * SharedResourcePage 用户可观察行为。
  *
- * 守的是 Issue #5 / #25 的要求：
- * - Platform 资源是只读的，不显示「修改共享资源」和「发布版本」；
- * - 操作入口由 capability 决定，后端逐请求校验，前端只收敛入口；
+ * 守的是 Issue #5 / #39 的要求：
+ * - 资源展示 canonical User / UserGroup owner，不再推断 Platform owner；
+ * - 操作入口由 owner context 的 capability 决定，后端逐请求校验，前端只收敛入口；
  * - 空态只对有发布权限的用户展示 CTA，且不绑定控件物理位置。
  *
  * 断言用角色和可见文案，不绑定 Primer 私有 DOM/class（见 frontend/README.md）。
@@ -25,12 +25,14 @@ import type {
 
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
 const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
+const mockHome = vi.hoisted(() => vi.fn())
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResource: mockGetSharedResource,
     getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
+    home: mockHome,
     getSharedResourceVersion: mockGetSharedResourceVersion,
   },
 }))
@@ -59,8 +61,7 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     id: 'res_test',
     name: '预训练权重',
     description: 'imagenet-subset',
-    is_platform_owned: false,
-    owner_workspace_id: 'ws_test',
+    owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
     created_at: '2026-08-14T10:00:00Z',
     versions: [],
     ...overrides,
@@ -85,10 +86,11 @@ function makeVersionDetail(
   id: string,
   label: string,
   sequence: number,
+  path = 'train.py',
 ): SharedResourceVersionDetail {
   return {
     ...makeVersionSummary(id, label, sequence),
-    files: [{ path: 'train.py', content_hash: 'abc', size: 100 }],
+    files: [{ path, content_hash: 'abc', size: 100 }],
   }
 }
 
@@ -170,19 +172,23 @@ describe('SharedResourcePage 权限与空态', () => {
     })
   })
 
-  it('Platform 资源只读：不显示修改和发布，但能看见资源', async () => {
+  it('无法解析 owner context 时保持只读，但仍展示 canonical owner', async () => {
     mockGetSharedResource.mockResolvedValue(
-      makeResource({ is_platform_owned: true, owner_workspace_id: null }),
+      makeResource({
+        owner: { kind: 'user', id: 'usr_alice', display_name: 'Alice' },
+      }),
     )
-    // Platform 资源不加载 workspace（owner_workspace_id 为 null）
-    mockGetLegacyWorkspaceContext.mockResolvedValue(undefined)
+    mockHome.mockResolvedValue({
+      user: { id: 'usr_alice' },
+      personal_resource_context_id: null,
+    })
 
     renderPage()
 
     await waitFor(() => {
       expect(screen.getByText('预训练权重')).toBeInTheDocument()
     })
-    expect(screen.getByText('平台资源')).toBeInTheDocument()
+    expect(screen.getByText('归属：Alice')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '修改共享资源' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument()
   })
@@ -203,11 +209,7 @@ describe('SharedResourcePage 权限与空态', () => {
     expect(await screen.findByRole('button', { name: /v2/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /v1/ })).toBeInTheDocument()
     expect(screen.getByText('最新')).toBeInTheDocument()
-    // 右侧详情默认加载最新版本，不去请求旧版本
-    await waitFor(() => {
-      expect(mockGetSharedResourceVersion).toHaveBeenCalledWith('ver_2')
-    })
-    expect(mockGetSharedResourceVersion).not.toHaveBeenCalledWith('ver_1')
+    expect(await screen.findByRole('button', { name: 'train.py' })).toBeInTheDocument()
   })
 
   it('点击左侧版本切换右侧详情', async () => {
@@ -219,14 +221,18 @@ describe('SharedResourcePage 权限与空态', () => {
     mockGetLegacyWorkspaceContext.mockResolvedValue(
       makeWorkspace(['workspace.view', 'shared_resource.view']),
     )
-    mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
+    mockGetSharedResourceVersion.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === 'ver_1'
+          ? makeVersionDetail('ver_1', 'v1', 1, 'old.py')
+          : makeVersionDetail('ver_2', 'v2', 2),
+      ),
+    )
 
     renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: /v1/ }))
-    await waitFor(() => {
-      expect(mockGetSharedResourceVersion).toHaveBeenCalledWith('ver_1')
-    })
+    expect(await screen.findByRole('button', { name: 'old.py' })).toBeInTheDocument()
   })
 
   it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
@@ -237,7 +243,7 @@ describe('SharedResourcePage 权限与空态', () => {
 
     renderPage()
 
-    // 面包屑：首页 → Test 空间 → 共享资源（当前页不在面包屑里）
+    // 面包屑：首页 → canonical owner → 共享资源（当前页不在面包屑里）
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Test 空间' })).toHaveAttribute(
         'href',
@@ -252,7 +258,7 @@ describe('SharedResourcePage 权限与空态', () => {
     const current = screen.getByRole('heading', { name: '预训练权重', level: 1 })
     expect(current).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '预训练权重' })).not.toBeInTheDocument()
-    // 归属标签跟在标题旁
-    expect(screen.getByText('空间资源')).toBeInTheDocument()
+    // 标题旁直接展示 API 返回的 canonical owner summary。
+    expect(screen.getByText('归属：Test 空间')).toBeInTheDocument()
   })
 })

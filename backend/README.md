@@ -62,6 +62,20 @@ uv run python -m workspace107.tools.seed
 uv run uvicorn workspace107.main:create_app --factory --reload
 ```
 
+`seed` 不带参数时只幂等创建本地开发 Compute Plans，不创建 Environment 或 Shared
+Resource。显式演示 bootstrap 使用：
+
+```bash
+uv run python -m workspace107.tools.seed --demo
+uv run python -m workspace107.tools.seed --demo --platform-owner-username <username>
+```
+
+Owner 选择顺序是 CLI、`WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME`、`student`，且只在
+`grp_platform_assets` 首次不存在时生效。User Group 已存在时不会创建新配置的 User，也
+不会改回或协调已转让的 Owner。演示 Project 使用 `grp_demo` 自己的 Environment；它与
+`grp_platform_assets` 持有的两条平台演示 Environment 是不同资产。这不是 production
+provisioning 接口。
+
 接口文档：<http://127.0.0.1:8000/docs>
 
 ## 配置

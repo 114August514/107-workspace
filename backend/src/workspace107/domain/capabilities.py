@@ -33,7 +33,6 @@ USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability
     MembershipRole.OWNER: _USER_GROUP_ADMINISTER | {UserGroupCapability.OWNERSHIP_TRANSFER},
     MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
     MembershipRole.MEMBER: _USER_GROUP_VIEW,
-    MembershipRole.VIEWER: _USER_GROUP_VIEW,
 }
 
 
@@ -82,11 +81,15 @@ class Capability(StrEnum):
 
     # -- Shared Resource --------------------------------------------------
     SHARED_RESOURCE_VIEW = "shared_resource.view"
-    """看 Workspace 内持有的 Shared Resource 及其版本。Platform 资源全平台可见，不靠这条。"""
+    """看 User Group 持有的 Shared Resource 及其版本；User-owned 资源由 owner 本人管理。"""
     SHARED_RESOURCE_MANAGE = "shared_resource.manage"
-    """在 Workspace 中创建 Shared Resource、修改名称与说明。"""
+    """创建或修改当前 User / User Group Owner 范围内的 Shared Resource。"""
     SHARED_RESOURCE_VERSION_CREATE = "shared_resource.version.create"
     """为 Shared Resource 上传文件形成新的不可变版本。"""
+
+    # -- Grant -------------------------------------------------------------
+    GRANT_MANAGE = "grant.manage"
+    """管理跨 Owner USE Grant（创建、查看、撤销）。"""
 
 
 _VIEW_ONLY: frozenset[Capability] = frozenset(
@@ -117,6 +120,7 @@ _ADMINISTER: frozenset[Capability] = _CONTRIBUTE | {
     Capability.USER_GROUP_UPDATE,
     Capability.MEMBER_MANAGE,
     Capability.CONFIG_MANAGE,
+    Capability.GRANT_MANAGE,
 }
 
 ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
@@ -124,7 +128,6 @@ ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
     MembershipRole.OWNER: _ADMINISTER | {Capability.OWNERSHIP_TRANSFER},
     MembershipRole.ADMIN: _ADMINISTER,
     MembershipRole.MEMBER: _CONTRIBUTE,
-    MembershipRole.VIEWER: _VIEW_ONLY,
 }
 
 # 面向用户的说明，用在权限不足的错误信息里。
@@ -147,6 +150,7 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.SHARED_RESOURCE_VIEW: "查看 Shared Resource",
     Capability.SHARED_RESOURCE_MANAGE: "管理 Shared Resource",
     Capability.SHARED_RESOURCE_VERSION_CREATE: "上传 Shared Resource 版本",
+    Capability.GRANT_MANAGE: "管理 USE Grant",
 }
 
 USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {

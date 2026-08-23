@@ -7,6 +7,7 @@ import { ProductRoutes } from '../../src/App'
 import { api } from '../../src/api/client'
 import type {
   ActivityPage,
+  Home,
   LegacyWorkspaceContext,
   Member,
   ProjectPage,
@@ -22,6 +23,19 @@ const group: UserGroup = {
   created_at: '2026-08-17T00:00:00Z',
   role: 'owner',
   capabilities: ['user_group.view', 'member.view', 'member.manage'],
+}
+
+const homeState = {
+  data: {
+    user: { id: 'usr_alice', username: 'alice', display_name: 'Alice', email: null },
+    user_groups: [group],
+    personal_resource_context_id: 'ws_personal_alice',
+    recent_projects: [],
+    recent_runs: [],
+  } satisfies Home,
+  loading: false,
+  error: undefined,
+  reload: vi.fn(),
 }
 
 const member: Member = {
@@ -85,7 +99,7 @@ describe('UserGroupPage governance boundary', () => {
   it('renders a collaborative resource context with normal product labels', async () => {
     render(
       <MemoryRouter initialEntries={['/workspaces/grp_lab']}>
-        <ProductRoutes username="alice" />
+        <ProductRoutes username="alice" home={homeState} />
       </MemoryRouter>,
     )
 
@@ -93,7 +107,6 @@ describe('UserGroupPage governance boundary', () => {
     expect(screen.getByText('User Group')).toBeInTheDocument()
     expect(screen.getByText('Project')).toBeInTheDocument()
     expect(screen.getByText('默认运行环境')).toBeInTheDocument()
-    expect(screen.getByText('Variable 与 Secret')).toBeInTheDocument()
     expect(screen.getByText('活动')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: '可用算力' }))
     expect(screen.getByText('这里显示你本人拥有的算力方案使用资格')).toBeInTheDocument()
@@ -120,7 +133,7 @@ describe('UserGroupPage governance boundary', () => {
 
     render(
       <MemoryRouter initialEntries={['/workspaces/ws_personal_alice']}>
-        <ProductRoutes username="alice" />
+        <ProductRoutes username="alice" home={homeState} />
       </MemoryRouter>,
     )
 

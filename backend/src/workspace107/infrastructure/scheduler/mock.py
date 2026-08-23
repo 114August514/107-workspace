@@ -64,7 +64,7 @@ class MockScheduler:
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
         stderr = submission.stderr_path.open("ab")
-        shell_options = {} if os.name == "nt" else {"executable": "/bin/bash"}
+        shell_options = {"executable": "/bin/bash"}
 
         try:
             process = await asyncio.create_subprocess_shell(
