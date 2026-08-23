@@ -1,4 +1,4 @@
-"""Mock Scheduler Adapter 的平台适配。"""
+"""Mock Scheduler Adapter 的 Bash 解释器行为。"""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ def _submission(root: Path) -> SchedulerSubmission:
     work.mkdir(parents=True)
     logs.mkdir(parents=True)
     return SchedulerSubmission(
-        run_id="run_windows",
-        job_name="Windows portability",
+        run_id="run_mock",
+        job_name="Mock scheduler",
         work_dir=work,
         command="python main.py",
         setup_command="",
@@ -45,28 +45,7 @@ def _submission(root: Path) -> SchedulerSubmission:
 
 
 @pytest.mark.asyncio
-async def test_windows_uses_system_command_interpreter(monkeypatch, tmp_path: Path) -> None:
-    captured: dict[str, Any] = {}
-
-    async def create_process(command: str, **options: Any) -> _FinishedProcess:
-        captured["command"] = command
-        captured.update(options)
-        return _FinishedProcess()
-
-    submission = _submission(tmp_path)
-    monkeypatch.setattr(mock_module.os, "name", "nt")
-    monkeypatch.setattr(mock_module.asyncio, "create_subprocess_shell", create_process)
-
-    scheduler = mock_module.MockScheduler()
-    job_id = await scheduler.submit(submission)
-    await scheduler.poll(job_id)
-
-    assert captured["command"] == submission.command
-    assert "executable" not in captured
-
-
-@pytest.mark.asyncio
-async def test_posix_continues_to_use_bash(monkeypatch, tmp_path: Path) -> None:
+async def test_mock_scheduler_uses_bash(monkeypatch, tmp_path: Path) -> None:
     captured: dict[str, Any] = {}
 
     async def create_process(command: str, **options: Any) -> _FinishedProcess:
@@ -74,7 +53,6 @@ async def test_posix_continues_to_use_bash(monkeypatch, tmp_path: Path) -> None:
         return _FinishedProcess()
 
     submission = _submission(tmp_path)
-    monkeypatch.setattr(mock_module.os, "name", "posix")
     monkeypatch.setattr(mock_module.asyncio, "create_subprocess_shell", create_process)
 
     scheduler = mock_module.MockScheduler()

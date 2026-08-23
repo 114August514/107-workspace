@@ -181,13 +181,8 @@ make check
 make coverage
 ```
 
-原生 Windows 没有 Make 时使用相同任务实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py test
-uv run --no-project python scripts/workspace.py check
-uv run --no-project python scripts/workspace.py coverage
-```
+测试支持 Linux，以及 Windows 主机上使用 Linux toolchain 与 Linux filesystem 的
+WSL2 环境；不支持原生 Windows / PowerShell runtime。
 
 `make test` 是项目测试套件的统一入口。
 

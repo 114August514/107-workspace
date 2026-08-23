@@ -72,8 +72,7 @@ Environment 分开存在。
 执行 Run Configuration 的命令。任何能提交 Run 的用户都能执行该运行身份允许的
 命令，因此它只能用于本地开发、自动化测试和受信任演示，不能对不受信任用户开放。
 
-Windows 下 Mock 使用系统命令解释器，POSIX 下使用 Bash。命令本身是否跨平台仍由
-Project 负责；平台不会自动翻译 shell 语法。
+Mock 固定使用 `/bin/bash` 执行命令；平台不会翻译其他 shell 的语法。
 
 ## 接入真实集群
 

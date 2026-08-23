@@ -29,15 +29,6 @@ make compose-up
 make compose-down
 ```
 
-Windows 没有 Make 时运行同一份 Python 实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py compose config
-uv run --no-project python scripts/workspace.py compose build
-uv run --no-project python scripts/workspace.py compose up
-uv run --no-project python scripts/workspace.py compose down
-```
-
 统一入口会显式选择本目录的 Compose 文件，并保持相对路径以仓库根目录为基准。
 需要直接使用 Docker 排障时，也必须指定项目目录和清单路径：
 

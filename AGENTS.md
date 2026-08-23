@@ -85,9 +85,8 @@ API contract、scheduler / Slurm、部署或真实共享环境时，
 
 `make check`
 
-Windows：
-
-`uv run --no-project python scripts/workspace.py check`
+开发与验证支持 Linux，或在 Windows 主机上使用 Linux toolchain 与 Linux filesystem
+的 WSL2 环境；不支持原生 Windows / PowerShell runtime。
 
 开发过程中选择能够证明当前 Claim 的最小有效验证，
 不要求每次局部修改都机械运行完整检查。
