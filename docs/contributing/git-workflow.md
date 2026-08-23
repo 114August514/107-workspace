@@ -1134,11 +1134,8 @@ Reviewer 按以下顺序检查：
 make check
 ```
 
-Windows 没有 Make 时使用同一份 Python 实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py check
-```
+支持 Linux 开发环境；Windows 主机上的开发必须使用 WSL2 的 Linux toolchain，并将
+仓库放在 WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持。
 
 统一检查至少覆盖：
 
@@ -1161,9 +1158,9 @@ OpenAPI 与前端类型契约
 CI 检查生成文件是否存在未提交差异
 ```
 
-CI 还单独验证数据库 migration 的升级、回退和再升级、Windows 无 Make 入口，以及
-Compose 构建与 HTTP smoke。不要在 workflow 中复制另一套检查命令；新的质量门应先
-进入 `scripts/workspace.py`，再由本地与 CI 共同调用。
+CI 还单独验证数据库 migration 的升级、回退和再升级、PostgreSQL 行为，以及 Compose
+构建与 HTTP smoke。不要在 workflow 中复制另一套检查命令；新的质量门应先进入
+`scripts/workspace.py`，再由本地与 CI 共同调用。
 
 ---
 
