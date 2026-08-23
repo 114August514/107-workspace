@@ -135,7 +135,7 @@ export function VersionPanel({
           {/*
             派生只需要能看见这个版本，不需要对**当前**空间有写权限——
             写权限是目标空间的事，由后端和弹窗里的空间列表一起把关。
-            所以这里不看 canWrite，否则 Viewer 就没法把别人的东西 Fork
+            所以这里不看 canWrite，否则只有查看能力的用户就没法把可读内容 Fork
             到自己的空间，而那正是 Fork 最主要的用法。
           */}
           <Button type="link" size="small" onClick={() => setForking(version)}>
