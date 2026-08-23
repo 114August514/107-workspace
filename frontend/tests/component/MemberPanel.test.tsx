@@ -35,7 +35,7 @@ const members: Member[] = [
     user_id: 'usr_carol',
     username: 'carol',
     display_name: 'Carol',
-    role: 'viewer',
+    role: 'admin',
     status: 'invited',
   },
 ]
@@ -54,7 +54,7 @@ describe('MemberPanel governance', () => {
     vi.restoreAllMocks()
   })
 
-  it('REQ-63-03 shows every member role and status without exposing owner role mutation', async () => {
+  it('REQ-63-03 shows only canonical roles without exposing owner/invited mutation', async () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
     const alice = await screen.findByTestId('member-usr_alice')
@@ -64,31 +64,45 @@ describe('MemberPanel governance', () => {
     expect(within(alice).getByText('所有者')).toBeInTheDocument()
     expect(within(alice).getByText('已加入')).toBeInTheDocument()
     expect(within(alice).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
-    expect(
-      within(bob).getByRole('button', { name: '修改 bob 的角色，当前成员' }),
-    ).toBeInTheDocument()
+    const bobRole = within(bob).getByRole('button', { name: '修改 bob 的角色，当前成员' })
+    expect(bobRole).toBeInTheDocument()
     expect(within(carol).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
     expect(within(carol).queryByRole('button', { name: /转让给/ })).not.toBeInTheDocument()
     expect(within(carol).getByRole('button', { name: '移除 carol' })).toBeInTheDocument()
   })
 
   it('REQ-63-04 invites a member and reports a server failure in the dialog', async () => {
-    vi.mocked(api.inviteMember).mockRejectedValueOnce(
-      new ApiError(409, 'conflict', 'carol 已经是该 User Group 的成员或已被邀请', []),
+    let rejectInvite!: (error: unknown) => void
+    vi.mocked(api.inviteMember).mockImplementationOnce(
+      () =>
+        new Promise<Member>((_resolve, reject) => {
+          rejectInvite = reject
+        }),
     )
     render(<MemberPanel userGroup={ownerGroup} />)
 
     await screen.findByText('Alice')
     fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
-    fireEvent.change(screen.getByLabelText(/用户名/), { target: { value: 'carol' } })
-    fireEvent.click(screen.getByRole('button', { name: '选择邀请角色，当前成员' }))
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
+    expect(screen.getByRole('radio', { name: '成员' })).toBeChecked()
+    expect(screen.getByText('可以参与 User Group 中的项目、资源与计算工作')).toBeInTheDocument()
+    expect(screen.getByText('具有成员能力，并可以管理成员和 User Group')).toBeInTheDocument()
+    const username = screen.getByLabelText(/用户名/)
+    fireEvent.change(username, { target: { value: 'carol' } })
+    fireEvent.click(screen.getByRole('radio', { name: '管理员' }))
+    expect(screen.getByRole('radio', { name: '管理员' })).toBeChecked()
     fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
 
+    await waitFor(() => expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'carol', 'admin'))
+    expect(username).toBeDisabled()
+    expect(screen.getByRole('radio', { name: '成员' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: '管理员' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '发送邀请' })).toBeDisabled()
+
+    rejectInvite(new ApiError(409, 'conflict', 'unstable backend invite message', []))
     expect(await screen.findByText('邀请发送失败。')).toBeInTheDocument()
     expect(screen.getByText('请确认用户名和角色后重试。')).toBeInTheDocument()
-    expect(screen.queryByText('carol 已经是该 User Group 的成员或已被邀请')).not.toBeInTheDocument()
-    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'carol', 'admin')
+    expect(screen.queryByText('unstable backend invite message')).not.toBeInTheDocument()
   })
 
   it('keeps focus on an empty invite username and does not call the API', async () => {
@@ -117,12 +131,13 @@ describe('MemberPanel governance', () => {
     expect(api.listMembers).toHaveBeenCalledTimes(2)
   })
 
-  it('REQ-63-05 changes an active non-owner role and reloads server-authoritative data', async () => {
+  it('REQ-63-05 changes an active member role and reloads server-authoritative data', async () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
     const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
     fireEvent.click(role)
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
+    expect(await screen.findAllByRole('menuitemradio')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '管理员' }))
 
     await waitFor(() =>
       expect(api.changeMemberRole).toHaveBeenCalledWith('ugrp_lab', 'usr_bob', 'admin'),

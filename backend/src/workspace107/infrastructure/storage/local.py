@@ -248,13 +248,6 @@ def _read_tail(path: Path, max_bytes: int) -> tuple[str, bool]:
 
 
 def _make_readonly(root: Path) -> None:
-    if os.name == "nt":
-        # Windows 的 chmod 只能可靠切换文件只读属性；目录只读位不控制写权限。
-        for path in root.rglob("*"):
-            if path.is_file():
-                path.chmod(READONLY_FILE)
-        return
-
     for path in sorted(root.rglob("*"), reverse=True):
         path.chmod(READONLY_FILE if path.is_file() else READONLY_DIR)
     root.chmod(READONLY_DIR)

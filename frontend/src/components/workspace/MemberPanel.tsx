@@ -8,6 +8,8 @@ import {
   Dialog,
   FormControl,
   Label,
+  Radio,
+  RadioGroup,
   Stack,
   TextInput,
 } from '@primer/react'
@@ -30,7 +32,7 @@ import styles from './MemberPanel.module.css'
  * Owner 不在普通 Role 选择中。唯一 Owner 只能由稳定的 transfer-ownership
  * 用例改变，前端不提供制造第二个 Owner 的入口。
  */
-const ASSIGNABLE_ROLES = ['admin', 'member', 'viewer'] as const satisfies readonly MembershipRole[]
+const ASSIGNABLE_ROLES = ['admin', 'member'] as const satisfies readonly MembershipRole[]
 
 interface Props {
   userGroup: UserGroup
@@ -279,6 +281,7 @@ function InviteMemberDialog({
   return (
     <Dialog
       title={copy.invite.title}
+      width="large"
       initialFocusRef={usernameRef}
       onClose={() => {
         if (!submitting) onClose()
@@ -320,17 +323,29 @@ function InviteMemberDialog({
               <FormControl.Validation variant="error">{usernameError}</FormControl.Validation>
             ) : null}
           </FormControl>
-          <FormControl disabled={submitting} id="invite-member-role">
-            <FormControl.Label>{copy.invite.roleLabel}</FormControl.Label>
-            <RoleMenu
-              value={role}
-              label={`选择邀请角色，当前${membershipRoleLabel(role)}`}
-              disabled={submitting}
-              onChange={setRole}
-              block
-            />
-            <FormControl.Caption>{copy.invite.ownerCaption}</FormControl.Caption>
-          </FormControl>
+          <RadioGroup
+            name="invite-member-role"
+            disabled={submitting}
+            onChange={(selected) => {
+              if (selected === 'admin' || selected === 'member') setRole(selected)
+            }}
+          >
+            <RadioGroup.Label>{copy.invite.roleLabel}</RadioGroup.Label>
+            {ASSIGNABLE_ROLES.map((assignableRole) => (
+              <FormControl
+                key={assignableRole}
+                disabled={submitting}
+                id={`invite-member-role-${assignableRole}`}
+              >
+                <Radio value={assignableRole} checked={role === assignableRole} />
+                <FormControl.Label>{membershipRoleLabel(assignableRole)}</FormControl.Label>
+                <FormControl.Caption>
+                  {copy.invite.roleDescription[assignableRole]}
+                </FormControl.Caption>
+              </FormControl>
+            ))}
+            <RadioGroup.Caption>{copy.invite.ownerCaption}</RadioGroup.Caption>
+          </RadioGroup>
         </Stack>
       </form>
     </Dialog>
@@ -342,21 +357,15 @@ function RoleMenu({
   label,
   disabled,
   onChange,
-  block = false,
 }: {
   value: MembershipRole
   label: string
   disabled: boolean
   onChange: (role: MembershipRole) => void
-  block?: boolean
 }) {
   return (
     <ActionMenu>
-      <ActionMenu.Button
-        aria-label={label}
-        disabled={disabled}
-        className={block ? styles.roleMenuButtonBlock : styles.roleMenuButton}
-      >
+      <ActionMenu.Button aria-label={label} disabled={disabled} className={styles.roleMenuButton}>
         {membershipRoleLabel(value)}
       </ActionMenu.Button>
       <ActionMenu.Overlay>
@@ -379,10 +388,9 @@ function RoleMenu({
   )
 }
 
-function roleVariant(role: MembershipRole): 'attention' | 'accent' | 'default' | 'secondary' {
+function roleVariant(role: MembershipRole): 'attention' | 'accent' | 'default' {
   if (role === 'owner') return 'attention'
   if (role === 'admin') return 'accent'
-  if (role === 'viewer') return 'secondary'
   return 'default'
 }
 

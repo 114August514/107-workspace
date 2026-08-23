@@ -46,7 +46,7 @@ body:
       label: 验收条件
       description: 逐条写出可检查的完成标准；重构任务应说明如何确认外部行为不变。
       placeholder: |
-        - 统一入口在 Linux 与 Windows 上执行同一任务实现
+        - 统一入口在本地 Linux 与 Linux CI 上执行同一任务实现
         - 现有对外行为和接口契约不变
         - 统一检查通过（填写实际命令）
     validations:

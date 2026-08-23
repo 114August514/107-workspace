@@ -102,7 +102,7 @@ class WorkspaceCliTests(unittest.TestCase):
             common._major_version("unknown")
 
     def test_backend_python_executable_is_resolved_by_uv(self) -> None:
-        expected = r"C:\workspace\backend\.venv\Scripts\python.exe"
+        expected = "/workspace/backend/.venv/bin/python"
         with mock.patch.object(project, "backend_uv") as backend_uv:
             backend_uv.return_value.stdout = f"{expected}\n"
             executable = project._backend_python_executable()

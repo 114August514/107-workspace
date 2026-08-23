@@ -10,7 +10,6 @@ const ROLE_LABEL: Record<MembershipRole, string> = {
   owner: '所有者',
   admin: '管理员',
   member: '成员',
-  viewer: '只读',
 }
 
 const STATUS_LABEL: Record<MembershipStatus, string> = {
@@ -54,6 +53,10 @@ export const userGroupGovernanceCopy = {
     usernamePlaceholder: '例如：student',
     usernameRequired: '请填写用户名',
     roleLabel: '角色',
+    roleDescription: {
+      member: '可以参与 User Group 中的项目、资源与计算工作',
+      admin: '具有成员能力，并可以管理成员和 User Group',
+    },
     ownerCaption: 'Owner 只能通过明确的所有权转让产生。',
     cancel: '取消',
     submit: '发送邀请',

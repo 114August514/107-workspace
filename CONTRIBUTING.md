@@ -18,12 +18,8 @@ make setup
 make check
 ```
 
-Windows 不要求安装 Make：
-
-```powershell
-uv run --no-project python scripts/workspace.py setup
-uv run --no-project python scripts/workspace.py check
-```
+支持 Linux 开发环境；Windows 主机请使用 WSL2 的 Linux toolchain，并将仓库放在
+WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持。
 
 修改 API DTO 或路由后运行 `make contract`，并提交
 `contracts/openapi.json` 与 `frontend/src/api/schema.d.ts` 的对应变化。

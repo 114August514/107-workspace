@@ -20,13 +20,6 @@ make contract
 make contract-check
 ```
 
-Windows 没有 Make 时运行同一份 Python 实现：
-
-```powershell
-uv run --no-project python scripts/workspace.py contract sync
-uv run --no-project python scripts/workspace.py contract check
-```
-
 修改后端 DTO 或路由时，应提交 `openapi.json` 与
 `frontend/src/api/schema.d.ts` 的对应变化。`make check` 会重新生成两者并拒绝未提交的
 漂移。

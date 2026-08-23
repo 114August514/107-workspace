@@ -8,16 +8,12 @@ InputBinding 的 ``source_subpath`` 让调用方只取来源内容的一个子�
 - 同前缀陷阱（``train`` vs ``training``）只取边界匹配的
 - 子路径不存在 → preflight 422 拒绝
 
-闭环测试用 Mock 调度器以子进程真实执行脚本，Windows 上跳过（同
-``test_shared_resource_input_binding.py``）。
+闭环测试使用 Mock 调度器以子进程真实执行脚本。
 """
 
 from __future__ import annotations
 
-import sys
-
 import httpx
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import (
@@ -26,11 +22,6 @@ from tests.helpers import (
     grant_test_entitlement,
     use_default_environment,
     wait_for_run,
-)
-
-pytestmark = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Mock 调度器的子进程执行在 Windows 上行为不稳定，跳过闭环测试",
 )
 
 ALICE = {"X-User": "alice"}

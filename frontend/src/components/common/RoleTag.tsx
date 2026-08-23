@@ -7,7 +7,6 @@ const ROLE_COLOR: Record<MembershipRole, string> = {
   owner: 'gold',
   admin: 'blue',
   member: 'default',
-  viewer: 'default',
 }
 
 export function RoleTag({ role, prefix }: { role: MembershipRole; prefix?: string }) {

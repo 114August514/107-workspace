@@ -32,8 +32,6 @@ def heading(label: str) -> None:
 
 def command_text(command: Sequence[str | os.PathLike[str]]) -> str:
     values = [os.fspath(value) for value in command]
-    if os.name == "nt":
-        return subprocess.list2cmdline(values)
     return shlex.join(values)
 
 
