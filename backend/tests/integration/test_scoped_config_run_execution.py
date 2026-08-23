@@ -5,6 +5,7 @@ import json
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy import text as sql_text
 
 from tests.helpers import (
     create_project_with_version,
@@ -147,6 +148,13 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     original_again = await client.get(f"/api/v1/runs/{run.json()['id']}/logs")
     original_text = json.dumps(original_again.json())
 
+    await session.execute(
+        sql_text("DELETE FROM run_secret_redactions WHERE run_id=:id"),
+        {"id": run.json()["id"]},
+    )
+    await session.commit()
+    missing_retention = await client.get(f"/api/v1/runs/{run.json()['id']}/logs")
+    assert missing_retention.status_code == 422
     assert "project-token" not in original_text
 
 

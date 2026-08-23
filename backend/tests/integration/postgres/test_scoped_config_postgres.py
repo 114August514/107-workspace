@@ -30,6 +30,7 @@ async def _migrate(config: Config, revision: str, downgrade: bool = False) -> No
 @pytest.mark.asyncio
 async def test_postgresql_scoped_config_structural_roundtrip() -> None:
     url = os.environ["WORKSPACE107_TEST_POSTGRESQL_URL"]
+    os.environ["WORKSPACE107_DATABASE_URL"] = url
     engine = create_async_engine(url)
     try:
         config = _config(url)
