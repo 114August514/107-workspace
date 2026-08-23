@@ -107,7 +107,7 @@ User Group、成员与共享资产
 │   ├── [Core] 查看成员角色和状态
 │   ├── [Core] Owner / Member 基础角色
 │   ├── [Core] 转让 User Group 所有权
-│   ├── [V1] Admin / Viewer 扩展角色
+│   ├── [V1] Admin 扩展角色
 │   ├── [V1] 修改成员角色
 │   ├── [V2] 自定义角色
 │   ├── [V2] 批量选择成员并授权

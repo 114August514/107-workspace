@@ -16,7 +16,6 @@ const ROLE_STYLE: Record<MembershipRole, RoleStyle> = {
   owner: { color: 'gold', label: '所有者' },
   admin: { color: 'blue', label: '管理员' },
   member: { color: 'default', label: '成员' },
-  viewer: { color: 'default', label: '只读' },
 }
 
 export function roleLabel(role: MembershipRole): string {
