@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ..application.catalog_service import EnvironmentView
+from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
 from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
@@ -417,4 +418,17 @@ def shared_resource_version_detail_out(
             s.SharedResourceVersionFileOut(path=f.path, size=f.size, content_hash=f.content_hash)
             for f in version.files
         ],
+    )
+
+
+def grant_out(view: GrantView) -> s.GrantOut:
+    return s.GrantOut(
+        id=view.grant.id,
+        grantor=owner_summary_out(view.grantor),
+        grantee=owner_summary_out(view.grantee),
+        target_kind=view.grant.target_kind.value,
+        target_id=view.grant.target_id,
+        action=view.grant.action.value,
+        granted_by=owner_summary_out(view.granted_by),
+        created_at=view.grant.created_at,
     )

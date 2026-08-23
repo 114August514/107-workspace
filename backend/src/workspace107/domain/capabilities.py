@@ -88,6 +88,10 @@ class Capability(StrEnum):
     SHARED_RESOURCE_VERSION_CREATE = "shared_resource.version.create"
     """为 Shared Resource 上传文件形成新的不可变版本。"""
 
+    # -- Grant -------------------------------------------------------------
+    GRANT_MANAGE = "grant.manage"
+    """管理跨 Owner USE Grant（创建、查看、撤销）。"""
+
 
 _VIEW_ONLY: frozenset[Capability] = frozenset(
     {
@@ -118,6 +122,7 @@ _ADMINISTER: frozenset[Capability] = _CONTRIBUTE | {
     Capability.USER_GROUP_UPDATE,
     Capability.MEMBER_MANAGE,
     Capability.CONFIG_MANAGE,
+    Capability.GRANT_MANAGE,
 }
 
 ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
@@ -148,6 +153,7 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.SHARED_RESOURCE_VIEW: "查看 Shared Resource",
     Capability.SHARED_RESOURCE_MANAGE: "管理 Shared Resource",
     Capability.SHARED_RESOURCE_VERSION_CREATE: "上传 Shared Resource 版本",
+    Capability.GRANT_MANAGE: "管理 USE Grant",
 }
 
 USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {

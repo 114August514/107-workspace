@@ -295,7 +295,8 @@
           "run.cancel",
           "shared_resource.view",
           "shared_resource.manage",
-          "shared_resource.version.create"
+          "shared_resource.version.create",
+          "grant.manage"
         ],
         "title": "Capability",
         "type": "string"
@@ -691,6 +692,106 @@
         ],
         "title": "ForkSourceOut",
         "type": "object"
+      },
+      "GrantCreateIn": {
+        "properties": {
+          "grantee": {
+            "$ref": "#/components/schemas/OwnerReferenceIn"
+          },
+          "grantor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnerReferenceIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for ALL grants (who issues the grant); omitted for asset grants\n(derived from the target asset's current owner)."
+          },
+          "target_id": {
+            "default": "",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "enum": [
+              "environment",
+              "shared_resource",
+              "all"
+            ],
+            "title": "Target Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_kind",
+          "grantee"
+        ],
+        "title": "GrantCreateIn",
+        "type": "object"
+      },
+      "GrantOut": {
+        "properties": {
+          "action": {
+            "const": "use",
+            "title": "Action",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "granted_by": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "grantee": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "grantor": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_kind": {
+            "enum": [
+              "environment",
+              "shared_resource",
+              "all"
+            ],
+            "title": "Target Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "grantor",
+          "grantee",
+          "target_kind",
+          "target_id",
+          "action",
+          "granted_by",
+          "created_at"
+        ],
+        "title": "GrantOut",
+        "type": "object"
+      },
+      "GrantTargetKind": {
+        "description": "Grant 指向的资产范围。\n\n``ALL`` 表示授权 Grantor 当前及未来拥有的全部可授权 Environment /\nShared Resource；此时 ``target_id`` 为空字符串。\n``ENVIRONMENT`` / ``SHARED_RESOURCE`` 表示仅授权具体顶层资产。",
+        "enum": [
+          "all",
+          "environment",
+          "shared_resource"
+        ],
+        "title": "GrantTargetKind",
+        "type": "string"
       },
       "HealthOut": {
         "properties": {
@@ -3528,6 +3629,392 @@
         "summary": "列出运行环境",
         "tags": [
           "catalog"
+        ]
+      }
+    },
+    "/api/v1/grants": {
+      "get": {
+        "description": "List Grants.\n\nFilter by target asset (``target_kind`` + ``target_id``) or by Grantor\n(``grantor_kind`` + ``grantor_id``).  Exactly one complete filter pair must\nbe given; partial pairs or both pairs simultaneously are rejected with 422.",
+        "operationId": "list_grants_api_v1_grants_get",
+        "parameters": [
+          {
+            "description": "按资产种类过滤：environment 或 shared_resource",
+            "in": "query",
+            "name": "target_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/GrantTargetKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按资产种类过滤：environment 或 shared_resource",
+              "title": "Target Kind"
+            }
+          },
+          {
+            "description": "顶层资产 ID",
+            "in": "query",
+            "name": "target_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "顶层资产 ID",
+              "title": "Target Id"
+            }
+          },
+          {
+            "description": "按 Grantor 种类过滤",
+            "in": "query",
+            "name": "grantor_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OwnerKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按 Grantor 种类过滤",
+              "title": "Grantor Kind"
+            }
+          },
+          {
+            "description": "Grantor ID",
+            "in": "query",
+            "name": "grantor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Grantor ID",
+              "title": "Grantor Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantOut"
+                  },
+                  "title": "Response List Grants Api V1 Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "列出 Grant",
+        "tags": [
+          "grant"
+        ]
+      },
+      "post": {
+        "description": "Create a USE Grant allowing ``grantee`` to reference the Grantor's asset(s).\n\nFor asset grants (environment/shared_resource), the Grantor is derived from\nthe target asset's current owner.  For ALL grants, ``grantor`` must be\nsupplied explicitly and the caller must have GRANT_MANAGE on that Grantor.",
+        "operationId": "create_grant_api_v1_grants_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "创建跨 Owner USE Grant",
+        "tags": [
+          "grant"
+        ]
+      }
+    },
+    "/api/v1/grants/{grant_id}": {
+      "delete": {
+        "description": "Revoke a Grant.  Requires GRANT_MANAGE on the Grant's Grantor.",
+        "operationId": "revoke_grant_api_v1_grants__grant_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "title": "Grant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "撤销 USE Grant",
+        "tags": [
+          "grant"
         ]
       }
     },

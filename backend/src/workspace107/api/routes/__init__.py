@@ -8,6 +8,7 @@ from ..schemas import ErrorOut
 from . import (
     catalog,
     configuration,
+    grants,
     health,
     home,
     notifications,
@@ -40,5 +41,6 @@ api_router.include_router(runs.router)
 api_router.include_router(catalog.router)
 api_router.include_router(notifications.router)
 api_router.include_router(shared_resources.router)
+api_router.include_router(grants.router)
 
 __all__ = ["api_router"]
