@@ -177,7 +177,7 @@ async def test_user_grant_enables_cross_owner_shared_resource_use(
     group_a = await _create_group(client, "Grant Group A")
     group_b = await _create_group(client, "Grant Group B")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
@@ -249,7 +249,7 @@ async def test_user_group_grant_enables_cross_owner_environment_use(
     env_b_id, env_b_version_id = await _create_environment_version(
         session, owner_user_group_id=group_b
     )
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A env project")
     alice_id = await _get_user_id(client, ALICE)
 
@@ -295,7 +295,7 @@ async def test_user_group_grant_inactive_member_cannot_use(
     group_b = await _create_group(client, "Inactive Member Group B")
     env_a = await _set_group_environment(session, client, group_a)
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
 
     alice_id = await _get_user_id(client, ALICE)
@@ -461,7 +461,7 @@ async def test_revoke_grant_blocks_subsequent_use(
     group_a = await _create_group(client, "Revoke Group A")
     group_b = await _create_group(client, "Revoke Group B")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
@@ -534,7 +534,7 @@ async def test_same_owner_use_requires_no_grant(
     """Owner-scope self-use still works without any Grant (Issue #39 regression)."""
     group_a = await _create_group(client, "Same Owner Group A")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A self-use project")
     _, resource_a_version_id = await _create_resource_version(client, group_a)
 
@@ -573,7 +573,7 @@ async def test_ownership_transfer_invalidates_grant(
     group_b = await _create_group(client, "Transfer Group B")
     group_c = await _create_group(client, "Transfer Group C")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
@@ -691,7 +691,7 @@ async def test_all_grant_covers_current_and_future_assets(
     group_a = await _create_group(client, "ALL Grant Group A")
     group_b = await _create_group(client, "ALL Grant Group B")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     _resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
@@ -791,7 +791,7 @@ async def test_new_owner_can_re_grant_after_transfer(
     group_b = await _create_group(client, "ReGrant Group B")
     group_c = await _create_group(client, "ReGrant Group C")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
@@ -899,7 +899,7 @@ async def test_usergroup_owner_role_transfer_preserves_grant(
     group_a = await _create_group(client, "RoleTransfer Group A")
     group_b = await _create_group(client, "RoleTransfer Group B")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
 
@@ -1002,7 +1002,7 @@ async def test_all_grant_with_nonempty_target_id_rejected(
     group_a = await _create_group(client, "RejectAllA")
     group_b = await _create_group(client, "RejectAllB")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     _resource_b_id, _ = await _create_resource_version(client, group_b)
 
     response = await client.post(
@@ -1031,7 +1031,7 @@ async def test_explicit_grantor_for_asset_grant_rejected(
     group_a = await _create_group(client, "RejectExplicitA")
     group_b = await _create_group(client, "RejectExplicitB")
     await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     resource_b_id, _ = await _create_resource_version(client, group_b)
 
     response = await client.post(

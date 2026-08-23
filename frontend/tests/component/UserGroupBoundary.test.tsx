@@ -109,11 +109,13 @@ describe('UserGroupPage governance boundary', () => {
     expect(screen.getByText('默认运行环境')).toBeInTheDocument()
     expect(screen.getByText('活动')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: '可用算力' }))
-    expect(screen.getByText('这里显示当前可用于这些 Project 的算力方案')).toBeInTheDocument()
+    expect(screen.getByText('这里显示你本人拥有的算力方案使用资格')).toBeInTheDocument()
     expect(
-      screen.getByText('算力方案由平台分配；如果当前没有可用方案，相关 Project 就无法提交 Run。'),
+      screen.getByText(
+        'Resource Entitlement 属于用户本人，提交 Run 时按发起用户的资格校验；成员身份不会转移算力资格。',
+      ),
     ).toBeInTheDocument()
-    expect(await screen.findByText('当前没有可用的算力方案')).toBeInTheDocument()
+    expect(await screen.findByText('你当前没有可用的算力方案资格')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /创建 Project/ })).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容|迁移/)
   })

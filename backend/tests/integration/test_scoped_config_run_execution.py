@@ -24,7 +24,7 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     user_id = me.json()["user"]["id"]
     group_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="run-config-evidence")
-    await grant_test_entitlement(session, group_id)
+    await grant_test_entitlement(session, "student")
 
     for owner, name, value in (
         (f"/api/v1/projects/{project['id']}", "LEVEL", "project-level"),
@@ -161,9 +161,9 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
 @pytest.mark.asyncio
 async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> None:
     await client.get("/api/v1/me")
-    group_id = await use_default_environment(session, client)
+    await use_default_environment(session, client)
     project = await create_project_with_version(client, name="rerun-guards")
-    await grant_test_entitlement(session, group_id)
+    await grant_test_entitlement(session, "student")
     config = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={
@@ -187,8 +187,10 @@ async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> No
     await wait_for_run(client, run.json()["id"])
     before = (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"]
     await session.execute(
-        text("UPDATE resource_entitlements SET max_concurrent_runs=1 WHERE workspace_id=:id"),
-        {"id": group_id},
+        text(
+            "UPDATE resource_entitlements SET max_concurrent_runs=1 "
+            "WHERE user_id=(SELECT id FROM users WHERE username='student')"
+        )
     )
     await session.execute(
         text("UPDATE runs SET status='running' WHERE id=:id"), {"id": run.json()["id"]}
@@ -218,9 +220,9 @@ async def test_scheduler_submit_failure_persists_run_and_notification(
 ) -> None:
     context.scheduler = _FailingScheduler()
     await client.get("/api/v1/me")
-    group_id = await use_default_environment(session, client)
+    await use_default_environment(session, client)
     project = await create_project_with_version(client, name="submit-failure")
-    await grant_test_entitlement(session, group_id)
+    await grant_test_entitlement(session, "student")
     config = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={

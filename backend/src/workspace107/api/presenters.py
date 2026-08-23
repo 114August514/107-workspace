@@ -8,11 +8,12 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ..application.catalog_service import EnvironmentView
+from ..application.entitlement_service import EntitlementView
 from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
 from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
-from ..application.workspace_service import EntitlementView, LegacyWorkspaceView
+from ..application.workspace_service import LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
 from ..domain.models import (
     Activity,

@@ -17,6 +17,7 @@ from ..application.access import AccessGuard
 from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
 from ..application.configuration_service import ConfigurationService
+from ..application.entitlement_service import EntitlementService
 from ..application.grant_service import GrantService
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
@@ -74,6 +75,7 @@ class Services:
     user_groups: UserGroupService
     configuration: ConfigurationService
     legacy_workspaces: LegacyWorkspaceService
+    entitlements: EntitlementService
     projects: ProjectService
     run_configurations: RunConfigurationService
     runs: RunService
@@ -108,6 +110,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
         configuration=ConfigurationService(repos, guard, vault),
         legacy_workspaces=LegacyWorkspaceService(repos, guard),
+        entitlements=EntitlementService(repos),
         projects=ProjectService(
             repos,
             guard,

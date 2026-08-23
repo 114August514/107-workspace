@@ -266,12 +266,8 @@ export const api = {
     )
   },
 
-  listEntitlements: async (id: string): Promise<Entitlement[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/entitlements', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
+  listEntitlements: async (): Promise<Entitlement[]> =>
+    unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
   listProjects: async (workspaceId: string, query: PageQuery = {}): Promise<ProjectPage> =>

@@ -159,7 +159,7 @@ export function LegacyWorkspacePage() {
             label: '可用算力',
             children: (
               <Card>
-                <EntitlementPanel workspaceId={workspaceId} />
+                <EntitlementPanel />
               </Card>
             ),
           },

@@ -6,10 +6,12 @@ import asyncio
 from typing import Any
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from workspace107.domain import ids
 from workspace107.domain.compute import ResourceEntitlement
+from workspace107.infrastructure.db import tables as t
 from workspace107.infrastructure.db.repositories import SqlRepositories
 from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
 
@@ -58,15 +60,24 @@ async def ensure_user_group(
 
 
 async def grant_test_entitlement(
-    session: AsyncSession, workspace_id: str, compute_plan_id: str = "plan_cpu_quick"
+    session: AsyncSession,
+    username: str,
+    compute_plan_id: str = "plan_cpu_quick",
+    *,
+    max_concurrent_runs: int = 2,
+    expires_at: str | None = None,
 ) -> None:
-    """Seed only the entitlement required by a test; UserGroup creation grants none."""
+    """Seed the entitlement of the user named ``username``; nothing grants one implicitly."""
+    user = (
+        await session.execute(select(t.UserRow).where(t.UserRow.username == username))
+    ).scalar_one()
     await SqlRepositories(session).entitlements.add(
         ResourceEntitlement(
             id=ids.new_id(ids.ENTITLEMENT),
-            workspace_id=workspace_id,
+            user_id=user.id,
             compute_plan_id=compute_plan_id,
-            max_concurrent_runs=2,
+            max_concurrent_runs=max_concurrent_runs,
+            expires_at=expires_at,
         )
     )
     await session.commit()

@@ -58,11 +58,10 @@ class Capability(StrEnum):
     """邀请、移除、修改角色。"""
     OWNERSHIP_TRANSFER = "ownership.transfer"
 
-    # -- 配置与权益 ------------------------------------------------------
+    # -- 配置 ------------------------------------------------------------
     CONFIG_VIEW = "config.view"
     """查看 Variable 的值和 Secret 的名称；任何角色都读不到 Secret 值（§3.1.4）。"""
     CONFIG_MANAGE = "config.manage"
-    ENTITLEMENT_VIEW = "entitlement.view"
 
     # -- Project ---------------------------------------------------------
     PROJECT_VIEW = "project.view"
@@ -98,7 +97,6 @@ _VIEW_ONLY: frozenset[Capability] = frozenset(
         Capability.USER_GROUP_VIEW,
         Capability.MEMBER_VIEW,
         Capability.CONFIG_VIEW,
-        Capability.ENTITLEMENT_VIEW,
         Capability.PROJECT_VIEW,
         Capability.RUN_VIEW,
         Capability.SHARED_RESOURCE_VIEW,
@@ -141,7 +139,6 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
     Capability.CONFIG_VIEW: "查看配置",
     Capability.CONFIG_MANAGE: "管理配置变量与 Secret",
-    Capability.ENTITLEMENT_VIEW: "查看资源权益",
     Capability.PROJECT_VIEW: "查看 Project",
     Capability.PROJECT_CREATE: "创建 Project",
     Capability.PROJECT_UPDATE: "修改 Project 设置",

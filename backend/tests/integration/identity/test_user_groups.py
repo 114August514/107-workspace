@@ -183,9 +183,7 @@ async def test_group_creation_has_exactly_one_active_owner(client: httpx.AsyncCl
     assert (legacy["name"], legacy["owner_id"]) == ("Renamed Lab", group["created_by_id"])
     owners = [m for m in members if m["role"] == "owner" and m["status"] == "active"]
     assert [m["username"] for m in owners] == ["alice"]
-    entitlements = (
-        await client.get(f"/api/v1/workspaces/{group['id']}/entitlements", headers=ALICE)
-    ).json()
+    entitlements = (await client.get("/api/v1/me/entitlements", headers=ALICE)).json()
     assert entitlements == []
 
 

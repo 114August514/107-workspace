@@ -234,12 +234,12 @@ class ResourceEntitlementRow(Base):
     __tablename__ = "resource_entitlements"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), index=True)
     compute_plan_id: Mapped[str] = mapped_column(ID, ForeignKey("compute_plans.id"))
     max_concurrent_runs: Mapped[int] = mapped_column(Integer)
     expires_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
-    __table_args__ = (UniqueConstraint("workspace_id", "compute_plan_id", name="uq_entitlement"),)
+    __table_args__ = (UniqueConstraint("user_id", "compute_plan_id", name="uq_entitlement"),)
 
 
 class RunConfigurationRow(Base):
