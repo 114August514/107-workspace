@@ -22,7 +22,13 @@ const group: UserGroup = {
   created_by_id: 'usr_alice',
   created_at: '2026-08-17T00:00:00Z',
   role: 'owner',
-  capabilities: ['user_group.view', 'member.view', 'member.manage'],
+  capabilities: [
+    'user_group.view',
+    'member.view',
+    'member.invite',
+    'member.remove',
+    'member.role.manage',
+  ],
 }
 
 const homeState = {

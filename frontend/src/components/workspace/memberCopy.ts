@@ -52,25 +52,19 @@ export const userGroupGovernanceCopy = {
     usernameLabel: '用户名',
     usernamePlaceholder: '例如：student',
     usernameRequired: '请填写用户名',
-    roleLabel: '角色',
-    roleDescription: {
-      member: '可以参与 User Group 中的项目、资源与计算工作',
-      admin: '具有成员能力，并可以管理成员和 User Group',
-    },
-    ownerCaption: 'Owner 只能通过所有权转让产生。',
     cancel: '取消',
     submit: '发送邀请',
     success: (username: string) => `已向 ${username} 发送邀请`,
     failureTitle: '邀请发送失败。',
-    failureNext: '请确认用户名和角色后重试。',
+    failureNext: '请确认用户名后重试。',
   },
   actions: {
     more: (username: string) => `${username} 的更多操作`,
   },
   role: {
-    controlLabel: (username: string) => `修改 ${username} 的角色`,
-    success: (username: string, role: MembershipRole) =>
-      `${username} 的角色已改为${membershipRoleLabel(role)}`,
+    action: (role: 'admin' | 'member') => (role === 'admin' ? '设为管理员' : '设为成员'),
+    success: (username: string, role: 'admin' | 'member') =>
+      `已将 ${username} ${role === 'admin' ? '设为管理员' : '设为成员'}`,
     failureTitle: '角色修改失败。',
     failureNext: '请确认成员仍在 User Group 中并重试。',
   },

@@ -7,6 +7,7 @@ from fastapi.responses import Response
 
 from ...application.run_configuration_service import RunConfigurationInput
 from ...domain.enums import ProjectStatus
+from ...domain.ownership import OwnerReference
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, PageDep, ServicesDep
@@ -17,6 +18,44 @@ MAX_TEXT_PREVIEW = 256 * 1024
 
 
 @router.get(
+    "/projects", response_model=s.PageOut[s.ProjectOut], summary="列出当前用户可发现的 Project"
+)
+async def list_discoverable_projects(
+    user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ProjectOut]:
+    """列出当前用户可发现的 Project：自己 / 所属 User Group 拥有的，以及 PUBLIC Project。"""
+    result = await services.projects.list_discoverable_for_user(user.id, page)
+    summaries = await services.projects.owner_summaries(result.items)
+    return p.page_out(
+        result,
+        lambda project: p.project_out(
+            project,
+            owner=summaries[(project.owner.kind, project.owner.id)],
+            owner_scope=False,
+        ),
+    )
+
+
+@router.post(
+    "/projects",
+    response_model=s.ProjectOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="为 User 或 User Group 创建 Project",
+)
+async def create_owned_project(
+    payload: s.ProjectCreateOwnedIn, user: CurrentUser, services: ServicesDep
+) -> s.ProjectOut:
+    project = await services.projects.create_owned(
+        user.id,
+        OwnerReference(kind=payload.owner.kind, id=payload.owner.id),
+        payload.name,
+        payload.description,
+        visibility=payload.visibility,
+    )
+    return p.project_out(project, owner=await services.projects.owner_summary(project))
+
+
+@router.get(
     "/projects/{project_id}",
     response_model=s.ProjectOut,
     summary="获取 Project 详情",
@@ -24,7 +63,11 @@ MAX_TEXT_PREVIEW = 256 * 1024
 async def get_project(project_id: str, user: CurrentUser, services: ServicesDep) -> s.ProjectOut:
     """校验当前用户可查看该 Project 后，返回项目设置与当前状态。"""
     access = await services.projects.get(user.id, project_id)
-    return p.project_out(access.project)
+    return p.project_out(
+        access.project,
+        owner=await services.projects.owner_summary(access.project),
+        owner_scope=access.owner_scope,
+    )
 
 
 @router.patch(
@@ -47,12 +90,13 @@ async def update_project(
         environment_version_id=payload.environment_version_id,
         inherit_workspace_environment=bool(payload.inherit_workspace_environment),
         default_run_configuration_id=payload.default_run_configuration_id,
+        visibility=payload.visibility,
     )
     if payload.status is not None:
         project = await services.projects.set_status(
             user.id, project_id, ProjectStatus(payload.status)
         )
-    return p.project_out(project)
+    return p.project_out(project, owner=await services.projects.owner_summary(project))
 
 
 # -- 文件 -------------------------------------------------------------------
@@ -281,20 +325,29 @@ async def fork_version(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.ProjectOut:
-    """两侧都会校验：源版本可读、目标空间可写。
+    """两侧都会校验：源版本可读、目标 Owner 下可创建。
 
-    复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
-    （GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
-    提交前检查会拦下（GR-407）。
+    ``target_workspace_id`` 与 ``target_owner`` 二选一；显式 Owner 形态是
+    #36 的正路，workspace 形态是过渡兼容。复制内容、运行方案和环境选择；
+    **不复制**权益、凭据、成员权限和 Run 历史（GR-503）。Secret 只复制
+    引用表达式，目标空间缺同名 Secret 时提交前检查会拦下（GR-407）。
+
+    PUBLIC 读者只能 Fork 出只含文件与不可变版本的新 Project。
     """
+    target_owner = (
+        OwnerReference(kind=payload.target_owner.kind, id=payload.target_owner.id)
+        if payload.target_owner
+        else None
+    )
     project = await services.projects.fork(
         user.id,
         version_id,
         payload.target_workspace_id,
+        target_owner=target_owner,
         name=payload.name,
         description=payload.description,
     )
-    return p.project_out(project)
+    return p.project_out(project, owner=await services.projects.owner_summary(project))
 
 
 @router.get(

@@ -298,6 +298,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出当前用户可发现的 Project
+         * @description 列出当前用户可发现的 Project：自己 / 所属 User Group 拥有的，以及 PUBLIC Project。
+         */
+        get: operations["list_discoverable_projects_api_v1_projects_get"];
+        put?: never;
+        /** 为 User 或 User Group 创建 Project */
+        post: operations["create_owned_project_api_v1_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}": {
         parameters: {
             query?: never;
@@ -1287,11 +1308,14 @@ export interface paths {
         put?: never;
         /**
          * 从历史版本派生新 Project
-         * @description 两侧都会校验：源版本可读、目标空间可写。
+         * @description 两侧都会校验：源版本可读、目标 Owner 下可创建。
          *
-         *     复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
-         *     （GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
-         *     提交前检查会拦下（GR-407）。
+         *     ``target_workspace_id`` 与 ``target_owner`` 二选一；显式 Owner 形态是
+         *     #36 的正路，workspace 形态是过渡兼容。复制内容、运行方案和环境选择；
+         *     **不复制**权益、凭据、成员权限和 Run 历史（GR-503）。Secret 只复制
+         *     引用表达式，目标空间缺同名 Secret 时提交前检查会拦下（GR-407）。
+         *
+         *     PUBLIC 读者只能 Fork 出只含文件与不可变版本的新 Project。
          */
         post: operations["fork_version_api_v1_versions__version_id__fork_post"];
         delete?: never;
@@ -1524,7 +1548,7 @@ export interface components {
          *     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
          * @enum {string}
          */
-        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
+        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
         /**
          * ChangeKind
          * @description 文件在两次快照之间的变化类型。
@@ -1694,8 +1718,9 @@ export interface components {
              * @default
              */
             name: string;
+            target_owner?: components["schemas"]["OwnerReferenceIn"] | null;
             /** Target Workspace Id */
-            target_workspace_id: string;
+            target_workspace_id?: string | null;
         };
         /**
          * ForkSourceOut
@@ -1895,13 +1920,13 @@ export interface components {
         LogStream: "stdout" | "stderr";
         /** MemberInviteIn */
         MemberInviteIn: {
-            /** @default member */
-            role: components["schemas"]["MembershipRole"];
             /** Username */
             username: string;
         };
         /** MemberOut */
         MemberOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["UserGroupCapability"][];
             /** Display Name */
             display_name: string;
             role: components["schemas"]["MembershipRole"];
@@ -2095,6 +2120,19 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** ProjectCreateOwnedIn */
+        ProjectCreateOwnedIn: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+            owner: components["schemas"]["OwnerReferenceIn"];
+            /** @default owner_scope */
+            visibility: components["schemas"]["ProjectVisibility"];
+        };
         /** ProjectFileOut */
         ProjectFileOut: {
             /** Content Hash */
@@ -2122,9 +2160,11 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            owner: components["schemas"]["OwnerSummaryOut"];
             status: components["schemas"]["ProjectStatus"];
             /** Updated At */
             updated_at: string | null;
+            visibility: components["schemas"]["ProjectVisibility"];
             /** Workspace Id */
             workspace_id: string;
         };
@@ -2147,6 +2187,7 @@ export interface components {
             /** Name */
             name?: string | null;
             status?: components["schemas"]["ProjectStatus"] | null;
+            visibility?: components["schemas"]["ProjectVisibility"] | null;
         };
         /** ProjectVersionDetailOut */
         ProjectVersionDetailOut: {
@@ -2207,6 +2248,12 @@ export interface components {
             /** Total Size */
             total_size: number;
         };
+        /**
+         * ProjectVisibility
+         * @description Project discovery boundary, independent from operation permissions.
+         * @enum {string}
+         */
+        ProjectVisibility: "owner_scope" | "public";
         /** ReadinessOut */
         ReadinessOut: {
             /** Database */
@@ -2585,7 +2632,7 @@ export interface components {
          * @description Stable public capabilities for User Group and Membership governance.
          * @enum {string}
          */
-        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer";
+        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer";
         /** UserGroupCreateIn */
         UserGroupCreateIn: {
             /**
@@ -3780,6 +3827,167 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_discoverable_projects_api_v1_projects_get: {
+        parameters: {
+            query?: {
+                /** @description 页码，从 1 开始 */
+                page?: number;
+                /** @description 每页条数 */
+                page_size?: number;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut_ProjectOut_"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_owned_project_api_v1_projects_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCreateOwnedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
             };
             /** @description 请求不合法 */
             400: {

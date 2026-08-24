@@ -91,6 +91,7 @@ def member_out(view: MemberView) -> s.MemberOut:
         display_name=view.user.display_name,
         role=view.membership.role.value,
         status=view.membership.status.value,
+        capabilities=sorted(view.capabilities),
     )
 
 
@@ -104,15 +105,19 @@ def entitlement_out(view: EntitlementView) -> s.EntitlementOut:
     )
 
 
-def project_out(project: Project) -> s.ProjectOut:
+def project_out(project: Project, *, owner: OwnerSummary, owner_scope: bool = True) -> s.ProjectOut:
     return s.ProjectOut(
         id=project.id,
         workspace_id=project.workspace_id,
+        owner=owner_summary_out(owner),
         name=project.name,
         description=project.description,
         status=project.status.value,
-        environment_version_id=project.environment_version_id,
-        default_run_configuration_id=project.default_run_configuration_id,
+        visibility=project.visibility.value,
+        environment_version_id=project.environment_version_id if owner_scope else None,
+        default_run_configuration_id=(
+            project.default_run_configuration_id if owner_scope else None
+        ),
         created_by=project.created_by,
         created_at=project.created_at,
         updated_at=project.updated_at,

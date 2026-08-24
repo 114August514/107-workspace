@@ -101,7 +101,6 @@ async def test_issue_39_demo_seed_uses_explicit_bootstrap_owner_and_preserves_tr
         initial_owner_id,
         PLATFORM_ASSET_GROUP_ID,
         successor.username,
-        MembershipRole.ADMIN,
     )
     await services.user_groups.respond_to_invitation(
         successor.id, PLATFORM_ASSET_GROUP_ID, accept=True

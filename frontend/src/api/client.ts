@@ -230,11 +230,11 @@ export const api = {
       }),
     ),
 
-  inviteMember: async (id: string, username: string, role: MembershipRole): Promise<Member> =>
+  inviteMember: async (id: string, username: string): Promise<Member> =>
     unwrap(
       await http.POST('/api/v1/user-groups/{user_group_id}/members', {
         params: { path: { user_group_id: id } },
-        body: { username, role },
+        body: { username },
       }),
     ),
 

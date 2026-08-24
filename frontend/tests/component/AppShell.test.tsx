@@ -33,6 +33,8 @@ const homeData: Home = {
       name: 'LJ 流体模拟',
       description: '',
       workspace_id: 'grp-1',
+      owner: { kind: 'user_group', id: 'grp-1', display_name: '计算物理课题组' },
+      visibility: 'owner_scope',
       status: 'active',
       created_by: 'u-1',
       created_at: '2026-08-15T10:00:00Z',

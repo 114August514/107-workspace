@@ -7,10 +7,8 @@ import {
   ConfirmationDialog,
   Dialog,
   FormControl,
-  Label,
   IconButton,
-  Radio,
-  RadioGroup,
+  Label,
   Stack,
   TextInput,
 } from '@primer/react'
@@ -28,13 +26,6 @@ import {
 } from './memberCopy'
 import { AsyncState } from '../common/AsyncState'
 import styles from './MemberPanel.module.css'
-
-/**
- * Owner 不在普通 Role 选择中。唯一 Owner 只能由稳定的 transfer-ownership
- * 用例改变，前端不提供制造第二个 Owner 的入口。
- */
-const ASSIGNABLE_ROLES = ['admin', 'member'] as const satisfies readonly MembershipRole[]
-const INVITABLE_ROLES = ['member', 'admin'] as const satisfies readonly MembershipRole[]
 
 interface Props {
   userGroup: UserGroup
@@ -58,10 +49,10 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
   const [pending, setPending] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
-  const canManage = can(userGroup, 'member.manage')
+  const canInvite = can(userGroup, 'member.invite')
   const canTransfer = can(userGroup, 'ownership.transfer')
 
-  const changeRole = async (member: Member, role: MembershipRole) => {
+  const changeRole = async (member: Member, role: 'admin' | 'member') => {
     setPending(`role:${member.user_id}`)
     setFeedback(null)
     try {
@@ -123,7 +114,7 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
           {copy.page.membersTitle}
         </h2>
         <p className={styles.sectionDescription}>{copy.page.membersDescription}</p>
-        {canManage ? (
+        {canInvite ? (
           <Button
             className={styles.inviteAction}
             leadingVisual={PersonAddIcon}
@@ -152,14 +143,15 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
         onRetry={members.reload}
         empty={items.length === 0}
         emptyText={copy.members.emptyTitle}
-        emptyDescription={copy.members.emptyDescription(canManage)}
+        emptyDescription={copy.members.emptyDescription(canInvite)}
       >
         <ul className={styles.memberList} aria-label={copy.members.listLabel}>
           {items.map((member) => {
-            const isOwner = member.role === 'owner'
-            const canChangeRole = canManage && member.status === 'active' && !isOwner
-            const canRemove = canManage && !isOwner
-            const canTransferOwnership = canTransfer && member.status === 'active' && !isOwner
+            const canChangeRole = can(member, 'member.role.manage')
+            const canRemove = can(member, 'member.remove')
+            const canTransferOwnership =
+              canTransfer && member.status === 'active' && member.role !== 'owner'
+            const nextRole = canChangeRole ? nextMembershipRole(member.role) : null
             return (
               <li
                 key={member.user_id}
@@ -174,16 +166,7 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
                 </div>
                 <div className={styles.governance}>
                   <div className={styles.role}>
-                    {canChangeRole ? (
-                      <RoleMenu
-                        value={member.role}
-                        label={`${copy.role.controlLabel(member.username)}，当前${membershipRoleLabel(member.role)}`}
-                        disabled={pending !== null}
-                        onChange={(role) => void changeRole(member, role)}
-                      />
-                    ) : (
-                      <span className={styles.roleText}>{membershipRoleLabel(member.role)}</span>
-                    )}
+                    <span className={styles.roleText}>{membershipRoleLabel(member.role)}</span>
                   </div>
                   <div className={styles.status}>
                     <Label size="small" variant={statusVariant(member.status)}>
@@ -191,12 +174,14 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
                     </Label>
                   </div>
                   <div className={styles.actions}>
-                    {canTransferOwnership || canRemove ? (
+                    {nextRole || canTransferOwnership || canRemove ? (
                       <MemberActionsMenu
                         member={member}
+                        nextRole={nextRole}
                         canTransfer={canTransferOwnership}
                         canRemove={canRemove}
                         disabled={pending !== null}
+                        onChangeRole={(role) => void changeRole(member, role)}
                         onTransfer={() => setConfirmation({ kind: 'transfer', member })}
                         onRemove={() => setConfirmation({ kind: 'remove', member })}
                       />
@@ -257,7 +242,6 @@ function InviteMemberDialog({
 }) {
   const usernameRef = useRef<HTMLInputElement>(null)
   const [username, setUsername] = useState('')
-  const [role, setRole] = useState<MembershipRole>('member')
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitFailed, setSubmitFailed] = useState(false)
@@ -272,7 +256,7 @@ function InviteMemberDialog({
     setSubmitFailed(false)
     setSubmitting(true)
     try {
-      await api.inviteMember(userGroup.id, trimmed, role)
+      await api.inviteMember(userGroup.id, trimmed)
       onInvited(trimmed)
       onClose()
     } catch {
@@ -327,29 +311,6 @@ function InviteMemberDialog({
               <FormControl.Validation variant="error">{usernameError}</FormControl.Validation>
             ) : null}
           </FormControl>
-          <RadioGroup
-            name="invite-member-role"
-            disabled={submitting}
-            onChange={(selected) => {
-              if (selected === 'admin' || selected === 'member') setRole(selected)
-            }}
-          >
-            <RadioGroup.Label>{copy.invite.roleLabel}</RadioGroup.Label>
-            {INVITABLE_ROLES.map((assignableRole) => (
-              <FormControl
-                key={assignableRole}
-                disabled={submitting}
-                id={`invite-member-role-${assignableRole}`}
-              >
-                <Radio value={assignableRole} checked={role === assignableRole} />
-                <FormControl.Label>{membershipRoleLabel(assignableRole)}</FormControl.Label>
-                <FormControl.Caption>
-                  {copy.invite.roleDescription[assignableRole]}
-                </FormControl.Caption>
-              </FormControl>
-            ))}
-            <RadioGroup.Caption>{copy.invite.ownerCaption}</RadioGroup.Caption>
-          </RadioGroup>
         </Stack>
       </form>
     </Dialog>
@@ -358,16 +319,20 @@ function InviteMemberDialog({
 
 function MemberActionsMenu({
   member,
+  nextRole,
   canTransfer,
   canRemove,
   disabled,
+  onChangeRole,
   onTransfer,
   onRemove,
 }: {
   member: Member
+  nextRole: 'admin' | 'member' | null
   canTransfer: boolean
   canRemove: boolean
   disabled: boolean
+  onChangeRole: (role: 'admin' | 'member') => void
   onTransfer: () => void
   onRemove: () => void
 }) {
@@ -383,6 +348,12 @@ function MemberActionsMenu({
       </ActionMenu.Anchor>
       <ActionMenu.Overlay align="end" width="auto">
         <ActionList>
+          {nextRole ? (
+            <ActionList.Item disabled={disabled} onSelect={() => onChangeRole(nextRole)}>
+              {copy.role.action(nextRole)}
+            </ActionList.Item>
+          ) : null}
+          {nextRole && (canTransfer || canRemove) ? <ActionList.Divider /> : null}
           {canTransfer ? (
             <ActionList.Item disabled={disabled} onSelect={onTransfer}>
               {copy.transfer.confirm}
@@ -400,40 +371,10 @@ function MemberActionsMenu({
   )
 }
 
-function RoleMenu({
-  value,
-  label,
-  disabled,
-  onChange,
-}: {
-  value: MembershipRole
-  label: string
-  disabled: boolean
-  onChange: (role: MembershipRole) => void
-}) {
-  return (
-    <ActionMenu>
-      <ActionMenu.Button variant="invisible" aria-label={label} disabled={disabled}>
-        {membershipRoleLabel(value)}
-      </ActionMenu.Button>
-      <ActionMenu.Overlay width="auto">
-        <ActionList selectionVariant="single">
-          {ASSIGNABLE_ROLES.map((role) => (
-            <ActionList.Item
-              key={role}
-              selected={role === value}
-              disabled={disabled}
-              onSelect={() => {
-                if (role !== value) onChange(role)
-              }}
-            >
-              {membershipRoleLabel(role)}
-            </ActionList.Item>
-          ))}
-        </ActionList>
-      </ActionMenu.Overlay>
-    </ActionMenu>
-  )
+function nextMembershipRole(role: MembershipRole): 'admin' | 'member' | null {
+  if (role === 'member') return 'admin'
+  if (role === 'admin') return 'member'
+  return null
 }
 
 function statusVariant(status: MembershipStatus): 'success' | 'attention' | 'secondary' | 'danger' {

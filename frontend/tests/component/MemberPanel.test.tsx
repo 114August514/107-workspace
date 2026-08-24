@@ -13,7 +13,14 @@ const ownerGroup: UserGroup = {
   created_by_id: 'usr_alice',
   created_at: '2026-08-17T00:00:00Z',
   role: 'owner',
-  capabilities: ['user_group.view', 'member.view', 'member.manage', 'ownership.transfer'],
+  capabilities: [
+    'user_group.view',
+    'member.view',
+    'member.invite',
+    'member.remove',
+    'member.role.manage',
+    'ownership.transfer',
+  ],
 }
 
 const members: Member[] = [
@@ -23,6 +30,7 @@ const members: Member[] = [
     display_name: 'Alice',
     role: 'owner',
     status: 'active',
+    capabilities: [],
   },
   {
     user_id: 'usr_bob',
@@ -30,20 +38,34 @@ const members: Member[] = [
     display_name: 'Bob',
     role: 'member',
     status: 'active',
+    capabilities: ['member.remove', 'member.role.manage'],
   },
   {
     user_id: 'usr_carol',
     username: 'carol',
     display_name: 'Carol',
     role: 'admin',
-    status: 'invited',
+    status: 'active',
+    capabilities: ['member.remove', 'member.role.manage'],
   },
+]
+
+const adminGroup: UserGroup = {
+  ...ownerGroup,
+  role: 'admin',
+  capabilities: ['user_group.view', 'member.view', 'member.invite', 'member.remove'],
+}
+
+const adminMembers: Member[] = [
+  { ...members[0]!, capabilities: [] },
+  { ...members[2]!, capabilities: [] },
+  { ...members[1]!, capabilities: ['member.remove'] },
 ]
 
 describe('MemberPanel governance', () => {
   beforeEach(() => {
     vi.spyOn(api, 'listMembers').mockResolvedValue(members)
-    vi.spyOn(api, 'inviteMember').mockResolvedValue(members[2]!)
+    vi.spyOn(api, 'inviteMember').mockResolvedValue(members[1]!)
     vi.spyOn(api, 'changeMemberRole').mockResolvedValue({ ...members[1]!, role: 'admin' })
     vi.spyOn(api, 'removeMember').mockResolvedValue(undefined)
     vi.spyOn(api, 'transferUserGroupOwnership').mockResolvedValue(undefined)
@@ -54,167 +76,86 @@ describe('MemberPanel governance', () => {
     vi.restoreAllMocks()
   })
 
-  it('REQ-63-03 keeps owner and invited boundaries behind capability-aware row actions', async () => {
+  it('REQ-66-01 invites by username as a fixed Member without role controls', async () => {
+    render(<MemberPanel userGroup={ownerGroup} />)
+
+    await screen.findByText('Alice')
+    fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(screen.queryByText('角色')).not.toBeInTheDocument()
+    expect(screen.queryByText('Owner 只能通过所有权转让产生。')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/用户名/), { target: { value: 'dave' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
+
+    expect(await screen.findByText('已向 dave 发送邀请')).toBeInTheDocument()
+    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'dave')
+    expect(api.listMembers).toHaveBeenCalledTimes(2)
+  })
+
+  it('REQ-66-02 renders roles as static identity and projects target capabilities into actions', async () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
     const alice = await screen.findByTestId('member-usr_alice')
     const bob = screen.getByTestId('member-usr_bob')
     const carol = screen.getByTestId('member-usr_carol')
-
     expect(within(alice).getByText('所有者')).toBeInTheDocument()
-    expect(within(alice).getByText('已加入')).toBeInTheDocument()
-    expect(within(alice).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
+    expect(within(bob).getByText('成员')).toBeInTheDocument()
+    expect(within(carol).getByText('管理员')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
     expect(
       within(alice).queryByRole('button', { name: 'alice 的更多操作' }),
     ).not.toBeInTheDocument()
-    expect(
-      within(bob).getByRole('button', { name: '修改 bob 的角色，当前成员' }),
-    ).toBeInTheDocument()
-    expect(within(carol).queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
 
-    fireEvent.click(within(carol).getByRole('button', { name: 'carol 的更多操作' }))
-    expect(await screen.findByRole('menuitem', { name: '移除成员' })).toBeInTheDocument()
-    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
+    fireEvent.click(within(bob).getByRole('button', { name: 'bob 的更多操作' }))
+    expect(await screen.findByRole('menuitem', { name: '设为管理员' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '转让所有权' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: '移除成员' })).toBeInTheDocument()
   })
 
-  it('REQ-63-04 invites a member and reports a server failure in the dialog', async () => {
-    let rejectInvite!: (error: unknown) => void
-    vi.mocked(api.inviteMember).mockImplementationOnce(
-      () =>
-        new Promise<Member>((_resolve, reject) => {
-          rejectInvite = reject
-        }),
-    )
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    await screen.findByText('Alice')
-    fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
-    const inviteRoles = screen.getAllByRole('radio')
-    expect(inviteRoles).toHaveLength(2)
-    expect(inviteRoles[0]).toHaveAccessibleName('成员')
-    expect(inviteRoles[0]).toBeChecked()
-    expect(inviteRoles[1]).toHaveAccessibleName('管理员')
-    expect(inviteRoles[1]).not.toBeChecked()
-    expect(screen.getByText('可以参与 User Group 中的项目、资源与计算工作')).toBeInTheDocument()
-    expect(screen.getByText('具有成员能力，并可以管理成员和 User Group')).toBeInTheDocument()
-    expect(screen.getByText('Owner 只能通过所有权转让产生。')).toBeInTheDocument()
-    const username = screen.getByLabelText(/用户名/)
-    fireEvent.change(username, { target: { value: 'carol' } })
-    fireEvent.click(screen.getByRole('radio', { name: '管理员' }))
-    expect(screen.getByRole('radio', { name: '管理员' })).toBeChecked()
-    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
-
-    await waitFor(() => expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'carol', 'admin'))
-    expect(username).toBeDisabled()
-    expect(screen.getByRole('radio', { name: '成员' })).toBeDisabled()
-    expect(screen.getByRole('radio', { name: '管理员' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '发送邀请' })).toBeDisabled()
-
-    rejectInvite(new ApiError(409, 'conflict', 'unstable backend invite message', []))
-    expect(await screen.findByText('邀请发送失败。')).toBeInTheDocument()
-    expect(screen.getByText('请确认用户名和角色后重试。')).toBeInTheDocument()
-    expect(screen.queryByText('unstable backend invite message')).not.toBeInTheDocument()
-  })
-
-  it('keeps focus on an empty invite username and does not call the API', async () => {
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    await screen.findByText('Alice')
-    fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
-    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
-
-    expect(await screen.findByText('请填写用户名')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: /用户名/ })).toHaveFocus()
-    expect(api.inviteMember).not.toHaveBeenCalled()
-  })
-
-  it('REQ-63-04 closes a successful invite flow, reports the result, and reloads members', async () => {
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    await screen.findByText('Alice')
-    fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
-    fireEvent.change(screen.getByLabelText(/用户名/), { target: { value: 'dave' } })
-    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
-
-    expect(await screen.findByText('已向 dave 发送邀请')).toBeInTheDocument()
-    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'dave', 'member')
-    expect(screen.queryByRole('dialog', { name: '邀请成员' })).not.toBeInTheDocument()
-    expect(api.listMembers).toHaveBeenCalledTimes(2)
-  })
-
-  it('REQ-63-05 changes an active member role and reloads server-authoritative data', async () => {
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
-    fireEvent.click(role)
-    expect(await screen.findAllByRole('menuitemradio')).toHaveLength(2)
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '管理员' }))
-
-    await waitFor(() =>
-      expect(api.changeMemberRole).toHaveBeenCalledWith('ugrp_lab', 'usr_bob', 'admin'),
-    )
-    expect(await screen.findByText('bob 的角色已改为管理员')).toBeInTheDocument()
-    expect(api.listMembers).toHaveBeenCalledTimes(2)
-  })
-
-  it('disables role menus while a server-authoritative role mutation is pending', async () => {
-    let resolveChange!: (member: Member) => void
-    vi.mocked(api.changeMemberRole).mockImplementationOnce(
-      () =>
-        new Promise<Member>((resolve) => {
-          resolveChange = resolve
-        }),
-    )
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
-    fireEvent.click(role)
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
-
-    expect(role).toBeDisabled()
-    resolveChange({
-      display_name: 'Bob',
-      role: 'admin',
-      status: 'active',
-      user_id: 'usr_bob',
-      username: 'bob',
-    })
-    await waitFor(() => expect(role).toBeEnabled())
-  })
-
-  it('uses stable action copy when a role change fails and lets the user try again', async () => {
-    vi.mocked(api.changeMemberRole).mockRejectedValueOnce(
-      new ApiError(409, 'conflict', 'unstable backend role message', []),
-    )
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    const role = await screen.findByRole('button', { name: '修改 bob 的角色，当前成员' })
-    fireEvent.click(role)
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: '管理员' }))
-
-    expect(await screen.findByText('角色修改失败。')).toBeInTheDocument()
-    expect(screen.getByText('请确认成员仍在 User Group 中并重试。')).toBeInTheDocument()
-    expect(screen.queryByText('unstable backend role message')).not.toBeInTheDocument()
-    expect(role).toBeEnabled()
-  })
-
-  it('REQ-63-06 requires explicit danger confirmation before removing a member', async () => {
+  it('REQ-66-03 changes the one applicable role and reloads server-authoritative members', async () => {
     render(<MemberPanel userGroup={ownerGroup} />)
 
     const bob = await screen.findByTestId('member-usr_bob')
     fireEvent.click(within(bob).getByRole('button', { name: 'bob 的更多操作' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '移除成员' }))
-    expect(api.removeMember).not.toHaveBeenCalled()
-    expect(
-      screen.getByText('移除后，该成员会立刻失去这个 User Group 的访问权。'),
-    ).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '移除成员' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '设为管理员' }))
 
-    await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('ugrp_lab', 'usr_bob'))
-    expect(await screen.findByText('已移除 bob')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(api.changeMemberRole).toHaveBeenCalledWith('ugrp_lab', 'usr_bob', 'admin'),
+    )
+    expect(await screen.findByText('已将 bob 设为管理员')).toBeInTheDocument()
+    expect(api.listMembers).toHaveBeenCalledTimes(2)
   })
 
-  it('adds the stable capability-gated ownership transfer with explicit confirmation', async () => {
+  it('REQ-66-03 demotes an Admin through the same capability-projected action', async () => {
+    render(<MemberPanel userGroup={ownerGroup} />)
+
+    const carol = await screen.findByTestId('member-usr_carol')
+    fireEvent.click(within(carol).getByRole('button', { name: 'carol 的更多操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '设为成员' }))
+
+    await waitFor(() =>
+      expect(api.changeMemberRole).toHaveBeenCalledWith('ugrp_lab', 'usr_carol', 'member'),
+    )
+    expect(await screen.findByText('已将 carol 设为成员')).toBeInTheDocument()
+  })
+
+  it('REQ-66-04 lets Admin perform only daily actions projected by each target fixture', async () => {
+    vi.mocked(api.listMembers).mockResolvedValue(adminMembers)
+    render(<MemberPanel userGroup={adminGroup} />)
+
+    const owner = await screen.findByTestId('member-usr_alice')
+    const admin = screen.getByTestId('member-usr_carol')
+    const member = screen.getByTestId('member-usr_bob')
+    expect(within(owner).queryByRole('button', { name: /更多操作/ })).not.toBeInTheDocument()
+    expect(within(admin).queryByRole('button', { name: /更多操作/ })).not.toBeInTheDocument()
+    fireEvent.click(within(member).getByRole('button', { name: 'bob 的更多操作' }))
+    expect(await screen.findByRole('menuitem', { name: '移除成员' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /设为/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: '转让所有权' })).not.toBeInTheDocument()
+  })
+
+  it('REQ-66-05 keeps ownership transfer separate and explicitly confirmed', async () => {
     const onUserGroupChanged = vi.fn()
     render(<MemberPanel userGroup={ownerGroup} onUserGroupChanged={onUserGroupChanged} />)
 
@@ -231,41 +172,46 @@ describe('MemberPanel governance', () => {
     expect(onUserGroupChanged).toHaveBeenCalledOnce()
   })
 
-  it('REQ-63-07 hides governance actions when capability is absent', async () => {
-    render(
-      <MemberPanel
-        userGroup={{
-          ...ownerGroup,
-          role: 'member',
-          capabilities: ['user_group.view', 'member.view'],
-        }}
-      />,
+  it('REQ-66-06 explicitly confirms removal projected by the target capability', async () => {
+    render(<MemberPanel userGroup={ownerGroup} />)
+
+    const bob = await screen.findByTestId('member-usr_bob')
+    fireEvent.click(within(bob).getByRole('button', { name: 'bob 的更多操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '移除成员' }))
+    expect(api.removeMember).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '移除成员' }))
+
+    await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('ugrp_lab', 'usr_bob'))
+    expect(await screen.findByText('已移除 bob')).toBeInTheDocument()
+  })
+
+  it('REQ-66-07 uses stable invite failure guidance', async () => {
+    vi.mocked(api.inviteMember).mockRejectedValueOnce(
+      new ApiError(409, 'conflict', 'unstable backend invite message', []),
     )
-
+    render(<MemberPanel userGroup={ownerGroup} />)
     await screen.findByText('Alice')
-    expect(screen.queryByRole('button', { name: '邀请成员' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /修改 .* 的角色/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /的更多操作/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
+    fireEvent.change(screen.getByLabelText(/用户名/), { target: { value: 'dave' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送邀请' }))
+    expect(await screen.findByText('邀请发送失败。')).toBeInTheDocument()
+    expect(screen.getByText('请确认用户名后重试。')).toBeInTheDocument()
+    expect(screen.queryByText('unstable backend invite message')).not.toBeInTheDocument()
   })
 
-  it('REQ-63-08 gives an actionable empty state', async () => {
-    vi.mocked(api.listMembers).mockResolvedValueOnce([])
+  it('REQ-66-07 uses stable role failure guidance and keeps the action retryable', async () => {
+    vi.mocked(api.changeMemberRole).mockRejectedValueOnce(
+      new ApiError(409, 'conflict', 'unstable backend role message', []),
+    )
     render(<MemberPanel userGroup={ownerGroup} />)
 
-    expect(await screen.findByText('这个 User Group 还没有成员。')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '邀请成员' })).toBeInTheDocument()
-  })
+    const bob = await screen.findByTestId('member-usr_bob')
+    fireEvent.click(within(bob).getByRole('button', { name: 'bob 的更多操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '设为管理员' }))
 
-  it('REQ-63-08 exposes a retry path after members fail to load', async () => {
-    vi.mocked(api.listMembers)
-      .mockRejectedValueOnce(new Error('network unavailable'))
-      .mockResolvedValueOnce(members)
-    render(<MemberPanel userGroup={ownerGroup} />)
-
-    expect(await screen.findByText('请求失败。')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '重试' }))
-
-    expect(await screen.findByText('Alice')).toBeInTheDocument()
-    expect(api.listMembers).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText('角色修改失败。')).toBeInTheDocument()
+    expect(screen.getByText('请确认成员仍在 User Group 中并重试。')).toBeInTheDocument()
+    expect(screen.queryByText('unstable backend role message')).not.toBeInTheDocument()
+    expect(within(bob).getByRole('button', { name: 'bob 的更多操作' })).toBeEnabled()
   })
 })

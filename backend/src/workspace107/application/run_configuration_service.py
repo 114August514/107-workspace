@@ -47,7 +47,7 @@ class RunConfigurationService:
         self._guard = guard
 
     async def list_for_project(self, user_id: str, project_id: str) -> list[RunConfiguration]:
-        await self._guard.project(user_id, project_id)
+        await self._guard.project(user_id, project_id, owner_scope=True)
         return await self._repos.run_configurations.list_for_project(project_id)
 
     async def get(self, user_id: str, configuration_id: str) -> RunConfiguration:
@@ -55,7 +55,7 @@ class RunConfigurationService:
         if configuration is None:
             raise ObjectNotFound("Run Configuration", configuration_id)
         try:
-            await self._guard.project(user_id, configuration.project_id)
+            await self._guard.project(user_id, configuration.project_id, owner_scope=True)
         except ObjectNotFound as exc:
             raise ObjectNotFound("Run Configuration", configuration_id) from exc
         return configuration

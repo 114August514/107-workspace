@@ -24,6 +24,7 @@ from ...domain.enums import (
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     TargetType,
@@ -418,13 +419,17 @@ class ProjectRepositoryImpl:
         self._session = session
 
     async def add(self, project: Project) -> None:
+        owner_user_id, owner_user_group_id = _owner_columns(project.owner)
         self._session.add(
             t.ProjectRow(
                 id=project.id,
                 workspace_id=project.workspace_id,
+                owner_user_id=owner_user_id,
+                owner_user_group_id=owner_user_group_id,
                 name=project.name,
                 description=project.description,
                 status=project.status.value,
+                visibility=project.visibility.value,
                 environment_version_id=project.environment_version_id,
                 default_run_configuration_id=project.default_run_configuration_id,
                 created_by=project.created_by,
@@ -442,9 +447,13 @@ class ProjectRepositoryImpl:
         row = await self._session.get(t.ProjectRow, project.id)
         if row is None:
             return
+        owner_user_id, owner_user_group_id = _owner_columns(project.owner)
         row.name = project.name
+        row.owner_user_id = owner_user_id
+        row.owner_user_group_id = owner_user_group_id
         row.description = project.description
         row.status = project.status.value
+        row.visibility = project.visibility.value
         row.environment_version_id = project.environment_version_id
         row.default_run_configuration_id = project.default_run_configuration_id
         row.updated_at = project.updated_at or datetime.now(UTC)
@@ -459,15 +468,39 @@ class ProjectRepositoryImpl:
         return await _paginate(self._session, stmt, page, _to_project)
 
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
-        visible = _visible_workspace_ids(user_id)
+        # Owner-scope only (no PUBLIC discovery): /me recent_projects shows what
+        # the User owns or their User Groups own.
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
         stmt = (
             select(t.ProjectRow)
-            .where(t.ProjectRow.workspace_id.in_(visible))
+            .where(
+                (t.ProjectRow.owner_user_id == user_id)
+                | t.ProjectRow.owner_user_group_id.in_(group_ids)
+            )
             .order_by(t.ProjectRow.updated_at.desc())
             .limit(limit)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
+
+    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
+        # Owner scope + PUBLIC projects the User can discover.
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
+        owner_scope = (
+            t.ProjectRow.owner_user_id == user_id
+        ) | t.ProjectRow.owner_user_group_id.in_(group_ids)
+        stmt = (
+            select(t.ProjectRow)
+            .where((t.ProjectRow.visibility == ProjectVisibility.PUBLIC.value) | owner_scope)
+            .order_by(t.ProjectRow.updated_at.desc())
+        )
+        return await _paginate(self._session, stmt, page, _to_project)
 
     async def name_exists(self, workspace_id: str, name: str) -> bool:
         stmt = (
@@ -1705,12 +1738,18 @@ def _to_membership(row: t.MembershipRow) -> Membership:
 
 
 def _to_project(row: t.ProjectRow) -> Project:
+    if row.owner_user_id or row.owner_user_group_id:
+        owner = _owner_reference(row.owner_user_id, row.owner_user_group_id)
+    else:  # pragma: no cover - CHECK constraint forbids a row with no owner
+        owner = OwnerReference(OwnerKind.USER_GROUP, row.workspace_id)
     return Project(
         id=row.id,
         workspace_id=row.workspace_id,
         name=row.name,
+        owner=owner,
         description=row.description,
         status=ProjectStatus(row.status),
+        visibility=ProjectVisibility(row.visibility),
         environment_version_id=row.environment_version_id,
         default_run_configuration_id=row.default_run_configuration_id,
         created_by=row.created_by,

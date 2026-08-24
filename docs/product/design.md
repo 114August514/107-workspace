@@ -85,6 +85,8 @@
 
 User Group 是平台中的用户协作组织。User 可通过独立 Membership 加入多个 User Group。跨 Owner 使用资产需要显式 USE Grant。
 
+当前治理角色采用 Owner / Admin / Member 三级模型。所有有效成员均可查看成员列表；Owner 可以邀请普通 Member、移除 Member 或 Admin，并可在 Member 与 Admin 之间显式变更角色；Admin 只能邀请普通 Member、移除普通 Member，不能变更任何成员角色或移除 Admin / Owner；Member 不具有成员治理权限。普通邀请只创建 Member，Owner 只能通过所有权转移用例产生或取消，不能通过普通角色变更完成。
+
 ```text
 User Group、成员与共享资产
 │
@@ -1735,7 +1737,7 @@ User 必须通过对应 User Group 的有效 Membership，才能以该组成员�
 
 ##### **GR-103 — Membership Role 权限**
 
-User 在一个 User Group 中可执行的操作必须受该 Membership 的 Role 和 Status 约束；同一 User 在其他 User Group 中的 Membership、Role 或 Status 不参与判断。
+User 在一个 User Group 中可执行的操作必须受该 Membership 的 Role 和 Status 约束；同一 User 在其他 User Group 中的 Membership、Role 或 Status 不参与判断。所有有效角色均可查看成员；Owner 可以邀请普通 Member、移除 Member 或 Admin、在 Member 与 Admin 之间变更角色并转移所有权；Admin 只能邀请和移除普通 Member；Member 不具有成员治理权限。普通邀请只产生 Member，Owner 身份只能通过所有权转移改变。
 
 ##### **GR-104 — User Group 所有权**
 
@@ -1957,7 +1959,7 @@ Activity 没有未读、完成或送达状态，也不替代 Notification、Audi
 
 ##### 管理 Membership
 
-User Group 可以建立 Membership、变更 Role 和 Status、退出或移除成员；变更仅影响对应 User 在该组中的成员身份和操作权限，不改变组拥有的对象，并须保持唯一有效 Owner。
+User Group 可以建立 Membership、变更 Role 和 Status、退出或移除成员；变更仅影响对应 User 在该组中的成员身份和操作权限，不改变组拥有的对象，并须保持唯一有效 Owner。普通邀请只建立 Member；只有 Owner 可以在 Member 与 Admin 之间变更 Role，Admin 只能邀请和移除普通 Member；Owner 不得通过普通 Role 变更产生或取消。
 
 ##### 转移 User Group Owner
 

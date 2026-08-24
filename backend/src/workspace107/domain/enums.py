@@ -39,6 +39,13 @@ class ProjectStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class ProjectVisibility(StrEnum):
+    """Project discovery boundary, independent from operation permissions."""
+
+    OWNER_SCOPE = "owner_scope"
+    PUBLIC = "public"
+
+
 class RunStatus(StrEnum):
     """Run 执行状态。
 

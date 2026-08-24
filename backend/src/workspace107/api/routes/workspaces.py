@@ -59,7 +59,13 @@ async def list_projects(
     workspace_id: str, user: CurrentUser, services: ServicesDep, page: PageDep
 ) -> s.PageOut[s.ProjectOut]:
     result = await services.projects.list_for_workspace(user.id, workspace_id, page)
-    return p.page_out(result, p.project_out)
+    summaries = await services.projects.owner_summaries(result.items)
+    return p.page_out(
+        result,
+        lambda project: p.project_out(
+            project, owner=summaries[(project.owner.kind, project.owner.id)]
+        ),
+    )
 
 
 @router.post(
@@ -75,9 +81,10 @@ async def create_project(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.ProjectOut:
-    return p.project_out(
-        await services.projects.create(user.id, workspace_id, payload.name, payload.description)
+    project = await services.projects.create(
+        user.id, workspace_id, payload.name, payload.description
     )
+    return p.project_out(project, owner=await services.projects.owner_summary(project))
 
 
 @router.get(
