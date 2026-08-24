@@ -101,11 +101,12 @@ class MemberOut(Model):
     display_name: str
     role: MembershipRole
     status: MembershipStatus
+    capabilities: list[UserGroupCapability] = Field(default_factory=list)
 
 
 class MemberInviteIn(Model):
+    model_config = ConfigDict(extra="forbid")
     username: str
-    role: MembershipRole = MembershipRole.MEMBER
 
 
 class MemberRoleUpdateIn(Model):

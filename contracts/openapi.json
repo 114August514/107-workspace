@@ -280,7 +280,9 @@
           "user_group.view",
           "user_group.update",
           "member.view",
-          "member.manage",
+          "member.invite",
+          "member.remove",
+          "member.role.manage",
           "ownership.transfer",
           "config.view",
           "config.manage",
@@ -1072,11 +1074,8 @@
         "type": "string"
       },
       "MemberInviteIn": {
+        "additionalProperties": false,
         "properties": {
-          "role": {
-            "$ref": "#/components/schemas/MembershipRole",
-            "default": "member"
-          },
           "username": {
             "title": "Username",
             "type": "string"
@@ -1090,6 +1089,13 @@
       },
       "MemberOut": {
         "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/UserGroupCapability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
           "display_name": {
             "title": "Display Name",
             "type": "string"
@@ -2948,7 +2954,9 @@
           "user_group.view",
           "user_group.update",
           "member.view",
-          "member.manage",
+          "member.invite",
+          "member.remove",
+          "member.role.manage",
           "ownership.transfer"
         ],
         "title": "UserGroupCapability",
