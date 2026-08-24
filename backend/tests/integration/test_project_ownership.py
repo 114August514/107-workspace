@@ -29,6 +29,46 @@ async def test_user_owned_project_is_not_visible_to_other_users(client) -> None:
 
 
 @pytest.mark.asyncio
+async def test_canonical_create_requires_owner_to_match_compatibility_anchor(client) -> None:
+    group_id = await ensure_user_group(client, headers=ALICE)
+    created = await client.post(
+        "/api/v1/projects",
+        json={"owner": {"kind": "user_group", "id": group_id}, "name": "Group Project"},
+        headers=ALICE,
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["owner"]["kind"] == "user_group"
+    assert created.json()["owner"]["id"] == group_id
+
+    # 负向：拿自己的 personal anchor 冒充 UserGroup Owner。
+    # personal anchor 的 canonical owner 是 User(Alice)，与请求的 owner 不一致，
+    # 必须干净地 404，而不是把 owner_user_group_id 落到 DB FK 边界。
+    alice = (await client.get("/api/v1/me", headers=ALICE)).json()["user"]
+    personal = await client.post(
+        "/api/v1/projects",
+        json={"owner": {"kind": "user", "id": alice["id"]}, "name": "Alice Personal"},
+        headers=ALICE,
+    )
+    assert personal.status_code == 201, personal.text
+    personal_anchor = (await client.get("/api/v1/me", headers=ALICE)).json()[
+        "personal_resource_context_id"
+    ]
+    assert personal_anchor is not None
+    hijack = await client.post(
+        "/api/v1/projects",
+        json={
+            "owner": {"kind": "user_group", "id": personal_anchor},
+            "name": "Hijack Project",
+        },
+        headers=ALICE,
+    )
+    assert hijack.status_code == 404
+    listing = await client.get("/api/v1/projects", headers=ALICE)
+    assert listing.status_code == 200
+    assert all(item["name"] != "Hijack Project" for item in listing.json()["items"])
+
+
+@pytest.mark.asyncio
 async def test_public_project_exposes_metadata_and_versions_but_not_working_state(
     client,
 ) -> None:

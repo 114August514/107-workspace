@@ -124,6 +124,12 @@ class ProjectService:
         access = await self._guard.legacy_workspace(
             user_id, workspace_id, needs=Capability.PROJECT_CREATE
         )
+        # Owner 权威始终从锚点推导；显式传入的 owner 必须与之完全一致。
+        # 锚点镜像不变量被 #37-#42 子域依赖，不能让任何调用方打破——
+        # 否则会变成 DB FK 边界错误或脏数据，而不是干净的 404。
+        canonical_owner = access.workspace.owner_reference
+        if owner is not None and owner != canonical_owner:
+            raise ObjectNotFound("Project Owner", owner.id)
         name = name.strip()
         if not name:
             raise ValidationFailed("Project 名称不能为空")
@@ -135,7 +141,7 @@ class ProjectService:
             id=ids.new_id(ids.PROJECT),
             workspace_id=workspace_id,
             name=name,
-            owner=owner or access.workspace.owner_reference,
+            owner=canonical_owner,
             description=description,
             visibility=visibility,
             created_by=user_id,
