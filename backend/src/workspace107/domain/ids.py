@@ -9,6 +9,7 @@ from uuid import uuid4
 
 USER = "usr"
 USER_GROUP = "grp"
+LEGACY_WORKSPACE = "ws"
 MEMBERSHIP = "mbr"
 PROJECT = "prj"
 PROJECT_VERSION = "pv"

@@ -11,7 +11,7 @@ from ..domain.capabilities import (
     describe,
     user_group_capabilities_of,
 )
-from ..domain.enums import MembershipRole
+from ..domain.enums import MembershipRole, ProjectVisibility
 from ..domain.errors import ObjectNotFound, PermissionDenied
 from ..domain.models import (
     Environment,
@@ -66,10 +66,14 @@ class LegacyWorkspaceAccess:
 class ProjectAccess:
     project: Project
     workspace: LegacyWorkspace
-    role: MembershipRole
+    role: MembershipRole | None
+    owner_scope: bool
 
     @property
     def capabilities(self) -> frozenset[Capability]:
+        if self.role is None:
+            # PUBLIC reader: metadata + immutable version read only.
+            return _PUBLIC_READER_CAPABILITIES
         return capabilities_of(self.role)
 
     def can(self, capability: Capability) -> bool:
@@ -77,7 +81,15 @@ class ProjectAccess:
 
     def require(self, capability: Capability) -> None:
         if not self.can(capability):
-            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
+            label = "公开读者" if self.role is None else self.role.value
+            raise PermissionDenied(f"当前角色（{label}）无权{describe(capability)}")
+
+    def require_owner_scope(self) -> None:
+        if not self.owner_scope:
+            raise PermissionDenied("当前 Project 仅公开其元数据和不可变版本")
+
+
+_PUBLIC_READER_CAPABILITIES = frozenset({Capability.PROJECT_VIEW})
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,38 +196,70 @@ class AccessGuard:
         return access
 
     async def project(
-        self, user_id: str, project_id: str, *, needs: Capability | None = None
+        self,
+        user_id: str,
+        project_id: str,
+        *,
+        needs: Capability | None = None,
+        owner_scope: bool = False,
     ) -> ProjectAccess:
         project = await self._repos.projects.get(project_id)
         if project is None:
             raise ObjectNotFound("Project", project_id)
-        try:
-            workspace_access = await self.legacy_workspace(user_id, project.workspace_id)
-        except ObjectNotFound as exc:
-            # 归属 Workspace 不可见时，Project 同样视为不存在。
-            raise ObjectNotFound("Project", project_id) from exc
 
+        role: MembershipRole | None = None
+        is_owner = False
+        if project.owner.kind is OwnerKind.USER:
+            if project.owner.id == user_id:
+                is_owner = True
+                role = MembershipRole.OWNER
+        else:
+            membership = await self._repos.memberships.get(project.owner.id, user_id)
+            if membership is not None and membership.is_active:
+                is_owner = True
+                role = membership.role
+
+        if not is_owner:
+            if project.visibility is not ProjectVisibility.PUBLIC:
+                raise ObjectNotFound("Project", project_id)
+            if owner_scope:
+                # Owner-scope operations (working state, runs, configs) never
+                # cross into the public read boundary.
+                raise ObjectNotFound("Project", project_id)
+
+        workspace = await self._compatibility_workspace(project)
         access = ProjectAccess(
-            project=project, workspace=workspace_access.workspace, role=workspace_access.role
+            project=project, workspace=workspace, role=role, owner_scope=is_owner
         )
         if needs is not None:
             access.require(needs)
         return access
+
+    async def _compatibility_workspace(self, project: Project) -> LegacyWorkspace:
+        workspace = await self._repos.legacy_workspaces.get(project.workspace_id)
+        if workspace is None:
+            raise ObjectNotFound("Project", project.id)
+        return workspace
 
     async def run(self, user_id: str, run_id: str, *, needs: Capability | None = None) -> RunAccess:
         run = await self._repos.runs.get(run_id)
         if run is None:
             raise ObjectNotFound("Run", run_id)
         try:
-            project_access = await self.project(user_id, run.project_id)
+            project_access = await self.project(user_id, run.project_id, owner_scope=True)
         except ObjectNotFound as exc:
             raise ObjectNotFound("Run", run_id) from exc
+        # owner_scope=True above guarantees project_access.role is a real membership
+        # role, never the PUBLIC reader's None.
+        role = project_access.role
+        if role is None:  # pragma: no cover - enforced by the guard above
+            raise ObjectNotFound("Run", run_id)
 
         access = RunAccess(
             run=run,
             project=project_access.project,
             workspace=project_access.workspace,
-            role=project_access.role,
+            role=role,
         )
         if needs is not None:
             access.require(needs)

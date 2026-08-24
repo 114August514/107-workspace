@@ -27,6 +27,7 @@ from .enums import (
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     TargetType,
@@ -135,13 +136,19 @@ class Secret:
 
 @dataclass(slots=True)
 class Project:
-    """Workspace 下可编辑、可版本化、可运行的计算项目。"""
+    """A versioned project with a canonical User/User Group owner.
+
+    ``workspace_id`` is a bounded compatibility anchor for child domains that
+    are migrated by #37-#42; it is not the ownership authority.
+    """
 
     id: str
     workspace_id: str
     name: str
+    owner: OwnerReference
     description: str = ""
     status: ProjectStatus = ProjectStatus.ACTIVE
+    visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE
     environment_version_id: str | None = None
     """None 表示继承 Workspace 默认环境。"""
     default_run_configuration_id: str | None = None
