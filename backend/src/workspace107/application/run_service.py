@@ -147,7 +147,7 @@ class RunService:
     # -- 查询 -----------------------------------------------------------
 
     async def list_for_project(self, user_id: str, project_id: str, page: PageRequest) -> Page[Run]:
-        await self._guard.project(user_id, project_id)
+        await self._guard.project(user_id, project_id, owner_scope=True)
         return await self._repos.runs.list_for_project(project_id, page)
 
     async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Run]:

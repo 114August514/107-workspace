@@ -641,14 +641,28 @@
             "title": "Name",
             "type": "string"
           },
+          "target_owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnerReferenceIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "target_workspace_id": {
-            "title": "Target Workspace Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Workspace Id"
           }
         },
-        "required": [
-          "target_workspace_id"
-        ],
         "title": "ForkIn",
         "type": "object"
       },
@@ -1589,6 +1603,34 @@
         "title": "ProjectCreateIn",
         "type": "object"
       },
+      "ProjectCreateOwnedIn": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/OwnerReferenceIn"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ProjectVisibility",
+            "default": "owner_scope"
+          }
+        },
+        "required": [
+          "name",
+          "owner"
+        ],
+        "title": "ProjectCreateOwnedIn",
+        "type": "object"
+      },
       "ProjectFileOut": {
         "properties": {
           "content_hash": {
@@ -1677,6 +1719,9 @@
             "title": "Name",
             "type": "string"
           },
+          "owner": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
           "status": {
             "$ref": "#/components/schemas/ProjectStatus"
           },
@@ -1692,6 +1737,9 @@
             ],
             "title": "Updated At"
           },
+          "visibility": {
+            "$ref": "#/components/schemas/ProjectVisibility"
+          },
           "workspace_id": {
             "title": "Workspace Id",
             "type": "string"
@@ -1700,9 +1748,11 @@
         "required": [
           "id",
           "workspace_id",
+          "owner",
           "name",
           "description",
           "status",
+          "visibility",
           "environment_version_id",
           "default_run_configuration_id",
           "created_by",
@@ -1782,6 +1832,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ProjectStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectVisibility"
               },
               {
                 "type": "null"
@@ -1930,6 +1990,15 @@
         ],
         "title": "ProjectVersionOut",
         "type": "object"
+      },
+      "ProjectVisibility": {
+        "description": "Project discovery boundary, independent from operation permissions.",
+        "enum": [
+          "owner_scope",
+          "public"
+        ],
+        "title": "ProjectVisibility",
+        "type": "string"
       },
       "ReadinessOut": {
         "properties": {
@@ -4845,6 +4914,240 @@
         "summary": "将通知标记为已读",
         "tags": [
           "notification"
+        ]
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "description": "列出当前用户可发现的 Project：自己 / 所属 User Group 拥有的，以及 PUBLIC Project。",
+        "operationId": "list_discoverable_projects_api_v1_projects_get",
+        "parameters": [
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageOut_ProjectOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "列出当前用户可发现的 Project",
+        "tags": [
+          "project"
+        ]
+      },
+      "post": {
+        "operationId": "create_owned_project_api_v1_projects_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreateOwnedIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "为 User 或 User Group 创建 Project",
+        "tags": [
+          "project"
         ]
       }
     },
@@ -12389,7 +12692,7 @@
     },
     "/api/v1/versions/{version_id}/fork": {
       "post": {
-        "description": "两侧都会校验：源版本可读、目标空间可写。\n\n复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史\n（GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时\n提交前检查会拦下（GR-407）。",
+        "description": "两侧都会校验：源版本可读、目标 Owner 下可创建。\n\n``target_workspace_id`` 与 ``target_owner`` 二选一；显式 Owner 形态是\n#36 的正路，workspace 形态是过渡兼容。复制内容、运行方案和环境选择；\n**不复制**权益、凭据、成员权限和 Run 历史（GR-503）。Secret 只复制\n引用表达式，目标空间缺同名 Secret 时提交前检查会拦下（GR-407）。\n\nPUBLIC 读者只能 Fork 出只含文件与不可变版本的新 Project。",
         "operationId": "fork_version_api_v1_versions__version_id__fork_post",
         "parameters": [
           {

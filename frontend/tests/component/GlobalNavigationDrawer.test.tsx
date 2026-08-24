@@ -28,6 +28,8 @@ function makeProject(index: number, workspaceId = `group-${index}`): Project {
     name: `Project ${index}`,
     description: '',
     workspace_id: workspaceId,
+    owner: { kind: 'user_group', id: workspaceId, display_name: `Group ${index}` },
+    visibility: 'owner_scope',
     status: 'active',
     created_by: 'user-1',
     created_at: '2026-08-15T10:00:00Z',

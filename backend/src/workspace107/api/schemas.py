@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..domain.capabilities import Capability, UserGroupCapability
 from ..domain.enums import (
@@ -23,6 +23,7 @@ from ..domain.enums import (
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     TargetType,
@@ -145,9 +146,11 @@ class EntitlementOut(Model):
 class ProjectOut(Model):
     id: str
     workspace_id: str
+    owner: OwnerSummaryOut
     name: str
     description: str
     status: ProjectStatus
+    visibility: ProjectVisibility
     environment_version_id: str | None
     default_run_configuration_id: str | None
     created_by: str
@@ -160,6 +163,11 @@ class ProjectCreateIn(Model):
     description: str = ""
 
 
+class ProjectCreateOwnedIn(ProjectCreateIn):
+    owner: OwnerReferenceIn
+    visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE
+
+
 class ProjectUpdateIn(Model):
     name: str | None = None
     description: str | None = None
@@ -167,6 +175,7 @@ class ProjectUpdateIn(Model):
     inherit_workspace_environment: bool | None = None
     default_run_configuration_id: str | None = None
     status: ProjectStatus | None = None
+    visibility: ProjectVisibility | None = None
 
 
 class ProjectFileOut(Model):
@@ -620,10 +629,17 @@ class UnreadCountOut(Model):
 
 
 class ForkIn(Model):
-    target_workspace_id: str
+    target_workspace_id: str | None = None
+    target_owner: OwnerReferenceIn | None = None
     name: str = ""
     """留空表示沿用源 Project 的名称。"""
     description: str = ""
+
+    @model_validator(mode="after")
+    def validate_target(self) -> ForkIn:
+        if (self.target_workspace_id is None) == (self.target_owner is None):
+            raise ValueError("Fork 必须且只能指定 target_workspace_id 或 target_owner")
+        return self
 
 
 class ForkSourceOut(Model):

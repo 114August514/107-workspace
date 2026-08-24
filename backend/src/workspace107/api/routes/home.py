@@ -16,13 +16,18 @@ async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
     """Return identity, visible User Groups, and recent legacy child-domain objects."""
     user_groups = await services.user_groups.list_for_user(user.id)
     personal_context = await services.legacy_workspaces.find_personal(user.id)
+    projects = await services.projects.list_recent_for_user(user.id, limit=10)
+    owner_summaries = await services.projects.owner_summaries(projects)
     return s.HomeOut(
         user=p.user_out(user),
         user_groups=[p.user_group_out(group) for group in user_groups],
         personal_resource_context_id=personal_context.id if personal_context else None,
         recent_projects=[
-            p.project_out(project)
-            for project in await services.projects.list_recent_for_user(user.id, limit=10)
+            p.project_out(
+                project,
+                owner=owner_summaries[(project.owner.kind, project.owner.id)],
+            )
+            for project in projects
         ],
         recent_runs=[
             p.run_out(run) for run in await services.runs.list_recent_for_user(user.id, limit=10)

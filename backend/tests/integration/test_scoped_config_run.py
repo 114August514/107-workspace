@@ -10,6 +10,7 @@ from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfigu
 from workspace107.domain.config_scope import ConfigScope, SecretReference
 from workspace107.domain.enums import EnvValueKind, LegacyWorkspaceKind, MembershipRole
 from workspace107.domain.models import LegacyWorkspace, Project, Variable
+from workspace107.domain.ownership import OwnerKind, OwnerReference
 from workspace107.domain.run_snapshot import build_snapshot
 from workspace107.domain.secrets import EnvValue, ResolvedEnv, parse_env_map
 from workspace107.infrastructure.db.repositories import SqlRepositories
@@ -18,9 +19,10 @@ from workspace107.infrastructure.db.secret_vault import DatabaseSecretVault
 
 def _access() -> ProjectAccess:
     return ProjectAccess(
-        Project("project", "workspace", "Project", ""),
+        Project("project", "workspace", "Project", owner=OwnerReference(OwnerKind.USER, "owner")),
         LegacyWorkspace("workspace", LegacyWorkspaceKind.PERSONAL, "Personal", owner_id="owner"),
         MembershipRole.OWNER,
+        owner_scope=True,
     )
 
 

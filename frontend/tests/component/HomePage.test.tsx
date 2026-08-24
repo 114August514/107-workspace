@@ -38,6 +38,8 @@ const homeData: Home = {
       name: 'LJ 流体模拟',
       description: '',
       workspace_id: 'ws-1',
+      owner: { kind: 'user', id: 'u-1', display_name: 'student' },
+      visibility: 'owner_scope',
       status: 'active',
       created_by: 'u-1',
       created_at: '2026-08-15T10:00:00Z',
