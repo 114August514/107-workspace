@@ -141,6 +141,7 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
             "name": "cross-owner",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",
@@ -317,6 +318,7 @@ async def test_issue_39_fork_validates_assets_against_target_owner(
             "name": "source config",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_a,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",

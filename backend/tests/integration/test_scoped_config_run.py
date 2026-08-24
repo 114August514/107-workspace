@@ -59,7 +59,7 @@ async def test_real_values_freeze_and_secret_rotation(context, session) -> None:
         compute_request=ComputeRequest(1, 1, 1, 0, 1),
         scheduler=ResolvedSchedulerConfiguration("c", "a", "p", "q", 1, 1, 1, 0, 1),
         artifact_rules=(),
-        created_by="owner",
+        initiated_by_user_id="owner",
         created_at=datetime.now(UTC),
     )
     await repos.variables.upsert(Variable(project, "LEVEL", "after"))

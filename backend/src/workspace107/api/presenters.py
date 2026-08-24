@@ -266,7 +266,7 @@ def run_out(run: Run) -> s.RunOut:
         scheduler_job_id=run.scheduler_job_id,
         exit_code=run.exit_code,
         failure_reason=run.failure_reason,
-        created_by=run.created_by,
+        initiated_by_user_id=run.initiated_by_user_id,
         created_at=run.created_at,
         submitted_at=run.submitted_at,
         started_at=run.started_at,
@@ -320,7 +320,7 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
             s.ArtifactRuleModel(path=r.path, name=r.name, optional=r.optional)
             for r in snapshot.artifact_rules
         ],
-        created_by=snapshot.created_by,
+        initiated_by_user_id=snapshot.initiated_by_user_id,
         created_at=snapshot.created_at,
     )
 

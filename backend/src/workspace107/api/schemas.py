@@ -398,9 +398,10 @@ class RunConfigurationIn(Model):
     name: str = Field(min_length=1, max_length=128)
     command: str = Field(min_length=1)
     compute_plan_id: str
+    environment_version_id: str
+    """精确引用的 Environment Version；不再继承 Project 或 Workspace 默认环境。"""
     working_directory: str = "."
     description: str = ""
-    environment_version_id: str | None = None
     environment_variables: dict[str, str] = Field(default_factory=dict)
     input_bindings: list[InputBindingModel] = Field(default_factory=list)
     compute_request: ComputeRequestModel | None = None
@@ -414,7 +415,7 @@ class RunConfigurationOut(Model):
     description: str
     working_directory: str
     command: str
-    environment_version_id: str | None
+    environment_version_id: str
     environment_variables: dict[str, str]
     input_bindings: list[InputBindingModel]
     compute_plan_id: str
@@ -457,6 +458,7 @@ class RunOut(Model):
     id: str
     project_id: str
     workspace_id: str
+    """兼容定位字段：#37-#42 迁移窗口内保留，不再是任何权限判断的依据。"""
     snapshot_id: str
     source_run_configuration_id: str | None
     project_version_id: str
@@ -467,7 +469,8 @@ class RunOut(Model):
     scheduler_job_id: str | None
     exit_code: int | None
     failure_reason: str
-    created_by: str
+    initiated_by_user_id: str
+    """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
     created_at: datetime | None
     submitted_at: datetime | None
     started_at: datetime | None
@@ -532,7 +535,7 @@ class RunSnapshotOut(Model):
     compute_request: ComputeRequestModel
     scheduler: ResolvedSchedulerOut
     artifact_rules: list[ArtifactRuleModel]
-    created_by: str
+    initiated_by_user_id: str
     created_at: datetime
 
 

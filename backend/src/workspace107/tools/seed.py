@@ -420,6 +420,7 @@ async def seed_demo(
             name="默认运行",
             command="python train.py",
             compute_plan_id="plan_cpu_quick",
+            environment_version_id=DEMO_ENVIRONMENT_VERSION_ID,
             description="用 CPU 快速测试方案跑一遍训练脚本",
             environment_variables={"EPOCHS": "${{ vars.EPOCHS }}", "SEED": "42"},
             artifact_rules=[{"path": "outputs", "name": "训练结果", "optional": False}],

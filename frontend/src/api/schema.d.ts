@@ -2316,8 +2316,11 @@ export interface components {
             environment_variables?: {
                 [key: string]: string;
             };
-            /** Environment Version Id */
-            environment_version_id?: string | null;
+            /**
+             * Environment Version Id
+             * @description 精确引用的 Environment Version；不再继承 Project 或 Workspace 默认环境。
+             */
+            environment_version_id: string;
             /** Input Bindings */
             input_bindings?: components["schemas"]["InputBindingModel"][];
             /** Name */
@@ -2344,7 +2347,7 @@ export interface components {
                 [key: string]: string;
             };
             /** Environment Version Id */
-            environment_version_id: string | null;
+            environment_version_id: string;
             /** Id */
             id: string;
             /** Input Bindings */
@@ -2409,8 +2412,6 @@ export interface components {
         RunOut: {
             /** Created At */
             created_at: string | null;
-            /** Created By */
-            created_by: string;
             /** Exit Code */
             exit_code: number | null;
             /** Failure Reason */
@@ -2419,6 +2420,11 @@ export interface components {
             finished_at: string | null;
             /** Id */
             id: string;
+            /**
+             * Initiated By User Id
+             * @description 发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。
+             */
+            initiated_by_user_id: string;
             /** Name */
             name: string;
             /** Project Id */
@@ -2444,7 +2450,10 @@ export interface components {
             status: components["schemas"]["RunStatus"];
             /** Submitted At */
             submitted_at: string | null;
-            /** Workspace Id */
+            /**
+             * Workspace Id
+             * @description 兼容定位字段：#37-#42 迁移窗口内保留，不再是任何权限判断的依据。
+             */
             workspace_id: string;
         };
         /**
@@ -2464,8 +2473,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Created By */
-            created_by: string;
             /** Environment Image */
             environment_image: string;
             /** Environment Setup Command */
@@ -2478,6 +2485,8 @@ export interface components {
             environment_version_id: string;
             /** Id */
             id: string;
+            /** Initiated By User Id */
+            initiated_by_user_id: string;
             /** Input Bindings */
             input_bindings: components["schemas"]["InputBindingModel"][];
             /** Project Id */

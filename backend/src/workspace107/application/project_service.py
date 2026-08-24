@@ -576,15 +576,16 @@ class ProjectService:
                 source_version.project_id
             )
             for configuration in configurations:
-                configuration_environment_id = configuration.environment_version_id
+                # 运行方案精确引用 Environment Version（#41），逐个按目标 Owner 校验。
                 if (
-                    configuration_environment_id is not None
-                    and await environment_version_for_owner_use(
-                        self._repos, user_id, configuration_environment_id, owner
+                    await environment_version_for_owner_use(
+                        self._repos, user_id, configuration.environment_version_id, owner
                     )
                     is None
                 ):
-                    raise ObjectNotFound("Environment Version", configuration_environment_id)
+                    raise ObjectNotFound(
+                        "Environment Version", configuration.environment_version_id
+                    )
                 for binding in configuration.input_bindings:
                     if (
                         binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
@@ -594,6 +595,15 @@ class ProjectService:
                         is None
                     ):
                         raise ObjectNotFound("Shared Resource Version", binding.source_id)
+                    if binding.source_type is InputSourceType.ARTIFACT:
+                        artifact = await self._repos.artifacts.get(binding.source_id)
+                        artifact_project = (
+                            await self._repos.projects.get(artifact.project_id)
+                            if artifact is not None
+                            else None
+                        )
+                        if artifact_project is None or artifact_project.owner != owner:
+                            raise ObjectNotFound("Artifact", binding.source_id)
         else:
             # PUBLIC 读者：根本不进入受保护配置的读取路径。
             project_environment_id = None

@@ -123,8 +123,12 @@ async def use_default_environment(
     client: httpx.AsyncClient,
     *,
     headers: dict[str, str] | None = None,
-) -> str:
-    """Create the group's own default environment and return its compatibility ID."""
+) -> tuple[str, str]:
+    """Create the group's own environment; return (workspace_id, version_id).
+
+    运行方案必须精确引用 Environment Version（#41），所以测试既需要兼容锚点
+    id（group scope 断言），也需要 version_id（写进 run-configurations payload）。
+    """
     workspace_id = await ensure_user_group(client, headers=headers)
     environment_id = ids.new_id(ids.ENVIRONMENT)
     version_id = ids.new_id(ids.ENVIRONMENT_VERSION)
@@ -154,4 +158,4 @@ async def use_default_environment(
         headers=headers,
     )
     response.raise_for_status()
-    return workspace_id
+    return workspace_id, version_id

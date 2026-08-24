@@ -48,7 +48,7 @@ function makeConfig(id: string, name: string): RunConfiguration {
     compute_request: null,
     description: '',
     environment_variables: {},
-    environment_version_id: null,
+    environment_version_id: 'ev-1',
     artifact_rules: [],
     input_bindings: [],
   }
@@ -74,7 +74,7 @@ function makeRun(): Run {
     status: 'queued',
     project_id: 'prj-1',
     workspace_id: 'ws-1',
-    created_by: 'student',
+    initiated_by_user_id: 'student',
     created_at: '2026-08-12T10:00:00Z',
     started_at: null,
     finished_at: null,

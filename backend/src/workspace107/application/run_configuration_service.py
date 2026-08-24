@@ -32,9 +32,10 @@ class RunConfigurationInput:
     name: str
     command: str
     compute_plan_id: str
+    environment_version_id: str
+    """运行方案必须精确引用的 Environment Version（#41），没有继承语义。"""
     working_directory: str = "."
     description: str = ""
-    environment_version_id: str | None = None
     environment_variables: dict[str, str] | None = None
     input_bindings: list[dict[str, str]] | None = None
     compute_request: dict[str, int] | None = None
@@ -67,7 +68,7 @@ class RunConfigurationService:
             user_id, project_id, needs=Capability.RUN_CONFIGURATION_MANAGE
         )
         plan = await self._require_plan(data.compute_plan_id)
-        parsed = await self._build_fields(user_id, data, plan, access.workspace.owner_reference)
+        parsed = await self._build_fields(user_id, data, plan, access.project.owner)
 
         configuration = RunConfiguration(
             id=ids.new_id(ids.RUN_CONFIGURATION),
@@ -100,7 +101,7 @@ class RunConfigurationService:
             user_id, configuration.project_id, needs=Capability.RUN_CONFIGURATION_MANAGE
         )
         plan = await self._require_plan(data.compute_plan_id)
-        parsed = await self._build_fields(user_id, data, plan, access.workspace.owner_reference)
+        parsed = await self._build_fields(user_id, data, plan, access.project.owner)
 
         configuration.name = parsed.name
         configuration.description = data.description
@@ -157,14 +158,15 @@ class RunConfigurationService:
         if working_directory != ".":
             working_directory = normalize_path(working_directory)
 
-        environment_version_id: str | None = None
-        if data.environment_version_id:
-            version = await environment_version_for_owner_use(
-                self._repos, user_id, data.environment_version_id, project_owner
-            )
-            if version is None:
-                raise ObjectNotFound("Environment Version", data.environment_version_id)
-            environment_version_id = version.id
+        # 环境在保存时就确定（#41、GR-205）：必须精确引用，不存在任何继承回退。
+        if not data.environment_version_id.strip():
+            raise ValidationFailed("运行方案必须指定 Environment Version")
+        version = await environment_version_for_owner_use(
+            self._repos, user_id, data.environment_version_id, project_owner
+        )
+        if version is None:
+            raise ObjectNotFound("Environment Version", data.environment_version_id)
+        environment_version_id = version.id
 
         env: dict[str, EnvValue] = parse_env_map(data.environment_variables or {})
 
@@ -183,14 +185,25 @@ class RunConfigurationService:
                 access_path=raw["access_path"],
                 source_subpath=raw.get("source_subpath", ""),
             )
-            if (
-                binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
-                and await shared_resource_version_for_owner_use(
-                    self._repos, user_id, binding.source_id, project_owner
+            if binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
+                if (
+                    await shared_resource_version_for_owner_use(
+                        self._repos, user_id, binding.source_id, project_owner
+                    )
+                    is None
+                ):
+                    raise ObjectNotFound("Shared Resource Version", binding.source_id)
+            else:
+                # Artifact 直接输入仅限同一 Project Owner（GR-405）；
+                # 跨 Owner 必须先发布成 Shared Resource 并走 USE Grant。
+                artifact = await self._repos.artifacts.get(binding.source_id)
+                source_project = (
+                    await self._repos.projects.get(artifact.project_id)
+                    if artifact is not None
+                    else None
                 )
-                is None
-            ):
-                raise ObjectNotFound("Shared Resource Version", binding.source_id)
+                if source_project is None or source_project.owner != project_owner:
+                    raise ObjectNotFound("Artifact", binding.source_id)
             if binding.access_path in seen_paths:
                 raise ConflictError(f"输入访问路径 {binding.access_path} 重复")
             seen_paths.add(binding.access_path)
@@ -233,7 +246,7 @@ class _ParsedConfiguration:
     name: str
     command: str
     working_directory: str
-    environment_version_id: str | None
+    environment_version_id: str
     environment_variables: dict[str, EnvValue]
     input_bindings: tuple[InputBinding, ...]
     compute_request: ComputeRequest | None

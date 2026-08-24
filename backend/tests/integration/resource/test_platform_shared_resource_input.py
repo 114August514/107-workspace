@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import create_project_with_version
+from tests.helpers import create_project_with_version, use_default_environment
 from workspace107.infrastructure.db.tables import (
     SharedResourceRow,
     SharedResourceVersionFileRow,
@@ -90,6 +90,7 @@ async def test_platform_shared_resource_作_run_输入被挡在运行方案保�
 ) -> None:
     """引用平台组 SR 版本时保存 Run Configuration 即按不存在拒绝。"""
     version_id = await _seed_platform_resource_with_version(session)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
 
     project = await create_project_with_version(
         client, name="引用平台资源", files={"main.py": "pass"}, headers=ALICE
@@ -100,6 +101,7 @@ async def test_platform_shared_resource_作_run_输入被挡在运行方案保�
             "name": "消费平台资源",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",
