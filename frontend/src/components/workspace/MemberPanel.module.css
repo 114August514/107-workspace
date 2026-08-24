@@ -107,6 +107,7 @@
   display: inline-flex;
   min-height: var(--control-medium-size);
   align-items: center;
+  padding-inline: var(--control-medium-paddingInline-normal);
   font-size: var(--text-body-size-medium);
   line-height: var(--text-body-lineHeight-medium);
 }
