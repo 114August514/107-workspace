@@ -13,7 +13,9 @@ class UserGroupCapability(StrEnum):
     USER_GROUP_VIEW = "user_group.view"
     USER_GROUP_UPDATE = "user_group.update"
     MEMBER_VIEW = "member.view"
-    MEMBER_MANAGE = "member.manage"
+    MEMBER_INVITE = "member.invite"
+    MEMBER_REMOVE = "member.remove"
+    MEMBER_ROLE_MANAGE = "member.role.manage"
     OWNERSHIP_TRANSFER = "ownership.transfer"
 
 
@@ -26,11 +28,16 @@ _USER_GROUP_VIEW: frozenset[UserGroupCapability] = frozenset(
 
 _USER_GROUP_ADMINISTER: frozenset[UserGroupCapability] = _USER_GROUP_VIEW | {
     UserGroupCapability.USER_GROUP_UPDATE,
-    UserGroupCapability.MEMBER_MANAGE,
+    UserGroupCapability.MEMBER_INVITE,
+    UserGroupCapability.MEMBER_REMOVE,
 }
 
 USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability]] = {
-    MembershipRole.OWNER: _USER_GROUP_ADMINISTER | {UserGroupCapability.OWNERSHIP_TRANSFER},
+    MembershipRole.OWNER: _USER_GROUP_ADMINISTER
+    | {
+        UserGroupCapability.MEMBER_ROLE_MANAGE,
+        UserGroupCapability.OWNERSHIP_TRANSFER,
+    },
     MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
     MembershipRole.MEMBER: _USER_GROUP_VIEW,
 }
@@ -54,8 +61,9 @@ class Capability(StrEnum):
 
     # -- 成员 ------------------------------------------------------------
     MEMBER_VIEW = "member.view"
-    MEMBER_MANAGE = "member.manage"
-    """邀请、移除、修改角色。"""
+    MEMBER_INVITE = "member.invite"
+    MEMBER_REMOVE = "member.remove"
+    MEMBER_ROLE_MANAGE = "member.role.manage"
     OWNERSHIP_TRANSFER = "ownership.transfer"
 
     # -- 配置 ------------------------------------------------------------
@@ -115,17 +123,21 @@ _CONTRIBUTE: frozenset[Capability] = _VIEW_ONLY | {
     Capability.SHARED_RESOURCE_VERSION_CREATE,
 }
 
-# 管空间需要的能力：改设置、管人、管配置。
+# 管空间需要的能力：改设置、邀请和移除普通成员、管配置。
 _ADMINISTER: frozenset[Capability] = _CONTRIBUTE | {
     Capability.USER_GROUP_UPDATE,
-    Capability.MEMBER_MANAGE,
+    Capability.MEMBER_INVITE,
+    Capability.MEMBER_REMOVE,
     Capability.CONFIG_MANAGE,
     Capability.GRANT_MANAGE,
 }
 
 ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
-    # Owner 比 Admin 只多一样：转让所有权。这件事不可逆，只能由所有者本人做。
-    MembershipRole.OWNER: _ADMINISTER | {Capability.OWNERSHIP_TRANSFER},
+    MembershipRole.OWNER: _ADMINISTER
+    | {
+        Capability.MEMBER_ROLE_MANAGE,
+        Capability.OWNERSHIP_TRANSFER,
+    },
     MembershipRole.ADMIN: _ADMINISTER,
     MembershipRole.MEMBER: _CONTRIBUTE,
 }
@@ -135,7 +147,9 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.USER_GROUP_VIEW: "查看 User Group",
     Capability.USER_GROUP_UPDATE: "修改 User Group 设置",
     Capability.MEMBER_VIEW: "查看成员",
-    Capability.MEMBER_MANAGE: "管理成员",
+    Capability.MEMBER_INVITE: "邀请成员",
+    Capability.MEMBER_REMOVE: "移除成员",
+    Capability.MEMBER_ROLE_MANAGE: "修改成员角色",
     Capability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
     Capability.CONFIG_VIEW: "查看配置",
     Capability.CONFIG_MANAGE: "管理配置变量与 Secret",
@@ -157,7 +171,9 @@ USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {
     UserGroupCapability.USER_GROUP_VIEW: "查看 User Group",
     UserGroupCapability.USER_GROUP_UPDATE: "修改 User Group 设置",
     UserGroupCapability.MEMBER_VIEW: "查看成员",
-    UserGroupCapability.MEMBER_MANAGE: "管理成员",
+    UserGroupCapability.MEMBER_INVITE: "邀请成员",
+    UserGroupCapability.MEMBER_REMOVE: "移除成员",
+    UserGroupCapability.MEMBER_ROLE_MANAGE: "修改成员角色",
     UserGroupCapability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
 }
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from ...domain.enums import MembershipRole
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, ServicesDep
@@ -76,9 +75,7 @@ async def invite_member(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.MemberOut:
-    await services.user_groups.invite_member(
-        user.id, user_group_id, payload.username, MembershipRole(payload.role)
-    )
+    await services.user_groups.invite_member(user.id, user_group_id, payload.username)
     views = await services.user_groups.list_members(user.id, user_group_id)
     return p.member_out(next(view for view in views if view.user.username == payload.username))
 

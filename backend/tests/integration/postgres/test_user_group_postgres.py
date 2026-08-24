@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from workspace107.api.deps import build_services
 from workspace107.config import Settings, get_settings
-from workspace107.domain.enums import MembershipRole
 from workspace107.domain.errors import ConflictError, ObjectNotFound, PermissionDenied
 from workspace107.main import build_context
 
@@ -258,9 +257,7 @@ async def test_postgresql_owner_race_serializes_transfer_and_removal(tmp_path: P
             alice = await services.identity.ensure_user("race_alice", "Race Alice")
             bob = await services.identity.ensure_user("race_bob", "Race Bob")
             group = await services.user_groups.create(alice.id, "Race Group")
-            await services.user_groups.invite_member(
-                alice.id, group.user_group.id, bob.username, MembershipRole.ADMIN
-            )
+            await services.user_groups.invite_member(alice.id, group.user_group.id, bob.username)
             await services.user_groups.respond_to_invitation(
                 bob.id, group.user_group.id, accept=True
             )

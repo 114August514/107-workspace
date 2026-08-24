@@ -91,6 +91,7 @@ def member_out(view: MemberView) -> s.MemberOut:
         display_name=view.user.display_name,
         role=view.membership.role.value,
         status=view.membership.status.value,
+        capabilities=sorted(view.capabilities),
     )
 
 
