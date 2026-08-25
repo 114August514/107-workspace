@@ -1,4 +1,4 @@
-import { Button, Form, Input, Popconfirm, Select, Space, Table, Tag, message } from 'antd'
+import { Button, Form, Input, Popconfirm, Space, Table, Tag, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useState } from 'react'
 
@@ -12,12 +12,9 @@ import { AsyncSection } from '../common/AsyncSection'
 import { RoleTag } from '../common/RoleTag'
 
 /**
- * 可以指派的角色。
- *
- * Owner 不在其中：换所有者是一次明确的交接，走转让流程，
- * 不能靠改角色造出第二个所有者。
+ * Membership roles are static identity information in the table. The server
+ * projects contextual governance capabilities for each target member.
  */
-const ASSIGNABLE_ROLES = ['admin', 'member'] as const satisfies readonly MembershipRole[]
 
 interface Props {
   userGroup: UserGroup
@@ -25,15 +22,16 @@ interface Props {
 
 export function MemberPanel({ userGroup }: Props) {
   const members = useAsync<Member[]>(() => api.listMembers(userGroup.id), [userGroup.id])
-  const [form] = Form.useForm<{ username: string; role: MembershipRole }>()
+  const [form] = Form.useForm<{ username: string }>()
   const [inviting, setInviting] = useState(false)
-  const canManage = can(userGroup, 'member.manage')
+  const canInvite = can(userGroup, 'member.invite')
+  const canGovernMembers = can(userGroup, 'member.remove') || can(userGroup, 'member.role.manage')
 
   const invite = async () => {
     const values = await form.validateFields()
     setInviting(true)
     try {
-      await api.inviteMember(userGroup.id, values.username, values.role ?? 'member')
+      await api.inviteMember(userGroup.id, values.username)
       message.success(`已向 ${values.username} 发送邀请`)
       form.resetFields()
       members.reload()
@@ -71,23 +69,7 @@ export function MemberPanel({ userGroup }: Props) {
       title: '角色',
       dataIndex: field<Member>('role'),
       width: 160,
-      render: (role: MembershipRole, member) => {
-        if (!canManage || role === 'owner') {
-          return <RoleTag role={role} />
-        }
-        return (
-          <Select
-            size="small"
-            value={role}
-            style={{ width: 120 }}
-            onChange={(next) => changeRole(member, next)}
-            options={ASSIGNABLE_ROLES.map((value) => ({
-              value,
-              label: roleLabel(value),
-            }))}
-          />
-        )
-      },
+      render: (role: MembershipRole) => <RoleTag role={role} />,
     },
     {
       title: '状态',
@@ -98,46 +80,54 @@ export function MemberPanel({ userGroup }: Props) {
     },
   ]
 
-  if (canManage) {
+  if (canGovernMembers) {
     columns.push({
       title: '操作',
-      width: 100,
-      render: (_, member) =>
-        member.role === 'owner' ? null : (
-          <Popconfirm
-            title={`移除 ${member.username}？`}
-            description="移除后该成员立刻失去这个 User Group 的访问权。"
-            okText="移除"
-            cancelText="取消"
-            onConfirm={() => remove(member)}
-          >
-            <Button type="link" danger size="small">
-              移除
-            </Button>
-          </Popconfirm>
-        ),
+      width: 180,
+      render: (_, member) => {
+        const canChangeRole = can(member, 'member.role.manage')
+        const canRemove = can(member, 'member.remove')
+        if (!canChangeRole && !canRemove) return null
+        return (
+          <Space size="small">
+            {canChangeRole && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => changeRole(member, member.role === 'admin' ? 'member' : 'admin')}
+              >
+                {member.role === 'admin' ? '设为普通成员' : '设为管理员'}
+              </Button>
+            )}
+            {canRemove && (
+              <Popconfirm
+                title={`移除 ${member.username}？`}
+                description="移除后该成员立刻失去这个 User Group 的访问权。"
+                okText="移除"
+                cancelText="取消"
+                onConfirm={() => remove(member)}
+              >
+                <Button type="link" danger size="small">
+                  移除
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        )
+      },
     })
   }
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      {canManage && (
-        <Form form={form} layout="inline" initialValues={{ role: 'member' }}>
+      {canInvite && (
+        <Form form={form} layout="inline">
           <Form.Item
             name="username"
             rules={[{ required: true, message: '请填写用户名' }]}
             style={{ minWidth: 220 }}
           >
             <Input placeholder="要邀请的用户名" />
-          </Form.Item>
-          <Form.Item name="role">
-            <Select
-              style={{ width: 120 }}
-              options={ASSIGNABLE_ROLES.map((value) => ({
-                value,
-                label: roleLabel(value),
-              }))}
-            />
           </Form.Item>
           <Form.Item>
             <Button type="primary" onClick={invite} loading={inviting}>

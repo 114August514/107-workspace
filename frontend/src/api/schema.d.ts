@@ -1548,7 +1548,7 @@ export interface components {
          *     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
          * @enum {string}
          */
-        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
+        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
         /**
          * ChangeKind
          * @description 文件在两次快照之间的变化类型。
@@ -1920,13 +1920,13 @@ export interface components {
         LogStream: "stdout" | "stderr";
         /** MemberInviteIn */
         MemberInviteIn: {
-            /** @default member */
-            role: components["schemas"]["MembershipRole"];
             /** Username */
             username: string;
         };
         /** MemberOut */
         MemberOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["UserGroupCapability"][];
             /** Display Name */
             display_name: string;
             role: components["schemas"]["MembershipRole"];
@@ -2641,7 +2641,7 @@ export interface components {
          * @description Stable public capabilities for User Group and Membership governance.
          * @enum {string}
          */
-        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer";
+        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer";
         /** UserGroupCreateIn */
         UserGroupCreateIn: {
             /**
