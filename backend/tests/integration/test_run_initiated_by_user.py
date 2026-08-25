@@ -101,7 +101,7 @@ async def _join_group(client: httpx.AsyncClient, group_id: str) -> None:
     await client.get("/api/v1/me", headers=BOB)
     response = await client.post(
         f"/api/v1/user-groups/{group_id}/members",
-        json={"username": "bob", "role": "member"},
+        json={"username": "bob"},
         headers=ALICE,
     )
     response.raise_for_status()

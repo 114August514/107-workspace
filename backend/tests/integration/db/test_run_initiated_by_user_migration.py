@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,9 @@ from alembic import command
 from alembic.config import Config
 
 from workspace107.config import get_settings
+from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfiguration
+from workspace107.domain.run_snapshot import RunSnapshot, build_snapshot
+from workspace107.domain.secrets import ResolvedEnv
 
 PREVIOUS_REVISION = "f36a1b2c3d4e"
 RUN_INITIATED_BY_REVISION = "a41b9c3e7d2f"
@@ -50,6 +55,48 @@ def _assert_integrity_error(
         connection.execute("RELEASE expected_integrity_error")
 
 
+def _legacy_snapshot_payload() -> dict[str, object]:
+    """构造一份迁移前格式的 Snapshot payload（identity key 还是 created_by）。
+
+    先用当前代码 build 一份完整 payload 保证形状保真，再把 identity key
+    改回旧名——这正是 upgrade 要修复的那一列半迁移数据。
+    """
+    snapshot = build_snapshot(
+        snapshot_id="snap_1",
+        project_id="prj_lab",
+        project_version_id="pv_1",
+        source_run_configuration_id="cfg_exact",
+        working_directory=".",
+        command="echo ok",
+        environment_version_id="ev_demo_python_312_2026",
+        environment_image="python:3.12-slim",
+        environment_setup_command="",
+        resolved_env=ResolvedEnv(literals={"EPOCHS": "5"}, secret_refs={}),
+        input_bindings=(),
+        compute_plan_id="plan_cpu_quick",
+        compute_request=ComputeRequest(
+            nodes=1, cpus=1, memory_mb=1024, gpus=0, time_limit_minutes=5
+        ),
+        scheduler=ResolvedSchedulerConfiguration(
+            cluster="107",
+            account="demo",
+            partition="debug",
+            qos="normal",
+            nodes=1,
+            cpus=1,
+            memory_mb=1024,
+            gpus=0,
+            time_limit_minutes=5,
+        ),
+        artifact_rules=(),
+        initiated_by_user_id="usr_alice",
+        created_at=datetime(2026, 8, 24, 0, 0, tzinfo=UTC),
+    )
+    payload = snapshot.to_payload()
+    payload["created_by"] = payload.pop("initiated_by_user_id")
+    return payload
+
+
 def _seed_predecessor(connection: sqlite3.Connection) -> None:
     """Seed pre-#41 schema: runs.created_by + nullable config env + workspace idempotency."""
     connection.execute("PRAGMA foreign_keys = ON")
@@ -78,7 +125,12 @@ def _seed_predecessor(connection: sqlite3.Connection) -> None:
         "'owner_scope', NULL, NULL, 'usr_alice', ?, ?)",
         (NOW, NOW),
     )
-    connection.execute("INSERT INTO run_snapshots (id, payload) VALUES ('snap_1', '{}')")
+    connection.execute(
+        "INSERT INTO run_snapshots (id, payload) VALUES ('snap_1', ?)",
+        (json.dumps(_legacy_snapshot_payload()),),
+    )
+    # 没有 identity key 的 payload：key rename 必须原样跳过，不能崩。
+    connection.execute("INSERT INTO run_snapshots (id, payload) VALUES ('snap_empty', '{}')")
     connection.executemany(
         "INSERT INTO run_configurations "
         "(id, project_id, name, description, working_directory, command, environment_version_id, "
@@ -126,6 +178,31 @@ def _assert_initiated_by_data(connection: sqlite3.Connection) -> None:
     assert _rows(connection, "SELECT * FROM idempotency_keys") == []
 
 
+def _snapshot_payload(connection: sqlite3.Connection, snapshot_id: str) -> dict[str, object]:
+    ((raw,),) = _rows(connection, f"SELECT payload FROM run_snapshots WHERE id='{snapshot_id}'")
+    return json.loads(str(raw))
+
+
+def _assert_migrated_snapshot(connection: sqlite3.Connection) -> None:
+    """升级后：identity key 已改名，且新代码能直接反序列化整份 Snapshot。"""
+    payload = _snapshot_payload(connection, "snap_1")
+    assert payload["initiated_by_user_id"] == "usr_alice"
+    assert "created_by" not in payload
+    restored = RunSnapshot.from_payload("snap_1", payload)
+    assert restored.initiated_by_user_id == "usr_alice"
+    assert restored.command == "echo ok"
+    # 没有 identity key 的行原样保留，rename 是安全的 no-op。
+    assert _snapshot_payload(connection, "snap_empty") == {}
+
+
+def _assert_legacy_snapshot(connection: sqlite3.Connection) -> None:
+    """降级后：identity key 逆变换回旧名，旧代码的 from_payload 读得回来。"""
+    payload = _snapshot_payload(connection, "snap_1")
+    assert payload["created_by"] == "usr_alice"
+    assert "initiated_by_user_id" not in payload
+    assert _snapshot_payload(connection, "snap_empty") == {}
+
+
 def test_issue_41_run_initiated_by_user_migration_round_trips(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -144,6 +221,7 @@ def test_issue_41_run_initiated_by_user_migration_round_trips(
             connection.execute("PRAGMA foreign_keys = ON")
             _assert_initiated_by_schema(connection)
             _assert_initiated_by_data(connection)
+            _assert_migrated_snapshot(connection)
 
             # NOT NULL：运行方案不能再不指定 Environment Version。
             _assert_integrity_error(
@@ -194,10 +272,12 @@ def test_issue_41_run_initiated_by_user_migration_round_trips(
                 connection,
                 "SELECT id, environment_version_id FROM run_configurations",
             ) == [("cfg_exact", "ev_demo_python_312_2026")]
+            _assert_legacy_snapshot(connection)
 
         command.upgrade(config, RUN_INITIATED_BY_REVISION)
         with sqlite3.connect(database) as connection:
             _assert_initiated_by_schema(connection)
             _assert_initiated_by_data(connection)
+            _assert_migrated_snapshot(connection)
     finally:
         get_settings.cache_clear()
