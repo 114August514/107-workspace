@@ -545,6 +545,8 @@ class RunDetailOut(Model):
     snapshot: RunSnapshotOut
     events: list[RunEventOut]
     artifacts: list[ArtifactOut]
+    capabilities: list[Capability]
+    """当前 User 对这个 Run 的稳定 capability；前端仅用于 action visibility。"""
 
 
 class LogChunkOut(Model):

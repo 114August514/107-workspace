@@ -34,3 +34,7 @@ async def test_user_group_and_legacy_capability_contracts_are_separate(
     assert "project.create" in models["Capability"]["enum"]
     assert "member.manage" not in models["Capability"]["enum"]
     assert "run.submit" in models["Capability"]["enum"]
+    assert models["RunDetailOut"]["properties"]["capabilities"]["items"] == {
+        "$ref": "#/components/schemas/Capability"
+    }
+    assert "capabilities" in models["RunDetailOut"]["required"]

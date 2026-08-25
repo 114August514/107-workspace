@@ -752,7 +752,7 @@ export interface paths {
         };
         /**
          * 获取 Run 详情
-         * @description 仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。
+         * @description 返回当前 User 可查看的 Run、不可变快照、事件、产物与操作 capability。
          */
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;
@@ -2363,6 +2363,11 @@ export interface components {
         RunDetailOut: {
             /** Artifacts */
             artifacts: components["schemas"]["ArtifactOut"][];
+            /**
+             * Capabilities
+             * @description 当前 User 对这个 Run 的稳定 capability；前端仅用于 action visibility。
+             */
+            capabilities: components["schemas"]["Capability"][];
             /** Events */
             events: components["schemas"]["RunEventOut"][];
             run: components["schemas"]["RunOut"];

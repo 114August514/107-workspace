@@ -89,13 +89,14 @@ async def create_run(
 
 @router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
 async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
-    """仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。"""
+    """返回当前 User 可查看的 Run、不可变快照、事件、产物与操作 capability。"""
     detail = await services.runs.get_detail(user.id, run_id)
     return s.RunDetailOut(
         run=p.run_out(detail.run),
         snapshot=p.snapshot_out(detail.snapshot),
         events=[p.run_event_out(e) for e in detail.events],
         artifacts=[p.artifact_out(a) for a in detail.artifacts],
+        capabilities=sorted(detail.capabilities),
     )
 
 

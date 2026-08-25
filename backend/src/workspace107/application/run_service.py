@@ -119,6 +119,7 @@ class RunDetail:
     snapshot: RunSnapshot
     events: list[RunEvent]
     artifacts: list[Artifact]
+    capabilities: frozenset[Capability]
 
 
 class RunService:
@@ -163,6 +164,7 @@ class RunService:
             snapshot=snapshot,
             events=await self._repos.run_events.list_for_run(run_id),
             artifacts=await self._repos.artifacts.list_for_run(run_id),
+            capabilities=access.capabilities,
         )
 
     async def read_logs(self, user_id: str, run_id: str) -> list[RunLogChunk]:
