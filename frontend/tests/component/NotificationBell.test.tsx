@@ -20,7 +20,6 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
     created_at: '2026-08-15T08:00:00Z',
     target_id: 'run-1',
     target_type: 'run',
-    workspace_id: 'ws-1',
     ...overrides,
   }
 }

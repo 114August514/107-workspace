@@ -26,13 +26,15 @@ const homeData: Home = {
       capabilities: [],
     },
   ],
-  personal_resource_context_id: null,
+  personal_execution_context: {
+    owner: { kind: 'user', id: 'u-1', display_name: '同学' },
+    entitlements: [],
+  },
   recent_projects: [
     {
       id: 'p-1',
       name: 'LJ 流体模拟',
       description: '',
-      workspace_id: 'grp-1',
       owner: { kind: 'user_group', id: 'grp-1', display_name: '计算物理课题组' },
       visibility: 'owner_scope',
       status: 'active',
@@ -57,7 +59,6 @@ const manyHomeItems: Home = {
     ...homeData.recent_projects[0]!,
     id: `p-${index + 1}`,
     name: `Project ${index + 1}`,
-    workspace_id: `grp-${index + 1}`,
   })),
 }
 
@@ -71,7 +72,6 @@ const contextGuideCases = [
     '/user-groups/grp-1',
     '这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。',
   ],
-  ['/workspaces/ws-1', '这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。'],
   [
     '/projects/p-1',
     '当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。',

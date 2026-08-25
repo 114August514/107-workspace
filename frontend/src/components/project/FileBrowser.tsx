@@ -16,7 +16,7 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { ProjectFile, LegacyWorkspaceContext } from '../../api/types'
+import type { Project, ProjectFile } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { formatBytes, formatRelative } from '../../utils/format'
@@ -24,14 +24,14 @@ import { AsyncSection } from '../common/AsyncSection'
 
 interface Props {
   projectId: string
-  /** 用来判断当前用户能不能改内容。undefined 表示还没加载出来，一律按不能处理。 */
-  workspace: LegacyWorkspaceContext | undefined
+  /** Current Project authority; undefined while the detail request is pending. */
+  access: Project | undefined
   onChanged: () => void
 }
 
 /** Project Working Tree：可编辑的当前文件状态。 */
-export function FileBrowser({ projectId, workspace, onChanged }: Props) {
-  const canWrite = can(workspace, 'project.content.write')
+export function FileBrowser({ projectId, access, onChanged }: Props) {
+  const canWrite = can(access, 'project.content.write')
   const files = useAsync<ProjectFile[]>(() => api.listFiles(projectId), [projectId])
   const [editing, setEditing] = useState<{
     path: string

@@ -22,13 +22,19 @@ function makeUserGroup(index: number): UserGroup {
   }
 }
 
-function makeProject(index: number, workspaceId = `group-${index}`): Project {
+function makeProject(
+  index: number,
+  owner: Project['owner'] = {
+    kind: 'user_group',
+    id: `group-${index}`,
+    display_name: `Group ${index}`,
+  },
+): Project {
   return {
     id: `project-${index}`,
     name: `Project ${index}`,
     description: '',
-    workspace_id: workspaceId,
-    owner: { kind: 'user_group', id: workspaceId, display_name: `Group ${index}` },
+    owner,
     visibility: 'owner_scope',
     status: 'active',
     created_by: 'user-1',
@@ -42,16 +48,17 @@ function makeProject(index: number, workspaceId = `group-${index}`): Project {
 function makeHome({
   userGroupCount = 7,
   projectCount = 7,
-  personalResourceContextId = 'personal-1',
 }: {
   userGroupCount?: number
   projectCount?: number
-  personalResourceContextId?: string | null
 } = {}): Home {
   return {
     user: { id: 'user-1', username: 'student', display_name: '同学' },
     user_groups: Array.from({ length: userGroupCount }, (_, index) => makeUserGroup(index + 1)),
-    personal_resource_context_id: personalResourceContextId,
+    personal_execution_context: {
+      owner: { kind: 'user', id: 'user-1', display_name: '同学' },
+      entitlements: [],
+    },
     recent_projects: Array.from({ length: projectCount }, (_, index) => makeProject(index + 1)),
     recent_runs: [],
   }
@@ -137,28 +144,22 @@ describe('GlobalNavigationDrawer', () => {
     expect(within(dialog).queryByRole('button', { name: /Project/ })).toBeNull()
   })
 
-  it('只在后端提供个人资源上下文时显示入口，并标记唯一的当前 route', async () => {
+  it('Project 次级文案直接使用显式 Owner，并标记当前 route', async () => {
     const home = makeHome({ projectCount: 3 })
-    home.recent_projects[1] = makeProject(2, 'personal-1')
+    home.recent_projects[1] = makeProject(2, {
+      kind: 'user',
+      id: 'user-1',
+      display_name: '同学',
+    })
     renderDrawer(home, '/projects/project-2')
 
     const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
-    expect(within(dialog).getByRole('link', { name: '个人资源' })).toHaveAttribute(
-      'href',
-      '/workspaces/personal-1',
-    )
+    expect(within(dialog).queryByRole('link', { name: '个人资源' })).toBeNull()
     const personalProject = within(dialog).getByRole('link', { name: /Project 2/ })
-    expect(personalProject).toHaveTextContent('个人资源')
+    expect(personalProject).toHaveTextContent('同学')
     const currentLinks = within(dialog)
       .getAllByRole('link')
       .filter((link) => link.getAttribute('aria-current') === 'page')
     expect(currentLinks).toEqual([personalProject])
-  })
-
-  it('没有个人资源上下文时不显示个人资源入口', async () => {
-    renderDrawer(makeHome({ personalResourceContextId: null }))
-
-    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
-    expect(within(dialog).queryByRole('link', { name: '个人资源' })).toBeNull()
   })
 })
