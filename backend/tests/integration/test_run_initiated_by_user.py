@@ -20,11 +20,20 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import grant_test_entitlement, wait_for_run
+from workspace107.application.run_service import RunDraft
 from workspace107.domain import ids
+from workspace107.domain.config_scope import ConfigScope
+from workspace107.domain.errors import SchedulerError
+from workspace107.infrastructure.db.repositories import SqlRepositories
+from workspace107.infrastructure.db.secret_vault import DatabaseSecretVault
 from workspace107.infrastructure.db.tables import (
     ArtifactRow,
+    ComputePlanRow,
     EnvironmentRow,
     EnvironmentVersionRow,
+    ProjectRow,
+    SharedResourceRow,
+    SharedResourceVersionFileRow,
 )
 
 ALICE = {"X-User": "alice"}
@@ -358,13 +367,159 @@ async def test_cross_owner_environment_grant_enables_exact_configuration_use(
     assert result["problems"] == []
 
 
+async def test_execution_context_revalidates_current_identity_and_exact_references(
+    client: httpx.AsyncClient, session: AsyncSession, services, context, monkeypatch
+) -> None:
+    group_a = await _create_group(client, "Execution Context Group A")
+    group_b = await _create_group(client, "Execution Context Group B")
+    _, environment_version_id = await _create_environment(session, owner_user_group_id=group_a)
+    await grant_test_entitlement(session, "alice")
+    project = await _create_project(client, group_a, name="execution context project")
+    alice_id = await _get_user_id(client, ALICE)
+    bob_id = await _get_user_id(client, BOB)
+
+    secret = await client.put(
+        f"/api/v1/projects/{project['id']}/secrets",
+        json={"name": "TOKEN", "value": "current-token"},
+        headers=ALICE,
+    )
+    assert secret.status_code == 204, secret.text
+
+    resource = await client.post(
+        "/api/v1/shared-resources",
+        json={
+            "name": "execution context input",
+            "owner": {"kind": "user_group", "id": group_a},
+        },
+        headers=ALICE,
+    )
+    resource.raise_for_status()
+    resource_version = await client.post(
+        f"/api/v1/shared-resources/{resource.json()['id']}/versions",
+        params={"prefix": ""},
+        data={"description": "v1"},
+        files={"files": ("train/data.txt", b"data", "text/plain")},
+        headers=ALICE,
+    )
+    resource_version.raise_for_status()
+    shared_version_id = resource_version.json()["id"]
+
+    configuration = await _create_configuration(
+        client,
+        project,
+        environment_version_id,
+        input_bindings=[
+            {
+                "source_type": "shared_resource_version",
+                "source_id": shared_version_id,
+                "access_path": "/inputs/train",
+                "source_subpath": "train",
+            }
+        ],
+        environment_variables={"TOKEN": "${{ secrets.TOKEN }}"},
+    )
+    created = await client.post(
+        f"/api/v1/projects/{project['id']}/runs",
+        json={"run_configuration_id": configuration["id"]},
+        headers=ALICE,
+    )
+    created.raise_for_status()
+    await wait_for_run(client, created.json()["id"], headers=ALICE)
+
+    detail = await services.runs.get_detail(alice_id, created.json()["id"])
+    repos = SqlRepositories(session)
+    version = await repos.project_versions.get(detail.snapshot.project_version_id)
+    assert version is not None
+    access, _ = await services.runs.validate_execution_context(detail.run, detail.snapshot)
+
+    prepare_calls: list[str] = []
+    scheduler_calls: list[str] = []
+
+    async def record_prepare(run_id: str, **_kwargs):
+        prepare_calls.append(run_id)
+        raise OSError("storage preparation must not be reached")
+
+    async def record_submit(submission):
+        scheduler_calls.append(submission.run_id)
+        raise SchedulerError("scheduler submission must not be reached")
+
+    monkeypatch.setattr(context.storage, "prepare_run_directory", record_prepare)
+    monkeypatch.setattr(context.scheduler, "submit", record_submit)
+
+    async def assert_execution_rejected(message: str) -> None:
+        prepare_count = len(prepare_calls)
+        scheduler_count = len(scheduler_calls)
+        await services.runs._submit(detail.run, detail.snapshot, version, access)
+        assert detail.run.status.value == "submit_failed"
+        assert message in detail.run.failure_reason
+        assert len(prepare_calls) == prepare_count
+        assert len(scheduler_calls) == scheduler_count
+
+    environment = await session.get(EnvironmentVersionRow, environment_version_id)
+    assert environment is not None
+    environment.available = False
+    await session.flush()
+    await assert_execution_rejected("当前不可用")
+    environment.available = True
+    await session.flush()
+    environment_asset = await session.get(EnvironmentRow, environment.environment_id)
+    assert environment_asset is not None
+    environment_asset.owner_user_group_id = group_b
+    await session.flush()
+    await assert_execution_rejected("运行环境版本")
+    environment_asset.owner_user_group_id = group_a
+    await session.flush()
+
+    shared_resource = await session.get(SharedResourceRow, resource.json()["id"])
+    assert shared_resource is not None
+    shared_resource.owner_user_group_id = group_b
+    await session.flush()
+    await assert_execution_rejected("Shared Resource Version")
+    shared_resource.owner_user_group_id = group_a
+    await session.flush()
+
+    project_row = await session.get(ProjectRow, project["id"])
+    assert project_row is not None
+    project_row.owner_user_group_id = None
+    project_row.owner_user_id = bob_id
+    await session.flush()
+    await assert_execution_rejected("Run 发起 User")
+    project_row.owner_user_id = None
+    project_row.owner_user_group_id = group_a
+    await session.flush()
+
+    shared_file = await session.get(
+        SharedResourceVersionFileRow,
+        (shared_version_id, "train/data.txt"),
+    )
+    assert shared_file is not None
+    shared_file_size = shared_file.size
+    shared_file_hash = shared_file.content_hash
+    await session.delete(shared_file)
+    await session.flush()
+    await assert_execution_rejected("子路径")
+    session.add(
+        SharedResourceVersionFileRow(
+            version_id=shared_version_id,
+            path="train/data.txt",
+            size=shared_file_size,
+            content_hash=shared_file_hash,
+        )
+    )
+    await session.flush()
+
+    await DatabaseSecretVault(session).delete_secret(ConfigScope.project(project["id"]), "TOKEN")
+    await session.flush()
+    await assert_execution_rejected("exact Secret")
+
+
 # ---------------------------------------------------------------------------
 # F. Artifact 直接输入仅限同一 Project Owner（GR-405）
 # ---------------------------------------------------------------------------
 
 
 async def test_artifact_input_boundary_follows_project_owner(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context, services, monkeypatch
 ) -> None:
     group_a = await _create_group(client, "Artifact Group A")
     group_b = await _create_group(client, "Artifact Group B")
@@ -373,6 +528,7 @@ async def test_artifact_input_boundary_follows_project_owner(
     await grant_test_entitlement(session, "alice")
     project_a = await _create_project(client, group_a, name="artifact source")
     project_b = await _create_project(client, group_b, name="artifact consumer")
+    same_owner_project = await _create_project(client, group_a, name="artifact same-owner consumer")
     configuration = await _create_configuration(client, project_a, environment_a)
 
     run = await client.post(
@@ -424,7 +580,7 @@ async def test_artifact_input_boundary_follows_project_owner(
 
     # 同 Owner 引用保存成功，preflight 干净通过。
     same = await client.post(
-        f"/api/v1/projects/{project_a['id']}/run-configurations",
+        f"/api/v1/projects/{same_owner_project['id']}/run-configurations",
         json={
             "name": "same-owner-artifact",
             "command": "python main.py",
@@ -435,8 +591,70 @@ async def test_artifact_input_boundary_follows_project_owner(
         headers=ALICE,
     )
     assert same.status_code == 201, same.text
-    result = await _preflight(client, project_a, same.json()["id"], ALICE)
+    result = await _preflight(client, same_owner_project, same.json()["id"], ALICE)
     assert result["problems"] == []
+
+    prepare_calls: list[str] = []
+    scheduler_calls: list[str] = []
+
+    async def record_prepare(run_id: str, **_kwargs):
+        prepare_calls.append(run_id)
+        raise OSError("storage preparation must not be reached")
+
+    async def record_submit(submission):
+        scheduler_calls.append(submission.run_id)
+        raise SchedulerError("scheduler submission must not be reached")
+
+    monkeypatch.setattr(context.storage, "prepare_run_directory", record_prepare)
+    monkeypatch.setattr(context.scheduler, "submit", record_submit)
+
+    original_submit = services.runs._submit
+    alice_id = await _get_user_id(client, ALICE)
+
+    async def make_artifact_unavailable_then_submit(run, snapshot, version, access):
+        artifact = await session.get(ArtifactRow, artifact_id)
+        assert artifact is not None
+        artifact.status = "cleaned"
+        await session.flush()
+        await original_submit(run, snapshot, version, access)
+
+    monkeypatch.setattr(
+        services.runs,
+        "_submit",
+        make_artifact_unavailable_then_submit,
+    )
+    unavailable = await services.runs.create(
+        alice_id,
+        same_owner_project["id"],
+        RunDraft(run_configuration_id=same.json()["id"]),
+    )
+    assert unavailable.run.status.value == "submit_failed"
+    assert "Artifact" in unavailable.run.failure_reason
+    assert prepare_calls == []
+    assert scheduler_calls == []
+    artifact = await session.get(ArtifactRow, artifact_id)
+    assert artifact is not None
+    artifact.status = "available"
+    await session.flush()
+
+    async def transfer_artifact_owner_then_submit(run, snapshot, version, access):
+        source_project = await session.get(ProjectRow, project_a["id"])
+        assert source_project is not None
+        source_project.owner_user_group_id = group_b
+        await session.flush()
+        await original_submit(run, snapshot, version, access)
+
+    monkeypatch.setattr(services.runs, "_submit", transfer_artifact_owner_then_submit)
+    submitted = await services.runs.create(
+        alice_id,
+        same_owner_project["id"],
+        RunDraft(run_configuration_id=same.json()["id"]),
+    )
+
+    assert submitted.run.status.value == "submit_failed"
+    assert "Artifact" in submitted.run.failure_reason
+    assert prepare_calls == []
+    assert scheduler_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +697,7 @@ async def test_idempotency_key_is_scoped_to_initiating_user(
 
 
 async def test_rerun_creates_new_run_for_current_user_without_drift(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context, monkeypatch
 ) -> None:
     group = await _create_group(client, "Rerun Group")
     _, environment_v1 = await _create_environment(session, owner_user_group_id=group)
@@ -489,6 +707,14 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     await grant_test_entitlement(session, "bob")
     project = await _create_project(client, group, name="rerun project")
     configuration = await _create_configuration(client, project, environment_v1)
+    scheduler_submissions = []
+    original_scheduler_submit = context.scheduler.submit
+
+    async def record_scheduler_submission(submission):
+        scheduler_submissions.append(submission)
+        return await original_scheduler_submit(submission)
+
+    monkeypatch.setattr(context.scheduler, "submit", record_scheduler_submission)
 
     original = await client.post(
         f"/api/v1/projects/{project['id']}/runs",
@@ -508,6 +734,13 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
         headers=ALICE,
     )
     assert response.status_code == 200, response.text
+    plan = await session.get(ComputePlanRow, "plan_cpu_quick")
+    assert plan is not None
+    plan.cluster = "changed-cluster"
+    plan.account = "changed-account"
+    plan.partition = "changed-partition"
+    plan.qos = "changed-qos"
+    await session.commit()
 
     bob_id = await _get_user_id(client, BOB)
     rerun = await client.post(f"/api/v1/runs/{run_id}/rerun", headers=BOB)
@@ -522,8 +755,10 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     snapshot = rerun_detail.json()["snapshot"]
     assert snapshot["id"] != original_snapshot["id"]
     assert snapshot["initiated_by_user_id"] == bob_id
-    # 不漂移：仍引用来源快照固定的 v1，而不是 Group 的新默认 v2。
+    # 不漂移：仍引用来源快照固定的 v1 和最终调度配置。
     assert snapshot["environment_version_id"] == environment_v1
+    assert snapshot["scheduler"] == original_snapshot["scheduler"]
+    assert scheduler_submissions[-1].configuration.as_payload() == original_snapshot["scheduler"]
 
     rerun_final = await wait_for_run(client, body["id"], headers=BOB)
     assert rerun_final["run"]["status"] == "succeeded"

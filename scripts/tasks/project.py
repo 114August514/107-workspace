@@ -361,6 +361,14 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         f"/projects/{project_id}/variables",
         {"name": "EPOCHS", "value": "3"},
     )
+    environments = client.request("GET", "/catalog/environments")
+    environment_version_id = next(
+        version["id"]
+        for environment in environments
+        if environment["owner"]["id"] == workspace_id
+        for version in environment["versions"]
+        if version["available"]
+    )
     configuration = client.request(
         "POST",
         f"/projects/{project_id}/run-configurations",
@@ -368,6 +376,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
             "name": "Default run",
             "command": "python train.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
             "environment_variables": {"EPOCHS": "${{ vars.EPOCHS }}"},
             "artifact_rules": [{"path": "outputs", "name": "Training result", "optional": False}],
         },

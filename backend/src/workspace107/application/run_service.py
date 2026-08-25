@@ -34,6 +34,7 @@ from ..domain.enums import (
 from ..domain.errors import (
     ConflictError,
     ObjectNotFound,
+    PermissionDenied,
     PreflightRejected,
     SchedulerError,
     ValidationFailed,
@@ -440,7 +441,7 @@ class RunService:
             input_bindings=source_snapshot.input_bindings,
             compute_plan_id=plan.id,
             compute_request=source_snapshot.compute_request,
-            scheduler=resolve_scheduler_configuration(plan, source_snapshot.compute_request),
+            scheduler=source_snapshot.scheduler,
             artifact_rules=source_snapshot.artifact_rules,
             initiated_by_user_id=user_id,
             created_at=now,
@@ -491,6 +492,64 @@ class RunService:
         return run
 
     # -- 内部 -----------------------------------------------------------
+    async def validate_execution_context(
+        self, run: Run, snapshot: RunSnapshot
+    ) -> tuple[ProjectAccess, dict[str, str]]:
+        """Revalidate persisted execution identity and every exact external reference.
+
+        This boundary deliberately reads ``run.initiated_by_user_id`` and
+        ``run.project_id`` again instead of trusting request-time access. A delayed
+        Worker can call the same seam immediately before materialization.
+        """
+        try:
+            access = await self._guard.project(
+                run.initiated_by_user_id,
+                run.project_id,
+                needs=Capability.RUN_SUBMIT,
+                owner_scope=True,
+            )
+        except (ObjectNotFound, PermissionDenied) as exc:
+            raise ValidationFailed("Run 发起 User 当前已无权在来源 Project 执行") from exc
+
+        problems: list[str] = []
+        environment_version = await environment_version_for_owner_use(
+            self._repos,
+            run.initiated_by_user_id,
+            snapshot.environment_version_id,
+            access.project.owner,
+        )
+        if environment_version is None:
+            problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
+        elif not environment_version.available:
+            problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
+
+        for binding in snapshot.input_bindings:
+            if binding.source_type is InputSourceType.ARTIFACT:
+                problem = await self._artifact_input_problem(
+                    binding.source_id,
+                    binding.access_path,
+                    access.project.owner,
+                )
+            else:
+                problem = await self._check_shared_resource_version_input(
+                    run.initiated_by_user_id,
+                    binding.source_id,
+                    binding.access_path,
+                    binding.source_subpath,
+                    access.project.owner,
+                )
+            if problem is not None:
+                problems.append(problem)
+
+        secret_values, secret_problems = await self._config_resolver.validate_and_resolve(
+            access,
+            run.initiated_by_user_id,
+            snapshot.env_secret_refs,
+        )
+        problems.extend(secret_problems)
+        if problems:
+            raise ValidationFailed("; ".join(problems))
+        return access, secret_values
 
     async def _submit(
         self,
@@ -501,15 +560,9 @@ class RunService:
     ) -> None:
         # 执行身份以持久化的 Run 记录为准（GR-307），不从调用参数传递——
         # 快照校验、Secret 解析和通知收件人都读同一个字段。
-        initiated_by_user_id = run.initiated_by_user_id
         try:
-            values: dict[str, str] = {}
-            if snapshot.env_secret_refs:
-                values, problems = await self._config_resolver.validate_and_resolve(
-                    access, initiated_by_user_id, snapshot.env_secret_refs
-                )
-                if problems:
-                    raise ValidationFailed("; ".join(problems))
+            access, values = await self.validate_execution_context(run, snapshot)
+            if values:
                 await self._secrets.retain_for_redaction(run.id, list(values.values()))
             inputs = await self._materialize_inputs(snapshot.input_bindings)
             paths = await self._storage.prepare_run_directory(
