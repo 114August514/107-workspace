@@ -289,7 +289,7 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
 # -- 跨 Owner 引用 -------------------------------------------------------
 
 
-async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存前(
+async def test_跨_owner_引用_user_group_shared_resource_被挡在运行方案保存前(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """Bob cannot persist an asset owned by Alice's exact User Group."""

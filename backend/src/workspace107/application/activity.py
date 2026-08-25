@@ -87,9 +87,6 @@ class ActivityService:
         self._repos = repos
         self._guard = guard
 
-    async def list_for_user(self, user_id: str, page: PageRequest) -> Page[Activity]:
-        return await self._repos.activities.list_for_user(user_id, page)
-
     async def list_for_user_group(
         self, user_id: str, user_group_id: str, page: PageRequest
     ) -> Page[Activity]:

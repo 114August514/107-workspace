@@ -337,13 +337,13 @@ async def test_read_version_file_rejects_missing_path(client: httpx.AsyncClient)
 async def test_discovery_excludes_resources_owned_by_other_user_group(
     client: httpx.AsyncClient,
 ) -> None:
-    alice_ws = await _user_group(client, ALICE)
+    alice_group_id = await _user_group(client, ALICE)
     bob_group_id = await _user_group(client, BOB)
     await client.post(
         "/api/v1/shared-resources",
         json={
             "name": "Alice 的",
-            "owner": {"kind": "user_group", "id": alice_ws},
+            "owner": {"kind": "user_group", "id": alice_group_id},
         },
         headers=ALICE,
     )
@@ -357,7 +357,9 @@ async def test_discovery_excludes_resources_owned_by_other_user_group(
     )
 
     alice_resources = (await client.get("/api/v1/shared-resources", headers=ALICE)).json()
-    assert [(r["name"], r["owner"]["id"]) for r in alice_resources] == [("Alice 的", alice_ws)]
+    assert [(r["name"], r["owner"]["id"]) for r in alice_resources] == [
+        ("Alice 的", alice_group_id)
+    ]
 
 
 async def test_get_version_blocks_cross_owner_access(
