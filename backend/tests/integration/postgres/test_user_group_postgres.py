@@ -17,6 +17,7 @@ from workspace107.domain.errors import ConflictError, ObjectNotFound, Permission
 from workspace107.main import build_context
 
 PREVIOUS_REVISION = "a3f7c2e91b84"
+TARGET_REVISION = "a41b9c3e7d2f"
 pytestmark = pytest.mark.skipif(
     not os.environ.get("WORKSPACE107_TEST_POSTGRESQL_URL"),
     reason="WORKSPACE107_TEST_POSTGRESQL_URL is required for PostgreSQL evidence",
@@ -150,7 +151,7 @@ async def test_postgresql_legacy_migration_roundtrip(tmp_path: Path) -> None:
                 ),
                 {"now": now},
             )
-        await _migrate(config, "head")
+        await _migrate(config, TARGET_REVISION)
         assert await _rows(engine, "SELECT id FROM user_groups ORDER BY id") == [("ws_collab",)]
         assert await _rows(
             engine, "SELECT created_by_id FROM user_groups WHERE id='ws_collab'"
@@ -225,7 +226,7 @@ async def test_postgresql_legacy_migration_roundtrip(tmp_path: Path) -> None:
             ("ws_collab", "usr_bob", "owner", "active"),
             ("ws_personal", "usr_alice", "owner", "active"),
         ]
-        await _migrate(config, "head")
+        await _migrate(config, TARGET_REVISION)
         assert await _rows(engine, "SELECT id, created_by_id FROM user_groups ORDER BY id") == [
             ("grp_new", "usr_carol"),
             ("ws_collab", None),
