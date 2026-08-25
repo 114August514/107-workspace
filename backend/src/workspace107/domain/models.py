@@ -29,6 +29,7 @@ from .enums import (
     ProjectStatus,
     RunEventType,
     RunStatus,
+    SharedResourcePublicationStatus,
     TargetType,
 )
 from .errors import ValidationFailed
@@ -566,6 +567,24 @@ class SharedResourceFile:
 
 
 @dataclass(frozen=True, slots=True)
+class SharedResourcePublicationAttempt:
+    """Durable candidate and validation result; never a published Version itself."""
+
+    id: str
+    shared_resource_id: str
+    status: SharedResourcePublicationStatus
+    description: str
+    files: tuple[SharedResourceFile, ...]
+    validation_summary: str
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SharedResourceVersion:
     """Shared Resource 已发布的不可变内容版本（GR-201）。
 
@@ -583,6 +602,8 @@ class SharedResourceVersion:
     """在该 Shared Resource 内自增，用于展示为 v1、v2……"""
     description: str
     files: tuple[SharedResourceFile, ...]
+    manifest_hash: str
+    validation_summary: str
     created_by: str
     created_at: datetime
 

@@ -307,6 +307,8 @@ class SharedResourceVersionOut(Model):
     description: str
     file_count: int
     total_size: int
+    manifest_hash: str
+    validation_summary: str
     created_by: str
     created_at: datetime
 
@@ -317,6 +319,22 @@ class SharedResourceVersionDetailOut(SharedResourceVersionOut):
 
 class SharedResourceDetailOut(SharedResourceOut):
     versions: list[SharedResourceVersionOut]
+
+
+class SharedResourcePublicationAttemptOut(Model):
+    id: str
+    shared_resource_id: str
+    status: Literal["pending", "processing", "succeeded", "failed"]
+    description: str
+    file_count: int
+    total_size: int
+    validation_summary: str
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class CanonicalSharedResourceCreateIn(Model):

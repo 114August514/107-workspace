@@ -17,6 +17,7 @@ from __future__ import annotations
 import httpx
 
 from tests.helpers import ensure_user_group
+from workspace107.api.deps import AppContext, build_services
 from workspace107.application.shared_resource_service import MAX_RESOURCE_NAME_LEN
 
 ALICE = {"X-User": "alice"}
@@ -45,6 +46,7 @@ async def _create_resource(
 
 async def _publish_version(
     client: httpx.AsyncClient,
+    context: AppContext,
     resource_id: str,
     *,
     files: list[tuple[str, bytes]],
@@ -52,13 +54,8 @@ async def _publish_version(
     prefix: str = "",
     headers: dict[str, str] | None = None,
 ) -> dict:
-    """发布版本并返回**详情**（含 files 列表）。
-
-    ``POST /shared-resources/{id}/versions`` 返回 ``SharedResourceVersionOut``，
-    其中只有 file_count / total_size，没有 files；要拿到完整文件清单需要再请求
-    一次 ``GET /shared-resource-versions/{id}``。
-    """
-    version = (
+    """Upload, run the real publication processor, and return version detail."""
+    attempt = (
         await client.post(
             f"/api/v1/shared-resources/{resource_id}/versions",
             params={"prefix": prefix},
@@ -69,9 +66,25 @@ async def _publish_version(
             headers=headers or ALICE,
         )
     ).json()
+    claim_session = context.session_factory()
+    try:
+        services = build_services(context, claim_session)
+        claimed = await services.shared_resource_publications.claim_next()
+        await claim_session.commit()
+    finally:
+        await claim_session.close()
+    assert claimed is not None and claimed.id == attempt["id"]
+    process_session = context.session_factory()
+    try:
+        services = build_services(context, process_session)
+        result = await services.shared_resource_publications.process(claimed.id)
+        await process_session.commit()
+    finally:
+        await process_session.close()
+    assert result.version_id is not None
     return (
         await client.get(
-            f"/api/v1/shared-resource-versions/{version['id']}",
+            f"/api/v1/shared-resource-versions/{result.version_id}",
             headers=headers or ALICE,
         )
     ).json()
@@ -197,10 +210,10 @@ async def test_update_rejects_empty_name(client: httpx.AsyncClient) -> None:
     assert "名称" in response.json()["message"]
 
 
-# -- publish_version ---------------------------------------------------------
+# -- publication ingress and successful processing ---------------------------
 
 
-async def test_publish_version_rejects_duplicate_paths(client: httpx.AsyncClient) -> None:
+async def test_publication_ingress_rejects_duplicate_paths(client: httpx.AsyncClient) -> None:
     resource = await _create_resource(client, "重复路径")
     response = await client.post(
         f"/api/v1/shared-resources/{resource['id']}/versions",
@@ -216,7 +229,7 @@ async def test_publish_version_rejects_duplicate_paths(client: httpx.AsyncClient
     assert "重复路径" in response.json()["message"]
 
 
-async def test_publish_version_rejects_path_that_escapes_root(
+async def test_publication_ingress_rejects_path_that_escapes_root(
     client: httpx.AsyncClient,
 ) -> None:
     resource = await _create_resource(client, "越界路径")
@@ -231,9 +244,9 @@ async def test_publish_version_rejects_path_that_escapes_root(
     assert "越出" in response.json()["message"]
 
 
-async def test_publish_version_rejects_empty_uploads(client: httpx.AsyncClient) -> None:
+async def test_publication_ingress_rejects_empty_uploads(client: httpx.AsyncClient) -> None:
     resource = await _create_resource(client, "空版本")
-    # 不带 files 字段：FastAPI 在 RequestValidationError 阶段就拦下
+    # No files field: transport validation rejects the raw request before an attempt is accepted.
     response = await client.post(
         f"/api/v1/shared-resources/{resource['id']}/versions",
         params={"prefix": ""},
@@ -248,27 +261,15 @@ async def test_publish_version_rejects_empty_uploads(client: httpx.AsyncClient) 
 
 
 async def test_publish_version_assigns_increasing_sequence(
-    client: httpx.AsyncClient,
+    client: httpx.AsyncClient, context: AppContext
 ) -> None:
     resource = await _create_resource(client, "多版本")
-    v1 = (
-        await client.post(
-            f"/api/v1/shared-resources/{resource['id']}/versions",
-            params={"prefix": ""},
-            data={"description": "v1"},
-            files=[("files", ("a.txt", b"first", "text/plain"))],
-            headers=ALICE,
-        )
-    ).json()
-    v2 = (
-        await client.post(
-            f"/api/v1/shared-resources/{resource['id']}/versions",
-            params={"prefix": ""},
-            data={"description": "v2"},
-            files=[("files", ("a.txt", b"second", "text/plain"))],
-            headers=ALICE,
-        )
-    ).json()
+    v1 = await _publish_version(
+        client, context, resource["id"], files=[("a.txt", b"first")], description="v1"
+    )
+    v2 = await _publish_version(
+        client, context, resource["id"], files=[("a.txt", b"second")], description="v2"
+    )
     assert v1["sequence"] == 1
     assert v2["sequence"] == 2
     assert v1["label"] == "v1"
@@ -276,11 +277,12 @@ async def test_publish_version_assigns_increasing_sequence(
 
 
 async def test_publish_version_records_file_size_and_hash(
-    client: httpx.AsyncClient,
+    client: httpx.AsyncClient, context: AppContext
 ) -> None:
     resource = await _create_resource(client, "带尺寸")
     version = await _publish_version(
         client,
+        context,
         resource["id"],
         files=[("data.txt", b"hello world")],
         prefix="dir",
@@ -293,10 +295,13 @@ async def test_publish_version_records_file_size_and_hash(
     assert version["total_size"] == file_entry["size"]
 
 
-async def test_publish_version_supports_multiple_files(client: httpx.AsyncClient) -> None:
+async def test_publish_version_supports_multiple_files(
+    client: httpx.AsyncClient, context: AppContext
+) -> None:
     resource = await _create_resource(client, "多文件")
     version = await _publish_version(
         client,
+        context,
         resource["id"],
         files=[("a.txt", b"first"), ("nested/b.txt", b"second")],
     )
@@ -308,9 +313,13 @@ async def test_publish_version_supports_multiple_files(client: httpx.AsyncClient
 # -- read_version_file -------------------------------------------------------
 
 
-async def test_read_version_file_returns_blob_content(client: httpx.AsyncClient) -> None:
+async def test_read_version_file_returns_blob_content(
+    client: httpx.AsyncClient, context: AppContext
+) -> None:
     resource = await _create_resource(client, "可读版本")
-    version = await _publish_version(client, resource["id"], files=[("notes.txt", b"hello")])
+    version = await _publish_version(
+        client, context, resource["id"], files=[("notes.txt", b"hello")]
+    )
     response = await client.get(
         f"/api/v1/shared-resource-versions/{version['id']}/files/content",
         params={"path": "notes.txt"},
@@ -320,9 +329,11 @@ async def test_read_version_file_returns_blob_content(client: httpx.AsyncClient)
     assert response.text == "hello"
 
 
-async def test_read_version_file_rejects_missing_path(client: httpx.AsyncClient) -> None:
+async def test_read_version_file_rejects_missing_path(
+    client: httpx.AsyncClient, context: AppContext
+) -> None:
     resource = await _create_resource(client, "缺文件")
-    version = await _publish_version(client, resource["id"], files=[("a.txt", b"x")])
+    version = await _publish_version(client, context, resource["id"], files=[("a.txt", b"x")])
     response = await client.get(
         f"/api/v1/shared-resource-versions/{version['id']}/files/content",
         params={"path": "missing.txt"},
@@ -361,10 +372,10 @@ async def test_discovery_excludes_resources_owned_by_other_user_group(
 
 
 async def test_get_version_blocks_cross_workspace_access(
-    client: httpx.AsyncClient,
+    client: httpx.AsyncClient, context: AppContext
 ) -> None:
     resource = await _create_resource(client, "私有数据")
-    version = await _publish_version(client, resource["id"], files=[("a.txt", b"x")])
+    version = await _publish_version(client, context, resource["id"], files=[("a.txt", b"x")])
 
     # Bob 看不到 Alice 的 Personal Workspace 资源
     not_found = await client.get(f"/api/v1/shared-resource-versions/{version['id']}", headers=BOB)
@@ -399,7 +410,9 @@ async def test_create_records_activity(client: httpx.AsyncClient) -> None:
     assert matched[0]["target_name"] == "会被记录的"
 
 
-async def test_publish_version_records_activity(client: httpx.AsyncClient) -> None:
+async def test_publish_version_records_activity(
+    client: httpx.AsyncClient, context: AppContext
+) -> None:
     workspace_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
@@ -411,15 +424,7 @@ async def test_publish_version_records_activity(client: httpx.AsyncClient) -> No
             headers=ALICE,
         )
     ).json()
-    version = (
-        await client.post(
-            f"/api/v1/shared-resources/{resource['id']}/versions",
-            params={"prefix": ""},
-            data={"description": "v1"},
-            files=[("files", ("a.txt", b"x", "text/plain"))],
-            headers=ALICE,
-        )
-    ).json()
+    version = await _publish_version(client, context, resource["id"], files=[("a.txt", b"x")])
 
     activities = (
         await client.get(f"/api/v1/workspaces/{workspace_id}/activities", headers=ALICE)
@@ -436,10 +441,10 @@ async def test_publish_version_records_activity(client: httpx.AsyncClient) -> No
 
 
 async def test_publish_version_deduplicates_identical_content(
-    client: httpx.AsyncClient,
+    client: httpx.AsyncClient, context: AppContext
 ) -> None:
     """同一份内容多次上传按内容寻址去重，版本里的 content_hash 相同。"""
     resource = await _create_resource(client, "去重")
-    v1 = await _publish_version(client, resource["id"], files=[("a.txt", b"same")])
-    v2 = await _publish_version(client, resource["id"], files=[("b.txt", b"same")])
+    v1 = await _publish_version(client, context, resource["id"], files=[("a.txt", b"same")])
+    v2 = await _publish_version(client, context, resource["id"], files=[("b.txt", b"same")])
     assert v1["files"][0]["content_hash"] == v2["files"][0]["content_hash"]

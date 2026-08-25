@@ -28,6 +28,7 @@ from ..domain.models import (
     Run,
     RunConfiguration,
     RunEvent,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
     User,
 )
@@ -396,6 +397,26 @@ def shared_resource_detail_out(
     )
 
 
+def shared_resource_publication_attempt_out(
+    attempt: SharedResourcePublicationAttempt,
+) -> s.SharedResourcePublicationAttemptOut:
+    return s.SharedResourcePublicationAttemptOut(
+        id=attempt.id,
+        shared_resource_id=attempt.shared_resource_id,
+        status=attempt.status,
+        description=attempt.description,
+        file_count=len(attempt.files),
+        total_size=sum(file.size for file in attempt.files),
+        validation_summary=attempt.validation_summary,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
+    )
+
+
 def shared_resource_version_out(version: SharedResourceVersion) -> s.SharedResourceVersionOut:
     return s.SharedResourceVersionOut(
         id=version.id,
@@ -405,6 +426,8 @@ def shared_resource_version_out(version: SharedResourceVersion) -> s.SharedResou
         description=version.description,
         file_count=version.file_count,
         total_size=version.total_size,
+        manifest_hash=version.manifest_hash,
+        validation_summary=version.validation_summary,
         created_by=version.created_by,
         created_at=version.created_at,
     )

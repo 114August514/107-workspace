@@ -27,6 +27,7 @@ from ..application.run_configuration_service import RunConfigurationService
 from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
 from ..application.scoped_config_resolver import ScopedConfigResolver
+from ..application.shared_resource_publication import SharedResourcePublicationProcessor
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
 from ..application.workspace_service import LegacyWorkspaceService
@@ -85,6 +86,7 @@ class Services:
     activities: ActivityService
     notifications: NotificationService
     shared_resources: SharedResourceService
+    shared_resource_publications: SharedResourcePublicationProcessor
     grants: GrantService
 
 
@@ -145,6 +147,13 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.storage,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
+        ),
+        shared_resource_publications=SharedResourcePublicationProcessor(
+            repos,
+            context.clock,
+            context.storage,
+            activity,
+            recovery_seconds=context.settings.shared_resource_publication_recovery_seconds,
         ),
         grants=GrantService(repos, guard, context.clock),
     )

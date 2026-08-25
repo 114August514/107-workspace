@@ -50,6 +50,9 @@ class Settings(BaseSettings):
 
     # 后台状态同步间隔（秒）。设为 0 表示不启动后台同步，由调用方显式触发。
     run_sync_interval_seconds: float = 1.0
+    # Shared Resource publication uses its own durable processor boundary.
+    shared_resource_publication_interval_seconds: float = 1.0
+    shared_resource_publication_recovery_seconds: float = 300.0
 
     @property
     def use_json_logs(self) -> bool:
