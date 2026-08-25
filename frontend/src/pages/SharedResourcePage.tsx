@@ -15,6 +15,10 @@ import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
 import { loadSharedResourceOwnerContext } from '../components/sharedresource/ownerContext'
+import {
+  AvailabilityLabel,
+  AvailabilityNotice,
+} from '../components/sharedresource/SharedResourceAvailability'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 
@@ -85,6 +89,7 @@ export function SharedResourcePage() {
               <PackageIcon className={styles.titleIcon} size={24} />
               <h1 className={styles.title}>{resource.data.name}</h1>
               <Label>归属：{resource.data.owner.display_name}</Label>
+              <AvailabilityLabel availability={resource.data.availability} />
               <div className={styles.actions}>
                 {canManage && (
                   <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
@@ -105,6 +110,7 @@ export function SharedResourcePage() {
             <Text as="p" className={styles.headerDescription}>
               {resource.data.description || '这个共享资源还没有填写说明。'}
             </Text>
+            <AvailabilityNotice availability={resource.data.availability} />
           </header>
         )}
       </AsyncState>

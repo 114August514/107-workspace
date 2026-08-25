@@ -2510,8 +2510,23 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * SharedResourceAvailabilityOut
+         * @description 当前 User 对 Shared Resource 的可用状态。
+         *
+         *     ``source`` 与 Run preflight 的授权语义一致；``grants`` 仅在资格来自
+         *     USE Grant 时非空。
+         */
+        SharedResourceAvailabilityOut: {
+            /** Grants */
+            grants: components["schemas"]["UseGrantSummaryOut"][];
+            source: components["schemas"]["UseAvailabilitySource"];
+            /** Usable */
+            usable: boolean;
+        };
         /** SharedResourceDetailOut */
         SharedResourceDetailOut: {
+            availability: components["schemas"]["SharedResourceAvailabilityOut"];
             /**
              * Created At
              * Format: date-time
@@ -2529,6 +2544,7 @@ export interface components {
         };
         /** SharedResourceOut */
         SharedResourceOut: {
+            availability: components["schemas"]["SharedResourceAvailabilityOut"];
             /**
              * Created At
              * Format: date-time
@@ -2626,6 +2642,33 @@ export interface components {
         UnreadCountOut: {
             /** Unread */
             unread: number;
+        };
+        /**
+         * UseAvailabilitySource
+         * @description 当前 User 对资产的使用资格来源。
+         *
+         *     与 Run preflight 的授权语义（见 ``application/asset_use.py``）对齐：
+         *     ``OWNER`` 对应同 Owner 路径，``USER_GRANT`` / ``USER_GROUP_GRANT`` 对应
+         *     Grant 路径（组 Grant 要求当前 User 是该 Grantee 组的有效成员），
+         *     ``UNAVAILABLE`` 表示当前无使用资格。
+         * @enum {string}
+         */
+        UseAvailabilitySource: "owner" | "user_grant" | "user_group_grant" | "unavailable";
+        /**
+         * UseGrantSummaryOut
+         * @description 解释当前 User 使用资格的单条 USE Grant 摘要。
+         */
+        UseGrantSummaryOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            grantee: components["schemas"]["OwnerSummaryOut"];
+            /** Id */
+            id: string;
+            /** Target All */
+            target_all: boolean;
         };
         /**
          * UserGroupCapability

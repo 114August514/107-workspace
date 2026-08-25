@@ -2732,8 +2732,37 @@
         "title": "SecretIn",
         "type": "object"
       },
+      "SharedResourceAvailabilityOut": {
+        "description": "当前 User 对 Shared Resource 的可用状态。\n\n``source`` 与 Run preflight 的授权语义一致；``grants`` 仅在资格来自\nUSE Grant 时非空。",
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/UseGrantSummaryOut"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "source": {
+            "$ref": "#/components/schemas/UseAvailabilitySource"
+          },
+          "usable": {
+            "title": "Usable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "usable",
+          "source",
+          "grants"
+        ],
+        "title": "SharedResourceAvailabilityOut",
+        "type": "object"
+      },
       "SharedResourceDetailOut": {
         "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/SharedResourceAvailabilityOut"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -2768,6 +2797,7 @@
           "description",
           "owner",
           "created_at",
+          "availability",
           "versions"
         ],
         "title": "SharedResourceDetailOut",
@@ -2775,6 +2805,9 @@
       },
       "SharedResourceOut": {
         "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/SharedResourceAvailabilityOut"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -2801,7 +2834,8 @@
           "name",
           "description",
           "owner",
-          "created_at"
+          "created_at",
+          "availability"
         ],
         "title": "SharedResourceOut",
         "type": "object"
@@ -3015,6 +3049,46 @@
           "unread"
         ],
         "title": "UnreadCountOut",
+        "type": "object"
+      },
+      "UseAvailabilitySource": {
+        "description": "当前 User 对资产的使用资格来源。\n\n与 Run preflight 的授权语义（见 ``application/asset_use.py``）对齐：\n``OWNER`` 对应同 Owner 路径，``USER_GRANT`` / ``USER_GROUP_GRANT`` 对应\nGrant 路径（组 Grant 要求当前 User 是该 Grantee 组的有效成员），\n``UNAVAILABLE`` 表示当前无使用资格。",
+        "enum": [
+          "owner",
+          "user_grant",
+          "user_group_grant",
+          "unavailable"
+        ],
+        "title": "UseAvailabilitySource",
+        "type": "string"
+      },
+      "UseGrantSummaryOut": {
+        "description": "解释当前 User 使用资格的单条 USE Grant 摘要。",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "grantee": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "target_all": {
+            "title": "Target All",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "grantee",
+          "target_all",
+          "created_at"
+        ],
+        "title": "UseGrantSummaryOut",
         "type": "object"
       },
       "UserGroupCapability": {

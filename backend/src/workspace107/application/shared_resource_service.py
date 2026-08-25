@@ -15,6 +15,7 @@ from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.enums import ActivityAction, TargetType
 from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
+from ..domain.grant import Grant, UseAvailabilitySource
 from ..domain.models import (
     SharedResource,
     SharedResourceFile,
@@ -26,6 +27,7 @@ from ..domain.ports.repositories import Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, SharedResourceAccess
 from .activity import ActivityRecorder
+from .asset_use import SharedResourceUseAvailability, shared_resource_use_availability
 from .ownership import OwnerSummary, owner_summaries
 
 MAX_RESOURCE_NAME_LEN = 128
@@ -48,15 +50,40 @@ def _normalize_path(raw: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class UseGrantSummaryView:
+    """解释当前 User 使用资格的单条 USE Grant 摘要。"""
+
+    grant: Grant
+    grantee: OwnerSummary
+
+
+@dataclass(frozen=True, slots=True)
+class AvailabilityView:
+    """展示用可用状态：资格来源加解释性 Grant 摘要。"""
+
+    source: UseAvailabilitySource
+    grants: tuple[UseGrantSummaryView, ...]
+
+    @property
+    def usable(self) -> bool:
+        return self.source is not UseAvailabilitySource.UNAVAILABLE
+
+
+_OWNER_AVAILABILITY = AvailabilityView(source=UseAvailabilitySource.OWNER, grants=())
+
+
+@dataclass(frozen=True, slots=True)
 class SharedResourceView:
     resource: SharedResource
     owner: OwnerSummary
+    availability: AvailabilityView
 
 
 @dataclass(frozen=True, slots=True)
 class SharedResourceAccessView:
     access: SharedResourceAccess
     owner: OwnerSummary
+    availability: AvailabilityView
 
     @property
     def resource(self) -> SharedResource:
@@ -94,12 +121,13 @@ class SharedResourceService:
     async def list_discoverable(self, user_id: str) -> list[SharedResourceView]:
         """Canonical actor-scoped list for ``GET /shared-resources``."""
         resources = await self._repos.shared_resources.list_discoverable_for_user(user_id)
-        return await self._views(resources)
+        return await self._views(user_id, resources)
 
     async def get(self, user_id: str, resource_id: str) -> SharedResourceAccessView:
         access = await self._guard.shared_resource(user_id, resource_id)
         owner = await self._owner(access.resource.owner)
-        return SharedResourceAccessView(access=access, owner=owner)
+        availability = await self._availability(user_id, access.resource)
+        return SharedResourceAccessView(access=access, owner=owner, availability=availability)
 
     async def list_versions(self, user_id: str, resource_id: str) -> list[SharedResourceVersion]:
         return await self._repos.shared_resources.list_versions_discoverable_for_user(
@@ -129,7 +157,11 @@ class SharedResourceService:
         """
         await self._require_owner_authority(user_id, owner)
         resource = await self._create_with_owner(user_id, owner, name, description)
-        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
+        return SharedResourceView(
+            resource=resource,
+            owner=await self._owner(resource.owner),
+            availability=_OWNER_AVAILABILITY,
+        )
 
     async def update(
         self,
@@ -167,7 +199,11 @@ class SharedResourceService:
                 target_id=resource.id,
                 target_name=resource.name,
             )
-        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
+        return SharedResourceView(
+            resource=resource,
+            owner=await self._owner(resource.owner),
+            availability=_OWNER_AVAILABILITY,
+        )
 
     async def publish_version(
         self,
@@ -299,15 +335,55 @@ class SharedResourceService:
         """Activity is UserGroup-scoped; User-owned assets have no fake Workspace feed."""
         return owner.id if owner.kind is OwnerKind.USER_GROUP else None
 
-    async def _views(self, resources: list[SharedResource]) -> list[SharedResourceView]:
+    async def _views(
+        self, user_id: str, resources: list[SharedResource]
+    ) -> list[SharedResourceView]:
         owners = await owner_summaries(self._repos, (resource.owner for resource in resources))
+        active_group_ids = await self._active_group_ids(user_id)
+        raw = [
+            await shared_resource_use_availability(
+                self._repos, user_id, resource, active_group_ids=active_group_ids
+            )
+            for resource in resources
+        ]
+        grantee_refs = {grant.grantee for availability in raw for grant in availability.grants}
+        grantees = await owner_summaries(self._repos, grantee_refs)
         return [
             SharedResourceView(
                 resource=resource,
                 owner=owners[(resource.owner.kind, resource.owner.id)],
+                availability=self._availability_view(availability, grantees),
             )
-            for resource in resources
+            for resource, availability in zip(resources, raw, strict=True)
         ]
+
+    async def _availability(self, user_id: str, resource: SharedResource) -> AvailabilityView:
+        active_group_ids = await self._active_group_ids(user_id)
+        raw = await shared_resource_use_availability(
+            self._repos, user_id, resource, active_group_ids=active_group_ids
+        )
+        grantees = await owner_summaries(self._repos, {grant.grantee for grant in raw.grants})
+        return self._availability_view(raw, grantees)
+
+    async def _active_group_ids(self, user_id: str) -> frozenset[str]:
+        groups = await self._repos.user_groups.list_for_user(user_id)
+        return frozenset(group.id for group in groups)
+
+    @staticmethod
+    def _availability_view(
+        raw: SharedResourceUseAvailability,
+        grantees: dict[tuple[OwnerKind, str], OwnerSummary],
+    ) -> AvailabilityView:
+        return AvailabilityView(
+            source=raw.source,
+            grants=tuple(
+                UseGrantSummaryView(
+                    grant=grant,
+                    grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
+                )
+                for grant in raw.grants
+            ),
+        )
 
     async def _owner(self, owner: OwnerReference) -> OwnerSummary:
         return (await owner_summaries(self._repos, (owner,)))[(owner.kind, owner.id)]

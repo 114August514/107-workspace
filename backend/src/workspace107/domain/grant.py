@@ -37,6 +37,21 @@ class GrantTargetKind(StrEnum):
     SHARED_RESOURCE = "shared_resource"
 
 
+class UseAvailabilitySource(StrEnum):
+    """当前 User 对资产的使用资格来源。
+
+    与 Run preflight 的授权语义（见 ``application/asset_use.py``）对齐：
+    ``OWNER`` 对应同 Owner 路径，``USER_GRANT`` / ``USER_GROUP_GRANT`` 对应
+    Grant 路径（组 Grant 要求当前 User 是该 Grantee 组的有效成员），
+    ``UNAVAILABLE`` 表示当前无使用资格。
+    """
+
+    OWNER = "owner"
+    USER_GRANT = "user_grant"
+    USER_GROUP_GRANT = "user_group_grant"
+    UNAVAILABLE = "unavailable"
+
+
 @dataclass(frozen=True, slots=True)
 class Grant:
     """跨 Owner USE 许可。

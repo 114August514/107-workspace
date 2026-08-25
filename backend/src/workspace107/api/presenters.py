@@ -11,10 +11,15 @@ from ..application.catalog_service import EnvironmentView
 from ..application.entitlement_service import EntitlementView
 from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
-from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
+from ..application.shared_resource_service import (
+    AvailabilityView,
+    SharedResourceAccessView,
+    SharedResourceView,
+)
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
 from ..application.workspace_service import LegacyWorkspaceView
 from ..domain.compute import ComputePlan, ComputeRequest
+from ..domain.grant import GrantTargetKind
 from ..domain.models import (
     Activity,
     Artifact,
@@ -378,6 +383,22 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
     )
 
 
+def availability_out(view: AvailabilityView) -> s.SharedResourceAvailabilityOut:
+    return s.SharedResourceAvailabilityOut(
+        usable=view.usable,
+        source=view.source,
+        grants=[
+            s.UseGrantSummaryOut(
+                id=summary.grant.id,
+                grantee=owner_summary_out(summary.grantee),
+                target_all=summary.grant.target_kind is GrantTargetKind.ALL,
+                created_at=summary.grant.created_at,
+            )
+            for summary in view.grants
+        ],
+    )
+
+
 def shared_resource_out(view: SharedResourceView) -> s.SharedResourceOut:
     return s.SharedResourceOut(
         id=view.resource.id,
@@ -385,11 +406,14 @@ def shared_resource_out(view: SharedResourceView) -> s.SharedResourceOut:
         description=view.resource.description,
         owner=owner_summary_out(view.owner),
         created_at=view.resource.created_at,
+        availability=availability_out(view.availability),
     )
 
 
 def shared_resource_access_out(view: SharedResourceAccessView) -> s.SharedResourceOut:
-    return shared_resource_out(SharedResourceView(resource=view.resource, owner=view.owner))
+    return shared_resource_out(
+        SharedResourceView(resource=view.resource, owner=view.owner, availability=view.availability)
+    )
 
 
 def shared_resource_detail_out(

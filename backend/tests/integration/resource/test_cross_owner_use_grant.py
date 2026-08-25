@@ -440,13 +440,15 @@ async def test_grant_does_not_grant_management_permission(
     )
     assert response.status_code == 201, response.text
 
-    # Bob tries to PATCH the resource — should fail (404, not visible for management).
+    # Bob tries to PATCH the resource — must fail: a USE Grant adds no management
+    # capability. Since grant-extended discovery makes the resource visible to Bob,
+    # the denial surfaces as 403 rather than 404.
     response = await client.patch(
         f"/api/v1/shared-resources/{resource_b_id}",
         json={"name": "hacked by bob"},
         headers=BOB,
     )
-    assert response.status_code == 404, response.text
+    assert response.status_code == 403, response.text
 
 
 # ---------------------------------------------------------------------------

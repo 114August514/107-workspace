@@ -28,6 +28,7 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
+from ..domain.grant import UseAvailabilitySource
 from ..domain.ownership import OwnerKind
 
 
@@ -295,12 +296,34 @@ class ComputePlanOut(Model):
 # -- Shared Resource --------------------------------------------------------
 
 
+class UseGrantSummaryOut(Model):
+    """解释当前 User 使用资格的单条 USE Grant 摘要。"""
+
+    id: str
+    grantee: OwnerSummaryOut
+    target_all: bool
+    created_at: datetime
+
+
+class SharedResourceAvailabilityOut(Model):
+    """当前 User 对 Shared Resource 的可用状态。
+
+    ``source`` 与 Run preflight 的授权语义一致；``grants`` 仅在资格来自
+    USE Grant 时非空。
+    """
+
+    usable: bool
+    source: UseAvailabilitySource
+    grants: list[UseGrantSummaryOut]
+
+
 class SharedResourceOut(Model):
     id: str
     name: str
     description: str
     owner: OwnerSummaryOut
     created_at: datetime
+    availability: SharedResourceAvailabilityOut
 
 
 class SharedResourceVersionFileOut(Model):

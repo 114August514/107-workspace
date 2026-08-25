@@ -63,6 +63,7 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     description: 'imagenet-subset',
     owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
     created_at: '2026-08-14T10:00:00Z',
+    availability: { usable: true, source: 'owner', grants: [] },
     versions: [],
     ...overrides,
   }
@@ -260,5 +261,113 @@ describe('SharedResourcePage 权限与空态', () => {
     expect(screen.queryByRole('link', { name: '预训练权重' })).not.toBeInTheDocument()
     // 标题旁直接展示 API 返回的 canonical owner summary。
     expect(screen.getByText('归属：Test 空间')).toBeInTheDocument()
+  })
+})
+
+describe('SharedResourcePage 可用状态展示（Issue #55）', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('Owner 范围内展示「可用」并解释可以直接使用', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({ availability: { usable: true, source: 'owner', grants: [] } }),
+    )
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('可用')).toBeInTheDocument()
+    })
+    expect(screen.getByText('你在这个资源的 Owner 范围内，可以直接使用。')).toBeInTheDocument()
+  })
+
+  it('User Grant 可用时展示「可用 · 授权」并解释授权来源', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        availability: {
+          usable: true,
+          source: 'user_grant',
+          grants: [
+            {
+              id: 'grant_1',
+              grantee: { kind: 'user', id: 'usr_bob', display_name: 'Bob' },
+              target_all: false,
+              created_at: '2026-08-20T10:00:00Z',
+            },
+          ],
+        },
+      }),
+    )
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('可用 · 授权')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('Owner 已向你授予使用授权，你可以在自己的 Project 中引用它。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/使用授权：授予 Bob（仅限此资源）/)).toBeInTheDocument()
+  })
+
+  it('UserGroup Grant 可用时提示需要保持有效成员身份', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        availability: {
+          usable: true,
+          source: 'user_group_grant',
+          grants: [
+            {
+              id: 'grant_2',
+              grantee: { kind: 'user_group', id: 'grp_ml', display_name: 'ML 组' },
+              target_all: true,
+              created_at: '2026-08-20T10:00:00Z',
+            },
+          ],
+        },
+      }),
+    )
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('可用 · 组授权')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('Owner 已向「ML 组」授予使用授权；实际使用要求你保持该组的有效成员身份。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/使用授权：授予 ML 组（覆盖 Owner 全部资产）/)).toBeInTheDocument()
+  })
+
+  it('不可用时展示「不可用」并说明不能用于 Run', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({ availability: { usable: false, source: 'unavailable', grants: [] } }),
+    )
+    mockGetLegacyWorkspaceContext.mockResolvedValue(
+      makeWorkspace(['workspace.view', 'shared_resource.view']),
+    )
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('不可用')).toBeInTheDocument()
+    })
+    expect(screen.getByText('当前没有有效的使用资格，这个资源不能用于 Run。')).toBeInTheDocument()
   })
 })

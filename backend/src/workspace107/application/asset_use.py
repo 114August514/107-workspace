@@ -9,8 +9,10 @@ acting User (Grantee) allows use.  A Grant with Target = ALL covers all Grantor 
 
 from __future__ import annotations
 
-from ..domain.grant import GrantTargetKind
-from ..domain.models import EnvironmentVersion, SharedResourceVersion
+from dataclasses import dataclass
+
+from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseAvailabilitySource
+from ..domain.models import EnvironmentVersion, SharedResource, SharedResourceVersion
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.repositories import Repositories
 
@@ -134,3 +136,73 @@ async def _has_use_grant(
     # A personal User-level Grant for the acting user also authorizes use.
     user_grantee = OwnerReference(kind=OwnerKind.USER, id=user_id)
     return await repos.grants.exists_use_grant(user_grantee, target_kind, target_id, asset_owner)
+
+
+@dataclass(frozen=True, slots=True)
+class SharedResourceUseAvailability:
+    """当前 User 对某个 Shared Resource 的使用资格。
+
+    ``grants`` 只包含解释当前资格来源、且覆盖该资源的 USE Grant
+    （Target = ALL 或精确指向该资源）；``OWNER`` 与 ``UNAVAILABLE`` 时为空。
+    """
+
+    source: UseAvailabilitySource
+    grants: tuple[Grant, ...]
+
+    @property
+    def usable(self) -> bool:
+        return self.source is not UseAvailabilitySource.UNAVAILABLE
+
+
+async def shared_resource_use_availability(
+    repos: Repositories,
+    user_id: str,
+    resource: SharedResource,
+    *,
+    active_group_ids: frozenset[str],
+) -> SharedResourceUseAvailability:
+    """Compute the acting User's USE availability for ``resource``.
+
+    Mirrors the two preflight paths of :func:`shared_resource_version_for_owner_use`:
+    owner scope first (same-owner path), then USE Grants issued by the resource's
+    current Owner to the acting User personally or to a UserGroup they actively
+    belong to (grant path).  Discovery itself is not extended here.
+    """
+    owner = resource.owner
+    if owner.kind is OwnerKind.USER:
+        if owner.id == user_id:
+            return SharedResourceUseAvailability(source=UseAvailabilitySource.OWNER, grants=())
+    elif owner.id in active_group_ids:
+        return SharedResourceUseAvailability(source=UseAvailabilitySource.OWNER, grants=())
+
+    covering = [
+        grant
+        for grant in await repos.grants.list_for_grantor(owner)
+        if grant.action is GrantAction.USE
+        and (
+            grant.target_kind is GrantTargetKind.ALL
+            or (
+                grant.target_kind is GrantTargetKind.SHARED_RESOURCE
+                and grant.target_id == resource.id
+            )
+        )
+    ]
+    user_grants = [
+        grant
+        for grant in covering
+        if grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id
+    ]
+    if user_grants:
+        return SharedResourceUseAvailability(
+            source=UseAvailabilitySource.USER_GRANT, grants=tuple(user_grants)
+        )
+    group_grants = [
+        grant
+        for grant in covering
+        if grant.grantee.kind is OwnerKind.USER_GROUP and grant.grantee.id in active_group_ids
+    ]
+    if group_grants:
+        return SharedResourceUseAvailability(
+            source=UseAvailabilitySource.USER_GROUP_GRANT, grants=tuple(group_grants)
+        )
+    return SharedResourceUseAvailability(source=UseAvailabilitySource.UNAVAILABLE, grants=())

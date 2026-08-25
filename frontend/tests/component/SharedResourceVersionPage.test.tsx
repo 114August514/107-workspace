@@ -63,6 +63,7 @@ const resource: SharedResourceDetail = {
   description: '',
   owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
   created_at: '2026-08-14T10:00:00Z',
+  availability: { usable: true, source: 'owner', grants: [] },
   versions: [],
 }
 
