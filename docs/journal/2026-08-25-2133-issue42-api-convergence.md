@@ -1,6 +1,6 @@
 # issue42-api-convergence
 
-- 状态：独立 Review 与 targeted cleanup findings 已修复并验证，等待最终 targeted re-review
+- 状态：最终 targeted review PASS，候选已就绪，待发布 PR
 - 认领：Issue 42 sole writer（worktree `107-workspace-42-api-convergence`）
 - 上下文：Issue #42，Parent #34；#35–#41 已合并；起点 `main` / PR #72 `9b00f4b`
 - 分支：`refactor/42-api-convergence`
@@ -53,6 +53,7 @@ Initiated User 语义。所有受控消费者在同一候选中 clean cutover，
 - Review remediation：Home `recent_runs` 同时要求当前 Project 可见且 `initiated_by_user_id` 为当前 User；双成员反例通过。删除 `/me/activities` 及其 repository 聚合；邀请/移除通知对无访问权 recipient 明确为非链接；更新 Run Configuration 和当前 resource fixture 术语。
 - Remediation focused backend：5 passed；frontend NotificationBell：12 passed，TypeScript typecheck 通过；真实 `make smoke` 再次完成隔离 HTTP 核心闭环。
 - Targeted cleanup：删除已无 route/repository 消费方的 `ActivityService.list_for_user`，并将最后两个当前 resource 测试名/变量收敛为 Owner / UserGroup 术语；定向 grep 无旧名，3 个文件的 ruff check 与 format-check 通过。
+- Final targeted re-review：PASS；当前候选无剩余 material finding。
 
 ## 禁区
 
