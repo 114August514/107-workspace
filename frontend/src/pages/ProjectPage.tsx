@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
+import { toAsyncError } from '../api/errors'
 import type {
   ActivityPage,
   ForkSource,
@@ -15,11 +16,13 @@ import type {
 import { useAsync } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
+import { AsyncState } from '../components/common/AsyncState'
 import { ListCard } from '../components/layout/ListCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { FileBrowser } from '../components/project/FileBrowser'
 import { VersionPanel } from '../components/project/VersionPanel'
+import { PrimerListCard } from '../components/primer/PrimerListCard'
 import { RunTable } from '../components/run/RunTable'
 import { SubmitRunModal } from '../components/run/SubmitRunModal'
 import { RunConfigurationPanel } from '../components/runconfig/RunConfigurationPanel'
@@ -47,6 +50,7 @@ export function ProjectPage() {
     () => api.listRuns(projectId, { page: runPage }),
     [projectId, token, runPage],
   )
+  const runError = toAsyncError(runs.error)
 
   const [submitting, setSubmitting] = useState<RunConfiguration | null>(null)
   const forkSource = useAsync<ForkSource | null>(() => api.forkSource(projectId), [projectId])
@@ -125,19 +129,22 @@ export function ProjectPage() {
             key: 'runs',
             label: '④ Run 历史',
             children: (
-              <ListCard>
-                <AsyncSection
+              <PrimerListCard>
+                <AsyncState
                   loading={runs.loading}
-                  error={runs.error}
+                  loadingText="正在加载 Run 历史…"
+                  error={runError ? { ...runError, message: '无法加载 Run 历史。' } : undefined}
+                  onRetry={runs.reload}
                   empty={runs.data?.total === 0}
-                  emptyText="还没有提交过 Run"
+                  emptyText="这个 Project 还没有 Run。"
+                  emptyDescription="提交 Run 后，可以在这里查看状态、日志、运行产物和运行快照。"
                 >
                   <RunTable
                     runs={runs.data?.items ?? []}
                     pagination={tablePagination(runs.data, setRunPage)}
                   />
-                </AsyncSection>
-              </ListCard>
+                </AsyncState>
+              </PrimerListCard>
             ),
           },
           {

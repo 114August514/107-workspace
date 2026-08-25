@@ -1,123 +1,128 @@
-import { Descriptions, Space, Tag, Typography } from 'antd'
-import { Link } from 'react-router-dom'
+import { Label, Link, Text } from '@primer/react'
+import { Link as RouterLink } from 'react-router-dom'
 
 import type { RunSnapshot } from '../../api/types'
 import { describeComputeRequest, formatTime } from '../../utils/format'
+import styles from './run.module.css'
 
-/**
- * 复现信息：这次 Run 到底按什么配置跑的。
- *
- * Run Snapshot 创建后不可修改。后来改运行方案、换环境、调整权益，
- * 都不会改变这里显示的内容。
- */
+function MetaRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className={styles.snapshotRow}>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  )
+}
+
+/** 不可变运行事实；只展示 Snapshot 已固定的精确身份和配置。 */
 export function RunSnapshotCard({ snapshot }: { snapshot: RunSnapshot }) {
   const scheduler = snapshot.scheduler
-  const secrets = Object.entries(snapshot.secret_references)
   const variables = Object.entries(snapshot.environment_variables)
+  const secrets = Object.entries(snapshot.secret_references)
 
   return (
-    <Descriptions
-      size="small"
-      column={1}
-      bordered
-      items={[
-        {
-          key: 'version',
-          label: 'Project Version',
-          children: (
-            <Link to={`/versions/${snapshot.project_version_id}`}>
-              {snapshot.project_version_id}
-            </Link>
-          ),
-        },
-        {
-          key: 'command',
-          label: '执行命令',
-          children: <Typography.Text code>{snapshot.command}</Typography.Text>,
-        },
-        { key: 'workdir', label: '工作目录', children: snapshot.working_directory },
-        {
-          key: 'environment',
-          label: '运行环境',
-          children: (
-            <Space direction="vertical" size={2}>
-              <Typography.Text code>{snapshot.environment_image}</Typography.Text>
-              <Typography.Text type="secondary">{snapshot.environment_version_id}</Typography.Text>
-            </Space>
-          ),
-        },
-        {
-          key: 'compute',
-          label: '算力请求',
-          children: describeComputeRequest(snapshot.compute_request),
-        },
-        {
-          key: 'scheduler',
-          label: '已解析调度配置',
-          children: (
-            <Space wrap size={[6, 6]}>
-              <Tag>集群 {scheduler.cluster}</Tag>
-              <Tag>Account {scheduler.account}</Tag>
-              <Tag>Partition {scheduler.partition}</Tag>
-              <Tag>QoS {scheduler.qos}</Tag>
-            </Space>
-          ),
-        },
-        {
-          key: 'env',
-          label: '环境变量',
-          children:
-            variables.length + secrets.length === 0 ? (
-              '—'
-            ) : (
-              <Space direction="vertical" size={4}>
-                {variables.map(([name, value]) => (
-                  <Typography.Text key={name} code>{`${name}=${value}`}</Typography.Text>
-                ))}
-                {secrets.map(([name, secret]) => (
-                  <Space key={name} size={6}>
-                    <Typography.Text code>{name}</Typography.Text>
-                    <Tag color="purple">来自 Secret {secret}（值不落快照）</Tag>
-                  </Space>
-                ))}
-              </Space>
-            ),
-        },
-        {
-          key: 'inputs',
-          label: '输入绑定',
-          children:
-            snapshot.input_bindings.length === 0 ? (
-              '—'
-            ) : (
-              <Space direction="vertical" size={4}>
-                {snapshot.input_bindings.map((binding) => (
-                  <Typography.Text key={binding.access_path} code>
-                    {`${binding.source_id} → ${binding.access_path}（只读）`}
-                  </Typography.Text>
-                ))}
-              </Space>
-            ),
-        },
-        {
-          key: 'rules',
-          label: 'Artifact 收集规则',
-          children:
-            snapshot.artifact_rules.length === 0 ? (
-              '—'
-            ) : (
-              <Space wrap size={[6, 6]}>
-                {snapshot.artifact_rules.map((rule) => (
-                  <Tag key={rule.path} color={rule.optional ? 'default' : 'blue'}>
-                    {rule.path}
-                    {rule.optional ? '（可选）' : '（必需）'}
-                  </Tag>
-                ))}
-              </Space>
-            ),
-        },
-        { key: 'created', label: '固定时间', children: formatTime(snapshot.created_at) },
-      ]}
-    />
+    <dl className={styles.snapshotGrid}>
+      <MetaRow label="发起用户">
+        <code className={styles.inlineCode}>{snapshot.initiated_by_user_id}</code>
+      </MetaRow>
+      <MetaRow label="Project 版本">
+        <Link as={RouterLink} to={`/versions/${snapshot.project_version_id}`}>
+          {snapshot.project_version_id}
+        </Link>
+      </MetaRow>
+      <MetaRow label="来源运行方案">
+        {snapshot.source_run_configuration_id ? (
+          <code className={styles.inlineCode}>{snapshot.source_run_configuration_id}</code>
+        ) : (
+          '—'
+        )}
+      </MetaRow>
+      <MetaRow label="执行命令">
+        <pre className={styles.command}>{snapshot.command}</pre>
+      </MetaRow>
+      <MetaRow label="工作目录">
+        <code className={styles.inlineCode}>{snapshot.working_directory || '.'}</code>
+      </MetaRow>
+      <MetaRow label="运行环境">
+        <div className={styles.valueStack}>
+          <code className={styles.inlineCode}>{snapshot.environment_image}</code>
+          <Text size="small" className={styles.muted}>
+            精确版本 {snapshot.environment_version_id}
+          </Text>
+          {snapshot.environment_setup_command ? (
+            <code className={styles.inlineCode}>{snapshot.environment_setup_command}</code>
+          ) : null}
+        </div>
+      </MetaRow>
+      <MetaRow label="算力请求">
+        <div className={styles.valueStack}>
+          <span>{describeComputeRequest(snapshot.compute_request)}</span>
+          <Text size="small" className={styles.muted}>
+            Compute Plan {snapshot.compute_plan_id}
+          </Text>
+        </div>
+      </MetaRow>
+      <MetaRow label="调度配置">
+        <div className={styles.labelGroup}>
+          <Label>集群 {scheduler.cluster || '—'}</Label>
+          <Label>Account {scheduler.account || '—'}</Label>
+          <Label>Partition {scheduler.partition || '—'}</Label>
+          <Label>QoS {scheduler.qos || '—'}</Label>
+        </div>
+      </MetaRow>
+      <MetaRow label="环境变量与 Secret">
+        {variables.length + secrets.length === 0 ? (
+          '—'
+        ) : (
+          <div className={styles.valueStack}>
+            {variables.map(([name, value]) => (
+              <code key={name} className={styles.inlineCode}>{`${name}=${value}`}</code>
+            ))}
+            {secrets.map(([name, reference]) => (
+              <div key={name} className={styles.secretReference}>
+                <code className={styles.inlineCode}>{name}</code>
+                <Label variant="done">Secret {reference}，值不写入快照</Label>
+              </div>
+            ))}
+          </div>
+        )}
+      </MetaRow>
+      <MetaRow label="运行输入">
+        {snapshot.input_bindings.length === 0 ? (
+          '—'
+        ) : (
+          <ul className={styles.compactList}>
+            {snapshot.input_bindings.map((binding) => (
+              <li key={`${binding.source_type}:${binding.source_id}:${binding.access_path}`}>
+                <code className={styles.inlineCode}>
+                  {binding.source_type}:{binding.source_id}
+                  {binding.source_subpath ? `/${binding.source_subpath}` : ''} →{' '}
+                  {binding.access_path}
+                </code>
+              </li>
+            ))}
+          </ul>
+        )}
+      </MetaRow>
+      <MetaRow label="运行产物规则">
+        {snapshot.artifact_rules.length === 0 ? (
+          '—'
+        ) : (
+          <div className={styles.labelGroup}>
+            {snapshot.artifact_rules.map((rule) => (
+              <Label
+                key={`${rule.name}:${rule.path}`}
+                variant={rule.optional ? 'secondary' : 'accent'}
+              >
+                {rule.path} · {rule.optional ? '可选' : '必需'}
+              </Label>
+            ))}
+          </div>
+        )}
+      </MetaRow>
+      <MetaRow label="固定时间">
+        <time dateTime={snapshot.created_at}>{formatTime(snapshot.created_at)}</time>
+      </MetaRow>
+    </dl>
   )
 }

@@ -1,22 +1,11 @@
-import { Timeline, Typography } from 'antd'
-import dayjs from 'dayjs'
+import { AlertFillIcon, CheckCircleFillIcon, ClockIcon, DotFillIcon } from '@primer/octicons-react'
+import { Text } from '@primer/react'
 
-import type { RunEvent } from '../../api/types'
+import type { RunEvent, RunEventType } from '../../api/types'
+import { formatTime } from '../../utils/format'
+import styles from './run.module.css'
 
-const EVENT_COLOR: Record<string, string> = {
-  created: 'gray',
-  submitted: 'blue',
-  submit_failed: 'red',
-  started: 'blue',
-  finished: 'green',
-  cancel_requested: 'orange',
-  cancelled: 'orange',
-  artifact_collected: 'green',
-  artifact_missing: 'orange',
-  error: 'red',
-}
-
-const EVENT_LABEL: Record<string, string> = {
+const EVENT_LABEL: Record<RunEventType, string> = {
   created: '创建 Run',
   submitted: '提交调度任务',
   submit_failed: '提交失败',
@@ -24,29 +13,48 @@ const EVENT_LABEL: Record<string, string> = {
   finished: '执行结束',
   cancel_requested: '请求取消',
   cancelled: '已取消',
-  artifact_collected: '收集 Artifact',
-  artifact_missing: 'Artifact 缺失',
+  artifact_collected: '收集运行产物',
+  artifact_missing: '运行产物缺失',
   error: '异常',
 }
 
-/** 平台产生的执行事件时间线，区别于用户程序的 stdout / stderr。 */
+function EventIcon({ type }: { type: RunEventType }) {
+  if (type === 'submit_failed' || type === 'error' || type === 'artifact_missing') {
+    return <AlertFillIcon size={16} aria-hidden />
+  }
+  if (type === 'finished' || type === 'artifact_collected') {
+    return <CheckCircleFillIcon size={16} aria-hidden />
+  }
+  if (type === 'created') return <ClockIcon size={16} aria-hidden />
+  return <DotFillIcon size={16} aria-hidden />
+}
+
+/** 平台执行事件；stdout / stderr 在独立日志表面展示。 */
 export function RunTimeline({ events }: { events: RunEvent[] }) {
+  if (events.length === 0) {
+    return <Text className={styles.muted}>这个 Run 还没有执行事件。</Text>
+  }
+
   return (
-    <Timeline
-      items={events.map((event) => ({
-        color: EVENT_COLOR[event.type] ?? 'gray',
-        children: (
-          <div>
-            <Typography.Text strong>{EVENT_LABEL[event.type] ?? event.type}</Typography.Text>
-            <Typography.Text type="secondary" style={{ marginInlineStart: 8 }}>
-              {dayjs(event.created_at).format('HH:mm:ss')}
-            </Typography.Text>
-            <div>
-              <Typography.Text type="secondary">{event.message}</Typography.Text>
+    <ol className={styles.timeline} aria-label="Run 执行事件">
+      {events.map((event) => (
+        <li key={event.id} className={styles.timelineItem}>
+          <span className={styles.timelineIcon}>
+            <EventIcon type={event.type} />
+          </span>
+          <div className={styles.timelineBody}>
+            <div className={styles.timelineHeading}>
+              <strong>{EVENT_LABEL[event.type]}</strong>
+              <time dateTime={event.created_at} title={formatTime(event.created_at)}>
+                {formatTime(event.created_at)}
+              </time>
             </div>
+            <Text as="p" className={styles.timelineMessage}>
+              {event.message}
+            </Text>
           </div>
-        ),
-      }))}
-    />
+        </li>
+      ))}
+    </ol>
   )
 }

@@ -1,107 +1,134 @@
-import { DownloadOutlined } from '@ant-design/icons'
-import { Button, Card, Empty, Space, Table, Tag, Typography, message } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
-import { useEffect, useState } from 'react'
+import { DownloadIcon, PackageIcon } from '@primer/octicons-react'
+import { Banner, Button, Label, Text } from '@primer/react'
+import { Blankslate } from '@primer/react/experimental'
+import { useState } from 'react'
 
 import { api } from '../../api/client'
+import { toAsyncError } from '../../api/errors'
 import type { Artifact, ArtifactEntry } from '../../api/types'
-import { formatBytes } from '../../utils/format'
-import { field } from '../../utils/field'
+import { useAsync } from '../../api/useAsync'
+import { formatBytes, formatTime } from '../../utils/format'
+import { AsyncState } from '../common/AsyncState'
+import { PrimerListCard } from '../primer/PrimerListCard'
+import styles from './run.module.css'
 
-/** 某个 Artifact 的文件列表。 */
 function ArtifactFiles({ artifact }: { artifact: Artifact }) {
-  const [entries, setEntries] = useState<ArtifactEntry[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let alive = true
-    api
-      .listArtifactFiles(artifact.id)
-      .then((result) => {
-        if (alive) setEntries(result)
-      })
-      .catch((error: Error) => message.error(error.message))
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [artifact.id])
+  const entries = useAsync<ArtifactEntry[]>(() => api.listArtifactFiles(artifact.id), [artifact.id])
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<Error | undefined>()
 
   const download = async (path: string) => {
+    setDownloading(path)
+    setDownloadError(undefined)
     try {
       await api.downloadArtifactFile(artifact.id, path)
     } catch (error) {
-      message.error((error as Error).message)
+      setDownloadError(error as Error)
+    } finally {
+      setDownloading(null)
     }
   }
 
-  const columns: ColumnsType<ArtifactEntry> = [
-    { title: '文件', dataIndex: field<ArtifactEntry>('path') },
-    { title: '大小', dataIndex: field<ArtifactEntry>('size'), width: 110, render: formatBytes },
-    {
-      title: '操作',
-      width: 100,
-      key: 'actions',
-      render: (_, entry) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<DownloadOutlined />}
-          onClick={() => download(entry.path)}
-        >
-          下载
-        </Button>
-      ),
-    },
-  ]
-
   return (
-    <Table
-      rowKey="path"
-      size="small"
-      loading={loading}
-      dataSource={entries}
-      columns={columns}
-      pagination={false}
-    />
+    <AsyncState
+      loading={entries.loading}
+      loadingText="正在读取运行产物文件…"
+      error={
+        entries.error
+          ? { ...toAsyncError(entries.error), message: '无法读取这个运行产物。' }
+          : undefined
+      }
+      onRetry={entries.reload}
+      empty={(entries.data ?? []).length === 0}
+      emptyText="这个运行产物没有文件。"
+    >
+      {downloadError ? (
+        <div className={styles.inlineBanner}>
+          <Banner variant="critical">
+            <Banner.Title>无法下载这个文件。</Banner.Title>
+            <Banner.Description>{toAsyncError(downloadError)?.problems?.[0]}</Banner.Description>
+          </Banner>
+        </div>
+      ) : null}
+      <div className={styles.tableScroller}>
+        <table className={styles.artifactTable} aria-label={`${artifact.name} 文件`}>
+          <thead>
+            <tr>
+              <th scope="col">文件</th>
+              <th scope="col">大小</th>
+              <th scope="col">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(entries.data ?? []).map((entry) => (
+              <tr key={entry.path}>
+                <td>
+                  <code className={styles.inlineCode}>{entry.path}</code>
+                </td>
+                <td>{formatBytes(entry.size)}</td>
+                <td>
+                  <Button
+                    size="small"
+                    leadingVisual={DownloadIcon}
+                    loading={downloading === entry.path}
+                    disabled={downloading !== null}
+                    onClick={() => void download(entry.path)}
+                  >
+                    下载文件
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </AsyncState>
   )
 }
 
 export function ArtifactPanel({ artifacts }: { artifacts: Artifact[] }) {
   if (artifacts.length === 0) {
-    return <Empty description="这次 Run 没有产生 Artifact" />
+    return (
+      <Blankslate narrow>
+        <Blankslate.Visual>
+          <PackageIcon size={24} />
+        </Blankslate.Visual>
+        <Blankslate.Heading>这个 Run 没有产生运行产物。</Blankslate.Heading>
+      </Blankslate>
+    )
   }
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <div className={styles.artifactList}>
       {artifacts.map((artifact) => (
-        <Card
+        <PrimerListCard
           key={artifact.id}
-          size="small"
           title={
-            <Space>
-              <Typography.Text strong>{artifact.name}</Typography.Text>
-              <Tag>{artifact.source_path}</Tag>
-              {artifact.status !== 'available' && <Tag color="orange">内容已清理</Tag>}
-            </Space>
+            <span className={styles.artifactTitle}>
+              {artifact.name}
+              {artifact.status !== 'available' ? (
+                <Label variant="attention">内容已清理</Label>
+              ) : null}
+            </span>
           }
           extra={
-            <Typography.Text type="secondary">
-              {artifact.file_count} 个文件 · {formatBytes(artifact.size)}
-            </Typography.Text>
+            <Text size="small" className={styles.muted}>
+              {artifact.file_count} 个文件 · {formatBytes(artifact.size)} ·{' '}
+              {formatTime(artifact.created_at)}
+            </Text>
           }
         >
+          <div className={styles.artifactMeta}>
+            <code className={styles.inlineCode}>{artifact.source_path}</code>
+            {artifact.description ? <Text size="small">{artifact.description}</Text> : null}
+          </div>
           {artifact.status === 'available' ? (
             <ArtifactFiles artifact={artifact} />
           ) : (
-            <Typography.Text type="secondary">
-              内容已被清理，但这条产出记录会一直保留在历史里。
-            </Typography.Text>
+            <div className={styles.emptyInline}>内容已清理；运行产物记录仍保留在 Run 历史中。</div>
           )}
-        </Card>
+        </PrimerListCard>
       ))}
-    </Space>
+    </div>
   )
 }

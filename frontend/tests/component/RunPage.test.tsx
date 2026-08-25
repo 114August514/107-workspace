@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-import { ConfigProvider } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { api, ApiError } from '../../src/api/client'
-import type { LogChunk, RunDetail, LegacyWorkspaceContext } from '../../src/api/types'
+import type { LogChunk, RunDetail } from '../../src/api/types'
 import { RunPage } from '../../src/pages/RunPage'
 
 const runDetailFixture = (): RunDetail => ({
@@ -34,6 +32,7 @@ const runDetailFixture = (): RunDetail => ({
   },
   events: [],
   artifacts: [],
+  capabilities: ['run.submit', 'run.cancel'],
   snapshot: {
     id: 'snapshot-1',
     command: 'python train.py',
@@ -72,25 +71,13 @@ const runDetailFixture = (): RunDetail => ({
   },
 })
 
-const workspaceFixture = (): LegacyWorkspaceContext => ({
-  id: 'workspace-1',
-  name: 'test-workspace',
-  kind: 'personal',
-  role: 'owner',
-  capabilities: ['run.submit', 'run.cancel'],
-  default_environment_version_id: null,
-  owner_id: 'student',
-})
-
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
-    <ConfigProvider locale={zhCN}>
-      <MemoryRouter initialEntries={['/runs/run-1']}>
-        <Routes>
-          <Route path="/runs/:runId" element={children} />
-        </Routes>
-      </MemoryRouter>
-    </ConfigProvider>
+    <MemoryRouter initialEntries={['/runs/run-1']}>
+      <Routes>
+        <Route path="/runs/:runId" element={children} />
+      </Routes>
+    </MemoryRouter>
   )
 }
 
@@ -116,7 +103,6 @@ describe('RunPage backend unavailable', () => {
     })
 
     vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
-    vi.spyOn(api, 'getLegacyWorkspaceContext').mockResolvedValue(workspaceFixture())
 
     render(
       <Wrapper>
@@ -146,5 +132,33 @@ describe('RunPage backend unavailable', () => {
       expect(screen.queryByText('无法加载这个 Run。')).not.toBeInTheDocument()
     })
     expect(screen.getByRole('heading', { name: 'test-run' })).toBeInTheDocument()
+  })
+
+  it('keeps actions fail-closed and restores them from refreshed Run capabilities', async () => {
+    const denied = runDetailFixture()
+    denied.capabilities = []
+    const restored = runDetailFixture()
+    restored.capabilities = ['run.submit']
+
+    const getRun = vi
+      .spyOn(api, 'getRun')
+      .mockResolvedValueOnce(denied)
+      .mockResolvedValueOnce(restored)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+    vi.spyOn(api, 'syncRuns').mockResolvedValue({ changed: 0 })
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    await screen.findByRole('heading', { name: 'test-run' })
+    expect(screen.queryByRole('button', { name: '重新运行' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+
+    expect(await screen.findByRole('button', { name: '重新运行' })).toBeInTheDocument()
+    expect(getRun).toHaveBeenCalledTimes(2)
   })
 })
