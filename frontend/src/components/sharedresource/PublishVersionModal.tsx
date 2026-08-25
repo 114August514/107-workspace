@@ -1,6 +1,6 @@
 import { CloudIcon } from '@primer/octicons-react'
 import { Dialog, Flash, FormControl, Stack, TextInput } from '@primer/react'
-import { type DragEvent, useCallback, useId, useState } from 'react'
+import { type DragEvent, useCallback, useEffect, useId, useState } from 'react'
 
 import { api } from '../../api/client'
 import type { SharedResourceVersion } from '../../api/types'
@@ -67,6 +67,7 @@ function DropArea({
         <input
           id={inputId}
           className={styles.fileInput}
+          aria-label="文件"
           type="file"
           multiple
           onChange={(e) => {
@@ -104,45 +105,107 @@ function DropArea({
   )
 }
 
-export function PublishVersionModal({ open, resourceId, onClose, onPublished }: Props) {
+export function PublishVersionModal(props: Props) {
+  return <ResourcePublishVersionModal key={props.resourceId} {...props} />
+}
+
+function ResourcePublishVersionModal({ open, resourceId, onClose, onPublished }: Props) {
+  const attemptStorageKey = `shared-resource-publication-attempt:${resourceId}`
   const [files, setFiles] = useState<File[]>([])
   const [prefix, setPrefix] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [polling, setPolling] = useState(false)
+  const [attemptId, setAttemptId] = useState<string | null>(() =>
+    window.sessionStorage.getItem(attemptStorageKey),
+  )
   const [feedback, setFeedback] = useState<{ variant: 'success' | 'danger'; text: string } | null>(
     null,
   )
 
-  const reset = () => {
-    setFiles([])
-    setPrefix('')
-    setDescription('')
-    setFeedback(null)
-    setSubmitting(false)
-  }
+  useEffect(() => {
+    if (!open || !polling || attemptId === null) return
+
+    const controller = new AbortController()
+    let timer: number | undefined
+
+    const poll = async () => {
+      try {
+        const attempt = await api.getSharedResourcePublicationAttempt(attemptId, controller.signal)
+        if (controller.signal.aborted) return
+
+        if (attempt.status === 'failed') {
+          window.sessionStorage.removeItem(attemptStorageKey)
+          setAttemptId(null)
+          setPolling(false)
+          setFeedback({
+            variant: 'danger',
+            text: attempt.failure_reason ?? attempt.validation_summary,
+          })
+          return
+        }
+        if (attempt.status === 'succeeded' && attempt.version_id !== null) {
+          const version = await api.getSharedResourceVersion(attempt.version_id, controller.signal)
+          if (controller.signal.aborted) return
+          window.sessionStorage.removeItem(attemptStorageKey)
+          setFiles([])
+          setPrefix('')
+          setDescription('')
+          setFeedback(null)
+          setAttemptId(null)
+          setPolling(false)
+          onPublished(version)
+          return
+        }
+
+        setFeedback({ variant: 'success', text: attempt.validation_summary })
+        timer = window.setTimeout(() => void poll(), 500)
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setPolling(false)
+        setFeedback({ variant: 'danger', text: (err as Error).message })
+      }
+    }
+
+    void poll()
+    return () => {
+      controller.abort()
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
+  }, [attemptId, attemptStorageKey, onPublished, open, polling])
 
   const handleClose = () => {
-    if (!submitting) {
-      reset()
-      onClose()
+    if (submitting) return
+    setPolling(false)
+    if (attemptId !== null) {
+      setFeedback({ variant: 'success', text: '已暂停查询；可重新打开并继续查询结果' })
     }
+    onClose()
   }
 
   const handleSubmit = async () => {
+    if (attemptId !== null) {
+      setFeedback({ variant: 'success', text: '正在查询校验结果…' })
+      setPolling(true)
+      return
+    }
     if (files.length === 0) {
       setFeedback({ variant: 'danger', text: '请至少选择一个文件' })
       return
     }
+
     setSubmitting(true)
     setFeedback(null)
     try {
-      const version = await api.publishSharedResourceVersion(resourceId, {
+      const attempt = await api.createSharedResourcePublicationAttempt(resourceId, {
         files,
         description: description.trim(),
         prefix: prefix.trim() || undefined,
       })
-      reset()
-      onPublished(version)
+      window.sessionStorage.setItem(attemptStorageKey, attempt.id)
+      setAttemptId(attempt.id)
+      setFeedback({ variant: 'success', text: attempt.validation_summary })
+      setPolling(true)
     } catch (err) {
       setFeedback({ variant: 'danger', text: (err as Error).message })
     } finally {
@@ -167,10 +230,16 @@ export function PublishVersionModal({ open, resourceId, onClose, onPublished }: 
       footerButtons={[
         { content: '取消', onClick: handleClose, disabled: submitting, buttonType: 'default' },
         {
-          content: submitting ? '发布中…' : '发布版本',
+          content: submitting
+            ? '正在上传…'
+            : polling
+              ? '正在校验…'
+              : attemptId
+                ? '继续查询结果'
+                : '发布版本',
           onClick: handleSubmit,
           buttonType: 'primary',
-          disabled: submitting,
+          disabled: submitting || polling,
         },
       ]}
     >

@@ -52,6 +52,8 @@ const version: SharedResourceVersionDetail = {
   sequence: 1,
   file_count: 1,
   total_size: 100,
+  manifest_hash: 'a'.repeat(64),
+  validation_summary: '已校验 1 个文件，共 100 字节；内容哈希与大小一致',
   created_at: '2026-08-14T10:00:00Z',
   created_by: 'student',
   files: [{ path: 'train.py', content_hash: 'abc', size: 100 }],
@@ -111,6 +113,13 @@ describe('SharedResourceVersionPage 文件预览', () => {
     cleanup()
     vi.clearAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('展示处理器校验摘要和不可变清单摘要', async () => {
+    renderPage()
+
+    expect(await screen.findByText(version.validation_summary)).toBeInTheDocument()
+    expect(screen.getByText(version.manifest_hash)).toBeInTheDocument()
   })
 
   it('点击文件即打开预览，成功后展示内容', async () => {
