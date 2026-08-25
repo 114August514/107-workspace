@@ -152,6 +152,10 @@ System 用于保护少量真正重要的跨进程核心闭环。
 需要真实证明 API、Worker 和 PostgreSQL 边界的场景，
 不能通过把这些边界 mock 掉之后宣称 system 行为已经验证。
 
+官方 executable smoke 使用真实 API 进程、独立 Worker、PostgreSQL 和 MockScheduler；每次创建
+唯一数据库与临时 storage，结束后隔离清理。它证明本地进程/持久化/文件系统接缝，不证明真实
+107 service identity、mount、REST profile、credential lifecycle 或 authorized submit/restart。
+
 ### 组织
 
 测试文件围绕一项能力、规则或边界组织，
@@ -175,22 +179,26 @@ System 用于保护少量真正重要的跨进程核心闭环。
 
 ## 运行
 
+Linux / WSL2 运行完整测试与工程验证：
+
 ```bash
 make test
 make check
 make coverage
+make smoke
 ```
 
-测试支持 Linux，以及 Windows 主机上使用 Linux toolchain 与 Linux filesystem 的
-WSL2 环境；不支持原生 Windows / PowerShell runtime。
+`make smoke` 需要 `WORKSPACE107_DATABASE_URL` 指向 PostgreSQL 管理连接；它启动 API 与独立
+Worker 并使用 Mock Scheduler。已有栈可运行
+`uv run --no-project python scripts/workspace.py smoke --base-url <.../api/v1>`，该模式不接管
+栈生命周期或数据清理。
 
-`make test` 是项目测试套件的统一入口。
+原生 Windows / PowerShell runtime 不在支持矩阵内。统一 Python task 实现不构成跨平台承诺；
+完整验证与 smoke 必须在 Linux 或使用 Linux toolchain/filesystem 的 WSL2 运行。权威边界见
+[ADR-0005](../decisions/0005-platform-support-matrix.md)。
 
-`make check` 是完整工程验证入口，
-但开发中的每个局部步骤不要求机械运行完整检查。
-
-`make coverage` 在当前测试基线演进期间只生成报告，
-不设置全仓统一百分比门槛。
+`make test` 是 Linux/WSL2 完整项目测试入口；`make check` 是完整工程验证入口，但局部改动不
+要求机械运行全套。`make coverage` 当前只生成报告，不设置全仓百分比门槛。
 
 如果未来需要 coverage gate，
 应根据模块风险、稳定边界和可测试性决定，

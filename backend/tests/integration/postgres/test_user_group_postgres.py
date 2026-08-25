@@ -248,7 +248,6 @@ async def test_postgresql_owner_race_serializes_transfer_and_removal(tmp_path: P
     settings = Settings(
         database_url=url,
         storage_root=tmp_path / "storage",
-        run_sync_interval_seconds=0,
     )
     context = build_context(settings)
     try:

@@ -46,7 +46,6 @@ def settings(tmp_path: Path) -> Settings:
         storage_root=tmp_path / "storage",
         scheduler="mock",
         auth_mode="dev",
-        run_sync_interval_seconds=0,
     )
 
 

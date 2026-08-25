@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ def _submission(root: Path) -> SchedulerSubmission:
     logs.mkdir(parents=True)
     return SchedulerSubmission(
         run_id="run_mock",
+        correlation="run_mock:snapshot_1:version_1:commit_1",
         job_name="Mock scheduler",
         work_dir=work,
         command="python main.py",
@@ -57,6 +59,26 @@ async def test_mock_scheduler_uses_bash(monkeypatch, tmp_path: Path) -> None:
 
     scheduler = mock_module.MockScheduler()
     job_id = await scheduler.submit(submission)
+    correlation = await scheduler.find_by_correlation(submission.correlation)
+    missing = await scheduler.find_by_correlation("run_missing:snapshot_1:version_1:commit_1")
     await scheduler.poll(job_id)
 
     assert captured["executable"] == "/bin/bash"
+    assert correlation.complete is True
+    assert correlation.job_ids == (job_id,)
+    assert correlation.reason == ""
+    assert missing.complete is True
+    assert missing.job_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_mock_scheduler_maps_nonzero_exit_to_failed(tmp_path: Path) -> None:
+    submission = replace(_submission(tmp_path), command="exit 7")
+    scheduler = mock_module.MockScheduler()
+
+    job_id = await scheduler.submit(submission)
+    await scheduler.wait_for_exit(job_id)
+    state = await scheduler.poll(job_id)
+
+    assert state.state.value == "failed"
+    assert state.exit_code == 7

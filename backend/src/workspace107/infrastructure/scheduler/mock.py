@@ -18,7 +18,12 @@ from typing import IO
 from uuid import uuid4
 
 from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.ports.scheduler import (
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
 # 用户作业只继承这些基础变量。
@@ -37,6 +42,7 @@ def build_job_environment(submission: SchedulerSubmission) -> dict[str, str]:
 @dataclass
 class _MockJob:
     process: asyncio.subprocess.Process
+    correlation: str
     stdout: IO[bytes]
     stderr: IO[bytes]
     started_at: datetime
@@ -60,6 +66,8 @@ class MockScheduler:
         # 把渲染出的作业脚本留在 Run 目录里，用户可以直接看到平台生成了什么。
         script_path = submission.stdout_path.parent.parent / "job.sh"
         script_path.write_text(render_sbatch_script(submission), encoding="utf-8")
+        os.chown(script_path, -1, submission.stdout_path.parent.stat().st_gid)
+        script_path.chmod(0o660)
 
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
@@ -83,11 +91,18 @@ class MockScheduler:
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
             process=process,
+            correlation=submission.correlation,
             stdout=stdout,
             stderr=stderr,
             started_at=datetime.now(UTC),
         )
         return job_id
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        job_ids = tuple(
+            job_id for job_id, job in self._jobs.items() if job.correlation == correlation
+        )
+        return SchedulerCorrelationResult(complete=True, job_ids=job_ids)
 
     async def poll(self, job_id: str) -> SchedulerJobState:
         job = self._jobs.get(job_id)
@@ -116,7 +131,14 @@ class MockScheduler:
                 finished_at=job.finished_at,
                 reason="任务已被取消",
             )
-
+        if return_code != 0:
+            return SchedulerJobState(
+                state=SchedulerState.FAILED,
+                exit_code=return_code,
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+                reason=f"任务退出码为 {return_code}",
+            )
         return SchedulerJobState(
             state=SchedulerState.COMPLETED,
             exit_code=return_code,

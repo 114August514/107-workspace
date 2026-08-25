@@ -1,22 +1,31 @@
 # 部署文件
 
-本目录保存可执行的部署编排；部署原理、生产边界和排障说明仍以
-[`docs/operations/deployment.md`](../docs/operations/deployment.md) 为准。
+本目录保存可执行编排。通用拓扑、配置和排障见
+[`docs/operations/deployment.md`](../docs/operations/deployment.md)；目标 107 当前证据边界和人工门见
+[`docs/operations/107-cluster.md`](../docs/operations/107-cluster.md)。
 
-当前只有 [`compose.yaml`](compose.yaml)，用于本机开发和受信任演示。它不提供 HTTPS、
-生产级 Secret 管理、自动备份、多副本编排或监控告警，因此不构成生产部署方案。
+[`compose.yaml`](compose.yaml) 只用于 Linux/WSL2 本地开发和受信任演示，不提供 HTTPS、生产
+Secret 管理、自动备份、多副本编排或监控告警，因此不是生产部署方案。原生 Windows /
+PowerShell runtime 不受支持；平台矩阵见
+[ADR-0005](../docs/decisions/0005-platform-support-matrix.md)。
 
 ## 目录边界
 
-- `deploy/` 管理服务如何组成一个可运行环境。
+- `deploy/` 管理服务如何组合。
 - [`backend/Dockerfile`](../backend/Dockerfile) 与
-  [`backend/docker-entrypoint.sh`](../backend/docker-entrypoint.sh) 由后端镜像维护。
-- [`frontend/Dockerfile`](../frontend/Dockerfile) 与
-  [`frontend/nginx.conf`](../frontend/nginx.conf) 由前端 Web 镜像维护。
-- 环境变量模板保留在根目录 [`.env.example`](../.env.example)，真实凭据不得提交。
+  [`backend/docker-entrypoint.sh`](../backend/docker-entrypoint.sh) 管理后端 image/bootstrap。
+- 环境模板在 [`.env.example`](../.env.example)；真实 credential 不得提交。
+- 只有实际引入其他部署方式时才增加目录，不预建 provider framework。
 
-只有在实际引入 Kubernetes、Systemd 或其他部署方式时，才在本目录增加对应子目录；
-不要预先建立空目录或复制服务自己的构建文件。
+## Compose 契约
+
+Compose 表达一个 API、一个独立 Worker、PostgreSQL、Web 和共享 storage。API/Worker 对 storage
+使用同一固定容器路径；Worker 直接依赖 PostgreSQL，不依赖 API。Scheduler、Slurm profile、JWT、
+shared GID 和 Worker poll 配置只属于 Worker，API 环境禁止出现这些变量。
+
+本地 image identity 和 shared GID 默认为 `10001`。可以通过 `.env` 的 service UID/GID build args
+和 shared GID 重建/配置，但真实 107 service/compute identity、mount mapping 和权限必须人工验收；
+清单可配置不等于目标环境 accepted。
 
 ## 统一入口
 
@@ -29,9 +38,12 @@ make compose-up
 make compose-down
 ```
 
-统一入口会显式选择本目录的 Compose 文件，并保持相对路径以仓库根目录为基准。
-需要直接使用 Docker 排障时，也必须指定项目目录和清单路径：
+`compose-config` 不只渲染 YAML，还检查 API/Worker credential boundary、Worker 所需配置、单独 DB
+依赖和 Worker healthcheck。Makefile 是薄转发，任务实现位于 `scripts/workspace.py`。
+
+直接排障时仍须显式指定项目目录与清单：
 
 ```bash
 docker compose --project-directory . --file deploy/compose.yaml ps
+docker compose --project-directory . --file deploy/compose.yaml logs -f api worker
 ```

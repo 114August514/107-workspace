@@ -54,7 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("migrate-down", help="downgrade the database by one revision")
     subparsers.add_parser("coverage", help="report backend test coverage without a global gate")
     subparsers.add_parser("demo", help="run the isolated core Run demonstration")
-    subparsers.add_parser("smoke", help="run the isolated HTTP core Run smoke test")
+    smoke_parser = subparsers.add_parser("smoke", help="run the HTTP core Run smoke test")
+    smoke_parser.add_argument(
+        "--base-url",
+        help="exercise an already-running API/Worker stack instead of starting an isolated stack",
+    )
     subparsers.add_parser("ship", help="deploy the application when a production target exists")
     subparsers.add_parser("hooks", help="enable repository-owned Git hooks for this clone")
     subparsers.add_parser("doctor", help="inspect the local engineering baseline")
@@ -101,7 +105,10 @@ def dispatch(args: argparse.Namespace) -> None:
     elif args.command == "demo":
         project.demo()
     elif args.command == "smoke":
-        project.demo(smoke=True)
+        if args.base_url is None:
+            project.demo(smoke=True)
+        else:
+            project.external_smoke(args.base_url)
     elif args.command == "ship":
         project.ship()
     elif args.command == "hooks":

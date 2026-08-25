@@ -12,8 +12,12 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlsplit
 
 from .common import (
     BACKEND_ROOT,
@@ -141,21 +145,73 @@ def compose(action: str) -> None:
     require_commands("docker")
     arguments: dict[str, list[str]] = {
         "build": ["build"],
-        "config": ["config"],
+        "config": ["config", "--format", "json"],
         "up": ["up", "--build"],
         "down": ["down"],
     }
-    run(
-        [
-            "docker",
-            "compose",
-            "--project-directory",
-            REPO_ROOT,
-            "--file",
-            COMPOSE_FILE,
-            *arguments[action],
-        ]
+    command = [
+        "docker",
+        "compose",
+        "--project-directory",
+        REPO_ROOT,
+        "--file",
+        COMPOSE_FILE,
+        *arguments[action],
+    ]
+    if action != "config":
+        run(command)
+        return
+    result = run(
+        command,
+        env={"POSTGRES_PASSWORD": os.environ.get("POSTGRES_PASSWORD") or "compose-config-only"},
+        capture=True,
     )
+    try:
+        rendered = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise TaskError("Docker Compose returned invalid JSON configuration") from error
+    _validate_compose_config(rendered)
+    print(result.stdout, end="")
+
+
+def _validate_compose_config(rendered: dict[str, Any]) -> None:
+    services = rendered.get("services", {})
+    api = services.get("api", {})
+    worker = services.get("worker", {})
+    if not api or not worker:
+        raise TaskError("Compose config must define separate api and worker services")
+
+    api_environment = api.get("environment", {})
+    forbidden_api = {
+        name
+        for name in api_environment
+        if name in {"WORKSPACE107_SCHEDULER", "WORKSPACE107_SHARED_GID"}
+        or name.startswith("WORKSPACE107_SLURM_")
+        or name.startswith("WORKSPACE107_WORKER_")
+    }
+    if forbidden_api:
+        raise TaskError(
+            "API service contains Worker-only configuration: " + ", ".join(sorted(forbidden_api))
+        )
+
+    worker_environment = worker.get("environment", {})
+    required_worker = {
+        "WORKSPACE107_SCHEDULER",
+        "WORKSPACE107_SHARED_GID",
+        "WORKSPACE107_SLURM_API_USER",
+        "WORKSPACE107_SLURM_JWT",
+        "WORKSPACE107_SLURM_API_SCHEMA_PROFILE",
+    }
+    missing_worker = sorted(required_worker - set(worker_environment))
+    if missing_worker:
+        raise TaskError("Worker service is missing configuration: " + ", ".join(missing_worker))
+
+    dependencies = worker.get("depends_on", {})
+    if "db" not in dependencies or "api" in dependencies:
+        raise TaskError("Worker must depend on PostgreSQL directly, not API health")
+    health_command = json.dumps(worker.get("healthcheck", {}).get("test", []))
+    if "8000" in health_command or "workspace107.worker" not in health_command:
+        raise TaskError("Worker healthcheck must probe the Worker process, not API port 8000")
 
 
 def install_hooks() -> None:
@@ -248,23 +304,142 @@ def _stop_processes(processes: list[subprocess.Popen[str]]) -> None:
             process.wait(timeout=5)
 
 
+@contextmanager
+def _smoke_admin_database() -> Iterator[str]:
+    configured = os.environ.get("WORKSPACE107_DATABASE_URL", "")
+    if configured.startswith("postgresql+"):
+        yield configured
+        return
+
+    require_commands("docker")
+    name = f"workspace107-smoke-postgres-{uuid.uuid4().hex}"
+    port = _free_port()
+    password = uuid.uuid4().hex
+    run(
+        [
+            "docker",
+            "run",
+            "--detach",
+            "--rm",
+            "--name",
+            name,
+            "--env",
+            f"POSTGRES_PASSWORD={password}",
+            "--publish",
+            f"127.0.0.1:{port}:5432",
+            "postgres:17-alpine",
+        ],
+        capture=True,
+        quiet=True,
+    )
+    try:
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            probe = run(
+                ["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"],
+                capture=True,
+                quiet=True,
+                check=False,
+            )
+            if probe.returncode == 0:
+                break
+            time.sleep(0.2)
+        else:
+            raise TaskError("Temporary PostgreSQL container did not become ready")
+        yield f"postgresql+asyncpg://postgres:{password}@127.0.0.1:{port}/postgres"
+    finally:
+        run(["docker", "rm", "--force", name], capture=True, quiet=True, check=False)
+
+
+@contextmanager
+def _temporary_smoke_database(admin_url: str) -> Iterator[str]:
+    name = f"workspace107_smoke_{uuid.uuid4().hex}"
+    environment = merged_environment(
+        {
+            "WORKSPACE107_SMOKE_ADMIN_DATABASE_URL": admin_url,
+            "WORKSPACE107_SMOKE_DATABASE_NAME": name,
+        }
+    )
+    created = backend_uv(
+        "run",
+        "python",
+        "-m",
+        "workspace107.tools.smoke_database",
+        "create",
+        env=environment,
+        capture=True,
+        quiet=True,
+    ).stdout.strip()
+    try:
+        if not created.startswith("postgresql+"):
+            raise TaskError("Smoke database helper did not return a PostgreSQL URL")
+        yield created
+    finally:
+        backend_uv(
+            "run",
+            "python",
+            "-m",
+            "workspace107.tools.smoke_database",
+            "drop",
+            env=environment,
+            capture=True,
+            quiet=True,
+        )
+
+
+def _validated_api_base_url(value: str) -> str:
+    candidate = value.strip().rstrip("/")
+    try:
+        parsed = urlsplit(candidate)
+        valid_port = parsed.port is None or parsed.port > 0
+    except ValueError:
+        valid_port = False
+        parsed = urlsplit("")
+    valid = (
+        parsed.scheme in {"http", "https"}
+        and parsed.hostname is not None
+        and valid_port
+        and parsed.username is None
+        and parsed.password is None
+        and not parsed.query
+        and not parsed.fragment
+        and parsed.path.rstrip("/").endswith("/api/v1")
+    )
+    if not valid:
+        raise TaskError("External smoke requires an HTTP(S) API URL ending in /api/v1")
+    return candidate
+
+
+def external_smoke(base_url: str) -> None:
+    """Exercise a running API/Worker stack without owning its lifecycle or data."""
+    heading("External stack core run smoke")
+    evidence = _exercise_core_run(
+        ApiClient(_validated_api_base_url(base_url), user="student"),
+        verbose=False,
+    )
+    print("ok  external HTTP core run completed: " + json.dumps(evidence, sort_keys=True))
+
+
 def demo(*, smoke: bool = False) -> None:
     heading("Isolated core run smoke" if smoke else "Core run demo")
     ensure_backend_dependencies(quiet=True)
     port = _selected_demo_port(smoke)
     base_url = f"http://127.0.0.1:{port}/api/v1"
 
-    with tempfile.TemporaryDirectory(prefix="workspace107-demo-") as directory:
+    with (
+        _smoke_admin_database() as database_url,
+        tempfile.TemporaryDirectory(prefix="workspace107-demo-") as directory,
+        _temporary_smoke_database(database_url) as isolated_database_url,
+    ):
         workdir = Path(directory)
         server_log = workdir / "uvicorn.log"
-        database_path = (workdir / "demo.db").resolve().as_posix()
+        worker_log = workdir / "worker.log"
         environment = merged_environment(
             {
                 "WORKSPACE107_ENV": "local",
-                "WORKSPACE107_DATABASE_URL": f"sqlite+aiosqlite:///{database_path}",
-                "WORKSPACE107_STORAGE_ROOT": str(workdir / "storage"),
+                "WORKSPACE107_DATABASE_URL": isolated_database_url,
+                "WORKSPACE107_STORAGE_ROOT": str((workdir / "storage").resolve()),
                 "WORKSPACE107_SCHEDULER": "mock",
-                "WORKSPACE107_RUN_SYNC_INTERVAL_SECONDS": "0",
             }
         )
         backend_uv("run", "alembic", "upgrade", "head", env=environment, quiet=smoke)
@@ -278,7 +453,7 @@ def demo(*, smoke: bool = False) -> None:
             quiet=smoke,
         )
 
-        command = [
+        server_command = [
             _backend_python_executable(),
             "-m",
             "uvicorn",
@@ -291,20 +466,39 @@ def demo(*, smoke: bool = False) -> None:
             "--log-level",
             "warning",
         ]
-        with server_log.open("w", encoding="utf-8") as log_file:
-            process = subprocess.Popen(
-                command,
+        worker_command = [_backend_python_executable(), "-m", "workspace107.worker"]
+        with (
+            server_log.open("w", encoding="utf-8") as server_output,
+            worker_log.open("w", encoding="utf-8") as worker_output,
+        ):
+            server_process = subprocess.Popen(
+                server_command,
                 cwd=BACKEND_ROOT,
                 env=environment,
-                stdout=log_file,
+                stdout=server_output,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            worker_process = subprocess.Popen(
+                worker_command,
+                cwd=BACKEND_ROOT,
+                env=environment,
+                stdout=worker_output,
                 stderr=subprocess.STDOUT,
                 text=True,
             )
             try:
-                _wait_until_ready(f"{base_url}/health", process, server_log)
+                _wait_until_ready(f"{base_url}/health", server_process, server_log)
                 _exercise_core_run(ApiClient(base_url, user="student"), verbose=not smoke)
+            except Exception as error:
+                server_output.flush()
+                worker_output.flush()
+                raise TaskError(
+                    f"{error}\nAPI log:\n{server_log.read_text(errors='replace')}"
+                    f"\nWorker log:\n{worker_log.read_text(errors='replace')}"
+                ) from error
             finally:
-                _stop_processes([process])
+                _stop_processes([worker_process, server_process])
 
     if smoke:
         print("ok  isolated HTTP core run completed")
@@ -312,7 +506,7 @@ def demo(*, smoke: bool = False) -> None:
         print("\nDemo complete: Project -> Version -> Run Snapshot -> logs -> Artifact.")
 
 
-def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
+def _exercise_core_run(client: ApiClient, *, verbose: bool) -> dict[str, Any]:
     def say(label: str) -> None:
         if verbose:
             print(f"\n{label}")
@@ -402,7 +596,6 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     status = "queued"
     detail: dict[str, Any] = {}
     while time.monotonic() < deadline:
-        client.request("POST", "/runs/sync")
         detail = client.request("GET", f"/runs/{run_id}")
         status = detail["run"]["status"]
         if verbose:
@@ -435,6 +628,14 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         print(log_text.rstrip())
         print(f"Artifact metrics.json: {metrics}")
         print(f"Run Snapshot: {detail['snapshot']}")
+    return {
+        "run_id": run_id,
+        "status": status,
+        "artifact_id": artifact_id,
+        "artifact_path": metric_file["path"],
+        "artifact_size": metric_file["size"],
+        "artifact": metrics,
+    }
 
 
 def _journal_fields(path: Path) -> tuple[str, dict[str, str]]:
@@ -601,6 +802,7 @@ def doctor() -> None:
         "docs/product/deferred.md",
         "docs/contributing/git-workflow.md",
         "docs/operations/deployment.md",
+        "docs/operations/107-cluster.md",
         "deploy/README.md",
         "deploy/compose.yaml",
         "docs/README.md",

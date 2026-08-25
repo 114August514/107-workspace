@@ -1,17 +1,14 @@
-"""Run 创建、提交与查询用例。
+"""Run query plus transactional Snapshot, QUEUED Run, and durable intent creation.
 
-创建 Run 的顺序（设计稿 §3.1.6 规则 6）::
-
-    校验与解析 -> 固定 Run Snapshot -> 准备工作目录 -> 提交调度任务
-    -> 关联 Scheduler Job -> 更新执行状态
-
-创建或重新执行 Run 时都要按当前权限和资源资格重新校验引用；
-历史上曾经成功使用，不代表当前仍然可以使用（设计稿 §3.4.3）。
+API requests validate current authority and exact references, then persist all execution
+facts atomically. Directory materialization, scheduler submit/poll/cancel, and artifact
+finalization belong exclusively to the single-active independent Worker.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from ..domain import ids
 from ..domain.capabilities import Capability
@@ -31,18 +28,11 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
-from ..domain.errors import (
-    ConflictError,
-    ObjectNotFound,
-    PermissionDenied,
-    PreflightRejected,
-    SchedulerError,
-    ValidationFailed,
-)
+from ..domain.errors import ConflictError, ObjectNotFound, PreflightRejected, ValidationFailed
+from ..domain.execution import ExecutionIntent
 from ..domain.models import (
     Artifact,
     EnvironmentVersion,
-    InputBinding,
     ProjectVersion,
     Run,
     RunConfiguration,
@@ -53,10 +43,10 @@ from ..domain.models import (
 from ..domain.ownership import OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
+from ..domain.ports.execution import ExecutionContextPort
 from ..domain.ports.repositories import Repositories
-from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.secret_vault import SecretVault
-from ..domain.ports.storage import ArtifactEntry, RunInput, StoragePort
+from ..domain.ports.storage import ArtifactEntry, StoragePort
 from ..domain.run_snapshot import RunSnapshot, build_snapshot
 from ..domain.secrets import ResolvedEnv, redact
 from .access import AccessGuard, ProjectAccess
@@ -65,7 +55,7 @@ from .asset_use import (
     environment_version_for_owner_use,
     shared_resource_version_for_owner_use,
 )
-from .notifier import Notifier
+from .execution_context import ExecutionContextService
 from .scoped_config_resolver import ScopedConfigResolver
 
 MAX_LOG_BYTES = 256 * 1024
@@ -128,21 +118,21 @@ class RunService:
         guard: AccessGuard,
         clock: Clock,
         storage: StoragePort,
-        scheduler: SchedulerPort,
         secrets: SecretVault,
         activity: ActivityRecorder,
-        notifier: Notifier,
         config_resolver: ScopedConfigResolver,
+        execution_context: ExecutionContextPort | None = None,
     ) -> None:
         self._repos = repos
         self._guard = guard
         self._clock = clock
         self._storage = storage
-        self._scheduler = scheduler
         self._secrets = secrets
         self._config_resolver = config_resolver
+        self._execution_context = execution_context or ExecutionContextService(
+            repos, guard, config_resolver
+        )
         self._activity = activity
-        self._notifier = notifier
 
     # -- 查询 -----------------------------------------------------------
 
@@ -301,11 +291,10 @@ class RunService:
         *,
         idempotency_key: str | None = None,
     ) -> RunSubmission:
-        """创建 Run 并提交给调度系统。
+        """创建 immutable Snapshot、QUEUED Run 与 durable execution intent。
 
-        提交失败不会回滚 Run——失败本身也是需要被记录和排查的历史事实。
-
-        带幂等键时，同一个键的重复请求返回上一次的结果，不会再跑一次。
+        请求事务不准备目录、不解析 Project Git 内容、也不调用 Scheduler。
+        带幂等键时，同一个键的重复请求返回上一次结果，不会再创建执行意图。
         """
         access = await self._guard.project(user_id, project_id, needs=Capability.RUN_SUBMIT)
 
@@ -374,11 +363,12 @@ class RunService:
             initiated_by_user_id=user_id,
             created_at=now,
         )
+        validated = await self._execution_context.validate(run, snapshot)
+        validated.secret_values.clear()
         await self._repos.runs.add(run)
+        await self._repos.execution_intents.add(_new_execution_intent(run.id, now))
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(user_id, idempotency_key, run.id)
-
-        await self._submit(run, snapshot, result.project_version, access)
         await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
         return RunSubmission(run=run, created=True)
 
@@ -463,11 +453,12 @@ class RunService:
             initiated_by_user_id=user_id,
             created_at=now,
         )
+        validated = await self._execution_context.validate(run, snapshot)
+        validated.secret_values.clear()
         await self._repos.runs.add(run)
+        await self._repos.execution_intents.add(_new_execution_intent(run.id, now))
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(user_id, idempotency_key, run.id)
-
-        await self._submit(run, snapshot, project_version, access)
         await self._record_run_activity(
             user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
         )
@@ -479,148 +470,12 @@ class RunService:
         if run.is_terminal:
             raise ConflictError(f"Run 已处于终态 {run.status}，无法取消")
 
+        if not await self._repos.execution_intents.request_cancel(run.id):
+            raise ConflictError("Run 的执行意图已完成，无法取消")
         await self._record_event(run.id, RunEventType.CANCEL_REQUESTED, "用户请求取消")
-        if run.scheduler_job_id:
-            await self._scheduler.cancel(run.scheduler_job_id)
-        else:
-            # 还没提交成功就取消，直接落到终态。
-            run.status = RunStatus.CANCELLED
-            run.finished_at = self._clock.now()
-            await self._repos.runs.update(run)
-            await self._record_event(run.id, RunEventType.CANCELLED, "任务尚未提交，已直接取消")
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_CANCELLED)
         return run
 
     # -- 内部 -----------------------------------------------------------
-    async def validate_execution_context(
-        self, run: Run, snapshot: RunSnapshot
-    ) -> tuple[ProjectAccess, dict[str, str]]:
-        """Revalidate persisted execution identity and every exact external reference.
-
-        This boundary deliberately reads ``run.initiated_by_user_id`` and
-        ``run.project_id`` again instead of trusting request-time access. A delayed
-        Worker can call the same seam immediately before materialization.
-        """
-        try:
-            access = await self._guard.project(
-                run.initiated_by_user_id,
-                run.project_id,
-                needs=Capability.RUN_SUBMIT,
-                owner_scope=True,
-            )
-        except (ObjectNotFound, PermissionDenied) as exc:
-            raise ValidationFailed("Run 发起 User 当前已无权在来源 Project 执行") from exc
-
-        problems: list[str] = []
-        environment_version = await environment_version_for_owner_use(
-            self._repos,
-            run.initiated_by_user_id,
-            snapshot.environment_version_id,
-            access.project.owner,
-        )
-        if environment_version is None:
-            problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
-        elif not environment_version.available:
-            problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
-
-        for binding in snapshot.input_bindings:
-            if binding.source_type is InputSourceType.ARTIFACT:
-                problem = await self._artifact_input_problem(
-                    binding.source_id,
-                    binding.access_path,
-                    access.project.owner,
-                )
-            else:
-                problem = await self._check_shared_resource_version_input(
-                    run.initiated_by_user_id,
-                    binding.source_id,
-                    binding.access_path,
-                    binding.source_subpath,
-                    access.project.owner,
-                )
-            if problem is not None:
-                problems.append(problem)
-
-        secret_values, secret_problems = await self._config_resolver.validate_and_resolve(
-            access,
-            run.initiated_by_user_id,
-            snapshot.env_secret_refs,
-        )
-        problems.extend(secret_problems)
-        if problems:
-            raise ValidationFailed("; ".join(problems))
-        return access, secret_values
-
-    async def _submit(
-        self,
-        run: Run,
-        snapshot: RunSnapshot,
-        version: ProjectVersion,
-        access: ProjectAccess,
-    ) -> None:
-        # 执行身份以持久化的 Run 记录为准（GR-307），不从调用参数传递——
-        # 快照校验、Secret 解析和通知收件人都读同一个字段。
-        try:
-            access, values = await self.validate_execution_context(run, snapshot)
-            if values:
-                await self._secrets.retain_for_redaction(run.id, list(values.values()))
-            inputs = await self._materialize_inputs(snapshot.input_bindings)
-            paths = await self._storage.prepare_run_directory(
-                run.id,
-                files=[(f.path, f.content_hash) for f in version.files],
-                inputs=inputs,
-            )
-            environment = dict(snapshot.env_literals)
-            # 输入内容在执行环境中的根目录。Input Binding 的 access_path 是
-            # 相对于它的绝对路径，例如 /inputs/train -> $WORKSPACE107_INPUTS_DIR/inputs/train。
-            environment.setdefault("WORKSPACE107_INPUTS_DIR", str(paths.inputs))
-            for env_name in snapshot.env_secret_refs:
-                environment[env_name] = values[env_name]
-
-            work_dir = paths.work
-            if snapshot.working_directory not in {"", "."}:
-                work_dir = paths.work / snapshot.working_directory
-
-            job_id = await self._scheduler.submit(
-                SchedulerSubmission(
-                    run_id=run.id,
-                    job_name=run.name,
-                    work_dir=work_dir,
-                    command=snapshot.command,
-                    setup_command=snapshot.environment_setup_command,
-                    environment_image=snapshot.environment_image,
-                    stdout_path=paths.stdout,
-                    stderr_path=paths.stderr,
-                    configuration=snapshot.scheduler,
-                    environment=environment,
-                )
-            )
-        except (SchedulerError, OSError, ValidationFailed) as exc:
-            run.status = RunStatus.SUBMIT_FAILED
-            run.failure_reason = str(exc)
-            run.finished_at = self._clock.now()
-            await self._repos.runs.update(run)
-            await self._record_event(run.id, RunEventType.SUBMIT_FAILED, str(exc))
-            # 提交失败是「交上去就没下文了」，用户不主动刷新根本不知道。
-            # 收件人是 Run 的发起人——即使就是当前操作者也要发。
-            await self._notifier.run_submit_failed(
-                recipient_id=run.initiated_by_user_id,
-                workspace_id=access.workspace.id,
-                run_id=run.id,
-                run_name=run.name,
-                reason=str(exc),
-            )
-            return
-
-        run.scheduler_job_id = job_id
-        run.submitted_at = self._clock.now()
-        await self._repos.runs.update(run)
-        await self._record_event(
-            run.id,
-            RunEventType.SUBMITTED,
-            f"已提交到 {snapshot.scheduler.cluster}/{snapshot.scheduler.partition}，"
-            f"调度任务 {job_id}",
-        )
 
     async def _record_run_activity(
         self, user_id: str, run: Run, action: ActivityAction, detail: str = ""
@@ -834,41 +689,6 @@ class RunService:
             return f"输入 {access_path} 引用的子路径 {subpath!r} 不存在"
         return None
 
-    async def _materialize_inputs(self, bindings: tuple[InputBinding, ...]) -> list[RunInput]:
-        """把 InputBinding 翻译成 storage 层的 RunInput。
-
-        - Artifact：直接按 ``artifact_id`` 让 storage 从产物目录拷贝。
-        - Shared Resource Version：从仓储取出 ``(path, content_hash)`` 列表，
-          让 storage 从 blob 池物化——版本本身没有独立存储目录。
-        """
-        inputs: list[RunInput] = []
-        for binding in bindings:
-            if binding.source_type is InputSourceType.ARTIFACT:
-                inputs.append(
-                    RunInput(
-                        source_type=binding.source_type,
-                        source_id=binding.source_id,
-                        access_path=binding.access_path,
-                        source_subpath=binding.source_subpath,
-                    )
-                )
-            elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
-                version = await self._repos.shared_resources.get_version_by_id(binding.source_id)
-                if version is None:  # pragma: no cover - 提交前检查已校验过
-                    raise SchedulerError(
-                        f"输入 {binding.access_path} 引用的 Shared Resource Version 不存在"
-                    )
-                inputs.append(
-                    RunInput(
-                        source_type=binding.source_type,
-                        source_id=binding.source_id,
-                        access_path=binding.access_path,
-                        files=tuple((f.path, f.content_hash) for f in version.files),
-                        source_subpath=binding.source_subpath,
-                    )
-                )
-        return inputs
-
     async def _revalidate_snapshot(
         self, snapshot: RunSnapshot, access: ProjectAccess, initiated_by_user_id: str
     ) -> list[str]:
@@ -927,6 +747,17 @@ class RunService:
                     problems.append(problem)
 
         return problems
+
+
+def _new_execution_intent(run_id: str, now: datetime) -> ExecutionIntent:
+    return ExecutionIntent(
+        run_id=run_id,
+        correlation=f"workspace107:{run_id}",
+        attempt_no=0,
+        next_action_at=now,
+        created_at=now,
+        updated_at=now,
+    )
 
 
 def _as_resolved_env(

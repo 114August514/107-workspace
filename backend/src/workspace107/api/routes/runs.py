@@ -72,12 +72,11 @@ async def create_run(
     response: Response,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> s.RunOut:
-    """需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。
+    """需要提交 Run 权限；校验通过后固定不可变快照并写入 durable execution intent。
 
-    提交失败仍会保留 Run，作为可排查的历史事实。
-
+    API 进程不会准备执行目录或调用调度系统；独立 Worker 在事务提交后推进执行。
     带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），
-    不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。
+    不会再创建执行意图；新创建返回 201。
     """
     submission = await services.runs.create(
         user.id, project_id, _to_draft(payload), idempotency_key=idempotency_key
@@ -117,8 +116,7 @@ async def read_logs(run_id: str, user: CurrentUser, services: ServicesDep) -> li
 async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunOut:
     """需要取消 Run 权限，且 Run 尚未进入终态。
 
-    已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务
-    会直接标记为已取消。
+    本请求只持久化取消意图；独立 Worker 负责取消、轮询并确认最终状态。
     """
     run = await services.runs.cancel(user.id, run_id)
     return p.run_out(run)
@@ -147,16 +145,6 @@ async def rerun(
     if not submission.created:
         response.status_code = status.HTTP_200_OK
     return p.run_out(submission.run)
-
-
-@router.post("/runs/sync", response_model=s.SyncOut, summary="同步 Run 状态")
-async def sync_runs(services: ServicesDep) -> s.SyncOut:
-    """无需用户身份，主动轮询全部未结束 Run 的调度状态。
-
-    状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会
-    中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。
-    """
-    return s.SyncOut(changed=await services.lifecycle.sync_all())
 
 
 # -- Artifact ---------------------------------------------------------------

@@ -17,14 +17,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import grant_test_entitlement, wait_for_run
-from workspace107.application.run_service import RunDraft
+from tests.helpers import grant_test_entitlement
 from workspace107.domain import ids
 from workspace107.domain.config_scope import ConfigScope
-from workspace107.domain.errors import SchedulerError
-from workspace107.infrastructure.db.repositories import SqlRepositories
+from workspace107.domain.errors import ValidationFailed
 from workspace107.infrastructure.db.secret_vault import DatabaseSecretVault
 from workspace107.infrastructure.db.tables import (
     ArtifactRow,
@@ -368,7 +367,7 @@ async def test_cross_owner_environment_grant_enables_exact_configuration_use(
 
 
 async def test_execution_context_revalidates_current_identity_and_exact_references(
-    client: httpx.AsyncClient, session: AsyncSession, services, context, monkeypatch
+    client: httpx.AsyncClient, session: AsyncSession, services
 ) -> None:
     group_a = await _create_group(client, "Execution Context Group A")
     group_b = await _create_group(client, "Execution Context Group B")
@@ -424,36 +423,14 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
         headers=ALICE,
     )
     created.raise_for_status()
-    await wait_for_run(client, created.json()["id"], headers=ALICE)
 
     detail = await services.runs.get_detail(alice_id, created.json()["id"])
-    repos = SqlRepositories(session)
-    version = await repos.project_versions.get(detail.snapshot.project_version_id)
-    assert version is not None
-    access, _ = await services.runs.validate_execution_context(detail.run, detail.snapshot)
-
-    prepare_calls: list[str] = []
-    scheduler_calls: list[str] = []
-
-    async def record_prepare(run_id: str, **_kwargs):
-        prepare_calls.append(run_id)
-        raise OSError("storage preparation must not be reached")
-
-    async def record_submit(submission):
-        scheduler_calls.append(submission.run_id)
-        raise SchedulerError("scheduler submission must not be reached")
-
-    monkeypatch.setattr(context.storage, "prepare_run_directory", record_prepare)
-    monkeypatch.setattr(context.scheduler, "submit", record_submit)
+    validated = await services.runs._execution_context.validate(detail.run, detail.snapshot)
+    assert validated.secret_values == {"TOKEN": "current-token"}
 
     async def assert_execution_rejected(message: str) -> None:
-        prepare_count = len(prepare_calls)
-        scheduler_count = len(scheduler_calls)
-        await services.runs._submit(detail.run, detail.snapshot, version, access)
-        assert detail.run.status.value == "submit_failed"
-        assert message in detail.run.failure_reason
-        assert len(prepare_calls) == prepare_count
-        assert len(scheduler_calls) == scheduler_count
+        with pytest.raises(ValidationFailed, match=message):
+            await services.runs._execution_context.validate(detail.run, detail.snapshot)
 
     environment = await session.get(EnvironmentVersionRow, environment_version_id)
     assert environment is not None
@@ -519,7 +496,7 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
 
 
 async def test_artifact_input_boundary_follows_project_owner(
-    client: httpx.AsyncClient, session: AsyncSession, context, services, monkeypatch
+    client: httpx.AsyncClient, session: AsyncSession, services
 ) -> None:
     group_a = await _create_group(client, "Artifact Group A")
     group_b = await _create_group(client, "Artifact Group B")
@@ -537,8 +514,6 @@ async def test_artifact_input_boundary_follows_project_owner(
         headers=ALICE,
     )
     assert run.status_code == 201, run.text
-    detail = await wait_for_run(client, run.json()["id"], headers=ALICE)
-    assert detail["run"]["status"] == "succeeded"
 
     artifact_id = ids.new_id(ids.ARTIFACT)
     session.add(
@@ -564,7 +539,6 @@ async def test_artifact_input_boundary_follows_project_owner(
         "source_id": artifact_id,
         "access_path": "/inputs/art",
     }
-    # 跨 Owner 直接引用 Artifact → 404；要先发布成 Shared Resource。
     cross = await client.post(
         f"/api/v1/projects/{project_b['id']}/run-configurations",
         json={
@@ -578,7 +552,6 @@ async def test_artifact_input_boundary_follows_project_owner(
     )
     assert cross.status_code == 404, cross.text
 
-    # 同 Owner 引用保存成功，preflight 干净通过。
     same = await client.post(
         f"/api/v1/projects/{same_owner_project['id']}/run-configurations",
         json={
@@ -594,67 +567,29 @@ async def test_artifact_input_boundary_follows_project_owner(
     result = await _preflight(client, same_owner_project, same.json()["id"], ALICE)
     assert result["problems"] == []
 
-    prepare_calls: list[str] = []
-    scheduler_calls: list[str] = []
-
-    async def record_prepare(run_id: str, **_kwargs):
-        prepare_calls.append(run_id)
-        raise OSError("storage preparation must not be reached")
-
-    async def record_submit(submission):
-        scheduler_calls.append(submission.run_id)
-        raise SchedulerError("scheduler submission must not be reached")
-
-    monkeypatch.setattr(context.storage, "prepare_run_directory", record_prepare)
-    monkeypatch.setattr(context.scheduler, "submit", record_submit)
-
-    original_submit = services.runs._submit
+    created = await client.post(
+        f"/api/v1/projects/{same_owner_project['id']}/runs",
+        json={"run_configuration_id": same.json()["id"]},
+        headers=ALICE,
+    )
+    created.raise_for_status()
     alice_id = await _get_user_id(client, ALICE)
+    detail = await services.runs.get_detail(alice_id, created.json()["id"])
 
-    async def make_artifact_unavailable_then_submit(run, snapshot, version, access):
-        artifact = await session.get(ArtifactRow, artifact_id)
-        assert artifact is not None
-        artifact.status = "cleaned"
-        await session.flush()
-        await original_submit(run, snapshot, version, access)
-
-    monkeypatch.setattr(
-        services.runs,
-        "_submit",
-        make_artifact_unavailable_then_submit,
-    )
-    unavailable = await services.runs.create(
-        alice_id,
-        same_owner_project["id"],
-        RunDraft(run_configuration_id=same.json()["id"]),
-    )
-    assert unavailable.run.status.value == "submit_failed"
-    assert "Artifact" in unavailable.run.failure_reason
-    assert prepare_calls == []
-    assert scheduler_calls == []
     artifact = await session.get(ArtifactRow, artifact_id)
     assert artifact is not None
-    artifact.status = "available"
+    artifact.status = "cleaned"
     await session.flush()
+    with pytest.raises(ValidationFailed, match="Artifact"):
+        await services.runs._execution_context.validate(detail.run, detail.snapshot)
 
-    async def transfer_artifact_owner_then_submit(run, snapshot, version, access):
-        source_project = await session.get(ProjectRow, project_a["id"])
-        assert source_project is not None
-        source_project.owner_user_group_id = group_b
-        await session.flush()
-        await original_submit(run, snapshot, version, access)
-
-    monkeypatch.setattr(services.runs, "_submit", transfer_artifact_owner_then_submit)
-    submitted = await services.runs.create(
-        alice_id,
-        same_owner_project["id"],
-        RunDraft(run_configuration_id=same.json()["id"]),
-    )
-
-    assert submitted.run.status.value == "submit_failed"
-    assert "Artifact" in submitted.run.failure_reason
-    assert prepare_calls == []
-    assert scheduler_calls == []
+    artifact.status = "available"
+    source_project = await session.get(ProjectRow, project_a["id"])
+    assert source_project is not None
+    source_project.owner_user_group_id = group_b
+    await session.flush()
+    with pytest.raises(ValidationFailed, match="Artifact"):
+        await services.runs._execution_context.validate(detail.run, detail.snapshot)
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +632,7 @@ async def test_idempotency_key_is_scoped_to_initiating_user(
 
 
 async def test_rerun_creates_new_run_for_current_user_without_drift(
-    client: httpx.AsyncClient, session: AsyncSession, context, monkeypatch
+    client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     group = await _create_group(client, "Rerun Group")
     _, environment_v1 = await _create_environment(session, owner_user_group_id=group)
@@ -707,14 +642,6 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     await grant_test_entitlement(session, "bob")
     project = await _create_project(client, group, name="rerun project")
     configuration = await _create_configuration(client, project, environment_v1)
-    scheduler_submissions = []
-    original_scheduler_submit = context.scheduler.submit
-
-    async def record_scheduler_submission(submission):
-        scheduler_submissions.append(submission)
-        return await original_scheduler_submit(submission)
-
-    monkeypatch.setattr(context.scheduler, "submit", record_scheduler_submission)
 
     original = await client.post(
         f"/api/v1/projects/{project['id']}/runs",
@@ -723,11 +650,10 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     )
     assert original.status_code == 201, original.text
     run_id = original.json()["id"]
-    detail = await wait_for_run(client, run_id, headers=ALICE)
-    assert detail["run"]["status"] == "succeeded"
-    original_snapshot = detail["snapshot"]
+    original_detail = await client.get(f"/api/v1/runs/{run_id}", headers=ALICE)
+    original_detail.raise_for_status()
+    original_snapshot = original_detail.json()["snapshot"]
 
-    # 快照固化之后 Group 默认环境漂移到 v2。
     response = await client.patch(
         f"/api/v1/workspaces/{group}",
         json={"default_environment_version_id": environment_v2},
@@ -749,16 +675,13 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     assert body["id"] != run_id
     assert body["source_run_id"] == run_id
     assert body["initiated_by_user_id"] == bob_id
+    assert body["status"] == "queued"
+    assert body["scheduler_job_id"] is None
 
     rerun_detail = await client.get(f"/api/v1/runs/{body['id']}", headers=BOB)
     rerun_detail.raise_for_status()
     snapshot = rerun_detail.json()["snapshot"]
     assert snapshot["id"] != original_snapshot["id"]
     assert snapshot["initiated_by_user_id"] == bob_id
-    # 不漂移：仍引用来源快照固定的 v1 和最终调度配置。
     assert snapshot["environment_version_id"] == environment_v1
     assert snapshot["scheduler"] == original_snapshot["scheduler"]
-    assert scheduler_submissions[-1].configuration.as_payload() == original_snapshot["scheduler"]
-
-    rerun_final = await wait_for_run(client, body["id"], headers=BOB)
-    assert rerun_final["run"]["status"] == "succeeded"

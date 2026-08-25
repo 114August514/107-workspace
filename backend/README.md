@@ -16,26 +16,28 @@ src/workspace107/
 │   ├── secrets.py        环境变量表达式与 Secret 引用（GR-304）
 │   ├── compute.py        算力方案、请求与调度解析
 │   └── ports/            Scheduler / Storage / SecretVault / Repositories / Clock
-├── application/      用例编排、权限校验、事务边界
+├── application/      API 用例与独立 Worker 执行编排
 │   ├── access.py         AccessGuard（GR-101 / GR-102 / GR-103）
-│   ├── run_service.py    提交前检查、创建 Run、重跑、取消
-│   └── run_lifecycle.py  调度状态同步与 Artifact 收集
-├── infrastructure/   端口实现：SQLAlchemy 仓储、本地存储、Mock/Slurm 调度
+│   ├── run_service.py    preflight、创建 Run 与 execution-context revalidation
+│   └── run_worker.py     持久 intent、workspace、Scheduler、Artifact 推进
+├── infrastructure/   SQLAlchemy、Git、POSIX workspace、Mock/Slurm adapter
 ├── api/              路由与 schema，不写业务规则
-├── tools/            OpenAPI 导出、种子数据
-└── main.py           唯一的装配点
+├── tools/            OpenAPI、seed 与隔离 smoke database
+├── main.py           HTTP API composition root
+└── worker.py         single-active independent Worker composition root
 ```
 
 ## 依赖注入
 
-当前旧实现只在两个组合入口里构造具体实现，别处一律拿协议：
+具体实现只在对应进程的 composition root 中构造，其他模块只拿协议：
 
 ```text
 domain/ports/     用 Protocol 描述「需要什么能力」
 application/      构造函数注入，只认这些协议
 infrastructure/   实现协议
-main.py           进程级装配：数据库引擎、存储、调度器、时钟
-api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
+main.py           API：数据库、local storage、Git project content、clock（无 Scheduler/credential）
+worker.py         Worker：execution store/context、Git exporter、Run workspace、Scheduler
+api/deps.py       请求级仓储、Secret vault 和用例服务
 ```
 
 路由通过 `Services` 容器拿用例服务，而 `Services` **只暴露 application 层的服务**——
@@ -50,8 +52,8 @@ api/deps.py       请求级装配：仓储、Secret 保管、各用例服务
                         不要往 Services 容器里塞端口
 ```
 
-这两处入口是当前代码事实，不是未来组合根数量门禁。目标架构还需要独立 Worker 入口；
-依赖方向和未来模块边界以 `docs/product/design.md` 为准。
+API 与 Worker 是两个明确入口。Scheduler 配置和 credential 只属于 Worker；API 不 submit、
+poll 或推进 execution intent。依赖方向与里程碑边界以 ADR-0004 和产品设计为准。
 
 ## 安装与运行
 
@@ -60,6 +62,12 @@ uv sync --all-extras
 uv run alembic upgrade head
 uv run python -m workspace107.tools.seed
 uv run uvicorn workspace107.main:create_app --factory --reload
+```
+
+独立 Worker 必须使用 PostgreSQL；在另一个终端以同一数据库/storage 配置运行：
+
+```bash
+uv run python -m workspace107.worker
 ```
 
 `seed` 不带参数时只幂等创建本地开发 Compute Plans，不创建 Environment 或 Shared
@@ -87,15 +95,16 @@ provisioning 接口。
 cp ../.env.example .env
 ```
 
-关键项：
+关键边界：
 
-| 变量 | 说明 |
-| :--- | :--- |
-| `WORKSPACE107_DATABASE_URL` | 默认 SQLite；部署时改 PostgreSQL |
-| `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
-| `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
-| `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
-| `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |
+| 变量 | 进程 | 说明 |
+| :--- | :--- | :--- |
+| `WORKSPACE107_DATABASE_URL` | API + Worker | API 本地可用 SQLite；独立 Worker 必须 PostgreSQL |
+| `WORKSPACE107_STORAGE_ROOT` | API + Worker | 两者看到的 canonical content root |
+| `WORKSPACE107_AUTH_MODE` | API | `dev` 用 `X-User` 请求头识别用户 |
+| `WORKSPACE107_SHARED_GID` | Worker | POSIX Run tree shared group |
+| `WORKSPACE107_SCHEDULER` | Worker | local/test `mock` 或 gated `slurm` |
+| `WORKSPACE107_SLURM_*` | Worker only | single profile 与 secret；禁止注入 API |
 
 ## 开发模式下的身份
 
@@ -115,14 +124,14 @@ curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
 
 | 适配器 | 行为 |
 | :--- | :--- |
-| `mock` | 在本机以子进程**真实执行**作业，状态来自真实退出码 |
-| `slurm` | 通过 Slurm REST API 提交，状态来自 Slurm |
+| `mock` | 在 Worker 主机以子进程真实执行；只允许 local/test，不是沙箱 |
+| `slurm` | 单目标、单 profile 的 submit/find/poll/cancel；启用前须完成人工门 |
 
-两者都只实现 `submit` / `poll` / `cancel`，没有「标记成功」的入口——
-当前实现中，Run 状态只能由调度系统的轮询结果驱动。
+Worker 负责状态和 Artifact 推进。稳定完整 correlation 用于 ambiguous submit reconcile；查询
+不完整或多匹配时停止，不能盲目重提。Slurm credential 只从 Worker 环境注入；issuer、TTL、
+renewal、revocation 和 restart lifecycle 未经目标 107 验收前没有默认 policy。
 
-Mock 模式下会把渲染出的 sbatch 脚本写到 `var/storage/runs/<run_id>/job.sh`，
-用户可以直接看到平台替他生成了什么。
+Mock 会把渲染脚本放在对应 Run workspace；它只证明本地闭环，不证明真实 mount/profile。
 
 ## 迁移
 

@@ -5,20 +5,22 @@
 # 独立的一次性任务；部署边界见 docs/operations/deployment.md。
 set -eu
 
-echo "==> 应用数据库迁移"
-alembic upgrade head
+if [ "${WORKSPACE107_SKIP_BOOTSTRAP:-false}" != "true" ]; then
+  echo "==> 应用数据库迁移"
+  alembic upgrade head
 
-echo "==> 载入平台目录（运行环境与算力方案）"
-if [ "${WORKSPACE107_SEED_DEMO:-false}" = "true" ]; then
-  # 演示数据是给人看的，默认不载入，由 WORKSPACE107_SEED_DEMO 显式打开。
-  python -m workspace107.tools.seed --demo
-else
-  python -m workspace107.tools.seed
+  echo "==> 载入平台目录（运行环境与算力方案）"
+  if [ "${WORKSPACE107_SEED_DEMO:-false}" = "true" ]; then
+    python -m workspace107.tools.seed --demo
+  else
+    python -m workspace107.tools.seed
+  fi
 fi
 
-if [ "${WORKSPACE107_SCHEDULER:-mock}" = "mock" ]; then
-  echo "!!  当前使用 mock 调度器：用户作业会在本容器内以子进程执行。"
-  echo "!!  仅用于演示和内部试用，对外提供服务必须切换到 slurm。"
+if [ "$1" = "python" ] && [ "${2:-}" = "-m" ] && [ "${3:-}" = "workspace107.worker" ] \
+  && [ "${WORKSPACE107_SCHEDULER:-mock}" = "mock" ]; then
+  echo "!!  当前使用 mock 调度器：用户作业会在 Worker 容器内以子进程执行。"
+  echo "!!  仅用于本地开发、测试和受信任演示，真实 107 必须通过人工验收门。"
 fi
 
 echo "==> 启动 $*"

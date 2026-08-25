@@ -2966,19 +2966,6 @@
         "title": "SharedResourceVersionOut",
         "type": "object"
       },
-      "SyncOut": {
-        "properties": {
-          "changed": {
-            "title": "Changed",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "changed"
-        ],
-        "title": "SyncOut",
-        "type": "object"
-      },
       "TargetType": {
         "description": "一条记录指向的对象类型。前端据此决定链接跳到哪里。\n\n活动和通知共用这一套：两者指向的都是同一批领域对象，\n分成两个枚举只会让前端的跳转逻辑写两遍。",
         "enum": [
@@ -3251,7 +3238,7 @@
     }
   },
   "info": {
-    "description": "面向 USTC 107 算力平台的协作式计算工作空间。\n\n当前迁移实现支持本地 Mock 执行闭环；真实 Worker、Git / Shared FS 和 Slurm 链路尚未完成验证。",
+    "description": "面向 USTC 107 算力平台的协作式计算工作空间。\n\nRun 由独立 Worker 从持久执行意图推进；真实 107 service identity、Shared FS、Slurm profile 与 credential lifecycle 尚未完成验收。",
     "title": "107 Workspace API",
     "version": "0.1.0"
   },
@@ -6822,7 +6809,7 @@
         ]
       },
       "post": {
-        "description": "需要提交 Run 权限；校验通过后固定不可变快照并向调度系统提交任务。\n\n提交失败仍会保留 Run，作为可排查的历史事实。\n\n带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），\n不会再跑一次；新创建返回 201。网络抖动或前端自动重试不会变成两次真实计算。",
+        "description": "需要提交 Run 权限；校验通过后固定不可变快照并写入 durable execution intent。\n\nAPI 进程不会准备执行目录或调用调度系统；独立 Worker 在事务提交后推进执行。\n带 ``Idempotency-Key`` 请求头时，同一个键的重复请求返回上一次的结果（200），\n不会再创建执行意图；新创建返回 201。",
         "operationId": "create_run_api_v1_projects__project_id__runs_post",
         "parameters": [
           {
@@ -8317,88 +8304,6 @@
         ]
       }
     },
-    "/api/v1/runs/sync": {
-      "post": {
-        "description": "无需用户身份，主动轮询全部未结束 Run 的调度状态。\n\n状态变化会写入执行记录，并在进入终态时收集 Artifact；单个 Run 同步失败不会\n中断其余 Run。生产环境由后台任务周期执行，前端轮询时也可以调用。",
-        "operationId": "sync_runs_api_v1_runs_sync_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SyncOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "请求不合法"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象可见，但当前角色无权执行该操作"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象不存在，或当前用户没有发现权限"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "与现有状态冲突，例如重名或对象不可修改"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "底层调度系统返回错误"
-          }
-        },
-        "summary": "同步 Run 状态",
-        "tags": [
-          "run"
-        ]
-      }
-    },
     "/api/v1/runs/{run_id}": {
       "get": {
         "description": "仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。",
@@ -8510,7 +8415,7 @@
     },
     "/api/v1/runs/{run_id}/cancel": {
       "post": {
-        "description": "需要取消 Run 权限，且 Run 尚未进入终态。\n\n已提交的任务会向调度系统发出取消请求，最终状态由后续同步确认；尚未提交的任务\n会直接标记为已取消。",
+        "description": "需要取消 Run 权限，且 Run 尚未进入终态。\n\n本请求只持久化取消意图；独立 Worker 负责取消、轮询并确认最终状态。",
         "operationId": "cancel_run_api_v1_runs__run_id__cancel_post",
         "parameters": [
           {

@@ -140,7 +140,7 @@ def version_out(version: ProjectVersion) -> s.ProjectVersionOut:
         sequence=version.sequence,
         label=version.label,
         message=version.message,
-        file_count=len(version.files),
+        file_count=version.file_count,
         total_size=version.total_size,
         created_by=version.created_by,
         created_at=version.created_at,

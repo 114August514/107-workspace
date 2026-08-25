@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import grant_test_entitlement, wait_for_run
+from tests.helpers import grant_test_entitlement
 from workspace107.domain import ids
 from workspace107.infrastructure.db.tables import (
     EnvironmentRow,
@@ -403,8 +403,20 @@ async def test_issue_39_rerun_revalidates_snapshot_asset_owners(
         headers=ALICE,
     )
     assert create.status_code == 201, create.text
-    detail = await wait_for_run(client, create.json()["id"], headers=ALICE)
-    assert detail["run"]["status"] == "succeeded"
+
+    # The API has persisted the exact execution snapshot even while the Run is queued.
+    detail = await client.get(f"/api/v1/runs/{create.json()['id']}", headers=ALICE)
+    assert detail.status_code == 200, detail.text
+    snapshot = detail.json()["snapshot"]
+    assert snapshot["environment_version_id"] == environment_a
+    assert snapshot["input_bindings"] == [
+        {
+            "source_type": "shared_resource_version",
+            "source_id": resource_a,
+            "access_path": "/inputs/data",
+            "source_subpath": "",
+        }
+    ]
 
     environment_version = await session.get(EnvironmentVersionRow, environment_a)
     assert environment_version is not None

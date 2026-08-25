@@ -509,8 +509,6 @@ export const api = {
       }),
     ),
 
-  syncRuns: async (): Promise<{ changed: number }> => unwrap(await http.POST('/api/v1/runs/sync')),
-
   // -- Artifact ----------------------------------------------------------
   listArtifactFiles: async (id: string): Promise<ArtifactEntry[]> =>
     unwrap(

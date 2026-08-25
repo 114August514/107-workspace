@@ -1,30 +1,36 @@
 # 仓库任务入口
 
-`workspace.py` 是任务的唯一实现，`Makefile` 是方便使用的薄入口。仓库支持 Linux，
-以及 Windows 主机上使用 Linux toolchain 与 Linux filesystem 的 WSL2 环境；不支持
-原生 Windows / PowerShell runtime。
+`scripts/workspace.py` 是任务的唯一实现；`Makefile` 是薄入口。支持 Linux，以及使用 Linux
+toolchain 与 Linux filesystem 的 WSL2；原生 Windows / PowerShell runtime 不受支持。统一
+Python CLI 不构成跨平台承诺。权威边界见
+[ADR-0005](../docs/decisions/0005-platform-support-matrix.md)。
 
 前端工具链统一使用 Node.js 24 LTS 与 pnpm 11。仓库只提交
-`frontend/pnpm-lock.yaml` 这一份前端依赖锁文件；同目录的 `pnpm-workspace.yaml` 只允许
-esbuild 必需的安装脚本。
-
-主要命令如下：
+`frontend/pnpm-lock.yaml` 这一份前端 lockfile。
 
 ```text
-setup                  按锁文件安装前后端依赖
-check [target]         运行格式、lint、类型、测试、构建和契约检查
+setup                  按 lockfile 安装前后端依赖
+check [target]         运行格式、lint、类型、测试、构建和 contract check
 contract sync|check    重新生成或核对 OpenAPI 与前端类型
 dev                    启动前后端开发服务
-demo / smoke           验证隔离的 Project 到 Artifact 工作流
+demo / smoke           API + PostgreSQL + 独立 Worker + Mock Scheduler 闭环
 migrate / migrate-down 升级或回退一个数据库版本
-coverage               生成后端覆盖率报告（重构期不设全仓门槛）
+coverage               生成后端 coverage report（不设全仓门槛）
 journal / audit        检查在途记录和需要评审的改动
 doctor                 检查本地工程基线
 ```
 
 `target` 可以是 `all`、`backend`、`frontend`；`check` 还支持 `contract`。
 
-任务实现按职责分层：
+默认 `smoke` 要求 `WORKSPACE107_DATABASE_URL` 指向 PostgreSQL。它为每次调用创建唯一数据库和
+临时 storage，启动 API 与独立 Worker，结束后清理自己创建的数据库、进程与目录。外部栈模式：
+
+```bash
+uv run --no-project python scripts/workspace.py smoke \
+  --base-url http://127.0.0.1:8107/api/v1
+```
+
+外部模式不启动/停止服务，也不清理目标栈业务数据。
 
 ```text
 scripts/
@@ -38,6 +44,6 @@ scripts/
     └── posix/bootstrap.sh
 ```
 
-bootstrap 文件只检查 Linux 前置条件并进入公共 Python 工作流。质量检查、契约、迁移
-和演示逻辑不在 shell 中重复实现。公共 CLI 不包含按平台复制的任务逻辑，CI 只在实际
-支持的 Linux 环境中验证这些入口。
+bootstrap 只检查平台前置条件并进入公共 Python workflow；质量检查、contract、migration 和 smoke
+逻辑不在 shell 中复制。完整 executable smoke 由 Linux + PostgreSQL 承担，Ubuntu 结果不能被
+描述成 WSL2 实机证据。
