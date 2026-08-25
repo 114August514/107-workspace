@@ -286,6 +286,7 @@ function InviteMemberDialog({
       ]}
     >
       <form
+        autoComplete="off"
         onSubmit={(event) => {
           event.preventDefault()
           if (!submitting) void submit()
@@ -303,6 +304,8 @@ function InviteMemberDialog({
             <TextInput
               ref={usernameRef}
               block
+              name="invite-member-username"
+              autoComplete="off"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               placeholder={copy.invite.usernamePlaceholder}
