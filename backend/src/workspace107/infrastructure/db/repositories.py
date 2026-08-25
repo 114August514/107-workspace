@@ -912,8 +912,8 @@ class RunRepositoryImpl:
         return await _paginate(self._session, stmt, page, _to_run)
 
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Run]:
-        # Run 可见性跟随 Project Owner（#41）：自己或所在 User Group 拥有的
-        # Project 下的 Run，与 /me recent_projects 的 owner-scope 语义一致。
+        # Home recent Runs are personal execution history: the User must be both the
+        # initiator and currently able to see the owning Project.
         group_ids = select(t.MembershipRow.user_group_id).where(
             t.MembershipRow.user_id == user_id,
             t.MembershipRow.status == MembershipStatus.ACTIVE.value,
@@ -922,8 +922,9 @@ class RunRepositoryImpl:
             select(t.RunRow)
             .join(t.ProjectRow, t.ProjectRow.id == t.RunRow.project_id)
             .where(
+                t.RunRow.initiated_by_user_id == user_id,
                 (t.ProjectRow.owner_user_id == user_id)
-                | t.ProjectRow.owner_user_group_id.in_(group_ids)
+                | t.ProjectRow.owner_user_group_id.in_(group_ids),
             )
             .order_by(t.RunRow.created_at.desc())
             .limit(limit)
@@ -1143,21 +1144,6 @@ class ActivityRepositoryImpl:
         stmt = (
             select(t.ActivityRow)
             .where(owner_column == owner.id)
-            .order_by(t.ActivityRow.created_at.desc(), t.ActivityRow.id.desc())
-        )
-        return await _paginate(self._session, stmt, page, _to_activity)
-
-    async def list_for_user(self, user_id: str, page: PageRequest) -> Page[Activity]:
-        group_ids = select(t.MembershipRow.user_group_id).where(
-            t.MembershipRow.user_id == user_id,
-            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
-        )
-        stmt = (
-            select(t.ActivityRow)
-            .where(
-                (t.ActivityRow.owner_user_id == user_id)
-                | t.ActivityRow.owner_user_group_id.in_(group_ids)
-            )
             .order_by(t.ActivityRow.created_at.desc(), t.ActivityRow.id.desc())
         )
         return await _paginate(self._session, stmt, page, _to_activity)

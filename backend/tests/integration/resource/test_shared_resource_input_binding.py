@@ -54,13 +54,13 @@ async def _create_resource_with_version(
     client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情（含 files）。"""
-    workspace_id = await _user_group(client)
+    user_group_id = await _user_group(client)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": name,
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
@@ -286,7 +286,7 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
     assert response.json()["code"] == "not_found"
 
 
-# -- 跨 Workspace 引用 -------------------------------------------------------
+# -- 跨 Owner 引用 -------------------------------------------------------
 
 
 async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存前(
@@ -298,11 +298,13 @@ async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存�
         client, name="Alice 私有", files=[("a.txt", b"x")]
     )
     bob_headers = {"X-User": "bob"}
-    bob_ws, bob_env_version_id = await use_default_environment(session, client, headers=bob_headers)
+    bob_group_id, bob_env_version_id = await use_default_environment(
+        session, client, headers=bob_headers
+    )
     project = (
         await client.post(
             "/api/v1/projects",
-            json={"owner": {"kind": "user_group", "id": bob_ws}, "name": "Bob 项目"},
+            json={"owner": {"kind": "user_group", "id": bob_group_id}, "name": "Bob 项目"},
             headers=bob_headers,
         )
     ).json()

@@ -1,6 +1,6 @@
 # issue42-api-convergence
 
-- 状态：候选实现完成，独立 Review 进行中
+- 状态：四项独立 Review findings 已修复并验证，等待 targeted re-review
 - 认领：Issue 42 sole writer（worktree `107-workspace-42-api-convergence`）
 - 上下文：Issue #42，Parent #34；#35–#41 已合并；起点 `main` / PR #72 `9b00f4b`
 - 分支：`refactor/42-api-convergence`
@@ -26,7 +26,7 @@ Initiated User 语义。所有受控消费者在同一候选中 clean cutover，
 - `/api/v1/me` 返回当前 User、User Groups、当前可见/最近 Projects 与 Runs，以及 User 级 execution context；没有 Personal Workspace 字段。
 - User Group 使用 `/api/v1/user-groups` 与 `/user-groups/:userGroupId`；不保留 `/workspaces` 或 `/workspaces/:id`。
 - Project/Environment/SharedResource/Grant/Entitlement 使用既有显式 Owner DTO；Run 使用 `initiated_by_user`。
-- Activity 聚合依据当前 User 可见的 User/UserGroup Project/Run authority；Notification 按 recipient 授权，导航 target 只指当前 UserGroup/Project/Run。
+- Activity 仅保留当前授权的 UserGroup / Project 聚合；不提供语义过宽的 `/me/activities`。Notification 按 recipient 授权，且失去/尚无 UserGroup 访问权的邀请与移除通知不带导航 target。
 - Migration 允许删除旧开发数据；保留 Users/UserGroups 等当前上游表，且不做旧数据转换。
 
 ## 仓外副作用
@@ -49,7 +49,9 @@ Initiated User 语义。所有受控消费者在同一候选中 clean cutover，
 - Backend runtime 不再包含 LegacyWorkspace model/repository/service/routes 或任何 `workspace_id` 字段；Home、Activity、Notification、Project/Fork/Run 均使用当前权威。
 - OpenAPI/generated TypeScript/client/frontend routes 已 clean cutover；旧 Personal/Collaborative Workspace 页面、helpers、fixtures 与兼容测试已删除。
 - Focused backend：287 passed、3 skipped；frontend：120 passed；`make smoke` 完成真实隔离 HTTP Project → Version → Run → Artifact 闭环。
-- 首次 `make check` 除 backend lint 两项外全部通过；import 排序与 unused unpack 已修复，等待最终 reverify。
+- 最终 `make check` 仅发现新增测试 import 顺序一项 backend lint；已修复，并用 `ruff check` 与 `ruff format --check` 对该文件确认通过。其余 backend/frontend tests、build、OpenAPI/generated TypeScript 一致性均通过。
+- Review remediation：Home `recent_runs` 同时要求当前 Project 可见且 `initiated_by_user_id` 为当前 User；双成员反例通过。删除 `/me/activities` 及其 repository 聚合；邀请/移除通知对无访问权 recipient 明确为非链接；更新 Run Configuration 和当前 resource fixture 术语。
+- Remediation focused backend：5 passed；frontend NotificationBell：12 passed，TypeScript typecheck 通过；真实 `make smoke` 再次完成隔离 HTTP 核心闭环。
 
 ## 禁区
 

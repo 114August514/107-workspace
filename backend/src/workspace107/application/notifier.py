@@ -101,8 +101,6 @@ class Notifier:
             type=NotificationType.USER_GROUP_INVITED,
             title=f"邀请你加入「{user_group_name}」",
             body=f"角色：{role}。在首页可以接受或拒绝。",
-            target_type=TargetType.USER_GROUP,
-            target_id=user_group_id,
         )
 
     async def member_removed(
@@ -114,8 +112,6 @@ class Notifier:
             type=NotificationType.MEMBER_REMOVED,
             title=f"你已被移出「{user_group_name}」",
             body="你不再能访问这个 User Group 拥有的对象。",
-            target_type=TargetType.USER_GROUP,
-            target_id=user_group_id,
             mandatory=True,
         )
 

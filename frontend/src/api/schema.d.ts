@@ -198,26 +198,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/activities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 我的近期活动
-         * @description Aggregate only the current User owner and active User Group owner scopes.
-         */
-        get: operations["list_my_activities_api_v1_me_activities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/me/entitlements": {
         parameters: {
             query?: never;
@@ -3375,87 +3355,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HomeOut"];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    list_my_activities_api_v1_me_activities_get: {
-        parameters: {
-            query?: {
-                /** @description 页码，从 1 开始 */
-                page?: number;
-                /** @description 每页条数 */
-                page_size?: number;
-            };
-            header?: {
-                "X-User"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageOut_ActivityOut_"];
                 };
             };
             /** @description 请求不合法 */

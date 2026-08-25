@@ -8,7 +8,7 @@ from ...application.ownership import OwnerSummary
 from ...domain.ownership import OwnerKind
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, PageDep, ServicesDep
+from ..deps import CurrentUser, ServicesDep
 
 router = APIRouter(tags=["home"])
 
@@ -40,14 +40,6 @@ async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
             p.run_out(run) for run in await services.runs.list_recent_for_user(user.id, limit=10)
         ],
     )
-
-
-@router.get("/me/activities", response_model=s.PageOut[s.ActivityOut], summary="我的近期活动")
-async def list_my_activities(
-    user: CurrentUser, services: ServicesDep, page: PageDep
-) -> s.PageOut[s.ActivityOut]:
-    """Aggregate only the current User owner and active User Group owner scopes."""
-    return p.page_out(await services.activities.list_for_user(user.id, page), p.activity_out)
 
 
 @router.get(

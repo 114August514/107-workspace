@@ -293,7 +293,8 @@ export function RunConfigurationModal({
         <Typography.Title level={5}>环境变量</Typography.Title>
         <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
           值可以是字面量，也可以用 <Typography.Text code>{'${{ vars.NAME }}'}</Typography.Text> 或{' '}
-          <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text> 引用 Workspace 的配置。
+          <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text> 引用 Project / Project
+          Owner scope；发起 User 配置使用显式 user namespace。
         </Typography.Paragraph>
         <Form.List name="env">
           {(fields, { add, remove }) => (
