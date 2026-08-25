@@ -1,9 +1,11 @@
 # issue42-api-convergence
 
-- 状态：最终 targeted review PASS，候选已就绪，待发布 PR
+- 状态：最终 targeted review PASS；PR 已发布，等待托管 checks
 - 认领：Issue 42 sole writer（worktree `107-workspace-42-api-convergence`）
 - 上下文：Issue #42，Parent #34；#35–#41 已合并；起点 `main` / PR #72 `9b00f4b`
 - 分支：`refactor/42-api-convergence`
+- PR：[#78](https://github.com/114August514/107-workspace/pull/78)；创建时 head `f8c34d8ed810d570e679537151087a489331fa55`
+- 发布：2026-08-26；仅 non-force push，未 merge / deploy
 - 开始：2026-08-25 21:33 +0800
 
 ## 意图
