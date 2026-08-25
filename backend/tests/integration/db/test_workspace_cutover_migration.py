@@ -86,7 +86,11 @@ def _assert_current(connection: sqlite3.Connection) -> None:
 
 def _assert_predecessor(connection: sqlite3.Connection) -> None:
     tables = _tables(connection)
-    assert {"workspaces", "legacy_personal_memberships", "user_group_migration_provenance"} <= tables
+    assert {
+        "workspaces",
+        "legacy_personal_memberships",
+        "user_group_migration_provenance",
+    } <= tables
     assert "workspace_id" in _columns(connection, "projects")
     assert "workspace_id" in _columns(connection, "runs")
     assert "workspace_id" in _columns(connection, "artifacts")

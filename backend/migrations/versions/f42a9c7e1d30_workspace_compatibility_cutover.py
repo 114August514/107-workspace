@@ -116,9 +116,7 @@ def _create_legacy_activities() -> None:
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_activities_workspace_created", "activities", ["workspace_id", "created_at"]
-    )
+    op.create_index("ix_activities_workspace_created", "activities", ["workspace_id", "created_at"])
     op.create_index("ix_activities_project_created", "activities", ["project_id", "created_at"])
 
 

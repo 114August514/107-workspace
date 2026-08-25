@@ -301,8 +301,8 @@ async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存�
     bob_ws, bob_env_version_id = await use_default_environment(session, client, headers=bob_headers)
     project = (
         await client.post(
-            f"/api/v1/workspaces/{bob_ws}/projects",
-            json={"name": "Bob 项目"},
+            "/api/v1/projects",
+            json={"owner": {"kind": "user_group", "id": bob_ws}, "name": "Bob 项目"},
             headers=bob_headers,
         )
     ).json()

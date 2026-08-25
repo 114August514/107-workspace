@@ -55,7 +55,6 @@ class Notifier:
         type: NotificationType,
         title: str,
         body: str = "",
-        workspace_id: str | None = None,
         target_type: TargetType | None = None,
         target_id: str | None = None,
         mandatory: bool = False,
@@ -70,7 +69,6 @@ class Notifier:
             type=type,
             title=title,
             body=body,
-            workspace_id=workspace_id,
             target_type=target_type,
             target_id=target_id,
             mandatory=mandatory,
@@ -103,7 +101,8 @@ class Notifier:
             type=NotificationType.USER_GROUP_INVITED,
             title=f"邀请你加入「{user_group_name}」",
             body=f"角色：{role}。在首页可以接受或拒绝。",
-            workspace_id=user_group_id,
+            target_type=TargetType.USER_GROUP,
+            target_id=user_group_id,
         )
 
     async def member_removed(
@@ -115,7 +114,8 @@ class Notifier:
             type=NotificationType.MEMBER_REMOVED,
             title=f"你已被移出「{user_group_name}」",
             body="你不再能访问这个 User Group 拥有的对象。",
-            workspace_id=user_group_id,
+            target_type=TargetType.USER_GROUP,
+            target_id=user_group_id,
             mandatory=True,
         )
 
@@ -134,7 +134,6 @@ class Notifier:
             type=NotificationType.ROLE_CHANGED,
             title=f"你在「{user_group_name}」的角色改为 {role}",
             body="能做什么随之变化，具体以 User Group 页面为准。",
-            workspace_id=user_group_id,
             target_type=TargetType.USER_GROUP,
             target_id=user_group_id,
             mandatory=True,
@@ -149,7 +148,6 @@ class Notifier:
             type=NotificationType.OWNERSHIP_RECEIVED,
             title=f"你成为「{user_group_name}」的 Owner",
             body="你现在负责这个 User Group 的成员与治理。",
-            workspace_id=user_group_id,
             target_type=TargetType.USER_GROUP,
             target_id=user_group_id,
             mandatory=True,
@@ -163,7 +161,6 @@ class Notifier:
         recipient_id: str,
         run_id: str,
         run_name: str,
-        workspace_id: str,
         succeeded: bool,
         reason: str = "",
     ) -> None:
@@ -178,13 +175,12 @@ class Notifier:
             type=NotificationType.RUN_SUCCEEDED if succeeded else NotificationType.RUN_FAILED,
             title=f"Run {'成功' if succeeded else '失败'}：{run_name}",
             body=reason,
-            workspace_id=workspace_id,
             target_type=TargetType.RUN,
             target_id=run_id,
         )
 
     async def run_submit_failed(
-        self, *, recipient_id: str, run_id: str, run_name: str, workspace_id: str, reason: str
+        self, *, recipient_id: str, run_id: str, run_name: str, reason: str
     ) -> None:
         await self._publish(
             recipient_id=recipient_id,
@@ -192,7 +188,6 @@ class Notifier:
             type=NotificationType.RUN_SUBMIT_FAILED,
             title=f"Run 提交失败：{run_name}",
             body=reason,
-            workspace_id=workspace_id,
             target_type=TargetType.RUN,
             target_id=run_id,
         )
@@ -201,9 +196,8 @@ class Notifier:
 class NotificationService:
     """读通知、标记已读。
 
-    **不做 Workspace 权限校验，只按收件人过滤。** 通知是发给这个人的，
-    与他现在还能不能看见相关对象无关——被移除的成员已经看不到那个空间，
-    但「你被移除了」这条必须还能读到，否则他根本不知道发生了什么。
+    Notifications are recipient-authorized even when the recipient no longer has access
+    to the current target. Every repository read or mutation retains recipient scoping.
 
     收件人条件由仓储的每个方法带上，包括标记已读：少一个条件就是
     「能标记别人的通知」这种越权。

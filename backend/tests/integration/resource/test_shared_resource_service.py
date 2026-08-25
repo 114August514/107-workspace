@@ -388,7 +388,7 @@ async def test_create_records_activity(client: httpx.AsyncClient) -> None:
     ).json()
 
     activities = (
-        await client.get(f"/api/v1/workspaces/{workspace_id}/activities", headers=ALICE)
+        await client.get(f"/api/v1/user-groups/{workspace_id}/activities", headers=ALICE)
     ).json()["items"]
     matched = [
         a
@@ -422,7 +422,7 @@ async def test_publish_version_records_activity(client: httpx.AsyncClient) -> No
     ).json()
 
     activities = (
-        await client.get(f"/api/v1/workspaces/{workspace_id}/activities", headers=ALICE)
+        await client.get(f"/api/v1/user-groups/{workspace_id}/activities", headers=ALICE)
     ).json()["items"]
     matched = [
         a

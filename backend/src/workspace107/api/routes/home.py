@@ -4,24 +4,31 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ...application.ownership import OwnerSummary
+from ...domain.ownership import OwnerKind
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, ServicesDep
+from ..deps import CurrentUser, PageDep, ServicesDep
 
 router = APIRouter(tags=["home"])
 
 
 @router.get("/me", response_model=s.HomeOut, summary="获取个人首页")
 async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
-    """Return identity, visible User Groups, and recent legacy child-domain objects."""
+    """Return current identity, User Groups, direct execution context, and recent objects."""
     user_groups = await services.user_groups.list_for_user(user.id)
-    personal_context = await services.legacy_workspaces.find_personal(user.id)
     projects = await services.projects.list_recent_for_user(user.id, limit=10)
     owner_summaries = await services.projects.owner_summaries(projects)
+    entitlements = await services.entitlements.list_for_user(user.id)
     return s.HomeOut(
         user=p.user_out(user),
         user_groups=[p.user_group_out(group) for group in user_groups],
-        personal_resource_context_id=personal_context.id if personal_context else None,
+        personal_execution_context=s.PersonalExecutionContextOut(
+            owner=p.owner_summary_out(
+                OwnerSummary(kind=OwnerKind.USER, id=user.id, display_name=user.display_name)
+            ),
+            entitlements=[p.entitlement_out(view) for view in entitlements],
+        ),
         recent_projects=[
             p.project_out(
                 project,
@@ -33,6 +40,14 @@ async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
             p.run_out(run) for run in await services.runs.list_recent_for_user(user.id, limit=10)
         ],
     )
+
+
+@router.get("/me/activities", response_model=s.PageOut[s.ActivityOut], summary="我的近期活动")
+async def list_my_activities(
+    user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ActivityOut]:
+    """Aggregate only the current User owner and active User Group owner scopes."""
+    return p.page_out(await services.activities.list_for_user(user.id, page), p.activity_out)
 
 
 @router.get(

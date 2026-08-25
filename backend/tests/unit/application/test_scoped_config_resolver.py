@@ -3,8 +3,8 @@ import pytest
 from workspace107.application.access import ProjectAccess
 from workspace107.application.scoped_config_resolver import ScopedConfigResolver
 from workspace107.domain.config_scope import ConfigScope, SecretReference
-from workspace107.domain.enums import EnvValueKind, LegacyWorkspaceKind, MembershipRole
-from workspace107.domain.models import LegacyWorkspace, Project, Variable
+from workspace107.domain.enums import EnvValueKind, MembershipRole
+from workspace107.domain.models import Project, Variable
 from workspace107.domain.ownership import OwnerKind, OwnerReference
 from workspace107.domain.secrets import EnvValue
 
@@ -25,15 +25,10 @@ class Secrets:
         return {name for candidate, name in self.values if candidate == scope}
 
 
-def access(kind=LegacyWorkspaceKind.PERSONAL):
-    workspace = LegacyWorkspace("ws", kind, "w", owner_id="owner")
-    owner = (
-        OwnerReference(OwnerKind.USER, "owner")
-        if kind is LegacyWorkspaceKind.PERSONAL
-        else OwnerReference(OwnerKind.USER_GROUP, "ws")
-    )
-    project = Project("project", "ws", "p", owner=owner)
-    return ProjectAccess(project, workspace, MembershipRole.OWNER, owner_scope=True)
+def access(kind=OwnerKind.USER):
+    owner = OwnerReference(kind, "owner" if kind is OwnerKind.USER else "group")
+    project = Project("project", "p", owner=owner)
+    return ProjectAccess(project, MembershipRole.OWNER, owner_scope=True)
 
 
 @pytest.mark.asyncio
