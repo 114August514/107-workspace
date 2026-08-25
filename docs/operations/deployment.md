@@ -41,6 +41,12 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 `WORKSPACE107_SEED_DEMO=true` 才额外创建演示资产与 Project。该流程假设单个 API
 实例；扩展到多副本之前，必须把迁移拆成独立的一次性任务。
 
+同一 API 实例的 lifespan 内还运行 Shared Resource publication loop：HTTP 上传只持久化
+publication attempt，loop 随后校验已接受 candidate 的内容寻址 blob，并在成功时发布不可变
+Version；进程重启后可重新认领超过恢复阈值的中断 attempt。它不是独立 Worker，也不支持多个
+API replica 共同处理；当前支持边界仍是上面的单 API 拓扑，不能据此宣称生产就绪或 Issue #46
+全部完成。
+
 ## 关键配置
 
 完整变量和默认值见 [`.env.example`](../../.env.example)。
@@ -57,6 +63,8 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 | `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；真实部署必须替换 |
 | `WORKSPACE107_SEED_DEMO` | 仅本地/受信任演示；`true` 时载入演示资产与 Project |
 | `WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME` | 平台演示资产组首次 bootstrap Owner；组已存在时忽略 |
+| `WORKSPACE107_SHARED_RESOURCE_PUBLICATION_INTERVAL_SECONDS` | API 内 publication loop 的扫描间隔（秒），默认 `1.0`；设为 `0` 会停用自动处理，已持久化 attempt 不会丢失 |
+| `WORKSPACE107_SHARED_RESOURCE_PUBLICATION_RECOVERY_SECONDS` | 中断的 processing attempt 可在多久后重新认领（秒），默认 `300.0`；应大于当前校验路径的正常耗时 |
 
 镜像不包含凭据，`.env` 也不会进入 Git 或构建上下文。
 
@@ -119,8 +127,9 @@ WORKSPACE107_SLURM_JWT=<secret>
 接入前还必须确认 slurmrestd API 版本、JWT 生命周期、分区、Account、QoS、资源上限
 和错误响应。seed 中的计算方案与环境值是开发数据，不是 107 平台配置事实。
 
-现有实现也没有独立 Background Worker、Git 版本存储和 Apptainer 准备链路；这些是
-`docs/product/design.md` M1 Walking Skeleton 的缺口，不能由 API 容器或 Mock 路径代替。
+现有实现也没有独立 Background Worker、Git 版本存储和 Apptainer 准备链路。上述 API
+进程内 Shared Resource publication loop 不代替独立 Worker；这些仍是
+`docs/product/design.md` M1 Walking Skeleton 的缺口。
 
 ## 探针和排障
 
@@ -149,7 +158,7 @@ docker compose --project-directory . --file deploy/compose.yaml exec api alembic
 - 建立数据库和用户存储的备份、恢复、保留与清理流程。
 - 在前置网关启用 HTTPS、访问控制、限流和日志采集。
 - 验证 API 请求体上限与 nginx `client_max_body_size` 一致。
-- 多副本部署前拆分数据库迁移和后台状态同步职责。
+- 多副本部署前拆分数据库迁移、Run 后台状态同步和 Shared Resource publication loop 职责。
 
 当前 Compose 没有提供 HTTPS、自动备份、多副本编排、监控告警或生产级 Secret
 管理。这些缺口必须显式完成，不能依赖默认配置补齐。
