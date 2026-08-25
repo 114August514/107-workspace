@@ -21,7 +21,7 @@ const runDetailFixture = (): RunDetail => ({
     source_run_id: null,
     source_run_configuration_id: null,
     status: 'succeeded',
-    created_by: 'student',
+    initiated_by_user_id: 'student',
     created_at: '2026-08-15T08:00:00Z',
     submitted_at: '2026-08-15T08:01:00Z',
     started_at: '2026-08-15T08:02:00Z',
@@ -52,7 +52,7 @@ const runDetailFixture = (): RunDetail => ({
     artifact_rules: [],
     input_bindings: [],
     created_at: '2026-08-15T08:00:00Z',
-    created_by: 'student',
+    initiated_by_user_id: 'student',
     project_id: 'project-1',
     project_version_id: 'version-1',
     scheduler: {

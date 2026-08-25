@@ -58,7 +58,7 @@ const homeData: Home = {
       project_version_label: 'v1',
       snapshot_id: 's-1',
       status: 'succeeded',
-      created_by: 'u-1',
+      initiated_by_user_id: 'u-1',
       created_at: '2026-08-15T10:00:00Z',
       submitted_at: null,
       started_at: null,

@@ -924,7 +924,7 @@ class RunRepositoryImpl:
                 scheduler_job_id=run.scheduler_job_id,
                 exit_code=run.exit_code,
                 failure_reason=run.failure_reason,
-                created_by=run.created_by,
+                initiated_by_user_id=run.initiated_by_user_id,
                 created_at=run.created_at or datetime.now(UTC),
                 submitted_at=run.submitted_at,
                 started_at=run.started_at,
@@ -960,10 +960,19 @@ class RunRepositoryImpl:
         return await _paginate(self._session, stmt, page, _to_run)
 
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Run]:
-        visible = _visible_workspace_ids(user_id)
+        # Run 可见性跟随 Project Owner（#41）：自己或所在 User Group 拥有的
+        # Project 下的 Run，与 /me recent_projects 的 owner-scope 语义一致。
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
         stmt = (
             select(t.RunRow)
-            .where(t.RunRow.workspace_id.in_(visible))
+            .join(t.ProjectRow, t.ProjectRow.id == t.RunRow.project_id)
+            .where(
+                (t.ProjectRow.owner_user_id == user_id)
+                | t.ProjectRow.owner_user_group_id.in_(group_ids)
+            )
             .order_by(t.RunRow.created_at.desc())
             .limit(limit)
         )
@@ -1007,15 +1016,15 @@ class RunRepositoryImpl:
         """数「这个 User 在这个算力方案上」还有几个未结束的 Run。
 
         并发额度按「User × 方案」授予，锁的也是那个 User 的那一条权益行，
-        所以只数该 User 发起（created_by）的 Run。**计数范围大于加锁范围
-        就等于没锁**——计数范围里混进别人的 Run，会读出一个比实际大的数，
-        让本来还有名额的请求被误拒，或反过来。
+        所以只数该 User 发起（initiated_by_user_id）的 Run。**计数范围大于
+        加锁范围就等于没锁**——计数范围里混进别人的 Run，会读出一个比实际
+        大的数，让本来还有名额的请求被误拒，或反过来。
         """
         stmt = (
             select(func.count())
             .select_from(t.RunRow)
             .where(
-                t.RunRow.created_by == user_id,
+                t.RunRow.initiated_by_user_id == user_id,
                 t.RunRow.compute_plan_id == compute_plan_id,
                 t.RunRow.status.in_([RunStatus.QUEUED.value, RunStatus.RUNNING.value]),
             )
@@ -1027,19 +1036,19 @@ class IdempotencyRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find(self, workspace_id: str, key: str) -> IdempotencyRecord | None:
-        row = await self._session.get(t.IdempotencyKeyRow, (workspace_id, key))
+    async def find(self, user_id: str, key: str) -> IdempotencyRecord | None:
+        row = await self._session.get(t.IdempotencyKeyRow, (user_id, key))
         if row is None:
             return None
         return IdempotencyRecord(
-            workspace_id=row.workspace_id,
+            initiated_by_user_id=row.initiated_by_user_id,
             key=row.key,
             endpoint=row.endpoint,
             run_id=row.run_id,
             created_at=_required(row.created_at),
         )
 
-    async def reserve(self, workspace_id: str, key: str, endpoint: str) -> None:
+    async def reserve(self, user_id: str, key: str, endpoint: str) -> None:
         """登记这个 key 并立刻落库。
 
         立刻 flush 是关键：复合主键的冲突要在这一刻就暴露出来，
@@ -1047,7 +1056,7 @@ class IdempotencyRepositoryImpl:
         """
         self._session.add(
             t.IdempotencyKeyRow(
-                workspace_id=workspace_id,
+                initiated_by_user_id=user_id,
                 key=key,
                 endpoint=endpoint,
                 run_id=None,
@@ -1056,8 +1065,8 @@ class IdempotencyRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def attach_run(self, workspace_id: str, key: str, run_id: str) -> None:
-        row = await self._session.get(t.IdempotencyKeyRow, (workspace_id, key))
+    async def attach_run(self, user_id: str, key: str, run_id: str) -> None:
+        row = await self._session.get(t.IdempotencyKeyRow, (user_id, key))
         if row is None:  # pragma: no cover - reserve 一定先于它调用
             return
         row.run_id = run_id
@@ -1676,24 +1685,6 @@ def _owner_columns(owner: OwnerReference) -> tuple[str | None, str | None]:
     return None, owner.id
 
 
-def _visible_workspace_ids(user_id: str):
-    """Resolve private legacy anchors without exposing Workspace governance."""
-    group_ids = select(t.MembershipRow.user_group_id).where(
-        t.MembershipRow.user_id == user_id,
-        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
-    )
-    return select(t.LegacyWorkspaceRow.id).where(
-        (
-            (t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.PERSONAL.value)
-            & (t.LegacyWorkspaceRow.owner_id == user_id)
-        )
-        | (
-            (t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.COLLABORATIVE.value)
-            & t.LegacyWorkspaceRow.id.in_(group_ids)
-        )
-    )
-
-
 def _to_user(row: t.UserRow) -> User:
     return User(
         id=row.id,
@@ -1879,7 +1870,7 @@ def _to_run(row: t.RunRow) -> Run:
         scheduler_job_id=row.scheduler_job_id,
         exit_code=row.exit_code,
         failure_reason=row.failure_reason,
-        created_by=row.created_by,
+        initiated_by_user_id=row.initiated_by_user_id,
         created_at=_aware(row.created_at),
         submitted_at=_aware(row.submitted_at),
         started_at=_aware(row.started_at),

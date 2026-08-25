@@ -317,10 +317,10 @@ class RunConfiguration:
     id: str
     project_id: str
     name: str
+    environment_version_id: str
+    """本次运行使用的精确 Environment Version；不再继承 Project 或 Workspace 默认值。"""
     working_directory: str = "."
     command: str = ""
-    environment_version_id: str | None = None
-    """None 表示继承 Project 的有效环境。"""
     environment_variables: dict[str, EnvValue] = field(default_factory=dict)
     input_bindings: tuple[InputBinding, ...] = ()
     compute_plan_id: str = ""
@@ -347,7 +347,7 @@ class Run:
     workspace_id: str
     snapshot_id: str
     compute_plan_id: str
-    """本次运行占用的算力方案。当前实现按「Workspace × 方案」计算并发额度。"""
+    """本次运行占用的算力方案。并发额度按「Initiated By User × 方案」计算（GR-307）。"""
     project_version_id: str
     """本次运行基于的 Project 版本。冗余自快照，用于 Run History 展示。"""
     project_version_label: str
@@ -361,7 +361,8 @@ class Run:
     scheduler_job_id: str | None = None
     exit_code: int | None = None
     failure_reason: str = ""
-    created_by: str = ""
+    initiated_by_user_id: str = ""
+    """发起本次 Run 的 User（GR-307）。执行身份、并发额度、通知接收方都以它为准。"""
     created_at: datetime | None = None
     submitted_at: datetime | None = None
     started_at: datetime | None = None
@@ -388,6 +389,7 @@ class IdempotencyRecord:
     """一次幂等提交的登记。
 
     客户端为一次「提交意图」生成一个 key，重试时复用同一个 key。
+    key 的作用域是发起 User：``(initiated_by_user_id, key)`` 唯一。
     平台据此判断这是不是同一次提交——网络抖动、用户双击、前端自动重试，
     都不应该变成两次真实的计算。
 
@@ -395,7 +397,7 @@ class IdempotencyRecord:
     还在处理中（或者已经失败回滚了）。
     """
 
-    workspace_id: str
+    initiated_by_user_id: str
     key: str
     endpoint: str
     run_id: str | None

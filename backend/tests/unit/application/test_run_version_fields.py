@@ -35,7 +35,7 @@ def _make_run(
         scheduler_job_id="job-1",
         exit_code=0,
         failure_reason="",
-        created_by="user-1",
+        initiated_by_user_id="user-1",
         created_at=datetime(2026, 8, 12, 10, 0, tzinfo=UTC),
         submitted_at=datetime(2026, 8, 12, 10, 1, tzinfo=UTC),
         started_at=datetime(2026, 8, 12, 10, 2, tzinfo=UTC),

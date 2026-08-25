@@ -265,7 +265,7 @@ class RunConfigurationRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     working_directory: Mapped[str] = mapped_column(String(1024), default=".")
     command: Mapped[str] = mapped_column(Text)
-    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    environment_version_id: Mapped[str] = mapped_column(ID)
     environment_variables: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     input_bindings: Mapped[list[Any]] = mapped_column(JSON, default=list)
     compute_plan_id: Mapped[str] = mapped_column(ID)
@@ -290,7 +290,7 @@ class RunRow(Base):
     workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     snapshot_id: Mapped[str] = mapped_column(ID, ForeignKey("run_snapshots.id"))
     # 从快照里冗余出来的一列。快照是 JSON，没法索引也没法跨库稳定地查；
-    # 而当前实现的并发上限口径是「Workspace × 算力方案」，
+    # 而并发上限口径是「Initiated By User × 算力方案」（GR-307），
     # 数未结束 Run 时必须能按方案过滤。方案在快照创建时就固定、之后不再变，
     # 冗余是安全的。
     compute_plan_id: Mapped[str] = mapped_column(ID, index=True)
@@ -310,7 +310,7 @@ class RunRow(Base):
     scheduler_job_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failure_reason: Mapped[str] = mapped_column(Text, default="")
-    created_by: Mapped[str] = mapped_column(ID, index=True)
+    initiated_by_user_id: Mapped[str] = mapped_column(ID, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -332,13 +332,13 @@ class RunSecretRedactionRow(Base):
 class IdempotencyKeyRow(Base):
     """幂等登记。
 
-    复合主键 ``(workspace_id, key)`` 就是并发下的那道保证：
-    第二个同 key 的请求插不进来，会撞唯一约束。
+    复合主键 ``(initiated_by_user_id, key)`` 就是并发下的那道保证：
+    第二个同 User 同 key 的请求插不进来，会撞唯一约束。
     """
 
     __tablename__ = "idempotency_keys"
 
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), primary_key=True)
+    initiated_by_user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), primary_key=True)
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     endpoint: Mapped[str] = mapped_column(String(64))
     run_id: Mapped[str | None] = mapped_column(ID, nullable=True)

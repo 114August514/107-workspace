@@ -1,12 +1,14 @@
 import pytest
 
-from tests.helpers import create_project_with_version, ensure_user_group
+from tests.helpers import create_project_with_version, use_default_environment
 
 
 @pytest.mark.asyncio
-async def test_fork_preserves_config_expressions_without_copying_scope_values(client) -> None:
+async def test_fork_preserves_config_expressions_without_copying_scope_values(
+    client, session
+) -> None:
+    group_id, env_version_id = await use_default_environment(session, client)
     source = await create_project_with_version(client, name="source-config")
-    await ensure_user_group(client)
     versions = await client.get(f"/api/v1/projects/{source['id']}/versions")
     assert versions.status_code == 200
     version_id = versions.json()["items"][0]["id"]
@@ -22,6 +24,7 @@ async def test_fork_preserves_config_expressions_without_copying_scope_values(cl
             "name": "config",
             "command": "echo ok",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
             "environment_variables": expressions,
         },
     )
@@ -32,12 +35,9 @@ async def test_fork_preserves_config_expressions_without_copying_scope_values(cl
     ):
         response = await client.put(f"/api/v1/projects/{source['id']}/{suffix}", json=payload)
         assert response.status_code in (200, 204)
-    target_group = await client.post("/api/v1/user-groups", json={"name": "fork-target"})
-    assert target_group.status_code == 201
-    target_id = target_group.json()["id"]
     fork = await client.post(
         f"/api/v1/versions/{version_id}/fork",
-        json={"target_workspace_id": target_id, "name": "target-config"},
+        json={"target_workspace_id": group_id, "name": "target-config"},
     )
     assert fork.status_code == 201
     target = fork.json()

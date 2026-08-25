@@ -146,7 +146,7 @@ class RunLifecycleService:
             # actor 记的是提交这次 Run 的人。结束不是他「做」的，但这条活动
             # 说的是他那次运行的结果——写成系统账号反而更难读。
             await self._activity.record(
-                actor_id=run.created_by,
+                actor_id=run.initiated_by_user_id,
                 workspace_id=run.workspace_id,
                 project_id=run.project_id,
                 action=ActivityAction.RUN_FINISHED,
@@ -159,7 +159,7 @@ class RunLifecycleService:
             # 取消是用户自己刚做的动作，不用再通知一遍。
             if run.status is not RunStatus.CANCELLED:
                 await self._notifier.run_finished(
-                    recipient_id=run.created_by,
+                    recipient_id=run.initiated_by_user_id,
                     run_id=run.id,
                     run_name=run.name,
                     workspace_id=run.workspace_id,

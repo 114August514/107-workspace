@@ -3,11 +3,41 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import ensure_user_group
+from workspace107.domain import ids
+from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
 
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
+
+
+async def _group_environment_version(session: AsyncSession, user_group_id: str) -> str:
+    """直插一个 User Group 拥有的 Environment Version，返回 version id。"""
+    environment_id = ids.new_id(ids.ENVIRONMENT)
+    version_id = ids.new_id(ids.ENVIRONMENT_VERSION)
+    session.add(
+        EnvironmentRow(
+            id=environment_id,
+            name=f"{environment_id} environment",
+            description="",
+            owner_user_group_id=user_group_id,
+        )
+    )
+    await session.flush()
+    session.add(
+        EnvironmentVersionRow(
+            id=version_id,
+            environment_id=environment_id,
+            version="1",
+            description="",
+            image="python:3.12-slim",
+            setup_command="",
+        )
+    )
+    await session.commit()
+    return version_id
 
 
 @pytest.mark.asyncio
@@ -161,8 +191,9 @@ async def test_discovery_lists_public_projects_but_home_feed_does_not(client) ->
 
 
 @pytest.mark.asyncio
-async def test_public_version_can_be_forked_to_requesting_user_owner(client) -> None:
+async def test_public_version_can_be_forked_to_requesting_user_owner(client, session) -> None:
     group_id = await ensure_user_group(client, headers=ALICE)
+    env_version_id = await _group_environment_version(session, group_id)
     source = await client.post(
         f"/api/v1/workspaces/{group_id}/projects",
         json={"name": "Fork Source"},
@@ -185,6 +216,7 @@ async def test_public_version_can_be_forked_to_requesting_user_owner(client) -> 
             "name": "private config",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
         },
         headers=ALICE,
     )
