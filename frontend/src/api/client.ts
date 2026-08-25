@@ -53,6 +53,7 @@ import type {
   SharedResourceVersionDetail,
   VersionDiff,
   WorkingChange,
+  WorkingChangeDetail,
   UserGroup,
 } from './types'
 
@@ -330,6 +331,24 @@ export const api = {
       }),
     ),
 
+  /**
+   * multipart 上传。多选时调用方逐个文件调一次而不是一次打包全部：
+   * 一个请求一个文件的成败，失败的用户才分得清是哪个文件出了问题。
+   */
+  uploadFiles: async (id: string, files: File[]): Promise<ProjectFile[]> => {
+    const form = new FormData()
+    for (const file of files) {
+      form.append('files', file)
+    }
+    return unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/upload', {
+        params: { path: { project_id: id } },
+        // 契约把 files 标成 string[]，实际是 File；理由同 publishSharedResourceVersion。
+        body: form as unknown as { files: string[] },
+      }),
+    )
+  },
+
   deletePath: async (id: string, path: string): Promise<void> => {
     unwrap(
       await http.DELETE('/api/v1/projects/{project_id}/files', {
@@ -346,11 +365,86 @@ export const api = {
       }),
     ),
 
+  copyPath: async (id: string, source: string, destination: string): Promise<ProjectFile[]> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/copy', {
+        params: { path: { project_id: id } },
+        body: { source, destination },
+      }),
+    ),
+
+  createDirectory: async (id: string, path: string): Promise<ProjectFile> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/mkdir', {
+        params: { path: { project_id: id } },
+        body: { path },
+      }),
+    ),
+
+  /**
+   * 上传 zip 压缩包并展开到工作区。
+   *
+   * 与 `publishSharedResourceVersion` 同理：契约类型把文件标成 string，
+   * 这里实际是 File，FormData 由浏览器补 Content-Type 和 boundary。
+   */
+  uploadArchive: async (id: string, file: File, prefix = ''): Promise<ProjectFile[]> => {
+    const form = new FormData()
+    form.append('file', file)
+    return unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/archive', {
+        params: {
+          path: { project_id: id },
+          query: prefix ? { prefix } : undefined,
+        },
+        body: form as unknown as { file: string },
+      }),
+    )
+  },
+
+  /**
+   * 下载 Project 文件。
+   *
+   * 走 fetch 拿 blob 再触发浏览器下载，而不是直接给 `<a href>`——
+   * 请求要带身份头，理由同 `downloadArtifactFile`。
+   */
+  downloadFile: async (id: string, path: string): Promise<void> => {
+    const blob = unwrap(
+      await http.GET('/api/v1/projects/{project_id}/files/download', {
+        params: { path: { project_id: id }, query: { path } },
+        parseAs: 'blob',
+      }),
+    )
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = path.split('/').pop() ?? 'file'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
+
   // -- 版本 --------------------------------------------------------------
   workingChanges: async (id: string): Promise<WorkingChange[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/changes', {
         params: { path: { project_id: id } },
+      }),
+    ),
+
+  workingChangeDetail: async (id: string, path: string): Promise<WorkingChangeDetail> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/changes/detail', {
+        params: { path: { project_id: id }, query: { path } },
+      }),
+    ),
+
+  /** 放弃指定未保存变更，返回剩余的未保存变更。 */
+  discardChanges: async (id: string, paths: string[]): Promise<WorkingChange[]> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/changes/discard', {
+        params: { path: { project_id: id } },
+        body: { paths },
       }),
     ),
 

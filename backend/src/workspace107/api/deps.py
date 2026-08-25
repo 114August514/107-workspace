@@ -118,6 +118,8 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.storage,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
+            max_archive_total_bytes=context.settings.max_archive_total_bytes,
+            max_archive_entries=context.settings.max_archive_entries,
         ),
         run_configurations=RunConfigurationService(repos, guard),
         runs=RunService(

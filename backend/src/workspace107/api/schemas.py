@@ -197,6 +197,20 @@ class FileMoveIn(Model):
     destination: str
 
 
+class FileCopyIn(Model):
+    source: str
+    destination: str
+
+
+class MkdirIn(Model):
+    path: str
+
+
+class DiscardChangesIn(Model):
+    paths: list[str] = Field(min_length=1)
+    """要放弃的未保存变更路径；不存在的变更按幂等跳过。"""
+
+
 class FileContentOut(Model):
     path: str
     content: str
@@ -206,6 +220,17 @@ class FileContentOut(Model):
 class WorkingChangeOut(Model):
     path: str
     change: ChangeKind
+
+
+class WorkingChangeDetailOut(Model):
+    """单个未保存变更的内容级详情。"""
+
+    path: str
+    change: ChangeKind
+    previous: FileContentOut | None = None
+    """基线（最近保存版本）中的内容预览；新增时为空。"""
+    current: FileContentOut | None = None
+    """当前工作区内容预览；删除时为空。"""
 
 
 class ProjectVersionFileOut(Model):
