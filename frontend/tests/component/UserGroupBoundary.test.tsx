@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ProductRoutes } from '../../src/App'
+import { App, ProductRoutes } from '../../src/App'
 import { api } from '../../src/api/client'
 import type {
   ActivityPage,
@@ -56,6 +56,8 @@ describe('UserGroupPage governance boundary', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
     vi.spyOn(api, 'listMembers').mockResolvedValue([member])
+    vi.spyOn(api, 'home').mockResolvedValue(homeState.data)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
     vi.spyOn(api, 'getLegacyWorkspaceContext').mockResolvedValue({
       ...group,
       kind: 'collaborative',
@@ -86,7 +88,7 @@ describe('UserGroupPage governance boundary', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows governance with a normal resource entry and no implementation wording', async () => {
+  it('REQ-63-01/02 keeps identity and membership governance on one Primer surface', async () => {
     render(
       <MemoryRouter initialEntries={['/user-groups/grp_lab']}>
         <Routes>
@@ -97,9 +99,36 @@ describe('UserGroupPage governance boundary', () => {
 
     await screen.findByRole('heading', { name: 'Research Lab' })
 
-    expect(screen.getAllByText('成员').length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: '查看 Project 与配置' })).toBeInTheDocument()
+    expect(screen.getByText('User Group')).toBeInTheDocument()
+    expect(screen.getAllByText('所有者').length).toBeGreaterThan(0)
+    expect(screen.getByText('Governance only')).toBeInTheDocument()
+    const membersSection = screen.getByRole('region', { name: '成员' })
+    const membersHeading = within(membersSection).getByRole('heading', { name: '成员' })
+    expect(
+      within(membersHeading.parentElement!).getByRole('button', { name: '邀请成员' }),
+    ).toBeVisible()
+    expect(
+      within(membersSection).getByText('管理成员及其在这个 User Group 中的权限。'),
+    ).toBeVisible()
+    const identityRail = screen.getByRole('complementary', { name: 'User Group 身份' })
+    expect(within(identityRail).getByText('成员')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'User Group 内容' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '查看 Project 与配置' })).not.toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容/)
+  })
+
+  it('REQ-63-01 composes with AppShell using exactly one main landmark', async () => {
+    render(
+      <MemoryRouter initialEntries={['/user-groups/grp_lab']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('heading', { name: 'Research Lab' })
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('complementary', { name: '页面引导' })).toHaveTextContent(
+      '这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。',
+    )
   })
 
   it('renders a collaborative resource context with normal product labels', async () => {
