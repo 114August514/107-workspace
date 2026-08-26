@@ -57,6 +57,25 @@ Initiated User 语义。所有受控消费者在同一候选中 clean cutover，
 - Targeted cleanup：删除已无 route/repository 消费方的 `ActivityService.list_for_user`，并将最后两个当前 resource 测试名/变量收敛为 Owner / UserGroup 术语；定向 grep 无旧名，3 个文件的 ruff check 与 format-check 通过。
 - Final targeted re-review：PASS；当前候选无剩余 material finding。
 
+## 托管 CI 诊断与语义校正（2026-08-26）
+
+- 人类确认 `Workspace107` / `107 Workspace` 是产品、包和项目名称，必须保留；本 Issue
+  只删除 Personal/Collaborative ownership entity 这一旧领域概念。审计 PR diff 后确认
+  `workspace107` Python package、107 Workspace 品牌、`WORKSPACE107_*` 环境变量以及文件系统、
+  worktree、Run working state 等普通 workspace 语义均未被误删或改名。
+- Hosted `postgres-migration-and-owner-race` 的三个失败和
+  `compose-build-and-smoke` 的 API unhealthy 是同一根因：cutover migration 对 PostgreSQL
+  强制使用 Alembic batch table recreation，试图删除仍被 Project 子表外键引用的
+  `projects_pkey`。改为 dialect-aware batch 默认策略：SQLite 仍按需重建表，PostgreSQL 直接
+  执行受控列/约束变更，不触碰主键及其依赖。
+- PostgreSQL 继续执行后暴露该 job 自身仍断言已删除的 `workspaces` /
+  `legacy_personal_memberships`。测试已改为保护当前 schema-only destructive cutover、当前
+  UserGroup/Membership 上游状态保留及 membership-owner 竞态不变量；没有恢复旧表、URL、
+  DTO 或 alias。
+- 前端定向审计确认 `/user-groups/:userGroupId` 是当前治理路由，Project 创建 contract
+  接受显式 `OwnerReference`；User-owned 与 UserGroup-owned Project 行为已有当前 contract /
+  integration 与 AppShell owner-link 覆盖。未恢复 `/workspaces` 页面或旧 compatibility tests。
+
 ## 禁区
 
 - 不改 Scheduler / Storage / Worker，不实现 #19/#20/#21 设计重做，不加依赖或框架。

@@ -126,7 +126,7 @@ def upgrade() -> None:
     op.drop_table("activities")
     _create_current_activities()
 
-    with op.batch_alter_table("projects", recreate="always") as batch:
+    with op.batch_alter_table("projects") as batch:
         batch.drop_constraint("uq_project_name", type_="unique")
         batch.drop_index("ix_projects_workspace_id")
         batch.drop_column("workspace_id")
@@ -147,15 +147,15 @@ def upgrade() -> None:
         postgresql_where=sa.text("owner_user_group_id IS NOT NULL"),
     )
 
-    with op.batch_alter_table("runs", recreate="always") as batch:
+    with op.batch_alter_table("runs") as batch:
         batch.drop_index("ix_runs_workspace_id")
         batch.drop_column("workspace_id")
-    with op.batch_alter_table("artifacts", recreate="always") as batch:
+    with op.batch_alter_table("artifacts") as batch:
         batch.drop_index("ix_artifacts_workspace_id")
         batch.drop_column("workspace_id")
-    with op.batch_alter_table("notifications", recreate="always") as batch:
+    with op.batch_alter_table("notifications") as batch:
         batch.drop_column("workspace_id")
-    with op.batch_alter_table("fork_relations", recreate="always") as batch:
+    with op.batch_alter_table("fork_relations") as batch:
         batch.drop_column("source_workspace_id")
         batch.add_column(sa.Column("source_owner_user_id", _ID, nullable=True))
         batch.add_column(sa.Column("source_owner_user_group_id", _ID, nullable=True))
@@ -201,25 +201,25 @@ def downgrade() -> None:
 
     op.drop_index("uq_projects_owner_user_group_name", table_name="projects")
     op.drop_index("uq_projects_owner_user_name", table_name="projects")
-    with op.batch_alter_table("projects", recreate="always") as batch:
+    with op.batch_alter_table("projects") as batch:
         batch.add_column(sa.Column("workspace_id", _ID, nullable=False))
         batch.create_foreign_key(
             "fk_projects_workspace_id_workspaces", "workspaces", ["workspace_id"], ["id"]
         )
         batch.create_unique_constraint("uq_project_name", ["workspace_id", "name"])
         batch.create_index("ix_projects_workspace_id", ["workspace_id"])
-    with op.batch_alter_table("runs", recreate="always") as batch:
+    with op.batch_alter_table("runs") as batch:
         batch.add_column(sa.Column("workspace_id", _ID, nullable=False))
         batch.create_foreign_key(
             "fk_runs_workspace_id_workspaces", "workspaces", ["workspace_id"], ["id"]
         )
         batch.create_index("ix_runs_workspace_id", ["workspace_id"])
-    with op.batch_alter_table("artifacts", recreate="always") as batch:
+    with op.batch_alter_table("artifacts") as batch:
         batch.add_column(sa.Column("workspace_id", _ID, nullable=False))
         batch.create_index("ix_artifacts_workspace_id", ["workspace_id"])
-    with op.batch_alter_table("notifications", recreate="always") as batch:
+    with op.batch_alter_table("notifications") as batch:
         batch.add_column(sa.Column("workspace_id", _ID, nullable=True))
-    with op.batch_alter_table("fork_relations", recreate="always") as batch:
+    with op.batch_alter_table("fork_relations") as batch:
         batch.drop_constraint("ck_fork_relations_exactly_one_source_owner", type_="check")
         batch.drop_column("source_owner_user_group_id")
         batch.drop_column("source_owner_user_id")
