@@ -10,16 +10,14 @@ import type { Activity, ActivityAction } from '../../api/types'
 import { isRunStatus, runStatusLabel } from '../../utils/runStatus'
 
 const ACTION_TEXT: Record<ActivityAction, string> = {
-  workspace_created: '创建了空间',
-  workspace_updated: '修改了空间设置',
   user_group_created: '创建了 User Group',
   user_group_updated: '修改了 User Group 设置',
   member_invited: '邀请了',
-  member_joined: '加入了空间',
-  member_left: '退出了空间',
+  member_joined: '加入了 User Group',
+  member_left: '退出了 User Group',
   member_removed: '移除了',
   member_role_changed: '修改了角色',
-  ownership_transferred: '把空间所有权转让给',
+  ownership_transferred: '把 User Group 所有权转让给',
   project_created: '创建了 Project',
   project_updated: '修改了 Project',
   project_forked: '派生出 Project',
@@ -44,8 +42,6 @@ export function describeAction(action: ActivityAction): string {
  */
 export function targetPath(activity: Activity): string | null {
   switch (activity.target_type) {
-    case 'workspace':
-      return `/workspaces/${activity.target_id}`
     case 'user_group':
       return `/user-groups/${activity.target_id}`
     case 'project':
@@ -53,8 +49,7 @@ export function targetPath(activity: Activity): string | null {
     case 'run':
       return `/runs/${activity.target_id}`
     case 'project_version':
-      // 版本没有独立页面，跳到它所属的 Project
-      return activity.project_id ? `/projects/${activity.project_id}` : null
+      return `/versions/${activity.target_id}`
     case 'shared_resource':
       return `/shared-resources/${activity.target_id}`
     case 'shared_resource_version':
@@ -65,10 +60,8 @@ export function targetPath(activity: Activity): string | null {
 }
 
 /**
- * 活动自己带的对象名要不要显示。
- *
- * 「加入了空间」「退出了空间」这两类里，操作者就是对象本人，
- * 再把名字重复一遍会读成「guest 加入了空间 guest」。
+ * 「加入了 User Group」「退出了 User Group」里，操作者就是对象本人，
+ * 再显示名字会形成重复句子。
  */
 export function showsTarget(activity: Activity): boolean {
   return activity.actor_id !== activity.target_id

@@ -362,7 +362,6 @@ class RunService:
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=project_id,
-            workspace_id=access.workspace.id,
             snapshot_id=snapshot.id,
             compute_plan_id=snapshot.compute_plan_id,
             project_version_id=snapshot.project_version_id,
@@ -378,8 +377,10 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(user_id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, result.project_version, access)
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
+        await self._submit(run, snapshot, result.project_version)
+        await self._record_run_activity(
+            user_id, run, access.project.owner, ActivityAction.RUN_SUBMITTED
+        )
         return RunSubmission(run=run, created=True)
 
     async def rerun(
@@ -451,7 +452,6 @@ class RunService:
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=access.run.project_id,
-            workspace_id=access.workspace.id,
             project_version_id=source_snapshot.project_version_id,
             project_version_label=project_version.label,
             snapshot_id=snapshot.id,
@@ -467,9 +467,13 @@ class RunService:
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(user_id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, project_version, access)
+        await self._submit(run, snapshot, project_version)
         await self._record_run_activity(
-            user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
+            user_id,
+            run,
+            access.project.owner,
+            ActivityAction.RUN_SUBMITTED,
+            detail=f"重跑自 {access.run.name}",
         )
         return RunSubmission(run=run, created=True)
 
@@ -488,7 +492,9 @@ class RunService:
             run.finished_at = self._clock.now()
             await self._repos.runs.update(run)
             await self._record_event(run.id, RunEventType.CANCELLED, "任务尚未提交，已直接取消")
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_CANCELLED)
+        await self._record_run_activity(
+            user_id, run, access.project.owner, ActivityAction.RUN_CANCELLED
+        )
         return run
 
     # -- 内部 -----------------------------------------------------------
@@ -556,12 +562,11 @@ class RunService:
         run: Run,
         snapshot: RunSnapshot,
         version: ProjectVersion,
-        access: ProjectAccess,
     ) -> None:
         # 执行身份以持久化的 Run 记录为准（GR-307），不从调用参数传递——
         # 快照校验、Secret 解析和通知收件人都读同一个字段。
         try:
-            access, values = await self.validate_execution_context(run, snapshot)
+            _, values = await self.validate_execution_context(run, snapshot)
             if values:
                 await self._secrets.retain_for_redaction(run.id, list(values.values()))
             inputs = await self._materialize_inputs(snapshot.input_bindings)
@@ -605,7 +610,6 @@ class RunService:
             # 收件人是 Run 的发起人——即使就是当前操作者也要发。
             await self._notifier.run_submit_failed(
                 recipient_id=run.initiated_by_user_id,
-                workspace_id=access.workspace.id,
                 run_id=run.id,
                 run_name=run.name,
                 reason=str(exc),
@@ -623,11 +627,16 @@ class RunService:
         )
 
     async def _record_run_activity(
-        self, user_id: str, run: Run, action: ActivityAction, detail: str = ""
+        self,
+        user_id: str,
+        run: Run,
+        owner: OwnerReference,
+        action: ActivityAction,
+        detail: str = "",
     ) -> None:
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=run.workspace_id,
+            owner=owner,
             project_id=run.project_id,
             action=action,
             target_type=TargetType.RUN,
@@ -666,8 +675,7 @@ class RunService:
     ) -> EnvironmentVersion | None:
         """运行方案必须精确引用一个 Environment Version（#41、GR-205）。
 
-        没有任何继承或回退：不读 Project 的环境选择，也不读 Workspace 默认
-        环境。运行时用到的环境在保存运行方案时就已经确定。
+        没有任何继承或回退：运行时只使用保存运行方案时已经确定的 Environment Version。
         """
         version = await environment_version_for_owner_use(
             self._repos, user_id, configuration.environment_version_id, project_owner

@@ -2,11 +2,6 @@ export const homeCopy = {
   fallbackTitle: '首页',
   subtitle: '从这里进入 Project，配置运行方案，提交计算作业——不需要自己写 sbatch。',
   loading: '正在加载首页内容…',
-  personalResource: {
-    title: '个人资源',
-    description: '查看已有的个人 Project、运行环境与配置。',
-    action: '查看个人资源',
-  },
   recentRuns: {
     title: '最近提交的 Run',
     empty: '还没有提交过 Run',

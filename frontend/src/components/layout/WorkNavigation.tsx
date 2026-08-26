@@ -17,10 +17,6 @@ interface Props {
  */
 export function WorkNavigation({ home }: Props) {
   const location = useLocation()
-  const ownerNames = new Map(home.user_groups.map((userGroup) => [userGroup.id, userGroup.name]))
-  if (home.personal_resource_context_id) {
-    ownerNames.set(home.personal_resource_context_id, workNavigationCopy.personalResourceGroup)
-  }
 
   return (
     <NavList aria-label={workNavigationCopy.ariaLabel} className={styles.navigation}>
@@ -75,9 +71,7 @@ export function WorkNavigation({ home }: Props) {
               </NavList.LeadingVisual>
               <span className={styles.itemContent}>
                 <span className={styles.itemText}>{project.name}</span>
-                {ownerNames.get(project.workspace_id) ? (
-                  <span className={styles.itemMeta}>{ownerNames.get(project.workspace_id)}</span>
-                ) : null}
+                <span className={styles.itemMeta}>{project.owner.display_name}</span>
               </span>
             </NavList.Item>
           ))

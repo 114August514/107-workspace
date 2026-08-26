@@ -1,8 +1,7 @@
-"""通知中心。
+"""Recipient-authorized notification center.
 
-**这些接口不做 Workspace 权限校验**，只按当前用户过滤。通知是发给这个人的，
-与他现在还能不能看见相关对象无关。被移除的成员已经看不到那个空间，
-但仍需要通过「你被移除了」这条通知理解发生了什么。
+Notifications remain readable after target access changes, but every read and mutation
+is scoped to the current recipient. Targets use only current User Group, Project, or Run routes.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ async def list_notifications(
     page: PageDep,
     unread_only: bool = Query(False, description="只看未读"),
 ) -> s.PageOut[s.NotificationOut]:
-    """分页返回当前用户收到的通知，可筛选未读项，不重新校验关联 Workspace 权限。"""
+    """分页返回当前用户收到的通知，可筛选未读项。"""
     result = await services.notifications.list_for_user(user.id, page, unread_only=unread_only)
     return p.page_out(result, p.notification_out)
 

@@ -37,7 +37,7 @@ async def test_fork_preserves_config_expressions_without_copying_scope_values(
         assert response.status_code in (200, 204)
     fork = await client.post(
         f"/api/v1/versions/{version_id}/fork",
-        json={"target_workspace_id": group_id, "name": "target-config"},
+        json={"target_owner": {"kind": "user_group", "id": group_id}, "name": "target-config"},
     )
     assert fork.status_code == 201
     target = fork.json()
