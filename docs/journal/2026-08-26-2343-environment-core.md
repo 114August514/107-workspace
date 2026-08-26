@@ -41,4 +41,4 @@ GitHub Issue #45 的实现分支将推送到远端并创建 PR；撤销方式为
   Run Configuration 重开与 preflight exact version 均已实测。
 - 验证：`make check` 通过；backend targeted 6 passed；frontend targeted 11 passed；
   production build 通过。独立 reviewer 结论 `PASS`。
-- 下一步：推送 branch 并创建关联 #45 的 PR，等待托管检查与评审。
+- PR：[#80](https://github.com/114August514/107-workspace/pull/80)；等待托管检查与评审。
