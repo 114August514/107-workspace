@@ -5,14 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
-import type {
-  ActivityPage,
-  ForkSource,
-  Project,
-  RunConfiguration,
-  RunPage,
-  LegacyWorkspaceContext,
-} from '../api/types'
+import type { ActivityPage, ForkSource, Project, RunConfiguration, RunPage } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
@@ -47,11 +40,6 @@ export function ProjectPage() {
   const bump = () => setToken((value) => value + 1)
 
   const project = useAsync<Project>(() => api.getProject(projectId), [projectId, token])
-  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
-    async () =>
-      project.data ? api.getLegacyWorkspaceContext(project.data.workspace_id) : undefined,
-    [project.data?.workspace_id],
-  )
   const [runPage, setRunPage] = useState(1)
   const runs = useAsync<RunPage>(
     () => api.listRuns(projectId, { page: runPage }),
@@ -75,10 +63,12 @@ export function ProjectPage() {
               { title: <Link to="/">首页</Link> },
               {
                 title:
-                  workspace.data?.kind === 'collaborative' ? (
-                    <Link to={`/user-groups/${workspace.data.id}`}>{workspace.data.name}</Link>
+                  project.data.owner.kind === 'user_group' ? (
+                    <Link to={`/user-groups/${project.data.owner.id}`}>
+                      {project.data.owner.display_name}
+                    </Link>
                   ) : (
-                    (workspace.data?.name ?? '个人数据')
+                    project.data.owner.display_name
                   ),
               },
               { title: project.data.name },
@@ -103,7 +93,7 @@ export function ProjectPage() {
             label: '① 项目文件',
             children: (
               <Card>
-                <FileBrowser projectId={projectId} workspace={workspace.data} onChanged={bump} />
+                <FileBrowser projectId={projectId} access={project.data} onChanged={bump} />
               </Card>
             ),
           },
@@ -115,7 +105,7 @@ export function ProjectPage() {
                 <VersionPanel
                   projectId={projectId}
                   projectName={project.data?.name ?? ''}
-                  workspace={workspace.data}
+                  access={project.data}
                   refreshToken={token}
                   onVersionSaved={bump}
                 />
@@ -129,7 +119,7 @@ export function ProjectPage() {
               <Card>
                 <RunConfigurationPanel
                   projectId={projectId}
-                  workspace={workspace.data}
+                  access={project.data}
                   defaultConfigurationId={project.data?.default_run_configuration_id ?? null}
                   onSubmitRun={setSubmitting}
                   onChanged={bump}

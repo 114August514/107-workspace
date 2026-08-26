@@ -31,10 +31,6 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
   const visibleProjects = showAllProjects ? projects : projects.slice(0, defaultVisibleItemCount)
   const hiddenUserGroupCount = userGroups.length - visibleUserGroups.length
   const hiddenProjectCount = projects.length - visibleProjects.length
-  const ownerNames = new Map(userGroups.map((userGroup) => [userGroup.id, userGroup.name]))
-  if (home.data?.personal_resource_context_id) {
-    ownerNames.set(home.data.personal_resource_context_id, globalNavigationCopy.personalResource)
-  }
 
   return (
     <Dialog
@@ -70,24 +66,6 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
                 </NavList.LeadingVisual>
                 <span className={styles.itemText}>{globalNavigationCopy.home}</span>
               </NavList.Item>
-              {home.data.personal_resource_context_id ? (
-                <NavList.Item
-                  className={styles.item}
-                  as={RouterLink}
-                  to={`/workspaces/${home.data.personal_resource_context_id}`}
-                  aria-current={
-                    location.pathname === `/workspaces/${home.data.personal_resource_context_id}`
-                      ? 'page'
-                      : undefined
-                  }
-                  onClick={onClose}
-                >
-                  <NavList.LeadingVisual>
-                    <OrganizationIcon />
-                  </NavList.LeadingVisual>
-                  <span className={styles.itemText}>{globalNavigationCopy.personalResource}</span>
-                </NavList.Item>
-              ) : null}
 
               <NavList.Group title={globalNavigationCopy.userGroupsGroup}>
                 {visibleUserGroups.length === 0 ? (
@@ -147,11 +125,7 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
                       </NavList.LeadingVisual>
                       <span className={styles.itemContent}>
                         <span className={styles.itemText}>{project.name}</span>
-                        {ownerNames.get(project.workspace_id) ? (
-                          <span className={styles.itemMeta}>
-                            {ownerNames.get(project.workspace_id)}
-                          </span>
-                        ) : null}
+                        <span className={styles.itemMeta}>{project.owner.display_name}</span>
                       </span>
                     </NavList.Item>
                   ))

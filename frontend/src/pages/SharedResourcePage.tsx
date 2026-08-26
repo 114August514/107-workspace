@@ -5,7 +5,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
-import type { LegacyWorkspaceContext, SharedResourceDetail } from '../api/types'
+import type { SharedResourceDetail } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
@@ -14,7 +14,6 @@ import { PrimerRelativeTime } from '../components/primer/PrimerMono'
 import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
-import { loadSharedResourceOwnerContext } from '../components/sharedresource/ownerContext'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 
@@ -27,15 +26,11 @@ export function SharedResourcePage() {
     () => api.getSharedResource(resourceId),
     [resourceId, token],
   )
-  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
-    async () => (resource.data ? loadSharedResourceOwnerContext(resource.data) : undefined),
-    [resource.data?.owner.kind, resource.data?.owner.id],
-  )
   const [editing, setEditing] = useState(false)
   const [publishing, setPublishing] = useState(false)
 
-  const canManage = can(workspace.data, 'shared_resource.manage')
-  const canPublish = can(workspace.data, 'shared_resource.version.create')
+  const canManage = can(resource.data, 'shared_resource.manage')
+  const canPublish = can(resource.data, 'shared_resource.version.create')
   // 版本列表按 sequence 倒序，首个即最新。
   const versions = resource.data?.versions ?? []
   const latestVersionId = versions[0]?.id
@@ -63,23 +58,14 @@ export function SharedResourcePage() {
               <Breadcrumbs.Item as={Link} to="/">
                 首页
               </Breadcrumbs.Item>
-              {workspace.data ? (
-                <Breadcrumbs.Item as={Link} to={`/workspaces/${workspace.data.id}`}>
+              {resource.data.owner.kind === 'user_group' ? (
+                <Breadcrumbs.Item as={Link} to={`/user-groups/${resource.data.owner.id}`}>
                   {resource.data.owner.display_name}
                 </Breadcrumbs.Item>
               ) : (
                 <Breadcrumbs.Item>{resource.data.owner.display_name}</Breadcrumbs.Item>
               )}
-              {workspace.data ? (
-                <Breadcrumbs.Item
-                  as={Link}
-                  to={`/workspaces/${workspace.data.id}/shared-resources`}
-                >
-                  共享资源
-                </Breadcrumbs.Item>
-              ) : (
-                <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
-              )}
+              <Breadcrumbs.Item>共享资源</Breadcrumbs.Item>
             </Breadcrumbs>
             <div className={styles.titleRow}>
               <PackageIcon className={styles.titleIcon} size={24} />

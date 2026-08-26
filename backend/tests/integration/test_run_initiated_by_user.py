@@ -77,8 +77,8 @@ async def _create_environment(
 
 async def _create_project(client: httpx.AsyncClient, user_group_id: str, *, name: str) -> dict:
     response = await client.post(
-        f"/api/v1/workspaces/{user_group_id}/projects",
-        json={"name": name},
+        "/api/v1/projects",
+        json={"owner": {"kind": "user_group", "id": user_group_id}, "name": name},
         headers=ALICE,
     )
     response.raise_for_status()
@@ -430,7 +430,7 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
     repos = SqlRepositories(session)
     version = await repos.project_versions.get(detail.snapshot.project_version_id)
     assert version is not None
-    access, _ = await services.runs.validate_execution_context(detail.run, detail.snapshot)
+    await services.runs.validate_execution_context(detail.run, detail.snapshot)
 
     prepare_calls: list[str] = []
     scheduler_calls: list[str] = []
@@ -449,7 +449,7 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
     async def assert_execution_rejected(message: str) -> None:
         prepare_count = len(prepare_calls)
         scheduler_count = len(scheduler_calls)
-        await services.runs._submit(detail.run, detail.snapshot, version, access)
+        await services.runs._submit(detail.run, detail.snapshot, version)
         assert detail.run.status.value == "submit_failed"
         assert message in detail.run.failure_reason
         assert len(prepare_calls) == prepare_count
@@ -546,7 +546,6 @@ async def test_artifact_input_boundary_follows_project_owner(
             id=artifact_id,
             run_id=run.json()["id"],
             project_id=project_a["id"],
-            workspace_id=run.json()["workspace_id"],
             name="输出",
             source_path="outputs",
             size=4,
@@ -611,12 +610,12 @@ async def test_artifact_input_boundary_follows_project_owner(
     original_submit = services.runs._submit
     alice_id = await _get_user_id(client, ALICE)
 
-    async def make_artifact_unavailable_then_submit(run, snapshot, version, access):
+    async def make_artifact_unavailable_then_submit(run, snapshot, version):
         artifact = await session.get(ArtifactRow, artifact_id)
         assert artifact is not None
         artifact.status = "cleaned"
         await session.flush()
-        await original_submit(run, snapshot, version, access)
+        await original_submit(run, snapshot, version)
 
     monkeypatch.setattr(
         services.runs,
@@ -637,12 +636,12 @@ async def test_artifact_input_boundary_follows_project_owner(
     artifact.status = "available"
     await session.flush()
 
-    async def transfer_artifact_owner_then_submit(run, snapshot, version, access):
+    async def transfer_artifact_owner_then_submit(run, snapshot, version):
         source_project = await session.get(ProjectRow, project_a["id"])
         assert source_project is not None
         source_project.owner_user_group_id = group_b
         await session.flush()
-        await original_submit(run, snapshot, version, access)
+        await original_submit(run, snapshot, version)
 
     monkeypatch.setattr(services.runs, "_submit", transfer_artifact_owner_then_submit)
     submitted = await services.runs.create(
@@ -729,8 +728,8 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
 
     # 快照固化之后 Group 默认环境漂移到 v2。
     response = await client.patch(
-        f"/api/v1/workspaces/{group}",
-        json={"default_environment_version_id": environment_v2},
+        f"/api/v1/projects/{project['id']}",
+        json={"environment_version_id": environment_v2},
         headers=ALICE,
     )
     assert response.status_code == 200, response.text

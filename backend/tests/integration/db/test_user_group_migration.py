@@ -10,6 +10,7 @@ from alembic.config import Config
 from workspace107.config import get_settings
 
 PREVIOUS_REVISION = "a3f7c2e91b84"
+USER_GROUP_REVISION = "e35a1d7c9b20"
 
 
 def _config(database: Path) -> Config:
@@ -74,7 +75,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     connection.commit()
     connection.close()
 
-    command.upgrade(config, "head")
+    command.upgrade(config, USER_GROUP_REVISION)
     connection = sqlite3.connect(database)
     assert _rows(connection, "SELECT id FROM user_groups ORDER BY id") == [("ws_collab",)]
     assert _rows(connection, "SELECT created_by_id FROM user_groups WHERE id='ws_collab'") == [
@@ -154,7 +155,7 @@ def test_user_group_migration_preserves_real_data_and_round_trips(
     ]
     connection.close()
 
-    command.upgrade(config, "head")
+    command.upgrade(config, USER_GROUP_REVISION)
     connection = sqlite3.connect(database)
     assert _rows(connection, "SELECT id FROM user_groups ORDER BY id") == [
         ("grp_new",),

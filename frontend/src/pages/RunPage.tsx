@@ -58,6 +58,9 @@ export function RunPage() {
   }, [runId])
 
   const detail = useAsync<RunDetail>(() => api.getRun(runId), [runId])
+  // 取消和重跑都是写操作。不按能力收敛的话，无对应能力的用户会看到按钮、
+  // 点了必然 403——后端拦得住，但让用户点一个注定失败的按钮不是好体验
+  // 前端能力只管「显不显示入口」，真正的授权仍由后端逐请求校验。
   const logs = useAsync<LogChunk[]>(() => api.readLogs(runId), [runId])
   const run = detail.data?.run
   const project = useAsync<Project | undefined>(
@@ -195,7 +198,7 @@ export function RunPage() {
                 >
                   刷新
                 </Button>
-                {active && can(detail.data, 'run.cancel') ? (
+                {active && can(detail.data.run, 'run.cancel') ? (
                   <Button
                     variant="danger"
                     leadingVisual={StopIcon}
@@ -205,7 +208,7 @@ export function RunPage() {
                     取消 Run
                   </Button>
                 ) : null}
-                {!active && can(detail.data, 'run.submit') ? (
+                {!active && can(detail.data.run, 'run.submit') ? (
                   <Button
                     variant="default"
                     leadingVisual={SyncIcon}

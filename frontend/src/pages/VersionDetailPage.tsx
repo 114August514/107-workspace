@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { can } from '../api/types'
-import type { Project, ProjectVersionDetail, LegacyWorkspaceContext } from '../api/types'
+import type { Project, ProjectVersionDetail } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncSection } from '../components/common/AsyncSection'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -26,14 +26,9 @@ export function VersionDetailPage() {
     async () => (version.data ? api.getProject(version.data.project_id) : undefined),
     [version.data?.project_id],
   )
-  const workspace = useAsync<LegacyWorkspaceContext | undefined>(
-    async () =>
-      project.data ? api.getLegacyWorkspaceContext(project.data.workspace_id) : undefined,
-    [project.data?.workspace_id],
-  )
 
-  const canWrite = can(workspace.data, 'project.content.write')
-  const canRun = can(workspace.data, 'run.submit')
+  const canWrite = can(project.data, 'project.content.write')
+  const canRun = can(project.data, 'run.submit')
 
   const restore = async () => {
     if (!version.data || !project.data) return
@@ -49,24 +44,22 @@ export function VersionDetailPage() {
   return (
     <Stack gap="large">
       <AsyncSection loading={version.loading} error={version.error}>
-        {version.data && (
+        {version.data && project.data && (
           <PageHeader
             breadcrumb={[
               { title: <Link to="/">首页</Link> },
               {
                 title:
-                  workspace.data?.kind === 'collaborative' ? (
-                    <Link to={`/user-groups/${workspace.data.id}`}>{workspace.data.name}</Link>
+                  project.data.owner.kind === 'user_group' ? (
+                    <Link to={`/user-groups/${project.data.owner.id}`}>
+                      {project.data.owner.display_name}
+                    </Link>
                   ) : (
-                    (workspace.data?.name ?? '个人数据')
+                    project.data.owner.display_name
                   ),
               },
               {
-                title: project.data ? (
-                  <Link to={`/projects/${project.data.id}`}>{project.data.name}</Link>
-                ) : (
-                  'Project'
-                ),
+                title: <Link to={`/projects/${project.data.id}`}>{project.data.name}</Link>,
               },
               { title: `Version ${version.data.label}` },
             ]}
@@ -149,7 +142,6 @@ export function VersionDetailPage() {
             versionLabel={version.data.label}
             projectId={version.data.project_id}
             defaultRunConfigurationId={project.data?.default_run_configuration_id ?? null}
-            workspace={workspace.data}
             onClose={() => setRunning(false)}
             onSubmitted={(run) => navigate(`/runs/${run.id}`)}
           />

@@ -35,8 +35,8 @@ class ScopedConfigResolver:
         env: dict[str, EnvValue],
     ) -> ScopedResolution:
         project_scope = ConfigScope.project(access.project.id)
-        # Owner scope 从 Project Owner 推导（#41），Workspace 不再参与：
-        # USER owner → User scope，USER_GROUP owner → User Group scope。
+        # Owner scope 从 Project Owner 推导：USER → User scope，
+        # USER_GROUP → User Group scope。
         owner = access.project.owner
         if owner.kind is OwnerKind.USER:
             owner_scope = ConfigScope.user(owner.id)

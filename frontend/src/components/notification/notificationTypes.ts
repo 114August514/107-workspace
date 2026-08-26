@@ -17,7 +17,6 @@ interface Style {
 }
 
 const NOTIFICATION_STYLE: Record<NotificationType, Style> = {
-  workspace_invited: { variant: 'accent', label: '邀请' },
   user_group_invited: { variant: 'accent', label: '邀请' },
   member_removed: { variant: 'danger', label: '成员变动' },
   role_changed: { variant: 'attention', label: '角色变更' },
@@ -44,8 +43,6 @@ export function notificationVariant(type: NotificationType): LabelProps['variant
 export function notificationPath(notification: Notification): string | null {
   if (!notification.target_id || !notification.target_type) return null
   switch (notification.target_type) {
-    case 'workspace':
-      return `/workspaces/${notification.target_id}`
     case 'user_group':
       return `/user-groups/${notification.target_id}`
     case 'project':
@@ -53,7 +50,7 @@ export function notificationPath(notification: Notification): string | null {
     case 'run':
       return `/runs/${notification.target_id}`
     case 'project_version':
-      return notification.workspace_id ? `/workspaces/${notification.workspace_id}` : null
+      return `/versions/${notification.target_id}`
     case 'shared_resource':
       return `/shared-resources/${notification.target_id}`
     case 'shared_resource_version':

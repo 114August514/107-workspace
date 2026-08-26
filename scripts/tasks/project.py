@@ -325,15 +325,19 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     )
     if demo_group is None:
         raise TaskError(f"Demo User Group {DEMO_USER_GROUP_ID!r} is not visible to the demo user")
-    workspace_id = demo_group["id"]
+    user_group_id = demo_group["id"]
     if verbose:
-        print(f"Workspace: {workspace_id}")
+        print(f"User Group: {user_group_id}")
 
     say("2. Create Project and source file")
     project = client.request(
         "POST",
-        f"/workspaces/{workspace_id}/projects",
-        {"name": "Demo Project", "description": "Isolated workflow demo"},
+        "/projects",
+        {
+            "owner": {"kind": "user_group", "id": user_group_id},
+            "name": "Demo Project",
+            "description": "Isolated workflow demo",
+        },
     )
     project_id = project["id"]
     source = (
@@ -365,7 +369,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
     environment_version_id = next(
         version["id"]
         for environment in environments
-        if environment["owner"]["id"] == workspace_id
+        if environment["owner"]["id"] == user_group_id
         for version in environment["versions"]
         if version["available"]
     )

@@ -12,7 +12,7 @@ const runDetailFixture = (): RunDetail => ({
     id: 'run-1',
     name: 'test-run',
     project_id: 'project-1',
-    workspace_id: 'workspace-1',
+    capabilities: ['run.submit', 'run.cancel'],
     project_version_id: 'version-1',
     project_version_label: 'v1',
     snapshot_id: 'snapshot-1',
@@ -32,7 +32,6 @@ const runDetailFixture = (): RunDetail => ({
   },
   events: [],
   artifacts: [],
-  capabilities: ['run.submit', 'run.cancel'],
   snapshot: {
     id: 'snapshot-1',
     command: 'python train.py',
@@ -73,7 +72,6 @@ const runDetailFixture = (): RunDetail => ({
 
 const projectFixture: Project = {
   id: 'project-1',
-  workspace_id: 'workspace-1',
   owner: { kind: 'user_group', id: 'workspace-1', display_name: 'Demo Group' },
   name: 'Demo Project',
   description: '',
@@ -100,7 +98,6 @@ const configurationFixture: RunConfiguration = {
   input_bindings: [],
   artifact_rules: [],
 }
-
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
     <MemoryRouter initialEntries={['/runs/run-1']}>
@@ -168,9 +165,9 @@ describe('RunPage backend unavailable', () => {
 
   it('keeps actions fail-closed and restores them from refreshed Run capabilities', async () => {
     const denied = runDetailFixture()
-    denied.capabilities = []
+    denied.run.capabilities = []
     const restored = runDetailFixture()
-    restored.capabilities = ['run.submit']
+    restored.run.capabilities = ['run.submit']
 
     const getRun = vi
       .spyOn(api, 'getRun')
