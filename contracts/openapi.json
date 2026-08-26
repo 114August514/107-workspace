@@ -2993,7 +2993,6 @@
           "id",
           "name",
           "description",
-          "default_environment_version_id",
           "created_by_id",
           "created_at",
           "role"

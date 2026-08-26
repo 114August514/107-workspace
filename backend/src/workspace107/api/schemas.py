@@ -63,7 +63,7 @@ class UserGroupOut(Model):
     id: str
     name: str
     description: str
-    default_environment_version_id: str | None
+    default_environment_version_id: str | None = None
     created_by_id: str | None
     created_at: datetime | None
     role: MembershipRole

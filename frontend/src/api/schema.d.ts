@@ -2636,7 +2636,7 @@ export interface components {
             /** Created By Id */
             created_by_id: string | null;
             /** Default Environment Version Id */
-            default_environment_version_id: string | null;
+            default_environment_version_id?: string | null;
             /** Description */
             description: string;
             /** Id */
