@@ -7,6 +7,7 @@ import { toAsyncError } from '../api/errors'
 import type { UserGroup } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
+import { DefaultEnvironmentPanel } from '../components/workspace/DefaultEnvironmentPanel'
 import { MemberPanel } from '../components/workspace/MemberPanel'
 import {
   membershipRoleLabel,
@@ -58,7 +59,13 @@ export function UserGroupPage() {
                 </div>
               </aside>
 
-              <MemberPanel userGroup={userGroup.data} onUserGroupChanged={userGroup.reload} />
+              <div className={styles.contentStack}>
+                <DefaultEnvironmentPanel
+                  userGroup={userGroup.data}
+                  onUserGroupChanged={userGroup.reload}
+                />
+                <MemberPanel userGroup={userGroup.data} onUserGroupChanged={userGroup.reload} />
+              </div>
             </div>
           </>
         ) : null}

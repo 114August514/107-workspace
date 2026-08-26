@@ -102,6 +102,10 @@ describe('GlobalNavigationDrawer', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
     expect(within(dialog).getByRole('navigation', { name: '全局导航' })).toBeVisible()
+    expect(within(dialog).getByRole('link', { name: '运行环境' })).toHaveAttribute(
+      'href',
+      '/environments',
+    )
     expect(within(dialog).getByRole('heading', { name: '你的 User Group' })).toBeVisible()
     expect(within(dialog).getByRole('heading', { name: '最近使用的 Project' })).toBeVisible()
     expect(hrefs(dialog, '/user-groups/')).toEqual([

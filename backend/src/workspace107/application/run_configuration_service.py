@@ -166,6 +166,8 @@ class RunConfigurationService:
         )
         if version is None:
             raise ObjectNotFound("Environment Version", data.environment_version_id)
+        if not version.available:
+            raise ValidationFailed("Environment Version 当前不可用")
         environment_version_id = version.id
 
         env: dict[str, EnvValue] = parse_env_map(data.environment_variables or {})

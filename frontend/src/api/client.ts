@@ -22,6 +22,7 @@ import type {
   ComputePlan,
   Entitlement,
   Environment,
+  EnvironmentVersion,
   FileContent,
   Home,
   Invitation,
@@ -176,6 +177,18 @@ export const api = {
   home: async (): Promise<Home> => unwrap(await http.GET('/api/v1/me')),
   environments: async (): Promise<Environment[]> =>
     unwrap(await http.GET('/api/v1/catalog/environments')),
+  environment: async (id: string): Promise<Environment> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environments/{environment_id}', {
+        params: { path: { environment_id: id } },
+      }),
+    ),
+  environmentVersion: async (id: string): Promise<EnvironmentVersion> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environment-versions/{version_id}', {
+        params: { path: { version_id: id } },
+      }),
+    ),
   computePlans: async (): Promise<ComputePlan[]> =>
     unwrap(await http.GET('/api/v1/catalog/compute-plans')),
 
@@ -194,12 +207,23 @@ export const api = {
 
   updateUserGroup: async (
     id: string,
-    payload: { name?: string; description?: string },
+    payload: {
+      name?: string
+      description?: string
+      default_environment_version_id?: string | null
+    },
   ): Promise<UserGroup> =>
     unwrap(
       await http.PATCH('/api/v1/user-groups/{user_group_id}', {
         params: { path: { user_group_id: id } },
         body: payload,
+      }),
+    ),
+
+  environmentsForUserGroup: async (id: string): Promise<Environment[]> =>
+    unwrap(
+      await http.GET('/api/v1/user-groups/{user_group_id}/environments', {
+        params: { path: { user_group_id: id } },
       }),
     ),
 
@@ -277,6 +301,13 @@ export const api = {
       await http.PATCH('/api/v1/projects/{project_id}', {
         params: { path: { project_id: id } },
         body: payload,
+      }),
+    ),
+
+  environmentsForProject: async (id: string): Promise<Environment[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/environments', {
+        params: { path: { project_id: id } },
       }),
     ),
 

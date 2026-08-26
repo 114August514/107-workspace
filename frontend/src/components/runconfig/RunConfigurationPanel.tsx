@@ -1,7 +1,8 @@
 import { PlayCircleOutlined, PlusOutlined } from '@ant-design/icons'
-import { Button, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
+import { Alert, Button, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
@@ -33,9 +34,17 @@ export function RunConfigurationPanel({
     [projectId],
   )
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
-  const environments = useAsync<Environment[]>(() => api.environments(), [])
+  const environments = useAsync<Environment[]>(
+    () => api.environmentsForProject(projectId),
+    [projectId],
+  )
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<RunConfiguration | null>(null)
+  const availableVersionCount = (environments.data ?? []).reduce(
+    (count, environment) =>
+      count + environment.versions.filter((version) => version.available).length,
+    0,
+  )
 
   const remove = async (configuration: RunConfiguration) => {
     try {
@@ -47,6 +56,12 @@ export function RunConfigurationPanel({
       message.error((error as Error).message)
     }
   }
+
+  const environmentVersions = Object.fromEntries(
+    (environments.data ?? []).flatMap((environment) =>
+      environment.versions.map((version) => [version.id, { environment, version }] as const),
+    ),
+  ) as Record<string, { environment: Environment; version: Environment['versions'][number] }>
 
   const columns: ColumnsType<RunConfiguration> = [
     {
@@ -68,6 +83,31 @@ export function RunConfigurationPanel({
       title: '工作目录',
       dataIndex: field<RunConfiguration>('working_directory'),
       width: 110,
+    },
+    {
+      title: 'Environment Version',
+      key: 'environment',
+      render: (_, configuration) => {
+        const selected = environmentVersions[configuration.environment_version_id]
+        if (!selected) {
+          return (
+            <Space wrap size={4}>
+              <Typography.Text code>{configuration.environment_version_id}</Typography.Text>
+              <Tag color="red">当前无 USE 资格或已删除</Tag>
+            </Space>
+          )
+        }
+        return (
+          <Space wrap size={4}>
+            <RouterLink to={`/environment-versions/${selected.version.id}`}>
+              {selected.environment.name} · {selected.version.version}
+            </RouterLink>
+            <Tag color={selected.version.available ? 'green' : 'orange'}>
+              {selected.version.available ? '可用' : '当前不可用'}
+            </Tag>
+          </Space>
+        )
+      },
     },
     {
       title: '环境变量',
@@ -129,9 +169,30 @@ export function RunConfigurationPanel({
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      {environments.loading ? (
+        <Alert type="info" showIcon message="正在读取当前 Project 可用的 Environment Version…" />
+      ) : environments.error ? (
+        <Alert
+          type="error"
+          showIcon
+          message="无法读取当前 Project 可用的 Environment Version"
+          description="请检查网络后重试；运行方案不会自动切换到其他版本。"
+        />
+      ) : availableVersionCount === 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="当前没有可用的 Environment Version"
+          description="请确认版本可用状态，或让资产 Owner 为 Project Owner 建立 USE Grant。"
+        />
+      ) : null}
+
       {canManage && (
         <Button
           icon={<PlusOutlined />}
+          disabled={
+            environments.loading || Boolean(environments.error) || availableVersionCount === 0
+          }
           onClick={() => {
             setEditing(null)
             setModalOpen(true)

@@ -51,6 +51,7 @@ const member: Member = {
 describe('UserGroupPage governance boundary', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'environmentsForUserGroup').mockResolvedValue([])
     vi.spyOn(api, 'listMembers').mockResolvedValue([member])
     vi.spyOn(api, 'home').mockResolvedValue(homeState.data)
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)

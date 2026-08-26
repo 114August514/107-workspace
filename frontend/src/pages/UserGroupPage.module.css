@@ -13,6 +13,13 @@
   gap: var(--base-size-24);
 }
 
+.contentStack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-16);
+}
+
 .identityRail {
   min-width: 0;
   padding-right: var(--base-size-24);

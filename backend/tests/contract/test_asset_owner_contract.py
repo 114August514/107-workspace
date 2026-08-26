@@ -136,6 +136,17 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
         )
     )
     session.add(
+        EnvironmentVersionRow(
+            id="envv_issue_45_unavailable_grant",
+            environment_id="env_issue_45_granted",
+            version="cuda-12.5",
+            description="Unavailable image",
+            image="cuda:12.5",
+            setup_command="",
+            available=False,
+        )
+    )
+    session.add(
         GrantRow(
             id="grt_issue_45_environment",
             grantor_kind="user_group",
@@ -159,7 +170,10 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
         "id": bob_group_id,
         "display_name": "bob test group",
     }
-    assert granted["versions"][0]["id"] == "envv_issue_45_granted"
+    assert {version["id"] for version in granted["versions"]} == {
+        "envv_issue_45_granted",
+        "envv_issue_45_unavailable_grant",
+    }
 
     group_catalog = await client.get(
         f"/api/v1/user-groups/{alice_group_id}/environments",
@@ -183,6 +197,19 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
     )
     assert project_catalog.status_code == 200
     assert {item["id"] for item in project_catalog.json()} == {"env_issue_45_granted"}
+
+    rejected_configuration = await client.post(
+        f"/api/v1/projects/{project.json()['id']}/run-configurations",
+        json={
+            "name": "Unavailable environment",
+            "command": "python train.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": "envv_issue_45_unavailable_grant",
+        },
+        headers=ALICE,
+    )
+    assert rejected_configuration.status_code == 422
+    assert rejected_configuration.json()["message"] == "Environment Version 当前不可用"
 
     detail = await client.get("/api/v1/catalog/environments/env_issue_45_granted", headers=ALICE)
     assert detail.status_code == 200

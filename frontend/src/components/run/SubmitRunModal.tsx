@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
 import type { PreflightResult, Run, RunConfiguration } from '../../api/types'
+import type { Environment, EnvironmentVersion } from '../../api/types'
+import { useAsync } from '../../api/useAsync'
 import { describeComputeRequest } from '../../utils/format'
 
 interface Props {
@@ -11,6 +13,11 @@ interface Props {
   configuration: RunConfiguration | null
   onClose: () => void
   onSubmitted: (run: Run) => void
+}
+
+interface EnvironmentSelection {
+  environment: Environment
+  version: EnvironmentVersion
 }
 
 /**
@@ -28,6 +35,14 @@ export function SubmitRunModal({ open, projectId, configuration, onClose, onSubm
   // 打开弹窗 = 形成一次提交意图。这之后无论点几次「提交」、
   // 或者失败后重试，都是同一个意图，用同一个键。
   const [idempotencyKey, setIdempotencyKey] = useState('')
+  const environment = useAsync<EnvironmentSelection | null>(async () => {
+    if (!configuration) return null
+    const version = await api.environmentVersion(configuration.environment_version_id)
+    return {
+      version,
+      environment: await api.environment(version.environment_id),
+    }
+  }, [configuration?.environment_version_id])
 
   const runPreflight = useCallback(async () => {
     if (!configuration) return
@@ -154,8 +169,29 @@ export function SubmitRunModal({ open, projectId, configuration, onClose, onSubm
             },
             {
               key: 'environment',
-              label: '运行环境版本',
-              children: preflight?.environment_version_id ?? '—',
+              label: 'Environment Version',
+              children: environment.loading ? (
+                '检查中…'
+              ) : environment.data ? (
+                <Space wrap size={6}>
+                  <Typography.Text>
+                    {environment.data.environment.name} · {environment.data.version.version}
+                  </Typography.Text>
+                  <Tag color={environment.data.version.available ? 'green' : 'orange'}>
+                    {environment.data.version.available ? '当前可用' : '当前不可用'}
+                  </Tag>
+                  <Typography.Text code>{environment.data.version.id}</Typography.Text>
+                </Space>
+              ) : (
+                <Space wrap size={6}>
+                  <Typography.Text code>
+                    {preflight?.environment_version_id ??
+                      configuration?.environment_version_id ??
+                      '—'}
+                  </Typography.Text>
+                  {environment.error ? <Tag color="red">当前无 USE 资格或已删除</Tag> : null}
+                </Space>
+              ),
             },
             {
               key: 'compute',
