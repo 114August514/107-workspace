@@ -390,6 +390,20 @@ async def restore_version(
 
 
 @router.get(
+    "/projects/{project_id}/environments",
+    response_model=list[s.EnvironmentOut],
+    summary="列出 Project 当前可用的 Environment",
+)
+async def list_project_environments(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> list[s.EnvironmentOut]:
+    views = await services.catalog.list_for_project(user.id, project_id)
+    return [p.environment_out(view) for view in views]
+
+
+@router.get(
     "/projects/{project_id}/run-configurations",
     response_model=list[s.RunConfigurationOut],
     summary="列出 Project 运行方案",

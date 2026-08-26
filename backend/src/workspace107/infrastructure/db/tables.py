@@ -48,6 +48,12 @@ class UserGroupRow(Base):
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str] = mapped_column(Text, default="")
+    default_environment_version_id: Mapped[str | None] = mapped_column(
+        ID,
+        ForeignKey("environment_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_by_id: Mapped[str | None] = mapped_column(
         ID, ForeignKey("users.id"), nullable=True, index=True
     )

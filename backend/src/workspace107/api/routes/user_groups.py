@@ -63,8 +63,26 @@ async def update_user_group(
         user_group_id,
         name=payload.name,
         description=payload.description,
+        default_environment_version_id=payload.default_environment_version_id,
+        update_default_environment_version=(
+            "default_environment_version_id" in payload.model_fields_set
+        ),
     )
     return p.user_group_out(await services.user_groups.get(user.id, user_group_id))
+
+
+@router.get(
+    "/{user_group_id}/environments",
+    response_model=list[s.EnvironmentOut],
+    summary="列出 User Group 当前可用的 Environment",
+)
+async def list_user_group_environments(
+    user_group_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> list[s.EnvironmentOut]:
+    views = await services.catalog.list_for_user_group(user.id, user_group_id)
+    return [p.environment_out(view) for view in views]
 
 
 @router.get("/{user_group_id}/members", response_model=list[s.MemberOut], summary="列出 Membership")

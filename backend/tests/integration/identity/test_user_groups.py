@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from workspace107.infrastructure.db.repositories import SqlRepositories
+from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
 
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
@@ -476,3 +477,70 @@ async def test_concurrent_transfer_and_role_change_preserve_an_active_owner(
 
     assert (transfer.status_code, role_change.status_code) in {(204, 403), (204, 200)}
     await _assert_exactly_one_active_owner(client, group_id)
+
+
+@pytest.mark.asyncio
+async def test_issue_45_group_default_environment_version_is_exact_available_and_clearable(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    group = await _create_group(client, ALICE, "Default Environment Lab")
+    group_id = str(group["id"])
+    session.add(
+        EnvironmentRow(
+            id="env_issue_45_default",
+            name="Python",
+            description="",
+            owner_user_group_id=group_id,
+        )
+    )
+    session.add_all(
+        [
+            EnvironmentVersionRow(
+                id="envv_issue_45_available",
+                environment_id="env_issue_45_default",
+                version="3.12",
+                description="",
+                image="python:3.12",
+                setup_command="",
+                available=True,
+            ),
+            EnvironmentVersionRow(
+                id="envv_issue_45_unavailable",
+                environment_id="env_issue_45_default",
+                version="3.13",
+                description="",
+                image="python:3.13",
+                setup_command="",
+                available=False,
+            ),
+        ]
+    )
+    await session.commit()
+
+    unavailable = await client.patch(
+        f"/api/v1/user-groups/{group_id}",
+        json={"default_environment_version_id": "envv_issue_45_unavailable"},
+        headers=ALICE,
+    )
+    assert unavailable.status_code == 422
+    assert unavailable.json()["message"] == "默认 Environment Version 当前不可用"
+
+    updated = await client.patch(
+        f"/api/v1/user-groups/{group_id}",
+        json={"default_environment_version_id": "envv_issue_45_available"},
+        headers=ALICE,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["default_environment_version_id"] == "envv_issue_45_available"
+
+    loaded = await client.get(f"/api/v1/user-groups/{group_id}", headers=ALICE)
+    assert loaded.json()["default_environment_version_id"] == "envv_issue_45_available"
+
+    cleared = await client.patch(
+        f"/api/v1/user-groups/{group_id}",
+        json={"default_environment_version_id": None},
+        headers=ALICE,
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["default_environment_version_id"] is None

@@ -63,6 +63,7 @@ class UserGroupOut(Model):
     id: str
     name: str
     description: str
+    default_environment_version_id: str | None
     created_by_id: str | None
     created_at: datetime | None
     role: MembershipRole
@@ -77,6 +78,7 @@ class UserGroupCreateIn(Model):
 class UserGroupUpdateIn(Model):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     description: str | None = None
+    default_environment_version_id: str | None = None
 
 
 class MemberOut(Model):

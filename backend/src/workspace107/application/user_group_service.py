@@ -19,6 +19,7 @@ from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
 from .access import AccessGuard, UserGroupAccess
 from .activity import ActivityRecorder
+from .asset_use import environment_version_for_owner_use
 from .notifier import Notifier
 
 
@@ -139,6 +140,8 @@ class UserGroupService:
         *,
         name: str | None = None,
         description: str | None = None,
+        default_environment_version_id: str | None = None,
+        update_default_environment_version: bool = False,
     ) -> UserGroup:
         access = await self._guard.user_group(
             user_id, user_group_id, needs=UserGroupCapability.USER_GROUP_UPDATE
@@ -151,6 +154,21 @@ class UserGroupService:
             group.name = name
         if description is not None:
             group.description = description
+        if update_default_environment_version:
+            if default_environment_version_id is None:
+                group.default_environment_version_id = None
+            else:
+                version = await environment_version_for_owner_use(
+                    self._repos,
+                    user_id,
+                    default_environment_version_id,
+                    group.owner_reference,
+                )
+                if version is None:
+                    raise ObjectNotFound("Environment Version", default_environment_version_id)
+                if not version.available:
+                    raise ValidationFailed("默认 Environment Version 当前不可用")
+                group.default_environment_version_id = version.id
         await self._repos.user_groups.update(group)
         await self._activity.record(
             actor_id=user_id,
