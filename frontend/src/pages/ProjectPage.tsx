@@ -1,7 +1,7 @@
 import { BranchesOutlined } from '@ant-design/icons'
 import { Card, Tabs, Tag } from 'antd'
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
@@ -36,6 +36,13 @@ import { tablePagination } from '../utils/pagination'
 export function ProjectPage() {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const activeTab =
+    requestedTab &&
+    ['files', 'versions', 'configurations', 'runs', 'activities'].includes(requestedTab)
+      ? requestedTab
+      : 'files'
   const [token, setToken] = useState(0)
   const bump = () => setToken((value) => value + 1)
 
@@ -84,7 +91,12 @@ export function ProjectPage() {
       </AsyncSection>
 
       <Tabs
-        defaultActiveKey="files"
+        activeKey={activeTab}
+        onChange={(nextTab) => {
+          const next = new URLSearchParams(searchParams)
+          next.set('tab', nextTab)
+          setSearchParams(next, { replace: true })
+        }}
         items={[
           {
             key: 'files',

@@ -389,7 +389,6 @@ class RunService:
         user_id: str,
         run_id: str,
         *,
-        name: str = "",
         idempotency_key: str | None = None,
     ) -> RunSubmission:
         """使用相同代码快照和配置重新运行。
@@ -460,7 +459,7 @@ class RunService:
             compute_plan_id=snapshot.compute_plan_id,
             source_run_configuration_id=source_snapshot.source_run_configuration_id,
             source_run_id=access.run.id,
-            name=name.strip() or f"{access.run.name}（重跑）",
+            name=access.run.name,
             status=RunStatus.QUEUED,
             initiated_by_user_id=user_id,
             created_at=now,

@@ -111,7 +111,7 @@ AppShell 的上下文引导在页面底部提供 route-level 的概念提示，�
 | `/workspaces/:workspaceId`  | 这里保留已有个人资源；进入 Project 后可继续查看文件、版本和 Run。                     |
 | `/projects/:projectId`      | 当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。 |
 | `/versions/:versionId`      | 这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。                 |
-| `/runs/:runId`              | 这里展示当前 Run 的状态、日志和产物；后续修改不会回写其运行快照。                     |
+| `/runs/:runId`              | 当前 Run 属于具体 Project；可以返回 Runs 查看同一 Project 的其他执行记录。            |
 
 这些文案只呈现现有产品概念，不声明新的领域规则。根据 loading、empty、error 或对象状态
 变化的提示，以及可配置的 guide engine，留到出现独立需求时再设计。

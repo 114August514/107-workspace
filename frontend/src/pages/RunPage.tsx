@@ -1,4 +1,4 @@
-import { PulseIcon, StopIcon, SyncIcon } from '@primer/octicons-react'
+import { ProjectIcon, PulseIcon, StopIcon, SyncIcon } from '@primer/octicons-react'
 import {
   Banner,
   Breadcrumbs,
@@ -9,12 +9,12 @@ import {
   UnderlineNav,
 } from '@primer/react'
 import { Card } from '@primer/react/experimental'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 
 import { api, newIdempotencyKey } from '../api/client'
 import { toAsyncError, type AsyncErrorView } from '../api/errors'
-import type { LogChunk, RunDetail } from '../api/types'
+import type { LogChunk, Project, RunConfiguration, RunDetail } from '../api/types'
 import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
@@ -23,13 +23,13 @@ import { PrimerStack } from '../components/primer/PrimerStack'
 import { ArtifactPanel } from '../components/run/ArtifactPanel'
 import { RunLogPanel } from '../components/run/RunLogPanel'
 import { RunSnapshotCard } from '../components/run/RunSnapshotCard'
+import { RunSummary } from '../components/run/RunSummary'
 import { RunTimeline } from '../components/run/RunTimeline'
 import styles from '../components/run/run.module.css'
-import { formatDuration, formatTime } from '../utils/format'
 
 const POLL_INTERVAL_MS = 2000
 
-type RunTab = 'logs' | 'events' | 'artifacts' | 'snapshot'
+type RunTab = 'summary' | 'execution' | 'artifacts' | 'snapshot'
 
 interface Feedback {
   variant: 'success' | 'critical'
@@ -42,19 +42,10 @@ function contextualError(error: Error | undefined, message: string): AsyncErrorV
   return view ? { ...view, message } : undefined
 }
 
-function SummaryItem({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className={styles.summaryItem}>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  )
-}
-
 export function RunPage() {
   const { runId = '' } = useParams()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<RunTab>('logs')
+  const [tab, setTab] = useState<RunTab>('summary')
   const [rerunKey, setRerunKey] = useState(newIdempotencyKey)
   const [rerunning, setRerunning] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -62,9 +53,24 @@ export function RunPage() {
   const [cancelOpen, setCancelOpen] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
 
+  useEffect(() => {
+    setTab('summary')
+  }, [runId])
+
   const detail = useAsync<RunDetail>(() => api.getRun(runId), [runId])
   const logs = useAsync<LogChunk[]>(() => api.readLogs(runId), [runId])
   const run = detail.data?.run
+  const project = useAsync<Project | undefined>(
+    async () => (run ? api.getProject(run.project_id) : undefined),
+    [run?.project_id],
+  )
+  const configurations = useAsync<RunConfiguration[]>(
+    async () => (run ? api.listRunConfigurations(run.project_id) : []),
+    [run?.project_id],
+  )
+  const sourceConfiguration = configurations.data?.find(
+    (configuration) => configuration.id === run?.source_run_configuration_id,
+  )
   const active = run !== undefined && !isTerminal(run.status)
 
   const syncAndReload = useCallback(async () => {
@@ -126,202 +132,194 @@ export function RunPage() {
   }
 
   return (
-    <PrimerStack gap="large">
-      <AsyncState
-        loading={detail.loading}
-        loadingText="正在加载 Run…"
-        error={contextualError(detail.error, '无法加载这个 Run。')}
-        onRetry={detail.reload}
-      >
-        {detail.data && run ? (
-          <>
-            <header className={styles.runHeader}>
-              <Breadcrumbs>
-                <Breadcrumbs.Item as={RouterLink} to="/">
-                  首页
-                </Breadcrumbs.Item>
-                <Breadcrumbs.Item as={RouterLink} to={`/projects/${run.project_id}`}>
+    <AsyncState
+      loading={detail.loading}
+      loadingText="正在加载 Run…"
+      error={contextualError(detail.error, '无法加载这个 Run。')}
+      onRetry={detail.reload}
+    >
+      {detail.data && run ? (
+        <PrimerStack gap="large">
+          <section className={styles.projectContext} aria-label="Project context">
+            <div className={styles.projectIdentity}>
+              <ProjectIcon size={20} aria-hidden />
+              <div>
+                <Text as="span" size="small" className={styles.muted}>
                   Project
-                </Breadcrumbs.Item>
-                <Breadcrumbs.Item>{run.name}</Breadcrumbs.Item>
-              </Breadcrumbs>
-              <div className={styles.titleRow}>
-                <PulseIcon size={24} className={styles.titleIcon} aria-hidden />
-                <h1 className={styles.pageTitle}>{run.name}</h1>
-                <RunStatusTag status={run.status} />
-                <div className={styles.headerActions}>
-                  <Button
-                    leadingVisual={SyncIcon}
-                    loading={refreshing}
-                    onClick={() => void refresh()}
-                  >
-                    刷新
-                  </Button>
-                  {active && can(detail.data, 'run.cancel') ? (
-                    <Button
-                      variant="danger"
-                      leadingVisual={StopIcon}
-                      disabled={cancelling}
-                      onClick={() => setCancelOpen(true)}
-                    >
-                      取消 Run
-                    </Button>
-                  ) : null}
-                  {!active && can(detail.data, 'run.submit') ? (
-                    <Button
-                      variant="primary"
-                      leadingVisual={SyncIcon}
-                      loading={rerunning}
-                      onClick={() => void rerun()}
-                    >
-                      重新运行
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              <Text as="p" className={styles.headerDescription}>
-                由用户 <code className={styles.inlineCode}>{run.initiated_by_user_id}</code> 发起，
-                使用 Project 版本{' '}
-                <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
-                  {run.project_version_label}
+                </Text>
+                <Link
+                  as={RouterLink}
+                  to={`/projects/${run.project_id}`}
+                  className={styles.projectName}
+                >
+                  {project.data?.name ?? 'Project'}
                 </Link>
-                。
-              </Text>
-            </header>
+              </div>
+            </div>
+            <UnderlineNav aria-label="Project navigation" className={styles.projectNavigation}>
+              <UnderlineNav.Item as={RouterLink} to={`/projects/${run.project_id}`}>
+                Project
+              </UnderlineNav.Item>
+              <UnderlineNav.Item
+                as={RouterLink}
+                to={`/projects/${run.project_id}?tab=runs`}
+                aria-current="page"
+              >
+                Runs
+              </UnderlineNav.Item>
+            </UnderlineNav>
+          </section>
 
-            {feedback ? (
-              <Banner variant={feedback.variant}>
-                <Banner.Title>{feedback.title}</Banner.Title>
-                {feedback.description ? (
-                  <Banner.Description>{feedback.description}</Banner.Description>
-                ) : null}
-              </Banner>
-            ) : null}
-
-            {run.failure_reason ? (
-              <Banner variant="critical">
-                <Banner.Title>Run 执行失败</Banner.Title>
-                <Banner.Description>{run.failure_reason}</Banner.Description>
-              </Banner>
-            ) : null}
-
-            <Card
-              as="section"
-              padding="normal"
-              className={styles.summaryCard}
-              aria-label="Run 摘要"
-            >
-              <dl className={styles.summaryGrid}>
-                <SummaryItem label="调度任务">
-                  {run.scheduler_job_id ? (
-                    <code className={styles.inlineCode}>{run.scheduler_job_id}</code>
-                  ) : (
-                    '—'
-                  )}
-                </SummaryItem>
-                <SummaryItem label="退出码">
-                  <span
-                    className={
-                      run.exit_code && run.exit_code !== 0 ? styles.exitFailure : undefined
-                    }
+          <header className={styles.runHeader}>
+            <Breadcrumbs>
+              <Breadcrumbs.Item as={RouterLink} to="/">
+                首页
+              </Breadcrumbs.Item>
+              <Breadcrumbs.Item as={RouterLink} to={`/projects/${run.project_id}`}>
+                {project.data?.name ?? 'Project'}
+              </Breadcrumbs.Item>
+              <Breadcrumbs.Item as={RouterLink} to={`/projects/${run.project_id}?tab=runs`}>
+                Runs
+              </Breadcrumbs.Item>
+              <Breadcrumbs.Item>{run.name}</Breadcrumbs.Item>
+            </Breadcrumbs>
+            <div className={styles.titleRow}>
+              <PulseIcon size={24} className={styles.titleIcon} aria-hidden />
+              <h1 className={styles.pageTitle}>{run.name}</h1>
+              <RunStatusTag status={run.status} />
+              <div className={styles.headerActions}>
+                <Button
+                  leadingVisual={SyncIcon}
+                  loading={refreshing}
+                  onClick={() => void refresh()}
+                >
+                  刷新
+                </Button>
+                {active && can(detail.data, 'run.cancel') ? (
+                  <Button
+                    variant="danger"
+                    leadingVisual={StopIcon}
+                    disabled={cancelling}
+                    onClick={() => setCancelOpen(true)}
                   >
-                    {run.exit_code ?? '—'}
-                  </span>
-                </SummaryItem>
-                <SummaryItem label="排队时长">{formatDuration(run.queued_seconds)}</SummaryItem>
-                <SummaryItem label="运行时长">{formatDuration(run.running_seconds)}</SummaryItem>
-                <SummaryItem label="创建时间">{formatTime(run.created_at)}</SummaryItem>
-                <SummaryItem label="提交时间">{formatTime(run.submitted_at)}</SummaryItem>
-                <SummaryItem label="开始时间">{formatTime(run.started_at)}</SummaryItem>
-                <SummaryItem label="结束时间">{formatTime(run.finished_at)}</SummaryItem>
-              </dl>
-              {run.source_run_id ? (
-                <div className={styles.sourceRun}>
-                  来源 Run：
-                  <Link as={RouterLink} to={`/runs/${run.source_run_id}`}>
-                    {run.source_run_id}
-                  </Link>
-                </div>
+                    取消 Run
+                  </Button>
+                ) : null}
+                {!active && can(detail.data, 'run.submit') ? (
+                  <Button
+                    variant="default"
+                    leadingVisual={SyncIcon}
+                    loading={rerunning}
+                    onClick={() => void rerun()}
+                  >
+                    重新运行
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </header>
+
+          {feedback ? (
+            <Banner variant={feedback.variant}>
+              <Banner.Title>{feedback.title}</Banner.Title>
+              {feedback.description ? (
+                <Banner.Description>{feedback.description}</Banner.Description>
               ) : null}
+            </Banner>
+          ) : null}
+
+          {run.failure_reason ? (
+            <Banner variant="critical">
+              <Banner.Title>Run 执行失败</Banner.Title>
+              <Banner.Description>{run.failure_reason}</Banner.Description>
+            </Banner>
+          ) : null}
+
+          <section aria-label="Run detail">
+            <UnderlineNav aria-label="Run detail navigation">
+              <UnderlineNav.Item
+                aria-current={tab === 'summary' ? 'page' : undefined}
+                onSelect={() => setTab('summary')}
+              >
+                概览
+              </UnderlineNav.Item>
+              <UnderlineNav.Item
+                aria-current={tab === 'execution' ? 'page' : undefined}
+                onSelect={() => setTab('execution')}
+              >
+                执行
+              </UnderlineNav.Item>
+              <UnderlineNav.Item
+                aria-current={tab === 'artifacts' ? 'page' : undefined}
+                counter={detail.data.artifacts.length}
+                onSelect={() => setTab('artifacts')}
+              >
+                运行产物
+              </UnderlineNav.Item>
+              <UnderlineNav.Item
+                aria-current={tab === 'snapshot' ? 'page' : undefined}
+                onSelect={() => setTab('snapshot')}
+              >
+                运行快照
+              </UnderlineNav.Item>
+            </UnderlineNav>
+            <Card className={styles.tabCard}>
+              <div className={styles.tabPanel} role="tabpanel">
+                {tab === 'summary' ? (
+                  <RunSummary
+                    detail={detail.data}
+                    configuration={sourceConfiguration}
+                    configurationLoading={configurations.loading}
+                    configurationError={configurations.error !== undefined}
+                  />
+                ) : null}
+                {tab === 'execution' ? (
+                  <div className={styles.executionStack}>
+                    <section className={styles.executionSection} aria-labelledby="run-events-title">
+                      <h2 id="run-events-title" className={styles.sectionTitle}>
+                        执行过程
+                      </h2>
+                      <RunTimeline events={detail.data.events} />
+                    </section>
+                    <section className={styles.executionSection} aria-labelledby="run-logs-title">
+                      <h2 id="run-logs-title" className={styles.sectionTitle}>
+                        日志
+                      </h2>
+                      <AsyncState
+                        loading={logs.loading}
+                        loadingText="正在读取 Run 日志…"
+                        error={contextualError(logs.error, '无法加载 Run 日志。')}
+                        onRetry={logs.reload}
+                      >
+                        <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
+                      </AsyncState>
+                    </section>
+                  </div>
+                ) : null}
+                {tab === 'artifacts' ? <ArtifactPanel artifacts={detail.data.artifacts} /> : null}
+                {tab === 'snapshot' ? <RunSnapshotCard snapshot={detail.data.snapshot} /> : null}
+              </div>
             </Card>
+          </section>
 
-            <section aria-label="Run 信息">
-              <UnderlineNav aria-label="Run 信息分类">
-                <UnderlineNav.Item
-                  aria-current={tab === 'logs' ? 'page' : undefined}
-                  onSelect={() => setTab('logs')}
-                >
-                  日志
-                </UnderlineNav.Item>
-                <UnderlineNav.Item
-                  aria-current={tab === 'events' ? 'page' : undefined}
-                  counter={detail.data.events.length}
-                  onSelect={() => setTab('events')}
-                >
-                  执行事件
-                </UnderlineNav.Item>
-                <UnderlineNav.Item
-                  aria-current={tab === 'artifacts' ? 'page' : undefined}
-                  counter={detail.data.artifacts.length}
-                  onSelect={() => setTab('artifacts')}
-                >
-                  运行产物
-                </UnderlineNav.Item>
-                <UnderlineNav.Item
-                  aria-current={tab === 'snapshot' ? 'page' : undefined}
-                  onSelect={() => setTab('snapshot')}
-                >
-                  运行快照
-                </UnderlineNav.Item>
-              </UnderlineNav>
-              <Card className={styles.tabCard}>
-                <div className={styles.tabPanel} role="tabpanel">
-                  {tab === 'logs' ? (
-                    <AsyncState
-                      loading={logs.loading}
-                      loadingText="正在读取 Run 日志…"
-                      error={contextualError(logs.error, '无法加载 Run 日志。')}
-                      onRetry={logs.reload}
-                    >
-                      <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
-                    </AsyncState>
-                  ) : null}
-                  {tab === 'events' ? <RunTimeline events={detail.data.events} /> : null}
-                  {tab === 'artifacts' ? <ArtifactPanel artifacts={detail.data.artifacts} /> : null}
-                  {tab === 'snapshot' ? (
-                    <div className={styles.snapshotPanel}>
-                      <Banner variant="info">
-                        <Banner.Title>运行快照创建后不可修改</Banner.Title>
-                        <Banner.Description>
-                          后续修改运行方案、运行环境或算力权益，不会改变这里记录的执行事实。
-                        </Banner.Description>
-                      </Banner>
-                      <RunSnapshotCard snapshot={detail.data.snapshot} />
-                    </div>
-                  ) : null}
-                </div>
-              </Card>
-            </section>
-          </>
-        ) : null}
-      </AsyncState>
-
-      {cancelOpen && run ? (
-        <ConfirmationDialog
-          title={`取消 Run“${run.name}”？`}
-          confirmButtonContent="取消 Run"
-          confirmButtonType="danger"
-          confirmButtonLoading={cancelling}
-          cancelButtonContent="返回"
-          onClose={(gesture) => {
-            if (cancelling) return
-            if (gesture === 'confirm') void cancel()
-            else setCancelOpen(false)
-          }}
-        >
-          取消会终止这次逻辑执行，但会保留 Run、运行快照以及已经产生的日志和运行产物。
-        </ConfirmationDialog>
+          {cancelOpen ? (
+            <ConfirmationDialog
+              title={`取消 Run“${run.name}”？`}
+              confirmButtonContent="取消 Run"
+              confirmButtonType="danger"
+              confirmButtonLoading={cancelling}
+              cancelButtonContent="返回"
+              onClose={(gesture) => {
+                if (cancelling) return
+                if (gesture === 'confirm') void cancel()
+                else setCancelOpen(false)
+              }}
+            >
+              取消会终止这次逻辑执行，但会保留 Run、运行快照以及已经产生的日志和运行产物。
+            </ConfirmationDialog>
+          ) : null}
+        </PrimerStack>
       ) : null}
-    </PrimerStack>
+    </AsyncState>
   )
 }
