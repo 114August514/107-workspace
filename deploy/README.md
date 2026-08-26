@@ -20,12 +20,12 @@ PowerShell runtime 不受支持；平台矩阵见
 ## Compose 契约
 
 Compose 表达一个 API、一个独立 Worker、PostgreSQL、Web 和共享 storage。API/Worker 对 storage
-使用同一固定容器路径；Worker 直接依赖 PostgreSQL，不依赖 API。Scheduler、Slurm profile、JWT、
-shared GID 和 Worker poll 配置只属于 Worker，API 环境禁止出现这些变量。
+使用同一固定容器路径和 `WORKSPACE107_STORAGE_GID`，两者都加入该 supplementary group；Worker
+直接依赖 PostgreSQL，不依赖 API。Scheduler、Slurm profile、JWT、Run-tree `shared_gid` 和 Worker
+poll 配置只属于 Worker，API 环境禁止出现这些变量。
 
-本地 image identity 和 shared GID 默认为 `10001`。可以通过 `.env` 的 service UID/GID build args
-和 shared GID 重建/配置，但真实 107 service/compute identity、mount mapping 和权限必须人工验收；
-清单可配置不等于目标环境 accepted。
+本地 image service identity、storage GID 和 Run-tree shared GID 默认都是 `10001`。service GID 可以
+不同，但当前 storage/shared GID 必须相等；这只建立 local seam，不提供 cross-Run isolation。
 
 ## 统一入口
 

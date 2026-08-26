@@ -20,16 +20,15 @@
 | identity | probe compute identity 已观察 | 不是 service identity，也不是部署 UID/GID 验收 |
 | credential probe | 一次短时 token 仅在远端单进程内使用 | 不证明 issuer、TTL policy、renewal、revocation 或 restart lifecycle |
 
-任何未复验事实都不得写成 `.env` 默认值或“107 已接受”的结论。
+任何未复验事实都不得写成 `.env` 默认值或“107 已接受”的结论。当前代码还没有 cross-Run
+filesystem isolation：全局 `shared_gid` 会让同组 compute identity 访问其他 Run。Worker 因此对
+`WORKSPACE107_SCHEDULER=slurm` 机械 fail-closed，不能靠填写配置解除。
 
-## 启用 Slurm 前的停止门
+## 解除 Slurm fail-closed 前的停止门
 
-先在脱敏验收记录中逐项标为“已确认”；任一未确认即停止并保持
-`WORKSPACE107_SCHEDULER=mock`：
-
-1. **服务与存储身份**：API/Worker service UID/GID、compute UID/GID、shared GID、setgid 与
-   directory modes；API、Worker 和 compute 对 canonical storage path 的同内容映射；同目录
-   atomic rename、只读 input、Log 与 Artifact 权限。
+1. **执行隔离**：先确认 API/Worker 共同使用 canonical `storage_gid`，且当前 Run-tree `shared_gid`
+   与它相同；再选定 per-job identity、per-Run group/ACL 或 mount isolation，并以 distinct compute
+   identity 证明 Run A 不能访问 Run B、Project Git、Shared Resource blob 和 Artifact control state。
 2. **REST profile**：单 target cluster、slurmrestd/Slurm version、API version、submit/job/list/
    cancel path、request/response schema、状态和错误映射。不同 profile 必须 clean replace，不能探测
    或兼容 fallback。
@@ -43,6 +42,9 @@
    以及 Native setup/command。当前只接受 Native 和单节点；Apptainer 或多节点需求必须停止。
 6. **执行授权**：明确的操作人、时间窗口、最小作业内容、允许的 submit/query/cancel/restart 动作、
    停止条件和 evidence 保存位置。
+
+完成上述事实还不够；必须先提交对应 isolation 实现和 negative test，经安全评审后删除 Worker
+startup fail-closed，才可以进入下面的授权窗口。
 
 ## 最小真实验收（仅在新授权窗口）
 

@@ -45,11 +45,15 @@ single active Worker -- current authorization revalidation
 ### B. POSIX Run workspace
 
 - identity 精确包含 run、snapshot、version 和 commit；同 identity 可恢复，不同 identity 冲突。
-- canonical storage root 由 API 与 Worker 以同一路径挂载；真实计算节点也必须看到同一绝对路径。
-- service UID、compute UID、shared GID、setgid、只读 input 和 Artifact 控制区权限必须在目标环境
-  逐项验收；本地容器默认值不是 107 mapping 事实。
-- 保留当前 `RunInput` 的 artifact/shared-resource/subpath 语义，不把 `workspace_id` 引回执行路径。
-- 单 Worker 是唯一 writer；不增加 per-run lease、heartbeat、claim 或 fencing。
+- canonical storage root 由 API 与 Worker 以同一路径和同一 `storage_gid` 挂载；两进程必须加入该组，
+  Worker 当前的 Run-tree `shared_gid` 必须与它相同。
+- 当前全局 group 只解决 local seam 的 compute 写入，不构成 cross-Run isolation；同组 identity
+  能遍历其他 Run，因此真实 Slurm/native Worker 必须 fail-closed。
+- 启用真实 compute 前必须实现并验证 per-job identity、per-Run group/ACL 或 mount namespace 中的一种
+  最小隔离 contract，使 Run A 不能访问 Run B、Project Git、blob store 或 Artifact control state。
+- canonical root 的 ancestor、owner、GID 和 mode 必须在 API/Worker composition 前 fail-closed；
+  `projects/`、`blobs/` 和 Artifact control area 保持 service-private，Run Input 保持只读。
+- 单 Worker 是唯一 service writer；不增加 per-run lease、heartbeat、claim 或 fencing。
 
 ### C. 独立 Worker
 
@@ -63,8 +67,8 @@ single active Worker -- current authorization revalidation
 
 ### D. 单目标 Scheduler profile
 
-- 只支持一个人工核验的 target cluster、schema profile 和 Native runtime；不提供多 profile、
-  多 cluster、Apptainer fallback 或兼容探测。
+- adapter 只实现一个 fixture-backed target/schema profile 和 Native payload；不提供多 profile、
+  多 cluster、Apptainer fallback 或兼容探测。真实 Slurm Worker 在 filesystem isolation 落地前拒绝启动。
 - correlation 使用完整稳定值。submit 前持久 arm；job id 用 compare-and-set 关联。
 - 响应丢失、timeout、HTTP non-2xx、invalid success 或 job id 未落库时必须先按 correlation reconcile。
 - 只有查询完整且零匹配才可再次 submit；唯一匹配关联原 job；多匹配或 incomplete 必须停止，
@@ -82,17 +86,20 @@ single active Worker -- current authorization revalidation
 
 ## 真实 107 人工门
 
-本 ADR 和本地 smoke 不授权访问 107，也不证明真实部署。启用 Slurm 前必须由获授权的人确认：
+本 ADR 和本地 smoke 不授权访问 107，也不证明真实部署。当前 `scheduler=slurm` 会在 Worker 启动时
+机械失败；它不能通过填写环境变量解除。解除该代码门之前，获授权的人必须确认：
 
-1. service identity、compute identity、shared GID、canonical mount mapping 和权限；
-2. slurmrestd version、单 profile、target cluster、路径、响应 schema 与状态映射；
-3. correlation 字段容量、精确过滤权限和分页完整性；
-4. credential issuer、签发方式、TTL、注入、renewal、revocation 与进程重启策略；JWT 必须只进入
+1. 能机械保证 Run A 不可访问 Run B、Project Git、Shared Resource blob 和 Artifact control state 的
+   per-job identity、per-Run group/ACL 或 mount isolation contract，并用 distinct compute identity 验证；
+2. service identity、compute identity、canonical mount mapping、setgid/ACL 与只读 Input 权限；
+3. slurmrestd version、单 profile、target cluster、路径、响应 schema 与状态映射；
+4. correlation 字段容量、精确过滤权限和分页完整性；
+5. credential issuer、签发方式、TTL、注入、renewal、revocation 与进程重启策略；JWT 必须只进入
    Worker 内存，不能进入 API、命令行、数据库、日志或 evidence；
-5. Account/Partition/QoS/resources、Native setup 和 authorized submit/restart 验收窗口。
+6. Account/Partition/QoS/resources、Native setup 和 authorized submit/restart 验收窗口。
 
-任何一项未确认都保持 Mock；配置存在不等于目标环境 accepted。真实验收还必须覆盖一次经授权的
-最小 submit，以及一次 ambiguous response/restart 恢复并证明不会重复作业。
+完成 filesystem isolation 的实现、测试和重新评审之后，才允许删除 startup fail-closed。随后真实验收
+还必须覆盖一次获授权最小 submit，以及一次 ambiguous response/restart 恢复并证明不会重复作业。
 
 ## 非目标
 

@@ -29,6 +29,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim-bookworm AS runtime
 ARG WORKSPACE107_SERVICE_UID=10001
 ARG WORKSPACE107_SERVICE_GID=10001
+ARG WORKSPACE107_STORAGE_GID=10001
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -55,7 +56,7 @@ COPY --chown=workspace:workspace alembic.ini docker-entrypoint.sh ./
 
 RUN chmod +x docker-entrypoint.sh \
  && mkdir -p "$WORKSPACE107_STORAGE_ROOT" \
- && chown -R workspace:workspace "$WORKSPACE107_STORAGE_ROOT" \
+ && chown -R "${WORKSPACE107_SERVICE_UID}:${WORKSPACE107_STORAGE_GID}" "$WORKSPACE107_STORAGE_ROOT" \
  && chmod 0750 "$WORKSPACE107_STORAGE_ROOT"
 
 USER workspace

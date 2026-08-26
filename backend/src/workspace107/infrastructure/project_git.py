@@ -33,6 +33,7 @@ _REPOSITORY_IDENTITY_FILE = "workspace107-project-identity"
 _VERSION_REF_PREFIX = "refs/workspace107/versions"
 _GIT_TIMEOUT_SECONDS = 30
 _GIT_ENV_KEYS = ("HOME", "LANG", "LC_ALL", "PATH", "SYSTEMROOT", "TMPDIR")
+_PRIVATE_DIRECTORY_MODE = 0o700
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,8 +53,13 @@ class GitProjectContent:
     """Git 是内容事实；正式 Version 由 immutable ref 与完整 commit OID 共同标识。"""
 
     def __init__(self, root: Path) -> None:
+        if os.name != "posix":
+            raise ValidationFailed("Project Git storage requires a POSIX host")
         self._root = root
-        self._root.mkdir(parents=True, exist_ok=True)
+        if self._root.exists() or self._root.is_symlink():
+            self._require_private_directory(self._root, "Project Git root")
+        else:
+            self._create_private_directory(self._root, "Project Git root")
 
     async def initialize_project(self, project_id: str, repository_identity: str) -> None:
         await asyncio.to_thread(self._initialize_sync, project_id, repository_identity)
@@ -278,13 +284,13 @@ class GitProjectContent:
 
     def _initialize_sync(self, project_id: str, repository_identity: str) -> None:
         project_root = self._project_root(project_id)
-        if project_root.exists():
+        if project_root.exists() or project_root.is_symlink():
             self._require_repository(project_id, repository_identity)
             return
-        project_root.mkdir()
+        self._create_private_directory(project_root, "Project repository root")
         work_tree = self._work_tree(project_root)
         git_directory = self._git_directory(project_root)
-        work_tree.mkdir()
+        self._create_private_directory(work_tree, "Project Working State")
         try:
             self._run_git(
                 "init",
@@ -292,6 +298,8 @@ class GitProjectContent:
                 f"--separate-git-dir={git_directory}",
                 str(work_tree),
             )
+            git_directory.chmod(_PRIVATE_DIRECTORY_MODE)
+            self._require_private_directory(git_directory, "Project Git control directory")
             (work_tree / ".git").unlink()
             identity_file = git_directory / _REPOSITORY_IDENTITY_FILE
             identity_file.write_text(repository_identity + "\n", encoding="utf-8")
@@ -313,23 +321,52 @@ class GitProjectContent:
     def _work_tree(project_root: Path) -> Path:
         return project_root / "work"
 
+    @staticmethod
+    def _create_private_directory(path: Path, label: str) -> None:
+        if path.is_symlink() or path.exists():
+            raise ValidationFailed(f"{label} already exists or is a symbolic link")
+        path.mkdir(mode=_PRIVATE_DIRECTORY_MODE)
+        path.chmod(_PRIVATE_DIRECTORY_MODE)
+        GitProjectContent._require_private_directory(path, label)
+
+    @staticmethod
+    def _require_private_directory(path: Path, label: str) -> None:
+        if path.is_symlink():
+            raise ValidationFailed(f"{label} cannot be a symbolic link")
+        try:
+            info = path.stat(follow_symlinks=False)
+        except FileNotFoundError as exc:
+            raise ValidationFailed(f"{label} does not exist") from exc
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValidationFailed(f"{label} must be a directory")
+        if info.st_uid != os.geteuid():
+            raise ValidationFailed(f"{label} must be owned by the service UID")
+        if stat.S_IMODE(info.st_mode) != _PRIVATE_DIRECTORY_MODE:
+            raise ValidationFailed(f"{label} mode must be 0o700")
+
     def _require_repository(self, project_id: str, repository_identity: str) -> Path:
         project_root = self._project_root(project_id)
-        self._recover_restore(project_root, project_id)
+        self._require_private_directory(project_root, "Project repository root")
         git_directory = self._git_directory(project_root)
         work_tree = self._work_tree(project_root)
-        if (
-            project_root.is_symlink()
-            or git_directory.is_symlink()
-            or work_tree.is_symlink()
-            or not git_directory.is_dir()
-            or not work_tree.is_dir()
-        ):
-            raise ProjectContentMissing(f"Project {project_id} 的 Git repository 不存在")
+        self._require_private_directory(git_directory, "Project Git control directory")
+        if work_tree.is_symlink():
+            raise ProjectContentIdentityMismatch(
+                f"Project {project_id} Working State cannot be a symbolic link"
+            )
+        self._recover_restore(project_root, project_id)
+        self._require_private_directory(work_tree, "Project Working State")
+
         identity_file = git_directory / _REPOSITORY_IDENTITY_FILE
+        if identity_file.is_symlink() or not identity_file.is_file():
+            raise ProjectContentIdentityMismatch(
+                f"Project {project_id} repository identity mismatch"
+            )
+        identity_info = identity_file.stat(follow_symlinks=False)
         if (
-            identity_file.is_symlink()
-            or not identity_file.is_file()
+            not stat.S_ISREG(identity_info.st_mode)
+            or identity_info.st_uid != os.geteuid()
+            or stat.S_IMODE(identity_info.st_mode) != 0o600
             or identity_file.read_text(encoding="utf-8").rstrip("\n") != repository_identity
         ):
             raise ProjectContentIdentityMismatch(

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./var/workspace107.db"
     storage_root: Path = Path("./var/storage")
+    storage_gid: int | None = None
     shared_gid: int | None = None
 
     scheduler: SchedulerKind = "mock"
@@ -71,52 +73,31 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_common_settings(self) -> Self:
-        if self.shared_gid is not None and self.shared_gid < 0:
-            raise ValueError("WORKSPACE107_SHARED_GID must be non-negative")
+        for name, value in (
+            ("WORKSPACE107_STORAGE_GID", self.storage_gid),
+            ("WORKSPACE107_SHARED_GID", self.shared_gid),
+        ):
+            if value is not None and value < 0:
+                raise ValueError(f"{name} must be non-negative")
+        if (
+            self.storage_gid is not None
+            and self.shared_gid is not None
+            and self.storage_gid != self.shared_gid
+        ):
+            raise ValueError("WORKSPACE107_STORAGE_GID and WORKSPACE107_SHARED_GID must match")
         return self
 
     def ensure_worker_configuration(self) -> None:
-        """Fail before the Worker acquires its lock or constructs adapters."""
+        """Fail before the Worker acquires its lock or constructs external adapters."""
         if os.name != "posix":
             raise ValueError("Independent Worker requires a POSIX host; use Linux or WSL2")
-        if self.scheduler == "mock":
-            if self.env not in {"local", "test", "export"}:
-                raise ValueError("Mock scheduler is only allowed in local/test environments")
-        else:
-            if self.shared_gid is None:
-                raise ValueError("Slurm scheduler requires explicit WORKSPACE107_SHARED_GID")
-            required = {
-                "SLURM_API_BASE_URL": self.slurm_api_base_url,
-                "SLURM_API_USER": self.slurm_api_user,
-                "SLURM_JWT": self.slurm_jwt,
-                "SLURM_TARGET_CLUSTER_ID": self.slurm_target_cluster_id,
-                "SLURM_API_VERSION": self.slurm_api_version,
-                "SLURM_API_SCHEMA_PROFILE": self.slurm_api_schema_profile,
-                "SLURM_SUBMIT_PATH": self.slurm_submit_path,
-                "SLURM_JOB_PATH_TEMPLATE": self.slurm_job_path_template,
-                "SLURM_JOBS_PATH": self.slurm_jobs_path,
-                "SLURM_CANCEL_PATH_TEMPLATE": self.slurm_cancel_path_template,
-                "SLURM_CORRELATION_FIELD": self.slurm_correlation_field,
-                "SLURM_CORRELATION_QUERY_PARAMETER": self.slurm_correlation_query_parameter,
-            }
-            missing = [name for name, value in required.items() if not value.strip()]
-            if missing:
-                names = ", ".join(f"WORKSPACE107_{name}" for name in missing)
-                raise ValueError(f"Slurm scheduler requires explicit configuration: {names}")
-            if not self.slurm_correlation_query_complete:
-                raise ValueError(
-                    "WORKSPACE107_SLURM_CORRELATION_QUERY_COMPLETE must be true only after the "
-                    "target cluster confirms permission and pagination completeness"
-                )
-            if self.slurm_correlation_max_bytes < 1:
-                raise ValueError("WORKSPACE107_SLURM_CORRELATION_MAX_BYTES must be positive")
-            if self.slurm_timeout_seconds <= 0:
-                raise ValueError("WORKSPACE107_SLURM_TIMEOUT_SECONDS must be positive")
-            if self.slurm_runtime_mode != "native":
-                raise ValueError(
-                    "Apptainer runtime is not implemented or target-validated; use native only "
-                    "after the human runtime gate"
-                )
+        if self.scheduler == "slurm":
+            raise ValueError(
+                "Slurm execution is disabled until per-Run filesystem isolation prevents "
+                "compute jobs from accessing other Runs and service-private stores"
+            )
+        if self.env not in {"local", "test", "export"}:
+            raise ValueError("Mock scheduler is only allowed in local/test environments")
         if not self.database_url.startswith("postgresql+"):
             raise ValueError("Independent Worker 必须使用 PostgreSQL 数据库")
 
@@ -147,16 +128,63 @@ class Settings(BaseSettings):
         return None if location.startswith(":") else Path(location)
 
     def ensure_local_directories(self) -> None:
-        """建好本地运行需要的目录。
+        """Create and validate the service-owned canonical storage namespace."""
+        if os.name != "posix":
+            raise ValueError("Canonical storage requires a POSIX host")
 
-        存储根目录和 SQLite 文件所在目录都在 .gitignore 里，新克隆的仓库中
-        并不存在。不先建出来，``alembic upgrade head`` 会直接报
-        「unable to open database file」——那是新成员遇到的第一条命令。
-        """
-        self.storage_root.mkdir(mode=0o750, parents=True, exist_ok=True)
+        canonical = Path(os.path.abspath(self.storage_root))
+        self._ensure_trusted_storage_ancestors(canonical.parent)
+        self.storage_root = canonical
+        if canonical.is_symlink():
+            raise ValueError("WORKSPACE107_STORAGE_ROOT cannot be a symbolic link")
+
+        created = not canonical.exists()
+        if created:
+            canonical.mkdir(mode=0o700)
+            if self.storage_gid is not None:
+                os.chown(canonical, -1, self.storage_gid)
+            canonical.chmod(0o750)
+        info = canonical.stat(follow_symlinks=False)
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError("WORKSPACE107_STORAGE_ROOT must be a directory")
+        if info.st_uid != os.geteuid():
+            raise ValueError("WORKSPACE107_STORAGE_ROOT must be owned by the service UID")
+        expected_gid = self.storage_gid if self.storage_gid is not None else os.getegid()
+        if info.st_gid != expected_gid:
+            raise ValueError(
+                "WORKSPACE107_STORAGE_ROOT GID does not match WORKSPACE107_STORAGE_GID"
+            )
+        mode = stat.S_IMODE(info.st_mode)
+        if mode == 0o755:
+            canonical.chmod(0o750)
+            mode = stat.S_IMODE(canonical.stat(follow_symlinks=False).st_mode)
+        if mode != 0o750:
+            raise ValueError("WORKSPACE107_STORAGE_ROOT mode must be exactly 0o750")
+
         sqlite_file = self.sqlite_file
         if sqlite_file is not None:
             sqlite_file.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _ensure_trusted_storage_ancestors(parent: Path) -> None:
+        current = Path(parent.anchor)
+        for part in parent.parts[1:]:
+            current /= part
+            try:
+                info = current.lstat()
+            except FileNotFoundError:
+                current.mkdir(mode=0o700)
+                info = current.lstat()
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                raise ValueError("WORKSPACE107_STORAGE_ROOT ancestors must be real directories")
+            mode = stat.S_IMODE(info.st_mode)
+            sticky = bool(mode & stat.S_ISVTX)
+            if mode & 0o022 and not sticky:
+                raise ValueError(
+                    "WORKSPACE107_STORAGE_ROOT ancestor is writable by an untrusted group"
+                )
+            if info.st_uid not in {0, os.geteuid()} and mode & stat.S_IWUSR and not sticky:
+                raise ValueError("WORKSPACE107_STORAGE_ROOT ancestor owner is not trusted")
 
     def __str__(self) -> str:  # pragma: no cover - 仅用于日志
         return (

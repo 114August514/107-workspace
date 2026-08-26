@@ -177,11 +177,19 @@ class WorkspaceCliTests(unittest.TestCase):
     def test_compose_config_validates_the_rendered_deployment(self) -> None:
         rendered = {
             "services": {
-                "api": {"environment": {"WORKSPACE107_DATABASE_URL": "postgresql://db"}},
+                "api": {
+                    "group_add": ["10001"],
+                    "environment": {
+                        "WORKSPACE107_DATABASE_URL": "postgresql://db",
+                        "WORKSPACE107_STORAGE_GID": "10001",
+                    },
+                },
                 "worker": {
+                    "group_add": ["10001"],
                     "depends_on": {"db": {"condition": "service_healthy"}},
                     "environment": {
                         "WORKSPACE107_SCHEDULER": "slurm",
+                        "WORKSPACE107_STORAGE_GID": "10001",
                         "WORKSPACE107_SHARED_GID": "10001",
                         "WORKSPACE107_SLURM_API_USER": "fixture-user",
                         "WORKSPACE107_SLURM_JWT": "secret",
@@ -220,11 +228,16 @@ class WorkspaceCliTests(unittest.TestCase):
     def test_compose_config_rejects_api_healthcheck_on_worker(self) -> None:
         rendered = {
             "services": {
-                "api": {"environment": {}},
+                "api": {
+                    "group_add": ["10001"],
+                    "environment": {"WORKSPACE107_STORAGE_GID": "10001"},
+                },
                 "worker": {
+                    "group_add": ["10001"],
                     "depends_on": {"db": {}},
                     "environment": {
                         "WORKSPACE107_SCHEDULER": "slurm",
+                        "WORKSPACE107_STORAGE_GID": "10001",
                         "WORKSPACE107_SHARED_GID": "10001",
                         "WORKSPACE107_SLURM_API_USER": "fixture-user",
                         "WORKSPACE107_SLURM_JWT": "secret",

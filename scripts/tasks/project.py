@@ -194,9 +194,15 @@ def _validate_compose_config(rendered: dict[str, Any]) -> None:
             "API service contains Worker-only configuration: " + ", ".join(sorted(forbidden_api))
         )
 
+    required_api = {"WORKSPACE107_STORAGE_GID"}
+    missing_api = sorted(required_api - set(api_environment))
+    if missing_api:
+        raise TaskError("API service is missing storage configuration: " + ", ".join(missing_api))
+
     worker_environment = worker.get("environment", {})
     required_worker = {
         "WORKSPACE107_SCHEDULER",
+        "WORKSPACE107_STORAGE_GID",
         "WORKSPACE107_SHARED_GID",
         "WORKSPACE107_SLURM_API_USER",
         "WORKSPACE107_SLURM_JWT",
@@ -205,6 +211,14 @@ def _validate_compose_config(rendered: dict[str, Any]) -> None:
     missing_worker = sorted(required_worker - set(worker_environment))
     if missing_worker:
         raise TaskError("Worker service is missing configuration: " + ", ".join(missing_worker))
+    storage_gid = str(api_environment["WORKSPACE107_STORAGE_GID"])
+    if str(worker_environment["WORKSPACE107_STORAGE_GID"]) != storage_gid:
+        raise TaskError("API and Worker must use the same canonical storage GID")
+    if str(worker_environment["WORKSPACE107_SHARED_GID"]) != storage_gid:
+        raise TaskError("Current local Run-tree shared GID must equal the canonical storage GID")
+    for service_name, service in (("API", api), ("Worker", worker)):
+        if storage_gid not in {str(value) for value in service.get("group_add", [])}:
+            raise TaskError(f"{service_name} service must join the canonical storage GID")
 
     dependencies = worker.get("depends_on", {})
     if "db" not in dependencies or "api" in dependencies:

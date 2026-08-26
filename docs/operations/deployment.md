@@ -27,7 +27,9 @@ browser -> web -> API ---------------------> PostgreSQL
                     v                            | execution intent/state
              canonical storage <---------- Worker (replicas=1)
                                               |
-                                              `-> MockScheduler or slurmrestd
+                                              `-> MockScheduler
+
+slurmrestd adapter seam: fixture-backed only; no runtime configuration enables it today.
 ```
 
 API 启动时执行 Alembic migration 和幂等平台目录 seed；只有
@@ -38,9 +40,9 @@ Worker 是独立进程并直接依赖 PostgreSQL，不依赖 API health。它取
 推进一个 execution intent。Compose 固定一个 Worker；这不是 standby、多副本或 lease 协议。
 
 API 与 Worker 挂载同一 storage source 到固定容器路径
-`/var/lib/workspace107/storage`。Scheduler、Slurm profile、JWT、shared GID 和 Worker poll 配置只
-注入 Worker；API 服务不得接收这些变量或 credential。API 只持有请求、数据库、auth 和 storage
-配置，不 submit 或 poll Scheduler。
+`/var/lib/workspace107/storage`，并共同接收/join `WORKSPACE107_STORAGE_GID`。Scheduler、Slurm
+profile、JWT、Run-tree shared GID 和 Worker poll 配置只注入 Worker；API 服务不得接收这些变量或
+credential。API 只持有请求、数据库、auth 和 storage 配置，不 submit 或 poll Scheduler。
 
 ## 配置
 
@@ -51,9 +53,10 @@ API 与 Worker 挂载同一 storage source 到固定容器路径
 | `POSTGRES_PASSWORD` | DB/API/Worker connection | Compose 必填，无默认密码 |
 | `WORKSPACE107_STORAGE_MOUNT` | API + Worker | 两者共享的 mount source |
 | `WORKSPACE107_SERVICE_UID/GID` | image build | 本地默认 `10001:10001`；改值需重建镜像 |
-| `WORKSPACE107_SHARED_GID` | Worker | Run tree 的 POSIX shared group；本地默认 `10001` |
-| `WORKSPACE107_SCHEDULER` | Worker | `mock` 或 gated `slurm` |
-| `WORKSPACE107_SLURM_*` | Worker only | 单 profile、correlation 和 secret；API 禁止注入 |
+| `WORKSPACE107_STORAGE_GID` | API + Worker | canonical root GID；两进程必须加入 |
+| `WORKSPACE107_SHARED_GID` | Worker | local Run-tree group；当前必须等于 storage GID |
+| `WORKSPACE107_SCHEDULER` | Worker | 当前唯一可运行值是 local/test `mock` |
+| `WORKSPACE107_SLURM_*` | Worker only | inert fixture-backed adapter contract；API 禁止注入 |
 | `WORKSPACE107_AUTH_MODE` | API | `dev` 只用于本地 |
 | `WORKSPACE107_SEED_DEMO` | API bootstrap | 仅本地/受信任演示 |
 
@@ -71,6 +74,11 @@ Docker named volume 只在单机 Docker 内可见，不满足真实计算节点�
    必须保持只读和路径安全；
 4. 同目录 staging-to-final atomic rename、并发 Log/Artifact 写入和进程重启恢复。
 
+当前全局 shared GID 不隔离不同 Run：同组 compute identity 可以遍历其他 Run tree。它只用于本地
+Mock/权限 seam，不是生产安全边界。`projects/`、`blobs/` 和 Artifact control area 显式保持
+service-private；真实 Slurm/native Worker 在 per-Run identity/group/ACL/mount isolation 落地前会
+机械拒绝启动。
+
 Compose 用 build args 配置 service identity，并用 `group_add` 给 Worker 加 shared GID；这些只表达
 部署参数，不证明该 mapping 被 107 接受。若计算节点不能提供
 `/var/lib/workspace107/storage`，必须先调整所有三方 mapping 并重新验收，不能只改 volume source。
@@ -81,13 +89,13 @@ MockScheduler 在 **Worker 容器/主机**用 shell 真实执行命令，不是�
 向不受信任用户开放；production 环境选择 Mock 会在 Worker 配置阶段失败。
 
 ```bash
-# 需要 WORKSPACE107_DATABASE_URL 指向可创建临时数据库的 PostgreSQL
 make smoke
 ```
 
-默认 smoke 每次创建唯一 PostgreSQL database 和临时 storage，执行 migration/seed，启动 API 与
-独立 Worker，使用 MockScheduler 走 Project → immutable Git Version → Run Snapshot → Log →
-Artifact，随后终止两个进程、drop 临时数据库并删除临时目录。它不复用或清理现有 Compose 数据。
+未配置 PostgreSQL 时，默认 smoke 启动并清理临时 PostgreSQL 容器；显式提供
+`WORKSPACE107_DATABASE_URL` 时，则只在该 server 内创建和删除唯一临时 database。两种路径都使用
+临时 storage，执行 migration/seed，启动 API 与独立 Worker，以 MockScheduler 走 Project →
+immutable Git Version → Run Snapshot → Log → Artifact，随后清理自己创建的资源。
 
 要只检查已运行的栈而不接管生命周期：
 
@@ -100,17 +108,17 @@ external smoke 会留下它创建的业务数据，调用者负责目标栈的�
 
 ## 接入真实 107
 
-配置解析通过不等于接入完成。`docs/operations/107-cluster.md` 的 human gate 必须逐项产生 fresh、
-脱敏 evidence，至少覆盖：
+当前 `WORKSPACE107_SCHEDULER=slurm` 会在 Worker 启动时机械失败；配置解析、human checklist 或
+已有 adapter 测试都不能解除。必须先实现并评审 per-Run filesystem isolation，证明 Run A 无法访问
+Run B 和 service-private stores，之后才进入 `docs/operations/107-cluster.md` 的其他 human gate：
 
-- service/compute identity、shared GID、canonical mount 和权限；
+- service/compute identity、canonical mount 和权限；
 - REST version/profile、target cluster、路径、响应和状态映射；
 - correlation 精确过滤权限、容量和分页完整性；
 - credential issuer、TTL、Worker-only injection、renewal、revocation 与 restart lifecycle；
 - Account/Partition/QoS/resources、Native setup，以及获授权 submit/restart ambiguity 验收。
 
-当前没有多 profile/cluster、Apptainer、credential fallback 或自动生命周期 policy。任一事实未知就
-保持 Mock，不登录、不 probe、不 submit。
+当前没有多 profile/cluster、Apptainer、credential fallback 或自动生命周期 policy。
 
 ## 探针和排障
 

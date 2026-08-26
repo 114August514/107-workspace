@@ -101,10 +101,11 @@ cp ../.env.example .env
 | :--- | :--- | :--- |
 | `WORKSPACE107_DATABASE_URL` | API + Worker | API 本地可用 SQLite；独立 Worker 必须 PostgreSQL |
 | `WORKSPACE107_STORAGE_ROOT` | API + Worker | 两者看到的 canonical content root |
+| `WORKSPACE107_STORAGE_GID` | API + Worker | canonical root GID；两进程都必须加入 |
 | `WORKSPACE107_AUTH_MODE` | API | `dev` 用 `X-User` 请求头识别用户 |
-| `WORKSPACE107_SHARED_GID` | Worker | POSIX Run tree shared group |
-| `WORKSPACE107_SCHEDULER` | Worker | local/test `mock` 或 gated `slurm` |
-| `WORKSPACE107_SLURM_*` | Worker only | single profile 与 secret；禁止注入 API |
+| `WORKSPACE107_SHARED_GID` | Worker | local Run-tree sharing；当前必须等于 storage GID |
+| `WORKSPACE107_SCHEDULER` | Worker | 当前仅 local/test `mock`；`slurm` 启动会 fail-closed |
+| `WORKSPACE107_SLURM_*` | Worker only | fixture-backed adapter contract 与 secret；禁止注入 API |
 
 ## 开发模式下的身份
 
@@ -125,11 +126,14 @@ curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
 | 适配器 | 行为 |
 | :--- | :--- |
 | `mock` | 在 Worker 主机以子进程真实执行；只允许 local/test，不是沙箱 |
-| `slurm` | 单目标、单 profile 的 submit/find/poll/cancel；启用前须完成人工门 |
+| `slurm` | adapter 覆盖单目标 submit/find/poll/cancel，但 Worker 当前拒绝启动 |
 
-Worker 负责状态和 Artifact 推进。稳定完整 correlation 用于 ambiguous submit reconcile；查询
-不完整或多匹配时停止，不能盲目重提。Slurm credential 只从 Worker 环境注入；issuer、TTL、
-renewal、revocation 和 restart lifecycle 未经目标 107 验收前没有默认 policy。
+当前全局 `shared_gid` 只能证明 compute identity 可访问一个 Run tree，不能阻止它访问同组的
+其他 Run。真实 Slurm/native 执行因此在 `Settings.ensure_worker_configuration()` 机械 fail-closed；
+必须先实现并验证 per-job identity、per-Run group/ACL 或 mount isolation 中的一种明确 contract。
+稳定完整 correlation 仍用于 adapter 的 ambiguous submit reconcile；查询不完整或多匹配时停止。
+Slurm credential 只从 Worker 环境注入；issuer、TTL、renewal、revocation 和 restart lifecycle
+未经目标 107 验收前没有默认 policy。
 
 Mock 会把渲染脚本放在对应 Run workspace；它只证明本地闭环，不证明真实 mount/profile。
 

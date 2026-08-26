@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from workspace107.config import Settings
 from workspace107.domain.ports.run_workspace import (
     ArtifactRunWorkspaceInput,
     RunWorkspaceConflict,
@@ -27,6 +28,8 @@ from workspace107.domain.ports.version_control import (
     ProjectVersionExportEvidence,
     ProjectVersionExportFile,
 )
+from workspace107.infrastructure.project_git import GitProjectContent
+from workspace107.infrastructure.storage.local import LocalStorage
 from workspace107.infrastructure.storage.run_workspace import PosixRunWorkspace
 
 COMMIT_OID = "1" * 40
@@ -341,15 +344,52 @@ def test_distinct_uids_share_execution_paths_but_not_service_control(
         _, status = os.waitpid(process_id, 0)
         assert os.waitstatus_to_exitcode(status) == 0
 
-    run_as(
-        service_uid,
-        service_gid,
-        lambda: asyncio.run(
+    wrong_owner_root = tmp_path / "wrong-owner"
+    wrong_owner_root.mkdir(mode=0o750)
+    os.chown(wrong_owner_root, compute_uid, shared_gid)
+    wrong_gid_root = tmp_path / "wrong-gid"
+    wrong_gid_root.mkdir(mode=0o750)
+    os.chown(wrong_gid_root, service_uid, compute_gid)
+    service_parent = tmp_path / "service-parent"
+    service_parent.mkdir(mode=0o700)
+    os.chown(service_parent, service_uid, service_gid)
+
+    def assert_storage_root_contract() -> None:
+        with pytest.raises(ValueError, match="service UID"):
+            Settings(
+                storage_root=wrong_owner_root, storage_gid=shared_gid
+            ).ensure_local_directories()
+        with pytest.raises(ValueError, match="GID"):
+            Settings(storage_root=wrong_gid_root, storage_gid=shared_gid).ensure_local_directories()
+
+        Settings(storage_root=root, storage_gid=shared_gid).ensure_local_directories()
+        worker_settings = Settings(
+            storage_root=root,
+            storage_gid=shared_gid,
+            shared_gid=shared_gid,
+            database_url="postgresql+asyncpg://service:test@database/workspace107",
+        )
+        worker_settings.ensure_local_directories()
+        worker_settings.ensure_worker_configuration()
+
+        first_start = service_parent / "first-start"
+        Settings(storage_root=first_start, storage_gid=shared_gid).ensure_local_directories()
+        assert first_start.stat().st_gid == shared_gid
+        assert stat.S_IMODE(first_start.stat().st_mode) == 0o750
+
+    run_as(service_uid, service_gid, assert_storage_root_contract)
+
+    def prepare_service_paths() -> None:
+        LocalStorage(root)
+        project_content = GitProjectContent(root / "projects")
+        asyncio.run(project_content.initialize_project("prj_private", "repo_private"))
+        asyncio.run(
             PosixRunWorkspace(root, FakeExporter(), shared_gid=shared_gid).prepare(
                 identity(), inputs=()
             )
-        ),
-    )
+        )
+
+    run_as(service_uid, service_gid, prepare_service_paths)
     workspace = root / "runs" / "run_test"
 
     def exercise_compute_paths() -> None:
@@ -365,6 +405,8 @@ def test_distinct_uids_share_execution_paths_but_not_service_control(
         denied = (
             lambda: (workspace / "inputs" / "forbidden").write_text("no"),
             lambda: (workspace / ".workspace-identity.json").open("w"),
+            lambda: list((root / "projects").iterdir()),
+            lambda: list((root / "blobs").iterdir()),
             lambda: list((root / "artifact-store").iterdir()),
             lambda: list((root / ".run-staging").iterdir()),
         )
