@@ -387,7 +387,6 @@ class SqlExecutionStore(ExecutionStore):
                         id=item.id,
                         run_id=run_id,
                         project_id=run.project_id,
-                        workspace_id=run.workspace_id,
                         name=item.name,
                         source_path=item.source_path,
                         size=item.size or 0,
@@ -576,10 +575,13 @@ async def _add_activity(
 ) -> None:
     repos = SqlRepositories(session)
     user = await repos.users.get(run.initiated_by_user_id)
+    project = await repos.projects.get(run.project_id)
+    if project is None:
+        raise RuntimeError(f"Run {run.id} 缺少 Project {run.project_id}")
     await repos.activities.add(
         Activity(
             id=ids.new_id(ids.ACTIVITY),
-            workspace_id=run.workspace_id,
+            owner=project.owner,
             project_id=run.project_id,
             actor_id=run.initiated_by_user_id,
             actor_name=user.username if user else run.initiated_by_user_id,
@@ -608,7 +610,6 @@ async def _add_notification(
             type=notification_type,
             title=title,
             body=body,
-            workspace_id=run.workspace_id,
             target_type=TargetType.RUN,
             target_id=run.id,
             created_at=at,

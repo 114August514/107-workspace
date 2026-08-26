@@ -29,8 +29,12 @@ async def test_user_group_and_project_config_full_http_crud(client) -> None:
     await _crud(client, f"/api/v1/user-groups/{group_id}", secret_value="group-plaintext")
 
     project_response = await client.post(
-        f"/api/v1/workspaces/{group_id}/projects",
-        json={"name": "config-project", "description": ""},
+        "/api/v1/projects",
+        json={
+            "owner": {"kind": "user_group", "id": group_id},
+            "name": "config-project",
+            "description": "",
+        },
     )
     assert project_response.status_code == 201
     project_id = project_response.json()["id"]
@@ -42,7 +46,12 @@ async def test_user_foreign_and_project_unauthorized_existing_are_404(client) ->
     own_group = await client.post("/api/v1/user-groups", json={"name": "owned"})
     group_id = own_group.json()["id"]
     project = await client.post(
-        f"/api/v1/workspaces/{group_id}/projects", json={"name": "private", "description": ""}
+        "/api/v1/projects",
+        json={
+            "owner": {"kind": "user_group", "id": group_id},
+            "name": "private",
+            "description": "",
+        },
     )
     project_id = project.json()["id"]
     assert (await client.get("/api/v1/users/other/variables")).status_code == 404

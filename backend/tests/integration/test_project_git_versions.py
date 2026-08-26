@@ -19,9 +19,10 @@ FULL_OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 async def test_project_api_persists_exact_git_version_and_reads_immutable_content(
     client, context, tmp_path
 ) -> None:
-    workspace_id = await ensure_user_group(client)
+    user_group_id = await ensure_user_group(client)
     created = await client.post(
-        f"/api/v1/workspaces/{workspace_id}/projects", json={"name": "Git Project"}
+        "/api/v1/projects",
+        json={"owner": {"kind": "user_group", "id": user_group_id}, "name": "Git Project"},
     )
     assert created.status_code == 201, created.text
     project_id = created.json()["id"]

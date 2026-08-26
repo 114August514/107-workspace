@@ -31,13 +31,15 @@ const homeData: Home = {
       capabilities: [],
     },
   ],
-  personal_resource_context_id: null,
+  personal_execution_context: {
+    owner: { kind: 'user', id: 'u-1', display_name: '同学' },
+    entitlements: [],
+  },
   recent_projects: [
     {
       id: 'p-1',
       name: 'LJ 流体模拟',
       description: '',
-      workspace_id: 'ws-1',
       owner: { kind: 'user', id: 'u-1', display_name: 'student' },
       visibility: 'owner_scope',
       status: 'active',
@@ -52,7 +54,6 @@ const homeData: Home = {
     {
       id: 'r-1',
       name: '首次基线运行',
-      workspace_id: 'ws-1',
       project_id: 'p-1',
       project_version_id: 'v-1',
       project_version_label: 'v1',

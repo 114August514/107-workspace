@@ -351,7 +351,6 @@ class RunService:
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=project_id,
-            workspace_id=access.workspace.id,
             snapshot_id=snapshot.id,
             compute_plan_id=snapshot.compute_plan_id,
             project_version_id=snapshot.project_version_id,
@@ -369,7 +368,9 @@ class RunService:
         await self._repos.execution_intents.add(_new_execution_intent(run.id, now))
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
         await self._attach_idempotency(user_id, idempotency_key, run.id)
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
+        await self._record_run_activity(
+            user_id, run, access.project.owner, ActivityAction.RUN_SUBMITTED
+        )
         return RunSubmission(run=run, created=True)
 
     async def rerun(
@@ -441,7 +442,6 @@ class RunService:
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=access.run.project_id,
-            workspace_id=access.workspace.id,
             project_version_id=source_snapshot.project_version_id,
             project_version_label=project_version.label,
             snapshot_id=snapshot.id,
@@ -459,8 +459,13 @@ class RunService:
         await self._repos.execution_intents.add(_new_execution_intent(run.id, now))
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
         await self._attach_idempotency(user_id, idempotency_key, run.id)
+
         await self._record_run_activity(
-            user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
+            user_id,
+            run,
+            access.project.owner,
+            ActivityAction.RUN_SUBMITTED,
+            detail=f"重跑自 {access.run.name}",
         )
         return RunSubmission(run=run, created=True)
 
@@ -473,16 +478,24 @@ class RunService:
         if not await self._repos.execution_intents.request_cancel(run.id):
             raise ConflictError("Run 的执行意图已完成，无法取消")
         await self._record_event(run.id, RunEventType.CANCEL_REQUESTED, "用户请求取消")
+        await self._record_run_activity(
+            user_id, run, access.project.owner, ActivityAction.RUN_CANCELLED
+        )
         return run
 
     # -- 内部 -----------------------------------------------------------
 
     async def _record_run_activity(
-        self, user_id: str, run: Run, action: ActivityAction, detail: str = ""
+        self,
+        user_id: str,
+        run: Run,
+        owner: OwnerReference,
+        action: ActivityAction,
+        detail: str = "",
     ) -> None:
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=run.workspace_id,
+            owner=owner,
             project_id=run.project_id,
             action=action,
             target_type=TargetType.RUN,
@@ -521,8 +534,7 @@ class RunService:
     ) -> EnvironmentVersion | None:
         """运行方案必须精确引用一个 Environment Version（#41、GR-205）。
 
-        没有任何继承或回退：不读 Project 的环境选择，也不读 Workspace 默认
-        环境。运行时用到的环境在保存运行方案时就已经确定。
+        没有任何继承或回退：运行时只使用保存运行方案时已经确定的 Environment Version。
         """
         version = await environment_version_for_owner_use(
             self._repos, user_id, configuration.environment_version_id, project_owner

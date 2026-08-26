@@ -82,20 +82,8 @@ async def _seed(factory: async_sessionmaker, *, with_intent: bool) -> None:
         )
         await session.flush()
         session.add(
-            t.LegacyWorkspaceRow(
-                id="ws_claim",
-                kind="personal",
-                name="Claim",
-                description="",
-                owner_id="usr_claim",
-                created_at=NOW,
-            )
-        )
-        await session.flush()
-        session.add(
             t.ProjectRow(
                 id="prj_claim",
-                workspace_id="ws_claim",
                 name="Claim",
                 owner_user_id="usr_claim",
                 owner_user_group_id=None,
@@ -132,7 +120,6 @@ async def _seed(factory: async_sessionmaker, *, with_intent: bool) -> None:
             t.RunRow(
                 id="run_claim",
                 project_id="prj_claim",
-                workspace_id="ws_claim",
                 snapshot_id="snap_claim",
                 compute_plan_id="plan_claim",
                 project_version_id="pv_claim",

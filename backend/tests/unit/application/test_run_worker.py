@@ -269,7 +269,6 @@ def _pending(
         run=Run(
             id="run_1",
             project_id="prj_1",
-            workspace_id="ws_1",
             snapshot_id="snap_1",
             compute_plan_id="plan_1",
             project_version_id="pv_1",

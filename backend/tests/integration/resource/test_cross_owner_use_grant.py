@@ -35,8 +35,8 @@ async def _create_project_with_version(
     client: httpx.AsyncClient, user_group_id: str, *, name: str, headers: dict | None = None
 ) -> dict:
     response = await client.post(
-        f"/api/v1/workspaces/{user_group_id}/projects",
-        json={"name": name},
+        "/api/v1/projects",
+        json={"owner": {"kind": "user_group", "id": user_group_id}, "name": name},
         headers=headers or ALICE,
     )
     response.raise_for_status()
@@ -118,12 +118,6 @@ async def _set_group_environment(
     session: AsyncSession, client: httpx.AsyncClient, user_group_id: str
 ) -> str:
     _, version_id = await _create_environment_version(session, owner_user_group_id=user_group_id)
-    response = await client.patch(
-        f"/api/v1/workspaces/{user_group_id}",
-        json={"default_environment_version_id": version_id},
-        headers=ALICE,
-    )
-    response.raise_for_status()
     return version_id
 
 

@@ -15,14 +15,22 @@ from tests.helpers import (
 ALICE = {"X-User": "alice"}
 
 
+async def _user_group(client: httpx.AsyncClient) -> str:
+    return await ensure_user_group(client, headers=ALICE)
+
+
 async def _create_resource_with_version(
     client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
 ) -> dict:
-    workspace_id = await ensure_user_group(client, headers=ALICE)
+    """建资源 + 发布 v1，返回版本详情。"""
+    user_group_id = await _user_group(client)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
-            json={"name": name, "owner": {"kind": "user_group", "id": workspace_id}},
+            json={
+                "name": name,
+                "owner": {"kind": "user_group", "id": user_group_id},
+            },
             headers=ALICE,
         )
     ).json()

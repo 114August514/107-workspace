@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
-PREVIOUS_REVISION = "a41b9c3e7d2f"
+PREVIOUS_REVISION = "f42a9c7e1d30"
 
 
 def _alembic(database: Path, *arguments: str) -> subprocess.CompletedProcess[str]:

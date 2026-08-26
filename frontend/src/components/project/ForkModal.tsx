@@ -2,7 +2,6 @@ import { Alert, Form, Input, Modal, Select, Typography, message } from 'antd'
 import { useEffect } from 'react'
 
 import { api } from '../../api/client'
-import { can } from '../../api/types'
 import type { Project, ProjectVersion, UserGroup } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 
@@ -21,19 +20,10 @@ interface Props {
  * 等于把「你有没有权限」这个问题推给用户去试——而他试之前根本没法知道。
  */
 export function ForkModal({ open, version, sourceProjectName, onClose, onForked }: Props) {
-  const [form] = Form.useForm<{ target_workspace_id: string; name: string; description: string }>()
-  const writableGroups = useAsync<UserGroup[]>(async () => {
-    const groups = await api.listUserGroups()
-    const contexts = await Promise.all(
-      groups.map(async (group) => ({
-        group,
-        context: await api.getLegacyWorkspaceContext(group.id),
-      })),
-    )
-    return contexts
-      .filter(({ context }) => can(context, 'project.create'))
-      .map(({ group }) => group)
-  }, [open])
+  const [form] = Form.useForm<{ target_owner_id: string; name: string; description: string }>()
+  // Every returned User Group is an active Membership; current role capabilities permit
+  // Project creation, while the backend remains authoritative for the exact request.
+  const writableGroups = useAsync<UserGroup[]>(() => api.listUserGroups(), [open])
 
   useEffect(() => {
     if (open) {
@@ -46,7 +36,7 @@ export function ForkModal({ open, version, sourceProjectName, onClose, onForked 
     const values = await form.validateFields()
     try {
       const project = await api.forkVersion(version.id, {
-        target_workspace_id: values.target_workspace_id,
+        target_owner: { kind: 'user_group', id: values.target_owner_id },
         name: values.name,
         description: values.description,
       })
@@ -85,7 +75,7 @@ export function ForkModal({ open, version, sourceProjectName, onClose, onForked 
       )}
       <Form form={form} layout="vertical">
         <Form.Item
-          name="target_workspace_id"
+          name="target_owner_id"
           label="创建到哪个 User Group"
           rules={[{ required: true, message: '请选择目标 User Group' }]}
         >

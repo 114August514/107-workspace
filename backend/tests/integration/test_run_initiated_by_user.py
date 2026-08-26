@@ -76,8 +76,8 @@ async def _create_environment(
 
 async def _create_project(client: httpx.AsyncClient, user_group_id: str, *, name: str) -> dict:
     response = await client.post(
-        f"/api/v1/workspaces/{user_group_id}/projects",
-        json={"name": name},
+        "/api/v1/projects",
+        json={"owner": {"kind": "user_group", "id": user_group_id}, "name": name},
         headers=ALICE,
     )
     response.raise_for_status()
@@ -521,7 +521,6 @@ async def test_artifact_input_boundary_follows_project_owner(
             id=artifact_id,
             run_id=run.json()["id"],
             project_id=project_a["id"],
-            workspace_id=run.json()["workspace_id"],
             name="输出",
             source_path="outputs",
             size=4,
@@ -655,8 +654,8 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     original_snapshot = original_detail.json()["snapshot"]
 
     response = await client.patch(
-        f"/api/v1/workspaces/{group}",
-        json={"default_environment_version_id": environment_v2},
+        f"/api/v1/projects/{project['id']}",
+        json={"environment_version_id": environment_v2},
         headers=ALICE,
     )
     assert response.status_code == 200, response.text

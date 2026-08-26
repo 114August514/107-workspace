@@ -4,7 +4,7 @@
 状态；发现任一 Project graph 数据时必须成对重建数据库与 storage，避免留下悬空状态。
 
 Revision ID: a1f0e2d3c4b5
-Revises: a41b9c3e7d2f
+Revises: f42a9c7e1d30
 Create Date: 2026-08-10 11:30:00
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a1f0e2d3c4b5"
-down_revision: str | None = "a41b9c3e7d2f"
+down_revision: str | None = "f42a9c7e1d30"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -22,7 +22,6 @@ from ..models import (
     EnvironmentVersion,
     ForkRelation,
     IdempotencyRecord,
-    LegacyWorkspace,
     Membership,
     Notification,
     Project,
@@ -46,15 +45,6 @@ class UserRepository(Protocol):
     async def get(self, user_id: str) -> User | None: ...
     async def get_by_username(self, username: str) -> User | None: ...
     async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]: ...
-
-
-class LegacyWorkspaceRepository(Protocol):
-    """Private persistence anchors retained only for #36-#42 compatibility."""
-
-    async def add(self, workspace: LegacyWorkspace) -> None: ...
-    async def get(self, workspace_id: str) -> LegacyWorkspace | None: ...
-    async def update(self, workspace: LegacyWorkspace) -> None: ...
-    async def get_personal(self, owner_id: str) -> LegacyWorkspace | None: ...
 
 
 class UserGroupRepository(Protocol):
@@ -87,7 +77,6 @@ class ProjectRepository(Protocol):
     async def add(self, project: Project) -> None: ...
     async def get(self, project_id: str) -> Project | None: ...
     async def update(self, project: Project) -> None: ...
-    async def list_for_workspace(self, workspace_id: str, page: PageRequest) -> Page[Project]: ...
     async def lock_writer(self, project_id: str) -> None:
         """在当前 PostgreSQL transaction 内串行化一个 Project 的 Git writer。"""
         ...
@@ -100,7 +89,7 @@ class ProjectRepository(Protocol):
         """列出用户可发现的 Project：Owner scope + PUBLIC。"""
         ...
 
-    async def name_exists(self, workspace_id: str, name: str) -> bool: ...
+    async def name_exists(self, owner: OwnerReference, name: str) -> bool: ...
 
 
 class ProjectVersionRepository(Protocol):
@@ -222,16 +211,12 @@ class ArtifactRepository(Protocol):
 
 class ActivityRepository(Protocol):
     async def add(self, activity: Activity) -> None: ...
-    async def list_for_workspace(self, workspace_id: str, page: PageRequest) -> Page[Activity]: ...
+    async def list_for_owner(self, owner: OwnerReference, page: PageRequest) -> Page[Activity]: ...
     async def list_for_project(self, project_id: str, page: PageRequest) -> Page[Activity]: ...
 
 
 class NotificationRepository(Protocol):
-    """通知按**收件人**查，不按 Workspace 查。
-
-    被移除的成员已经看不到那个 Workspace 了，但「你被移除了」这条通知
-    必须还能读到——按 Workspace 过滤会把它一起挡掉。
-    """
+    """Notifications are authorized only by their exact recipient."""
 
     async def add(self, notification: Notification) -> None: ...
     async def list_for_user(
@@ -308,7 +293,6 @@ class Repositories(Protocol):
     """一次工作单元内可用的全部仓储。"""
 
     users: UserRepository
-    legacy_workspaces: LegacyWorkspaceRepository
     user_groups: UserGroupRepository
     memberships: MembershipRepository
     variables: VariableRepository

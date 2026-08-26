@@ -23,7 +23,6 @@ def _make_run(
     return Run(
         id="run-1",
         project_id="proj-1",
-        workspace_id="ws-1",
         snapshot_id="snap-1",
         compute_plan_id="plan-1",
         project_version_id=project_version_id,

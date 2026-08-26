@@ -5,12 +5,7 @@ import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type {
-  ComputePlan,
-  Environment,
-  RunConfiguration,
-  LegacyWorkspaceContext,
-} from '../../api/types'
+import type { ComputePlan, Environment, Project, RunConfiguration } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { AsyncSection } from '../common/AsyncSection'
@@ -18,7 +13,7 @@ import { RunConfigurationModal } from './RunConfigurationModal'
 
 interface Props {
   projectId: string
-  workspace: LegacyWorkspaceContext | undefined
+  access: Project | undefined
   defaultConfigurationId: string | null
   onSubmitRun: (configuration: RunConfiguration) => void
   onChanged: () => void
@@ -26,13 +21,13 @@ interface Props {
 
 export function RunConfigurationPanel({
   projectId,
-  workspace,
+  access,
   defaultConfigurationId,
   onSubmitRun,
   onChanged,
 }: Props) {
-  const canManage = can(workspace, 'run_configuration.manage')
-  const canSubmit = can(workspace, 'run.submit')
+  const canManage = can(access, 'run_configuration.manage')
+  const canSubmit = can(access, 'run.submit')
   const configurations = useAsync<RunConfiguration[]>(
     () => api.listRunConfigurations(projectId),
     [projectId],

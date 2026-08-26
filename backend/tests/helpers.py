@@ -65,12 +65,16 @@ async def create_project_with_version(
     headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """创建 Project、写入文件并保存一个版本，返回 Project。"""
-    workspace_id = await ensure_user_group(client, headers=headers)
+    user_group_id = await ensure_user_group(client, headers=headers)
 
     project = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/projects",
-            json={"name": name, "description": "测试用"},
+            "/api/v1/projects",
+            json={
+                "owner": {"kind": "user_group", "id": user_group_id},
+                "name": name,
+                "description": "测试用",
+            },
             headers=headers,
         )
     ).json()
@@ -98,12 +102,8 @@ async def use_default_environment(
     *,
     headers: dict[str, str] | None = None,
 ) -> tuple[str, str]:
-    """Create the group's own environment; return (workspace_id, version_id).
-
-    运行方案必须精确引用 Environment Version（#41），所以测试既需要兼容锚点
-    id（group scope 断言），也需要 version_id（写进 run-configurations payload）。
-    """
-    workspace_id = await ensure_user_group(client, headers=headers)
+    """Create the group's own Environment Version and return its current owner id."""
+    user_group_id = await ensure_user_group(client, headers=headers)
     environment_id = ids.new_id(ids.ENVIRONMENT)
     version_id = ids.new_id(ids.ENVIRONMENT_VERSION)
     session.add(
@@ -111,7 +111,7 @@ async def use_default_environment(
             id=environment_id,
             name="Test Environment",
             description="测试环境",
-            owner_user_group_id=workspace_id,
+            owner_user_group_id=user_group_id,
         )
     )
     await session.flush()
@@ -126,10 +126,4 @@ async def use_default_environment(
         )
     )
     await session.commit()
-    response = await client.patch(
-        f"/api/v1/workspaces/{workspace_id}",
-        json={"default_environment_version_id": version_id},
-        headers=headers,
-    )
-    response.raise_for_status()
-    return workspace_id, version_id
+    return user_group_id, version_id

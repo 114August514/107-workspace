@@ -8,13 +8,13 @@ from ..domain import ids
 from ..domain.capabilities import UserGroupCapability, user_group_capabilities_of
 from ..domain.enums import (
     ActivityAction,
-    LegacyWorkspaceKind,
     MembershipRole,
     MembershipStatus,
     TargetType,
 )
 from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied, ValidationFailed
-from ..domain.models import LegacyWorkspace, Membership, User, UserGroup
+from ..domain.models import Membership, User, UserGroup
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
 from .access import AccessGuard, UserGroupAccess
@@ -108,17 +108,6 @@ class UserGroupService:
             created_at=now,
         )
         await self._repos.user_groups.add(group)
-        # Private same-ID anchor: required only while #36-#42 tables still FK to workspaces.id.
-        await self._repos.legacy_workspaces.add(
-            LegacyWorkspace(
-                id=group.id,
-                kind=LegacyWorkspaceKind.COLLABORATIVE,
-                name=group.name,
-                description=group.description,
-                owner_id=user_id,
-                created_at=now,
-            )
-        )
         await self._repos.memberships.add(
             Membership(
                 id=ids.new_id(ids.MEMBERSHIP),
@@ -131,7 +120,7 @@ class UserGroupService:
         )
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=group.id,
+            owner=OwnerReference(OwnerKind.USER_GROUP, group.id),
             action=ActivityAction.USER_GROUP_CREATED,
             target_type=TargetType.USER_GROUP,
             target_id=group.id,
@@ -163,15 +152,9 @@ class UserGroupService:
         if description is not None:
             group.description = description
         await self._repos.user_groups.update(group)
-        anchor = await self._repos.legacy_workspaces.get(group.id)
-        if anchor is None:
-            raise ObjectNotFound("Legacy Workspace anchor", group.id)
-        anchor.name = group.name
-        anchor.description = group.description
-        await self._repos.legacy_workspaces.update(anchor)
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=group.id,
+            owner=OwnerReference(OwnerKind.USER_GROUP, group.id),
             action=ActivityAction.USER_GROUP_UPDATED,
             target_type=TargetType.USER_GROUP,
             target_id=group.id,
@@ -390,11 +373,6 @@ class UserGroupService:
         await self._repos.memberships.update(current)
         target.role = MembershipRole.OWNER
         await self._repos.memberships.update(target)
-        anchor = await self._repos.legacy_workspaces.get(user_group_id)
-        if anchor is None:
-            raise ObjectNotFound("Legacy Workspace anchor", user_group_id)
-        anchor.owner_id = target_user_id
-        await self._repos.legacy_workspaces.update(anchor)
         owner = await self._repos.memberships.get_active_owner(user_group_id)
         if owner is None or owner.user_id != target_user_id:  # pragma: no cover - DB corruption
             raise ConflictError("User Group 所有权转让未形成唯一有效 Owner")
@@ -424,7 +402,7 @@ class UserGroupService:
             return
         await self._activity.record(
             actor_id=actor_id,
-            workspace_id=user_group_id,
+            owner=OwnerReference(OwnerKind.USER_GROUP, user_group_id),
             action=action,
             target_type=TargetType.MEMBER,
             target_id=member.id,

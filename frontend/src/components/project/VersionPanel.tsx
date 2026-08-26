@@ -7,10 +7,10 @@ import { api } from '../../api/client'
 import { can } from '../../api/types'
 import type {
   ChangeKind,
+  Project,
   ProjectVersion,
   ProjectVersionPage,
   WorkingChange,
-  LegacyWorkspaceContext,
 } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
@@ -28,7 +28,7 @@ const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
 interface Props {
   projectId: string
   projectName: string
-  workspace: LegacyWorkspaceContext | undefined
+  access: Project | undefined
   refreshToken: number
   onVersionSaved: () => void
 }
@@ -41,13 +41,13 @@ interface Props {
 export function VersionPanel({
   projectId,
   projectName,
-  workspace,
+  access,
   refreshToken,
   onVersionSaved,
 }: Props) {
   const navigate = useNavigate()
   const [forking, setForking] = useState<ProjectVersion | null>(null)
-  const canWrite = can(workspace, 'project.content.write')
+  const canWrite = can(access, 'project.content.write')
   const [page, setPage] = useState(1)
   const versions = useAsync<ProjectVersionPage>(
     () => api.listVersions(projectId, { page }),

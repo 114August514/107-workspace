@@ -13,12 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
-import type {
-  PreflightResult,
-  Run,
-  RunConfiguration,
-  LegacyWorkspaceContext,
-} from '../../api/types'
+import type { PreflightResult, Run, RunConfiguration } from '../../api/types'
 import { describeComputeRequest } from '../../utils/format'
 
 interface Props {
@@ -27,7 +22,6 @@ interface Props {
   versionLabel: string
   projectId: string
   defaultRunConfigurationId: string | null
-  workspace: LegacyWorkspaceContext | undefined
   onClose: () => void
   onSubmitted: (run: Run) => void
 }
