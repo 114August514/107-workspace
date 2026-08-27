@@ -76,6 +76,10 @@ export function RunConfigurationModal({
   const [submitting, setSubmitting] = useState(false)
   const planId = Form.useWatch('compute_plan_id', form)
   const custom = Form.useWatch('use_custom_resources', form)
+  const environmentVersionId = Form.useWatch('environment_version_id', form)
+  const selectedEnvironmentVersion = environments
+    .flatMap((environment) => environment.versions.map((version) => ({ environment, version })))
+    .find(({ version }) => version.id === environmentVersionId)
   const plan = plans.find((item) => item.id === planId)
 
   useEffect(() => {
@@ -170,10 +174,10 @@ export function RunConfigurationModal({
   }
 
   const environmentOptions = environments.map((environment) => ({
-    label: environment.name,
+    label: `${environment.name} · Owner ${environment.owner.display_name}`,
     options: environment.versions.map((version) => ({
       value: version.id,
-      label: `${environment.name} · ${version.version}`,
+      label: `${version.version} · ${version.available ? '可用' : '当前不可用'}`,
       disabled: !version.available,
     })),
   }))
@@ -221,13 +225,29 @@ export function RunConfigurationModal({
           <Input placeholder="这个方案用在什么场景" />
         </Form.Item>
 
+        {environmentVersionId && !selectedEnvironmentVersion ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="已保存的 Environment Version 当前无 USE 资格或已删除"
+            description="运行方案仍保留原 exact version ID，不会自动切换。请选择一个当前可用版本后再保存。"
+          />
+        ) : selectedEnvironmentVersion && !selectedEnvironmentVersion.version.available ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="已保存的 Environment Version 当前不可用"
+            description="运行方案仍保留原 exact version ID，不会自动切换。请选择一个当前可用版本后再保存。"
+          />
+        ) : null}
+
         <Form.Item
           name="environment_version_id"
-          label="运行环境"
-          rules={[{ required: true, message: '请选择运行环境' }]}
-          extra="运行方案固定引用这个版本；创建 Run 时不会再继承默认环境"
+          label="Environment Version"
+          rules={[{ required: true, message: '请选择 Environment Version' }]}
+          extra="保存后固定引用这个版本；默认值变化、版本不可用或 USE Grant 撤销都不会静默切换"
         >
-          <Select placeholder="选择运行环境" options={environmentOptions} />
+          <Select placeholder="选择确定的 Environment Version" options={environmentOptions} />
         </Form.Item>
 
         <Form.Item

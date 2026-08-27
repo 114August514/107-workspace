@@ -771,7 +771,7 @@ async def test_all_grant_covers_current_and_future_assets(
     assert response.status_code == 201, response.text
 
     # Create an environment under Group B — ALL grant should cover it too.
-    _env_b_id, env_b_version_id = await _create_environment_version(
+    env_b_id, env_b_version_id = await _create_environment_version(
         session, owner_user_group_id=group_b
     )
     response = await client.patch(
@@ -780,6 +780,12 @@ async def test_all_grant_covers_current_and_future_assets(
         headers=ALICE,
     )
     assert response.status_code == 200, response.text
+    catalog = await client.get(
+        f"/api/v1/projects/{project['id']}/environments",
+        headers=ALICE,
+    )
+    assert catalog.status_code == 200
+    assert env_b_id in {environment["id"] for environment in catalog.json()}
 
 
 # ---------------------------------------------------------------------------

@@ -699,6 +699,28 @@ class EnvironmentRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
 
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        owner_user_id, owner_group_id = _owner_columns(owner)
+        stmt = (
+            select(t.EnvironmentRow)
+            .where(
+                t.EnvironmentRow.owner_user_id == owner_user_id,
+                t.EnvironmentRow.owner_user_group_id == owner_group_id,
+            )
+            .order_by(t.EnvironmentRow.name, t.EnvironmentRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment(row) for row in rows]
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        stmt = (
+            select(t.EnvironmentVersionRow)
+            .where(t.EnvironmentVersionRow.environment_id == environment_id)
+            .order_by(t.EnvironmentVersionRow.version.desc(), t.EnvironmentVersionRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment_version(row) for row in rows]
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentVersionRow, version_id)

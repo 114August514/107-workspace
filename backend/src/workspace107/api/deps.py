@@ -128,7 +128,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             notifier,
             config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
-        catalog=CatalogService(repos),
+        catalog=CatalogService(repos, guard),
         health=HealthService(repos),
         lifecycle=RunLifecycleService(
             repos, context.clock, context.storage, context.scheduler, activity, notifier, session

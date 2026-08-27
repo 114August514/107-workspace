@@ -430,7 +430,7 @@ class PreflightOut(Model):
     ok: bool
     problems: list[str]
     project_version_id: str | None
-    environment_version_id: str | None
+    environment_version: EnvironmentVersionOut | None
     compute_plan_id: str | None
     compute_request: ComputeRequestModel | None
     resolved_environment_variables: dict[str, str]

@@ -119,6 +119,14 @@ class EnvironmentRepository(Protocol):
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
     ) -> EnvironmentVersion | None: ...
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        """Trusted owner lookup; application authorization remains authoritative."""
+        ...
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        """Trusted version lookup after the parent Environment is authorized."""
+        ...
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
