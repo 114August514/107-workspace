@@ -85,8 +85,9 @@ Compose 用 build args 配置 service identity，并用 `group_add` 给 Worker �
 
 ## Mock 与官方 smoke
 
-MockScheduler 在 **Worker 容器/主机**用 shell 真实执行命令，不是沙箱。它只允许 local/test，不能
-向不受信任用户开放；production 环境选择 Mock 会在 Worker 配置阶段失败。
+MockScheduler 在 **Worker 容器/主机**以独立 POSIX process group 真实执行命令，不是沙箱。cancel 与
+正常 Worker shutdown 会终止整个 owned group；异常进程死亡后 registry/ownership 丢失只能报告
+`UNKNOWN`，不承诺 orphan cleanup 或 restart recovery。Mock 只允许 local/test，不能向不受信任用户开放。
 
 ```bash
 make smoke

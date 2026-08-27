@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import tempfile
@@ -80,6 +81,11 @@ def _backend_python_executable() -> str:
     return executable
 
 
+def _demo_command(python_executable: str) -> str:
+    """Use the owned backend interpreter for the local demo workload."""
+    return shlex.join([python_executable, "train.py"])
+
+
 def run_dev(component: str = "all") -> None:
     heading(f"Development server ({component})")
     if component in {"all", "backend"}:
@@ -98,6 +104,8 @@ def run_dev(component: str = "all") -> None:
                     "workspace107.main:create_app",
                     "--factory",
                     "--reload",
+                    "--reload-dir",
+                    "src",
                     "--host",
                     "127.0.0.1",
                     "--port",
@@ -350,7 +358,16 @@ def _smoke_admin_database() -> Iterator[str]:
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             probe = run(
-                ["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"],
+                [
+                    "docker",
+                    "exec",
+                    name,
+                    "pg_isready",
+                    "-h",
+                    "127.0.0.1",
+                    "-U",
+                    "postgres",
+                ],
                 capture=True,
                 quiet=True,
                 check=False,
@@ -427,8 +444,10 @@ def _validated_api_base_url(value: str) -> str:
 def external_smoke(base_url: str) -> None:
     """Exercise a running API/Worker stack without owning its lifecycle or data."""
     heading("External stack core run smoke")
+    run_command = os.environ.get("WORKSPACE107_EXTERNAL_SMOKE_COMMAND", "python3 train.py")
     evidence = _exercise_core_run(
         ApiClient(_validated_api_base_url(base_url), user="student"),
+        run_command=run_command,
         verbose=False,
     )
     print("ok  external HTTP core run completed: " + json.dumps(evidence, sort_keys=True))
@@ -439,6 +458,7 @@ def demo(*, smoke: bool = False) -> None:
     ensure_backend_dependencies(quiet=True)
     port = _selected_demo_port(smoke)
     base_url = f"http://127.0.0.1:{port}/api/v1"
+    python_executable = _backend_python_executable()
 
     with (
         _smoke_admin_database() as database_url,
@@ -468,7 +488,7 @@ def demo(*, smoke: bool = False) -> None:
         )
 
         server_command = [
-            _backend_python_executable(),
+            python_executable,
             "-m",
             "uvicorn",
             "workspace107.main:create_app",
@@ -480,7 +500,7 @@ def demo(*, smoke: bool = False) -> None:
             "--log-level",
             "warning",
         ]
-        worker_command = [_backend_python_executable(), "-m", "workspace107.worker"]
+        worker_command = [python_executable, "-m", "workspace107.worker"]
         with (
             server_log.open("w", encoding="utf-8") as server_output,
             worker_log.open("w", encoding="utf-8") as worker_output,
@@ -503,7 +523,11 @@ def demo(*, smoke: bool = False) -> None:
             )
             try:
                 _wait_until_ready(f"{base_url}/health", server_process, server_log)
-                _exercise_core_run(ApiClient(base_url, user="student"), verbose=not smoke)
+                _exercise_core_run(
+                    ApiClient(base_url, user="student"),
+                    run_command=_demo_command(python_executable),
+                    verbose=not smoke,
+                )
             except Exception as error:
                 server_output.flush()
                 worker_output.flush()
@@ -520,7 +544,7 @@ def demo(*, smoke: bool = False) -> None:
         print("\nDemo complete: Project -> Version -> Run Snapshot -> logs -> Artifact.")
 
 
-def _exercise_core_run(client: ApiClient, *, verbose: bool) -> dict[str, Any]:
+def _exercise_core_run(client: ApiClient, *, run_command: str, verbose: bool) -> dict[str, Any]:
     def say(label: str) -> None:
         if verbose:
             print(f"\n{label}")
@@ -586,7 +610,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> dict[str, Any]:
         f"/projects/{project_id}/run-configurations",
         {
             "name": "Default run",
-            "command": "python train.py",
+            "command": run_command,
             "compute_plan_id": "plan_cpu_quick",
             "environment_version_id": environment_version_id,
             "environment_variables": {"EPOCHS": "${{ vars.EPOCHS }}"},

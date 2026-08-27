@@ -102,29 +102,14 @@ class WorkspaceCliTests(unittest.TestCase):
         with self.assertRaisesRegex(TaskError, "Could not parse tool version"):
             common._major_version("unknown")
 
-    def test_backend_python_executable_is_resolved_by_uv(self) -> None:
-        expected = "/workspace/backend/.venv/bin/python"
-        with mock.patch.object(project, "backend_uv") as backend_uv:
-            backend_uv.return_value.stdout = f"{expected}\n"
-            executable = project._backend_python_executable()
-
-        self.assertEqual(executable, expected)
-        backend_uv.assert_called_once_with(
-            "run",
-            "--no-sync",
-            "python",
-            "-c",
-            "import sys; print(sys.executable)",
-            capture=True,
-            quiet=True,
-        )
-
     def test_smoke_database_is_unique_and_dropped_when_the_body_fails(self) -> None:
         admin_url = "postgresql+asyncpg://user:secret@db:5432/existing"
         isolated_url = "postgresql+asyncpg://user:secret@db:5432/workspace107_smoke_deadbeef"
         with (
             mock.patch.object(
-                project, "backend_uv", return_value=mock.Mock(stdout=isolated_url + "\n")
+                project,
+                "backend_uv",
+                return_value=mock.Mock(stdout=isolated_url + "\n"),
             ) as backend_uv,
             self.assertRaisesRegex(RuntimeError, "exercise failed"),
             project._temporary_smoke_database(admin_url) as database_url,

@@ -56,6 +56,7 @@ async def run(settings: Settings) -> None:
     engine = create_engine(settings)
     factory = create_session_factory(engine)
     lock: PostgresWorkerLock | None = None
+    scheduler: SchedulerPort | None = None
     try:
         lock = await PostgresWorkerLock.acquire(
             engine,
@@ -68,11 +69,12 @@ async def run(settings: Settings) -> None:
             exporter,
             shared_gid=settings.resolved_shared_gid,
         )
+        scheduler = build_scheduler(settings)
         worker = RunWorker(
             store=SqlExecutionStore(factory),
             execution_context=SqlExecutionContext(factory),
             workspace=workspace,
-            scheduler=build_scheduler(settings),
+            scheduler=scheduler,
             action_delay_seconds=settings.worker_poll_seconds,
         )
         logger.info("Single-active Independent Worker 已启动")
@@ -81,6 +83,8 @@ async def run(settings: Settings) -> None:
             if not handled:
                 await lock.run_guarded(asyncio.sleep(settings.worker_idle_seconds))
     finally:
+        if isinstance(scheduler, MockScheduler):
+            await scheduler.close()
         if lock is not None:
             await lock.close()
         await engine.dispose()

@@ -125,8 +125,14 @@ curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
 
 | 适配器 | 行为 |
 | :--- | :--- |
-| `mock` | 在 Worker 主机以子进程真实执行；只允许 local/test，不是沙箱 |
+| `mock` | 在 Worker 主机以独立 POSIX process group 执行；只允许 local/test，不是沙箱 |
 | `slurm` | adapter 覆盖单目标 submit/find/poll/cancel，但 Worker 当前拒绝启动 |
+
+Mock cancel 对整个 process group 先发 `SIGTERM`，宽限期后仍存活则发 `SIGKILL`；Worker 正常关闭也会
+清理自己仍掌握的全部 Mock workload。Mock registry 只存在于 Worker 内存：异常崩溃或 `SIGKILL` 后
+无法保证找回/清理 orphan workload，已有 job id 会保持 `UNKNOWN` 并明确报告 ownership loss。这是
+local/test limitation，不是跨 Worker restart recovery；真实执行必须使用后续通过 isolation gate 的
+Scheduler contract。
 
 当前全局 `shared_gid` 只能证明 compute identity 可访问一个 Run tree，不能阻止它访问同组的
 其他 Run。真实 Slurm/native 执行因此在 `Settings.ensure_worker_configuration()` 机械 fail-closed；

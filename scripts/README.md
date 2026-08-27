@@ -22,10 +22,15 @@ doctor                 检查本地工程基线
 
 `target` 可以是 `all`、`backend`、`frontend`；`check` 还支持 `contract`。
 
-默认 `smoke` 要求 `WORKSPACE107_DATABASE_URL` 指向 PostgreSQL。它为每次调用创建唯一数据库和
-临时 storage，启动 API 与独立 Worker，结束后清理自己创建的数据库、进程与目录。外部栈模式：
+默认 `smoke` 在没有配置 PostgreSQL 时自行启动临时 PostgreSQL container；每次调用都创建唯一
+database 和临时 storage，并以 backend venv 的 exact interpreter 执行本地 demo workload。结束后
+清理自己创建的 container、database、进程与目录。
+
+外部栈模式不把控制机的 venv 路径发送给目标 Worker；默认使用目标环境的 `python3 train.py`。
+目标环境需要其他命令时显式设置 `WORKSPACE107_EXTERNAL_SMOKE_COMMAND`：
 
 ```bash
+WORKSPACE107_EXTERNAL_SMOKE_COMMAND="python3 train.py" \
 uv run --no-project python scripts/workspace.py smoke \
   --base-url http://127.0.0.1:8107/api/v1
 ```
