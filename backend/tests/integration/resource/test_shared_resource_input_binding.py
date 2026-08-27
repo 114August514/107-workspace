@@ -286,6 +286,46 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
     assert response.json()["code"] == "not_found"
 
 
+async def test_冲突的输入访问路径被挡在运行方案保存前(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """REQ-44: 两个输入不能写入同一路径，也不能互相覆盖父子路径。"""
+    _, environment_version_id = await use_default_environment(session, client, headers=ALICE)
+    version = await _create_resource_with_version(
+        client, name="路径冲突", files=[("data.txt", b"x")]
+    )
+    project = await create_project_with_version(
+        client, name="路径冲突项目", files={"main.py": "pass"}, headers=ALICE
+    )
+
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "冲突输入",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version["id"],
+                    "access_path": "/inputs/data/",
+                },
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version["id"],
+                    "access_path": "/inputs/data/train",
+                },
+            ],
+        },
+        headers=ALICE,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "conflict"
+    assert "输入访问路径" in response.json()["message"]
+
+
 # -- 跨 Owner 引用 -------------------------------------------------------
 
 

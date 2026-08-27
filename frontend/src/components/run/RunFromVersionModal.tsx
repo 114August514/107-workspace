@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
 import type { PreflightResult, Run, RunConfiguration } from '../../api/types'
 import { describeComputeRequest } from '../../utils/format'
+import { InputBindingSummary } from '../runconfig/InputBindingSummary'
 
 interface Props {
   open: boolean
@@ -265,6 +266,17 @@ export function RunFromVersionModal({
                   '检查中…'
                 ) : (
                   '—'
+                ),
+              },
+              {
+                key: 'inputs',
+                label: '运行输入',
+                children: (
+                  <InputBindingSummary
+                    bindings={selectedConfig.input_bindings}
+                    checking={checking}
+                    preflightOk={preflight?.ok ?? null}
+                  />
                 ),
               },
               {

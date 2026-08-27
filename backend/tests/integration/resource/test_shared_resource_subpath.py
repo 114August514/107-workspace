@@ -303,45 +303,40 @@ print("exists_other=", (base / "other.txt").exists())
     assert "exists_other= False" in stdout, stdout
 
 
-# -- preflight：子路径不存在 → 422 ----------------------------------------
+# -- 保存：子路径不存在 → 422 -------------------------------------------
 
 
-async def test_子路径不存在被挡在提交前(client: httpx.AsyncClient, session: AsyncSession) -> None:
+async def test_子路径不存在被挡在运行方案保存前(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client, name="不存在子路径", files=[("a.txt", b"x")]
     )
     project = await create_project_with_version(
         client, name="错误子路径", files={"main.py": "pass"}, headers=ALICE
     )
-    configuration = (
-        await client.post(
-            f"/api/v1/projects/{project['id']}/run-configurations",
-            json={
-                "name": "跑一下",
-                "command": "python main.py",
-                "compute_plan_id": "plan_cpu_quick",
-                "environment_version_id": env_version_id,
-                "input_bindings": [
-                    {
-                        "source_type": "shared_resource_version",
-                        "source_id": version["id"],
-                        "access_path": "/inputs/x",
-                        "source_subpath": "nope/",
-                    }
-                ],
-            },
-            headers=ALICE,
-        )
-    ).json()
     response = await client.post(
-        f"/api/v1/projects/{project['id']}/runs",
-        json={"run_configuration_id": configuration["id"]},
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "跑一下",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version["id"],
+                    "access_path": "/inputs/x",
+                    "source_subpath": "nope/",
+                }
+            ],
+        },
         headers=ALICE,
     )
+
     assert response.status_code == 422
-    assert any("子路径" in p for p in response.json()["problems"])
+    assert "子路径" in response.json()["message"]
 
 
 # -- 空子路径物化全部（不回归）--------------------------------------------

@@ -229,10 +229,13 @@ class InputBinding:
     source_subpath: str = ""
 
     def __post_init__(self) -> None:
-        if not self.access_path.startswith("/"):
+        candidate = self.access_path.strip().replace("\\", "/")
+        if not candidate.startswith("/"):
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 必须是绝对路径")
-        if ".." in self.access_path.split("/"):
+        if ".." in candidate.split("/"):
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 不允许包含 ..")
+        normalized = "/" + posixpath.normpath(candidate).lstrip("/")
+        object.__setattr__(self, "access_path", normalized)
         if self.source_subpath:
             candidate = self.source_subpath.strip().replace("\\", "/").lstrip("/")
             if not candidate:
@@ -548,6 +551,12 @@ class SharedResourceVersion:
     @property
     def label(self) -> str:
         return f"v{self.sequence}"
+
+    def contains_subpath(self, subpath: str) -> bool:
+        """Return whether a normalized path names a file or directory in this version."""
+        return any(
+            file.path == subpath or file.path.startswith(subpath + "/") for file in self.files
+        )
 
     @property
     def total_size(self) -> int:

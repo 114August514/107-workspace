@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, act, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RunFromVersionModal } from '../../src/components/run/RunFromVersionModal'
@@ -295,5 +295,27 @@ describe('RunFromVersionModal', () => {
         'test-key',
       )
     })
+  })
+
+  it('REQ-44 展示本次固定的 exact 输入引用与可用性', async () => {
+    const configuration = makeConfig('config-a', '方案 A')
+    configuration.input_bindings = [
+      {
+        source_type: 'shared_resource_version',
+        source_id: 'shrv-dataset-v2',
+        source_subpath: 'train',
+        access_path: '/inputs/train',
+      },
+    ]
+    mockListRunConfigurations.mockResolvedValue([configuration])
+    mockPreflight.mockResolvedValue(makePreflight(true))
+
+    renderModal()
+
+    const dialog = within(screen.getByRole('dialog'))
+    expect(await dialog.findByText('资源版本 shrv-dataset-v2')).toBeInTheDocument()
+    expect(dialog.getByText('来源子路径 train')).toBeInTheDocument()
+    expect(dialog.getByText('输入访问路径 /inputs/train')).toBeInTheDocument()
+    await waitFor(() => expect(dialog.getAllByText('当前可用').length).toBeGreaterThan(0))
   })
 })
