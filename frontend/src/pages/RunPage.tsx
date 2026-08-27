@@ -1,25 +1,23 @@
-import { ProjectIcon, PulseIcon, StopIcon, SyncIcon } from '@primer/octicons-react'
-import {
-  Banner,
-  Breadcrumbs,
-  Button,
-  ConfirmationDialog,
-  Link,
-  Text,
-  UnderlineNav,
-} from '@primer/react'
+import { ArrowLeftIcon, ProjectIcon, StopIcon, SyncIcon } from '@primer/octicons-react'
+import { Banner, Button, ConfirmationDialog, Link, UnderlineNav } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 import { useCallback, useEffect, useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 
 import { api, newIdempotencyKey } from '../api/client'
 import { toAsyncError, type AsyncErrorView } from '../api/errors'
-import type { LogChunk, Project, RunConfiguration, RunDetail } from '../api/types'
+import type {
+  ComputePlan,
+  LogChunk,
+  Project,
+  RunConfiguration,
+  RunDetail,
+  User,
+} from '../api/types'
 import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { RunStatusTag } from '../components/common/RunStatusTag'
-import { PrimerStack } from '../components/primer/PrimerStack'
 import { ArtifactPanel } from '../components/run/ArtifactPanel'
 import { RunLogPanel } from '../components/run/RunLogPanel'
 import { RunSnapshotCard } from '../components/run/RunSnapshotCard'
@@ -42,8 +40,8 @@ function contextualError(error: Error | undefined, message: string): AsyncErrorV
   return view ? { ...view, message } : undefined
 }
 
-export function RunPage() {
-  const { runId = '' } = useParams()
+export function RunPage({ currentUser }: { currentUser?: User }) {
+  const { projectId = '', runId = '' } = useParams()
   const navigate = useNavigate()
   const [tab, setTab] = useState<RunTab>('summary')
   const [rerunKey, setRerunKey] = useState(newIdempotencyKey)
@@ -58,10 +56,8 @@ export function RunPage() {
   }, [runId])
 
   const detail = useAsync<RunDetail>(() => api.getRun(runId), [runId])
-  // 取消和重跑都是写操作。不按能力收敛的话，无对应能力的用户会看到按钮、
-  // 点了必然 403——后端拦得住，但让用户点一个注定失败的按钮不是好体验
-  // 前端能力只管「显不显示入口」，真正的授权仍由后端逐请求校验。
   const logs = useAsync<LogChunk[]>(() => api.readLogs(runId), [runId])
+  const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
   const run = detail.data?.run
   const project = useAsync<Project | undefined>(
     async () => (run ? api.getProject(run.project_id) : undefined),
@@ -74,7 +70,13 @@ export function RunPage() {
   const sourceConfiguration = configurations.data?.find(
     (configuration) => configuration.id === run?.source_run_configuration_id,
   )
+  const computePlan = plans.data?.find((plan) => plan.id === detail.data?.snapshot.compute_plan_id)
   const active = run !== undefined && !isTerminal(run.status)
+
+  useEffect(() => {
+    if (!run || projectId === run.project_id) return
+    navigate(`/projects/${run.project_id}/runs/${run.id}`, { replace: true })
+  }, [navigate, projectId, run])
 
   const syncAndReload = useCallback(async () => {
     await api.syncRuns().catch(() => undefined)
@@ -121,7 +123,7 @@ export function RunPage() {
     try {
       const created = await api.rerun(runId, rerunKey)
       setRerunKey(newIdempotencyKey())
-      navigate(`/runs/${created.id}`)
+      navigate(`/projects/${created.project_id}/runs/${created.id}`)
     } catch (error) {
       const view = toAsyncError(error as Error)
       setFeedback({
@@ -134,6 +136,13 @@ export function RunPage() {
     }
   }
 
+  const shortRunId = run?.id.replace(/^run_/, '').slice(0, 8) ?? ''
+  const automaticName =
+    project.data && run ? `${project.data.name} · ${run.project_version_label}` : null
+  const runTitle =
+    run && automaticName && run.name !== automaticName ? run.name : `Run #${shortRunId}`
+  const configurationLabel = sourceConfiguration?.name ?? '运行方案'
+
   return (
     <AsyncState
       loading={detail.loading}
@@ -142,54 +151,53 @@ export function RunPage() {
       onRetry={detail.reload}
     >
       {detail.data && run ? (
-        <PrimerStack gap="large">
-          <section className={styles.projectContext} aria-label="Project context">
+        <div className={styles.page}>
+          <header className={styles.projectShell} aria-label="Project shell">
             <div className={styles.projectIdentity}>
-              <ProjectIcon size={20} aria-hidden />
-              <div>
-                <Text as="span" size="small" className={styles.muted}>
-                  Project
-                </Text>
-                <Link
-                  as={RouterLink}
-                  to={`/projects/${run.project_id}`}
-                  className={styles.projectName}
-                >
-                  {project.data?.name ?? 'Project'}
+              <ProjectIcon size={16} aria-hidden />
+              {project.data?.owner.kind === 'user_group' ? (
+                <Link as={RouterLink} to={`/user-groups/${project.data.owner.id}`}>
+                  {project.data.owner.display_name}
                 </Link>
-              </div>
-            </div>
-            <UnderlineNav aria-label="Project navigation" className={styles.projectNavigation}>
-              <UnderlineNav.Item as={RouterLink} to={`/projects/${run.project_id}`}>
-                Project
-              </UnderlineNav.Item>
-              <UnderlineNav.Item
+              ) : (
+                <span>{project.data?.owner.display_name ?? 'Project'}</span>
+              )}
+              <span className={styles.projectSeparator}>/</span>
+              <Link
                 as={RouterLink}
-                to={`/projects/${run.project_id}?tab=runs`}
-                aria-current="page"
+                to={`/projects/${run.project_id}`}
+                className={styles.projectName}
               >
+                {project.data?.name ?? 'Project'}
+              </Link>
+            </div>
+            <nav className={styles.projectNavigation} aria-label="Project navigation">
+              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=files`}>
+                项目文件
+              </Link>
+              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=versions`}>
+                版本
+              </Link>
+              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=configurations`}>
+                运行方案
+              </Link>
+              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=runs`} aria-current="page">
                 Runs
-              </UnderlineNav.Item>
-            </UnderlineNav>
-          </section>
+              </Link>
+            </nav>
+          </header>
 
           <header className={styles.runHeader}>
-            <Breadcrumbs>
-              <Breadcrumbs.Item as={RouterLink} to="/">
-                首页
-              </Breadcrumbs.Item>
-              <Breadcrumbs.Item as={RouterLink} to={`/projects/${run.project_id}`}>
-                {project.data?.name ?? 'Project'}
-              </Breadcrumbs.Item>
-              <Breadcrumbs.Item as={RouterLink} to={`/projects/${run.project_id}?tab=runs`}>
-                Runs
-              </Breadcrumbs.Item>
-              <Breadcrumbs.Item>{run.name}</Breadcrumbs.Item>
-            </Breadcrumbs>
+            <Link
+              as={RouterLink}
+              to={`/projects/${run.project_id}?tab=runs`}
+              className={styles.backLink}
+            >
+              <ArrowLeftIcon size={16} aria-hidden />
+              Runs
+            </Link>
             <div className={styles.titleRow}>
-              <PulseIcon size={24} className={styles.titleIcon} aria-hidden />
-              <h1 className={styles.pageTitle}>{run.name}</h1>
-              <RunStatusTag status={run.status} />
+              <h1 className={styles.pageTitle}>{runTitle}</h1>
               <div className={styles.headerActions}>
                 <Button
                   leadingVisual={SyncIcon}
@@ -220,6 +228,15 @@ export function RunPage() {
                 ) : null}
               </div>
             </div>
+            <div className={styles.runMeta}>
+              <RunStatusTag status={run.status} />
+              <span aria-hidden>·</span>
+              <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
+                {run.project_version_label}
+              </Link>
+              <span aria-hidden>·</span>
+              <span>{configurationLabel}</span>
+            </div>
           </header>
 
           {feedback ? (
@@ -239,7 +256,7 @@ export function RunPage() {
           ) : null}
 
           <section aria-label="Run detail">
-            <UnderlineNav aria-label="Run detail navigation">
+            <UnderlineNav aria-label="Run detail navigation" className={styles.runNavigation}>
               <UnderlineNav.Item
                 aria-current={tab === 'summary' ? 'page' : undefined}
                 onSelect={() => setTab('summary')}
@@ -271,9 +288,14 @@ export function RunPage() {
                 {tab === 'summary' ? (
                   <RunSummary
                     detail={detail.data}
+                    projectId={run.project_id}
                     configuration={sourceConfiguration}
                     configurationLoading={configurations.loading}
                     configurationError={configurations.error !== undefined}
+                    computePlan={computePlan}
+                    computePlanLoading={plans.loading}
+                    computePlanError={plans.error !== undefined}
+                    currentUser={currentUser}
                   />
                 ) : null}
                 {tab === 'execution' ? (
@@ -307,7 +329,7 @@ export function RunPage() {
 
           {cancelOpen ? (
             <ConfirmationDialog
-              title={`取消 Run“${run.name}”？`}
+              title={`取消 Run“${runTitle}”？`}
               confirmButtonContent="取消 Run"
               confirmButtonType="danger"
               confirmButtonLoading={cancelling}
@@ -321,7 +343,7 @@ export function RunPage() {
               取消会终止这次逻辑执行，但会保留 Run、运行快照以及已经产生的日志和运行产物。
             </ConfirmationDialog>
           ) : null}
-        </PrimerStack>
+        </div>
       ) : null}
     </AsyncState>
   )

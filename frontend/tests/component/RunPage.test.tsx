@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import { api, ApiError } from '../../src/api/client'
-import type { LogChunk, Project, RunConfiguration, RunDetail } from '../../src/api/types'
+import type {
+  ComputePlan,
+  LogChunk,
+  Project,
+  RunConfiguration,
+  RunDetail,
+} from '../../src/api/types'
+import { RunLocatorPage } from '../../src/pages/RunLocatorPage'
 import { RunPage } from '../../src/pages/RunPage'
 
 const runDetailFixture = (): RunDetail => ({
@@ -98,11 +105,33 @@ const configurationFixture: RunConfiguration = {
   input_bindings: [],
   artifact_rules: [],
 }
+
+const computePlanFixture: ComputePlan = {
+  id: 'plan-1',
+  code: 'cpu-basic',
+  name: 'CPU 基础',
+  description: '单节点 CPU',
+  max_nodes: 1,
+  max_cpus: 8,
+  max_gpus: 0,
+  max_memory_mb: 8192,
+  max_time_limit_minutes: 60,
+  default_nodes: 1,
+  default_cpus: 2,
+  default_gpus: 0,
+  default_memory_mb: 2048,
+  default_time_limit_minutes: 30,
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.pathname}</output>
+}
 function Wrapper({ children }: { children: React.ReactNode }) {
   return (
-    <MemoryRouter initialEntries={['/runs/run-1']}>
+    <MemoryRouter initialEntries={['/projects/project-1/runs/run-1']}>
       <Routes>
-        <Route path="/runs/:runId" element={children} />
+        <Route path="/projects/:projectId/runs/:runId" element={children} />
       </Routes>
     </MemoryRouter>
   )
@@ -113,6 +142,7 @@ describe('RunPage backend unavailable', () => {
     vi.resetAllMocks()
     vi.spyOn(api, 'getProject').mockResolvedValue(projectFixture)
     vi.spyOn(api, 'listRunConfigurations').mockResolvedValue([configurationFixture])
+    vi.spyOn(api, 'computePlans').mockResolvedValue([computePlanFixture])
   })
 
   afterEach(() => {
@@ -160,7 +190,7 @@ describe('RunPage backend unavailable', () => {
     await waitFor(() => {
       expect(screen.queryByText('无法加载这个 Run。')).not.toBeInTheDocument()
     })
-    expect(screen.getByRole('heading', { name: 'test-run' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'test-run' })).toBeInTheDocument()
   })
 
   it('keeps actions fail-closed and restores them from refreshed Run capabilities', async () => {
@@ -197,7 +227,7 @@ describe('RunPage backend unavailable', () => {
 
     render(
       <Wrapper>
-        <RunPage />
+        <RunPage currentUser={{ id: 'student', username: 'student', display_name: '同学' }} />
       </Wrapper>,
     )
 
@@ -212,21 +242,16 @@ describe('RunPage backend unavailable', () => {
     )
 
     const summary = screen.getByLabelText('Run Summary')
-    expect(
-      within(summary)
-        .getAllByRole('term')
-        .map((term) => term.textContent),
-    ).toEqual([
-      '状态',
-      '发起用户',
-      'Project 版本',
-      '运行方案',
-      '运行时长',
-      '排队时长',
-      'Compute Plan',
-      '执行来源',
-    ])
+    expect(within(summary).getByRole('heading', { name: '来源' })).toBeVisible()
+    expect(within(summary).getByRole('heading', { name: '算力' })).toBeVisible()
+    expect(within(summary).getByRole('heading', { name: '来源关系' })).toBeVisible()
+    expect(within(summary).getByText('运行 8 秒')).toBeVisible()
+    expect(within(summary).getByText('排队 1 秒')).toBeVisible()
     expect(within(summary).getByText('默认训练方案')).toBeVisible()
+    expect(within(summary).getByText('同学')).toBeVisible()
+    expect(within(summary).getByText('CPU 基础')).toBeVisible()
+    expect(within(summary).getByText('cpu-basic')).toBeVisible()
+    expect(within(summary).getByText('首次运行')).toBeVisible()
     expect(screen.getByText('诊断信息')).toBeVisible()
     expect(screen.getByText('调度任务')).not.toBeVisible()
   })
@@ -282,5 +307,22 @@ describe('RunPage backend unavailable', () => {
     )
     expect(screen.queryByRole('heading', { name: '执行过程' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Run Summary')).toBeVisible()
+  })
+
+  it('resolves an ID-only Run link into the canonical Project route', async () => {
+    vi.spyOn(api, 'getRun').mockResolvedValue(runDetailFixture())
+
+    render(
+      <MemoryRouter initialEntries={['/runs/run-1']}>
+        <Routes>
+          <Route path="/runs/:runId" element={<RunLocatorPage />} />
+          <Route path="/projects/:projectId/runs/:runId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/projects/project-1/runs/run-1'),
+    )
   })
 })

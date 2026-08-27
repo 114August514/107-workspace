@@ -48,6 +48,10 @@ describe('RunTable 版本列', () => {
 
     const link = screen.getByRole('link', { name: 'v3' })
     expect(link).toHaveAttribute('href', '/versions/ver-1')
+    expect(screen.getByRole('link', { name: '首次运行' })).toHaveAttribute(
+      'href',
+      '/projects/proj-1/runs/run-1',
+    )
   })
 
   it('多行 Run 各自显示自己的版本', () => {

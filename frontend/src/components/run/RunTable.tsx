@@ -58,7 +58,11 @@ export function RunTable({ runs, pagination = false }: Props) {
                   <RunStatusTag status={run.status} />
                 </Cell>
                 <Cell label="Run">
-                  <Link as={RouterLink} to={`/runs/${run.id}`} className={styles.primaryLink}>
+                  <Link
+                    as={RouterLink}
+                    to={`/projects/${run.project_id}/runs/${run.id}`}
+                    className={styles.primaryLink}
+                  >
                     {run.name}
                   </Link>
                   {run.scheduler_job_id ? (

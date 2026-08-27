@@ -10,6 +10,7 @@ import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
+import { RunLocatorPage } from './pages/RunLocatorPage'
 import { SharedResourcePage } from './pages/SharedResourcePage'
 import { SharedResourceVersionPage } from './pages/SharedResourceVersionPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
@@ -97,7 +98,11 @@ export function ProductRoutes({ username, home }: { username: string; home: Asyn
       <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
       <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
-      <Route path="/runs/:runId" element={<RunPage key={username} />} />
+      <Route
+        path="/projects/:projectId/runs/:runId"
+        element={<RunPage key={username} currentUser={home.data?.user} />}
+      />
+      <Route path="/runs/:runId" element={<RunLocatorPage key={username} />} />
       <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
       <Route path="/shared-resources/:resourceId" element={<SharedResourcePage key={username} />} />
       <Route

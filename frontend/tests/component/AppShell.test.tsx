@@ -78,6 +78,10 @@ const contextGuideCases = [
   ],
   ['/versions/v-1', '这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。'],
   ['/runs/r-1', '当前 Run 属于具体 Project；可以返回 Runs 查看同一 Project 的其他执行记录。'],
+  [
+    '/projects/p-1/runs/r-1',
+    '当前 Run 属于具体 Project；可以返回 Runs 查看同一 Project 的其他执行记录。',
+  ],
 ] as const
 
 function LocationProbe() {

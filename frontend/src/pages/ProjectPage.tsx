@@ -171,7 +171,7 @@ export function ProjectPage() {
         projectId={projectId}
         configuration={submitting}
         onClose={() => setSubmitting(null)}
-        onSubmitted={(run) => navigate(`/runs/${run.id}`)}
+        onSubmitted={(run) => navigate(`/projects/${run.project_id}/runs/${run.id}`)}
       />
     </Stack>
   )

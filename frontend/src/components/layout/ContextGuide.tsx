@@ -8,6 +8,7 @@ const contextGuides = [
   { pattern: '/', message: contextGuideCopy.home },
   { pattern: '/user-groups/:userGroupId', message: contextGuideCopy.userGroup },
   { pattern: '/projects/:projectId', message: contextGuideCopy.project },
+  { pattern: '/projects/:projectId/runs/:runId', message: contextGuideCopy.run },
   { pattern: '/versions/:versionId', message: contextGuideCopy.version },
   { pattern: '/runs/:runId', message: contextGuideCopy.run },
 ] as const
