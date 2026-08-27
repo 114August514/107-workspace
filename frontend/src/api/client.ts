@@ -210,20 +210,12 @@ export const api = {
     payload: {
       name?: string
       description?: string
-      default_environment_version_id?: string | null
     },
   ): Promise<UserGroup> =>
     unwrap(
       await http.PATCH('/api/v1/user-groups/{user_group_id}', {
         params: { path: { user_group_id: id } },
         body: payload,
-      }),
-    ),
-
-  environmentsForUserGroup: async (id: string): Promise<Environment[]> =>
-    unwrap(
-      await http.GET('/api/v1/user-groups/{user_group_id}/environments', {
-        params: { path: { user_group_id: id } },
       }),
     ),
 

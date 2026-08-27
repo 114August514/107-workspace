@@ -62,7 +62,6 @@ def user_group_out(view: UserGroupView) -> s.UserGroupOut:
         id=group.id,
         name=group.name,
         description=group.description,
-        default_environment_version_id=group.default_environment_version_id,
         created_by_id=group.created_by_id,
         created_at=group.created_at,
         role=view.role,

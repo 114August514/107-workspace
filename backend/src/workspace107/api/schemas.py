@@ -63,7 +63,6 @@ class UserGroupOut(Model):
     id: str
     name: str
     description: str
-    default_environment_version_id: str | None = None
     created_by_id: str | None
     created_at: datetime | None
     role: MembershipRole
@@ -78,7 +77,6 @@ class UserGroupCreateIn(Model):
 class UserGroupUpdateIn(Model):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     description: str | None = None
-    default_environment_version_id: str | None = None
 
 
 class MemberOut(Model):
@@ -432,7 +430,7 @@ class PreflightOut(Model):
     ok: bool
     problems: list[str]
     project_version_id: str | None
-    environment_version_id: str | None
+    environment_version: EnvironmentVersionOut | None
     compute_plan_id: str | None
     compute_request: ComputeRequestModel | None
     resolved_environment_variables: dict[str, str]

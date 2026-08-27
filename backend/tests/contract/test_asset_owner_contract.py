@@ -175,13 +175,6 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
         "envv_issue_45_unavailable_grant",
     }
 
-    group_catalog = await client.get(
-        f"/api/v1/user-groups/{alice_group_id}/environments",
-        headers=ALICE,
-    )
-    assert group_catalog.status_code == 200
-    assert {item["id"] for item in group_catalog.json()} == {"env_issue_45_granted"}
-
     project = await client.post(
         "/api/v1/projects",
         json={
@@ -214,3 +207,21 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
     detail = await client.get("/api/v1/catalog/environments/env_issue_45_granted", headers=ALICE)
     assert detail.status_code == 200
     assert detail.json()["id"] == "env_issue_45_granted"
+
+    revoked = await client.delete("/api/v1/grants/grt_issue_45_environment", headers=bob_headers)
+    assert revoked.status_code == 204
+
+    catalog_after_revoke = await client.get("/api/v1/catalog/environments", headers=ALICE)
+    assert "env_issue_45_granted" not in {item["id"] for item in catalog_after_revoke.json()}
+    project_after_revoke = await client.get(
+        f"/api/v1/projects/{project.json()['id']}/environments",
+        headers=ALICE,
+    )
+    assert project_after_revoke.status_code == 200
+    assert project_after_revoke.json() == []
+    assert (
+        await client.get(
+            "/api/v1/catalog/environments/env_issue_45_granted",
+            headers=ALICE,
+        )
+    ).status_code == 404

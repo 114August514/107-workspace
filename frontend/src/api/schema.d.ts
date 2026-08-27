@@ -1074,23 +1074,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/user-groups/{user_group_id}/environments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 列出 User Group 当前可用的 Environment */
-        get: operations["list_user_group_environments_api_v1_user_groups__user_group_id__environments_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/user-groups/{user_group_id}/invitation": {
         parameters: {
             query?: never;
@@ -2076,8 +2059,7 @@ export interface components {
             /** Compute Plan Id */
             compute_plan_id: string | null;
             compute_request: components["schemas"]["ComputeRequestModel"] | null;
-            /** Environment Version Id */
-            environment_version_id: string | null;
+            environment_version: components["schemas"]["EnvironmentVersionOut"] | null;
             /** Ok */
             ok: boolean;
             /** Problems */
@@ -2635,8 +2617,6 @@ export interface components {
             created_at: string | null;
             /** Created By Id */
             created_by_id: string | null;
-            /** Default Environment Version Id */
-            default_environment_version_id?: string | null;
             /** Description */
             description: string;
             /** Id */
@@ -2647,8 +2627,6 @@ export interface components {
         };
         /** UserGroupUpdateIn */
         UserGroupUpdateIn: {
-            /** Default Environment Version Id */
-            default_environment_version_id?: string | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -7823,84 +7801,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PageOut_ActivityOut_"];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    list_user_group_environments_api_v1_user_groups__user_group_id__environments_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                user_group_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnvironmentOut"][];
                 };
             };
             /** @description 请求不合法 */

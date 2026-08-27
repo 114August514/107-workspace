@@ -55,7 +55,15 @@ function makePreflight(ok: boolean): PreflightResult {
     problems: ok ? [] : ['缺少 Secret'],
     compute_plan_id: 'cp-1',
     compute_request: null,
-    environment_version_id: null,
+    environment_version: {
+      id: 'ev-1',
+      environment_id: 'env-1',
+      version: '3.12',
+      description: '',
+      image: 'python:3.12',
+      setup_command: '',
+      available: true,
+    },
     project_version_id: 'ver-1',
     resolved_environment_variables: {},
     secret_references: {},
@@ -134,6 +142,9 @@ describe('RunFromVersionModal', () => {
     await waitFor(() => {
       expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
     })
+    expect(screen.getByText('3.12')).toBeVisible()
+    expect(screen.getByText('ev-1')).toBeVisible()
+    expect(screen.getByText('当前可用')).toBeVisible()
 
     // 提交按钮此时应该可用（A 的 preflight ok）
     // antd 对双字符中文标签会插入间距：「提 交」

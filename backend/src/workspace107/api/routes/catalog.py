@@ -1,4 +1,4 @@
-"""Platform catalog for environments and compute plans."""
+"""Environment discovery and platform Compute Plan routes."""
 
 from __future__ import annotations
 

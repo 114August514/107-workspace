@@ -190,7 +190,6 @@ class UserGroupRepositoryImpl:
                 name=user_group.name,
                 description=user_group.description,
                 created_by_id=user_group.created_by_id,
-                default_environment_version_id=user_group.default_environment_version_id,
                 created_at=user_group.created_at or datetime.now(UTC),
             )
         )
@@ -236,7 +235,6 @@ class UserGroupRepositoryImpl:
             return
         row.name = user_group.name
         row.description = user_group.description
-        row.default_environment_version_id = user_group.default_environment_version_id
         await _flush(self._session)
 
     async def list_for_user(self, user_id: str) -> list[UserGroup]:
@@ -701,107 +699,23 @@ class EnvironmentRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
 
-    async def list_usable_for_user(self, user_id: str) -> list[Environment]:
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        owner_user_id, owner_group_id = _owner_columns(owner)
         stmt = (
             select(t.EnvironmentRow)
             .where(
-                _environment_use_predicate(
-                    t.EnvironmentRow.owner_user_id,
-                    t.EnvironmentRow.owner_user_group_id,
-                    t.EnvironmentRow.id,
-                    user_id,
-                )
+                t.EnvironmentRow.owner_user_id == owner_user_id,
+                t.EnvironmentRow.owner_user_group_id == owner_group_id,
             )
             .order_by(t.EnvironmentRow.name, t.EnvironmentRow.id)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_environment(row) for row in rows]
 
-    async def get_usable_for_user(self, user_id: str, environment_id: str) -> Environment | None:
-        stmt = select(t.EnvironmentRow).where(
-            t.EnvironmentRow.id == environment_id,
-            _environment_use_predicate(
-                t.EnvironmentRow.owner_user_id,
-                t.EnvironmentRow.owner_user_group_id,
-                t.EnvironmentRow.id,
-                user_id,
-            ),
-        )
-        row = (await self._session.execute(stmt)).scalar_one_or_none()
-        return _to_environment(row) if row else None
-
-    async def list_versions_usable_for_user(
-        self, user_id: str, environment_id: str
-    ) -> list[EnvironmentVersion]:
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
         stmt = (
             select(t.EnvironmentVersionRow)
-            .join(t.EnvironmentRow, t.EnvironmentRow.id == t.EnvironmentVersionRow.environment_id)
-            .where(
-                t.EnvironmentRow.id == environment_id,
-                _environment_use_predicate(
-                    t.EnvironmentRow.owner_user_id,
-                    t.EnvironmentRow.owner_user_group_id,
-                    t.EnvironmentRow.id,
-                    user_id,
-                ),
-            )
-            .order_by(t.EnvironmentVersionRow.version.desc(), t.EnvironmentVersionRow.id)
-        )
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_environment_version(row) for row in rows]
-
-    async def get_version_usable_for_user(
-        self, user_id: str, version_id: str
-    ) -> EnvironmentVersion | None:
-        stmt = (
-            select(t.EnvironmentVersionRow)
-            .join(t.EnvironmentRow, t.EnvironmentRow.id == t.EnvironmentVersionRow.environment_id)
-            .where(
-                t.EnvironmentVersionRow.id == version_id,
-                _environment_use_predicate(
-                    t.EnvironmentRow.owner_user_id,
-                    t.EnvironmentRow.owner_user_group_id,
-                    t.EnvironmentRow.id,
-                    user_id,
-                ),
-            )
-        )
-        row = (await self._session.execute(stmt)).scalar_one_or_none()
-        return _to_environment_version(row) if row else None
-
-    async def list_usable_for_owner(self, user_id: str, owner: OwnerReference) -> list[Environment]:
-        stmt = (
-            select(t.EnvironmentRow)
-            .where(
-                _environment_use_predicate(
-                    t.EnvironmentRow.owner_user_id,
-                    t.EnvironmentRow.owner_user_group_id,
-                    t.EnvironmentRow.id,
-                    user_id,
-                    owner=owner,
-                )
-            )
-            .order_by(t.EnvironmentRow.name, t.EnvironmentRow.id)
-        )
-        rows = (await self._session.execute(stmt)).scalars().all()
-        return [_to_environment(row) for row in rows]
-
-    async def list_versions_usable_for_owner(
-        self, user_id: str, owner: OwnerReference, environment_id: str
-    ) -> list[EnvironmentVersion]:
-        stmt = (
-            select(t.EnvironmentVersionRow)
-            .join(t.EnvironmentRow, t.EnvironmentRow.id == t.EnvironmentVersionRow.environment_id)
-            .where(
-                t.EnvironmentRow.id == environment_id,
-                _environment_use_predicate(
-                    t.EnvironmentRow.owner_user_id,
-                    t.EnvironmentRow.owner_user_group_id,
-                    t.EnvironmentRow.id,
-                    user_id,
-                    owner=owner,
-                ),
-            )
+            .where(t.EnvironmentVersionRow.environment_id == environment_id)
             .order_by(t.EnvironmentVersionRow.version.desc(), t.EnvironmentVersionRow.id)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
@@ -1735,84 +1649,6 @@ def _asset_discovery_predicate(owner_user_column: Any, owner_group_column: Any, 
     return (owner_user_column == user_id) | owner_group_column.in_(active_group_ids)
 
 
-def _owner_predicate(
-    owner_user_column: Any,
-    owner_group_column: Any,
-    owner: OwnerReference,
-):
-    if owner.kind is OwnerKind.USER:
-        return owner_user_column == owner.id
-    return owner_group_column == owner.id
-
-
-def _environment_use_predicate(
-    owner_user_column: Any,
-    owner_group_column: Any,
-    environment_id_column: Any,
-    user_id: str,
-    *,
-    owner: OwnerReference | None = None,
-):
-    """Repository-enforced Environment visibility for actual USE contexts."""
-    active_group_ids = select(t.MembershipRow.user_group_id).where(
-        t.MembershipRow.user_id == user_id,
-        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
-    )
-    if owner is None:
-        direct = _asset_discovery_predicate(owner_user_column, owner_group_column, user_id)
-        grantee = or_(
-            and_(
-                t.GrantRow.grantee_kind == OwnerKind.USER.value,
-                t.GrantRow.grantee_id == user_id,
-            ),
-            and_(
-                t.GrantRow.grantee_kind == OwnerKind.USER_GROUP.value,
-                t.GrantRow.grantee_id.in_(active_group_ids),
-            ),
-        )
-    else:
-        direct = _owner_predicate(owner_user_column, owner_group_column, owner)
-        grantee = or_(
-            and_(
-                t.GrantRow.grantee_kind == owner.kind.value,
-                t.GrantRow.grantee_id == owner.id,
-            ),
-            and_(
-                t.GrantRow.grantee_kind == OwnerKind.USER.value,
-                t.GrantRow.grantee_id == user_id,
-            ),
-        )
-
-    grantor = or_(
-        and_(
-            t.GrantRow.grantor_kind == OwnerKind.USER.value,
-            t.GrantRow.grantor_id == owner_user_column,
-        ),
-        and_(
-            t.GrantRow.grantor_kind == OwnerKind.USER_GROUP.value,
-            t.GrantRow.grantor_id == owner_group_column,
-        ),
-    )
-    target = or_(
-        t.GrantRow.target_kind == GrantTargetKind.ALL.value,
-        and_(
-            t.GrantRow.target_kind == GrantTargetKind.ENVIRONMENT.value,
-            t.GrantRow.target_id == environment_id_column,
-        ),
-    )
-    granted = (
-        select(t.GrantRow.id)
-        .where(
-            t.GrantRow.action == GrantAction.USE.value,
-            grantor,
-            grantee,
-            target,
-        )
-        .exists()
-    )
-    return or_(direct, granted)
-
-
 def _owner_reference(owner_user_id: str | None, owner_user_group_id: str | None) -> OwnerReference:
     if owner_user_id is not None and owner_user_group_id is None:
         return OwnerReference(OwnerKind.USER, owner_user_id)
@@ -1842,7 +1678,6 @@ def _to_user_group(row: t.UserGroupRow) -> UserGroup:
         id=row.id,
         name=row.name,
         description=row.description,
-        default_environment_version_id=row.default_environment_version_id,
         created_by_id=row.created_by_id,
         created_at=_aware(row.created_at),
     )

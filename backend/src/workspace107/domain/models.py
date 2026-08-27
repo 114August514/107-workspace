@@ -61,8 +61,6 @@ class UserGroup:
     id: str
     name: str
     description: str = ""
-    default_environment_version_id: str | None = None
-    """该 User Group 推荐给新 Run Configuration 的确定 Environment Version。"""
     created_by_id: str | None = None
     created_at: datetime | None = None
 

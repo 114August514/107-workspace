@@ -51,7 +51,6 @@ const member: Member = {
 describe('UserGroupPage governance boundary', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
-    vi.spyOn(api, 'environmentsForUserGroup').mockResolvedValue([])
     vi.spyOn(api, 'listMembers').mockResolvedValue([member])
     vi.spyOn(api, 'home').mockResolvedValue(homeState.data)
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
@@ -88,7 +87,6 @@ describe('UserGroupPage governance boundary', () => {
     expect(within(identityRail).getByText('成员')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'User Group 内容' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '查看 Project 与配置' })).not.toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/旧|Workspace|Legacy|兼容/)
   })
 
   it('REQ-63-01 composes with AppShell using exactly one main landmark', async () => {

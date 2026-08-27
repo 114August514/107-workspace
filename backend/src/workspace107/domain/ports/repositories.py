@@ -119,26 +119,14 @@ class EnvironmentRepository(Protocol):
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
     ) -> EnvironmentVersion | None: ...
-    async def list_usable_for_user(self, user_id: str) -> list[Environment]:
-        """List assets usable through actor ownership, active groups, or USE Grants."""
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        """Trusted owner lookup; application authorization remains authoritative."""
         ...
 
-    async def get_usable_for_user(
-        self, user_id: str, environment_id: str
-    ) -> Environment | None: ...
-    async def list_versions_usable_for_user(
-        self, user_id: str, environment_id: str
-    ) -> list[EnvironmentVersion]: ...
-    async def get_version_usable_for_user(
-        self, user_id: str, version_id: str
-    ) -> EnvironmentVersion | None: ...
-    async def list_usable_for_owner(self, user_id: str, owner: OwnerReference) -> list[Environment]:
-        """List assets the actor may use for one exact Project/User Group owner."""
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        """Trusted version lookup after the parent Environment is authorized."""
         ...
 
-    async def list_versions_usable_for_owner(
-        self, user_id: str, owner: OwnerReference, environment_id: str
-    ) -> list[EnvironmentVersion]: ...
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
