@@ -29,6 +29,9 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-8);
   min-width: 0;
   overflow: hidden;
   color: var(--fgColor-default);

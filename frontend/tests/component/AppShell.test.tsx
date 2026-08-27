@@ -106,6 +106,13 @@ afterEach(() => {
 })
 
 describe('AppShell 壳层', () => {
+  it('TopBar 品牌链接包含装饰性 Brand Mark', () => {
+    renderShell('student')
+
+    const brand = screen.getByRole('link', { name: '107 Workspace' })
+    expect(brand.querySelector('svg')).not.toBeNull()
+  })
+
   it.each(contextGuideCases)('路由 %s 显示对应的页面引导', (pathname, message) => {
     renderShell('student', readyHome(), pathname)
 

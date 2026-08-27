@@ -1,7 +1,7 @@
 # USTC VIS 与 107 Workspace 品牌输入
 
 本页只记录 Issue #64 使用的外部来源、已核实事实和吸收边界。它不是对学校
-VIS 的替代，也不把 107 Workspace 的临时网页配色声明为学校规范。
+VIS 的替代，也不把 107 Workspace 的网页配色声明为学校规范。
 
 ## 官方来源
 
@@ -37,12 +37,12 @@ C100 M80 Y0 K0
 success、warning、danger 或其他界面语义色；这些职责继续由 Primer semantic tokens
 承担。
 
-## Issue #64 人工视觉门的临时网页适配
+## 107 Workspace 网页品牌色
 
-候选 Reference 使用以下临时 sRGB 值：
+以下 sRGB 值是 107 Workspace 的网页品牌色：
 
 ```text
-primary        #0057B8
+primary        #0455B6
 primary hover  #00458F
 on primary     #FFFFFF
 subtle         #DDEBFF
@@ -50,36 +50,42 @@ foreground     #003B78
 border         #4F83BE
 ```
 
-这些值是 **107 Workspace provisional web adaptation**，不是官方 USTC RGB/HEX，也不是
+这些值是 **107 Workspace web adaptation**，不是官方 USTC RGB/HEX，也不是
 从官方手册 JPG 或学校网页截图采样得到。选择方法是：
 
 1. 仅把官方 `C100 M80 Y0 K0` 作为“深蓝、以蓝为主”的品牌输入，不假装设备相关 CMYK
    可以无配置文件地唯一换算为 sRGB；
-2. 在 sRGB 中选择克制的产品蓝 `#0057B8`，再分别为 hover、浅底前景、浅底和边界选择
+2. 在 sRGB 中选择克制的产品蓝 `#0455B6`，再分别为 hover、浅底前景、浅底和边界选择
    有明确界面职责的值；
 3. 使用 WCAG 2.x 相对亮度公式检查真实组合，并把可访问性优先于与印刷色样的肉眼接近；
-4. 人工视觉门选定 Mark 和品牌强度后，删除未采用候选；最终值若调整，在这里记录新的
-   选择依据与证据。
+4. 人工视觉门已完成：owner 确认最终 Mark（107 猪形图形）与 primary #0455B6。
 
 当前计算结果（对比度，前景 / 背景）：
 
 | 组合                                            | 对比度 |
 | :---------------------------------------------- | -----: |
-| `#0057B8` / `#FFFFFF`                           | 6.87:1 |
+| `#0455B6` / `#FFFFFF`                           | 7.05:1 |
 | `#00458F` / `#FFFFFF`                           | 9.34:1 |
 | `#003B78` / `#DDEBFF`                           | 9.17:1 |
-| `#0057B8` / Primer light muted canvas `#F6F8FA` | 6.46:1 |
+| `#0455B6` / Primer light muted canvas `#F6F8FA` | 6.62:1 |
 | `#4F83BE` / `#FFFFFF`                           | 3.95:1 |
 | `#4F83BE` / `#DDEBFF`                           | 3.27:1 |
 
 因此 primary/on-primary 可承载普通文字，foreground/subtle 可承载 selected text，
 primary 可作为浅色画布上的 focus outline，border 可作为相邻白色或 subtle 背景的
-非文字边界。正式采用前仍需在真实 Primer 组件、桌面和 375 px 浏览器中复核。
+非文字边界。
+
+## Mark 来源与 16 px 规则
+
+最终 Mark 为 owner 提供的 107 猪形图形（107pig.svg，7 条 path），是独立的产品资产，
+不引用或复刻 USTC 校徽、校名等官方资产。各尺寸使用相同 path，16 px 与 favicon 使用
+optical padding `viewBox="-6 -6 112 112"`。favicon 已生成于 `frontend/public/favicon.svg`
+并经 `frontend/index.html` 接入。降级规则：若真实渲染中 16 px 白色细节糊化，保留
+3 条蓝色路径、去掉 4 条白色细节路径；永不引入第二套 Logo。
 
 ## 当前吸收边界
 
 - Primer 继续负责 neutral canvas、正文、边框、间距、排版、控件交互与 semantic status；
 - 107 brand layer 只负责产品 Mark、wordmark 和少量 link、selected、focus、primary affordance；
-- 当前 `/design-system` 同时呈现三个 Mark 候选，不提供切换器或运行时配置；
-- 候选 2 在界面中明确标为 `候选 2 · 节点连接（image2）`，供人工检查；
-- 未经人工选择，不修改真实 AppShell，也不生成 favicon，避免把候选误当成最终品牌。
+- 最终 Mark 已接入真实 AppShell（TopBar 24 px）并生成 favicon；
+- 人工视觉门已完成，Mark 与 primary 色已定稿。

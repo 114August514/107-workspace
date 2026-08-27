@@ -11,29 +11,13 @@ import { Button, Heading, Label, Link, Stack, Text } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 import type { ComponentType } from 'react'
 
-import { BrandMark, type BrandMarkCandidate } from '../../brand/BrandMark'
+import { BrandMark } from '../../brand/BrandMark'
 import styles from './BrandReference.module.css'
 
-const candidates: Array<{
-  id: BrandMarkCandidate
-  name: string
-  description: string
-}> = [
-  {
-    id: 1,
-    name: '候选 1 · 开放数字',
-    description: '最少笔画的 107 几何表达；透明底，在中性界面中最克制。',
-  },
-  {
-    id: 2,
-    name: '候选 2 · 节点连接（image2）',
-    description: '用一条带端点的计算节点轨道包住 107；轮廓化表达比候选 1 更强调 compute。',
-  },
-  {
-    id: 3,
-    name: '候选 3 · 数字方章',
-    description: '将 107 置于有限品牌色块；favicon 识别最强，但在 TopBar 中也最醒目。',
-  },
+const markSpecimenSizes: Array<{ size: 16 | 24 | 32; caption: string }> = [
+  { size: 16, caption: '16px（optical padding）' },
+  { size: 24, caption: '24px' },
+  { size: 32, caption: '32px' },
 ]
 
 const iconMappings: Array<{
@@ -82,7 +66,8 @@ export function IdentityBoundary() {
             Brand Mark / 107 Workspace / App Icon
           </Text>
           <Text as="p" className={styles.mutedText}>
-            独立的产品识别层；只使用数字与计算母题，不复刻校徽。当前候选仅供人工视觉门选择。
+            独立的产品识别层；最终 Mark 为 owner 确认的 107 小猪图形，不复刻校徽，无运行时的 Mark
+            切换。
           </Text>
         </Stack>
       </Card>
@@ -103,56 +88,34 @@ export function IdentityBoundary() {
   )
 }
 
-export function MarkCandidates() {
+export function BrandMarkSpecimen() {
   return (
-    <div className={styles.candidateGrid} aria-label="107 Brand Mark 候选对比">
-      {candidates.map((candidate) => (
-        <article
-          key={candidate.id}
-          className={styles.candidateCard}
-          aria-labelledby={`mark-${candidate.id}`}
-        >
-          <div className={styles.candidateHeading}>
-            <Heading as="h3" variant="small" id={`mark-${candidate.id}`}>
-              {candidate.name}
-            </Heading>
-            <Label variant={candidate.id === 1 ? 'accent' : 'secondary'}>
-              {candidate.id === 1 ? '建议起点' : '待比较'}
-            </Label>
-          </div>
-          <p className={styles.mutedText}>{candidate.description}</p>
+    <article className={styles.specimenCard} aria-label="107 Brand Mark 最终规格">
+      <div className={styles.topbarSpecimen} aria-label="107 Brand Mark TopBar 示例">
+        <BrandMark size={24} decorative />
+        <span className={styles.wordmark}>107 Workspace</span>
+        <span className={styles.topbarMeta}>neutral TopBar</span>
+      </div>
 
-          <div className={styles.topbarSpecimen} aria-label={`${candidate.name} TopBar 示例`}>
-            <BrandMark candidate={candidate.id} size={24} decorative />
-            <span className={styles.wordmark}>107 Workspace</span>
-            <span className={styles.topbarMeta}>neutral TopBar</span>
-          </div>
-
-          <div className={styles.sizeSamples} aria-label={`${candidate.name} 小尺寸样本`}>
-            {([16, 24, 32] as const).map((size) => (
-              <figure key={size} className={styles.sizeSample}>
-                <span className={styles.sizeCanvas}>
-                  <BrandMark
-                    candidate={candidate.id}
-                    size={size}
-                    label={`${candidate.name}，${size} 像素`}
-                  />
-                </span>
-                <figcaption>{size}px</figcaption>
-              </figure>
-            ))}
-          </div>
-        </article>
-      ))}
-    </div>
+      <div className={styles.sizeSamples} aria-label="107 Brand Mark 小尺寸样本">
+        {markSpecimenSizes.map(({ size, caption }) => (
+          <figure key={size} className={styles.sizeSample}>
+            <span className={styles.sizeCanvas}>
+              <BrandMark size={size} label={`107 Brand Mark，${size} 像素`} />
+            </span>
+            <figcaption>{caption}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </article>
   )
 }
 
 export function ColorOwnership() {
   return (
     <div className={styles.colorLayout}>
-      <div className={styles.paletteGrid} aria-label="107 provisional web color samples">
-        <ColorSwatch name="primary" value="#0057B8" className={styles.primarySwatch} />
+      <div className={styles.paletteGrid} aria-label="107 web color samples">
+        <ColorSwatch name="primary" value="#0455B6" className={styles.primarySwatch} />
         <ColorSwatch name="primary hover" value="#00458F" className={styles.hoverSwatch} />
         <ColorSwatch name="on primary" value="#FFFFFF" className={styles.onPrimarySwatch} />
         <ColorSwatch name="subtle" value="#DDEBFF" className={styles.subtleSwatch} />
@@ -167,7 +130,7 @@ export function ColorOwnership() {
           </Heading>
           <Text as="p" className={styles.mutedText}>
             官方标准色的权威输入是 CMYK C100 M80 Y0 K0；上方 HEX 是 107 Workspace
-            为屏幕与可访问性选择的临时 web adaptation，不是官方 USTC HEX。
+            为屏幕与可访问性选择的 web adaptation，不是官方 USTC HEX。
           </Text>
           <div className={styles.semanticRow} aria-label="Primer semantic colors remain distinct">
             <Label variant="success">成功</Label>

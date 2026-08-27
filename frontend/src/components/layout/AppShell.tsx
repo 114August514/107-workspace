@@ -5,6 +5,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 
 import type { Home } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
+import { BrandMark } from '../../brand/BrandMark'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
@@ -54,6 +55,7 @@ export function AppShell({ username, onUsernameChange, home, children }: Props) 
               onClick={() => setNavigationOpen(true)}
             />
             <RouterLink to="/" className={styles.brand}>
+              <BrandMark size={24} decorative />
               {appShellCopy.brand}
             </RouterLink>
           </div>

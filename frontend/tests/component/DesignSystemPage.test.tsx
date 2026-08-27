@@ -61,27 +61,21 @@ describe('DesignSystemPage', () => {
     expect(screen.queryByLabelText(/参考画布$/)).not.toBeInTheDocument()
   })
 
-  it('在相同真实上下文呈现三个可识别 Mark 候选及 16/24/32px 样本', () => {
+  it('呈现最终 107 Brand Mark 及 16/24/32px 样本', () => {
     render(
       <PrimerRoot>
         <DesignSystemPage />
       </PrimerRoot>,
     )
 
-    for (const candidate of [
-      '候选 1 · 开放数字',
-      '候选 2 · 节点连接（image2）',
-      '候选 3 · 数字方章',
-    ]) {
-      expect(screen.getByRole('heading', { name: candidate })).toBeInTheDocument()
-      expect(screen.getByLabelText(`${candidate} TopBar 示例`)).toHaveTextContent('107 Workspace')
-      for (const size of [16, 24, 32]) {
-        expect(screen.getByRole('img', { name: `${candidate}，${size} 像素` })).toHaveAttribute(
-          'width',
-          String(size),
-        )
-      }
+    expect(screen.getByLabelText('107 Brand Mark TopBar 示例')).toHaveTextContent('107 Workspace')
+    for (const size of [16, 24, 32]) {
+      expect(screen.getByRole('img', { name: `107 Brand Mark，${size} 像素` })).toHaveAttribute(
+        'width',
+        String(size),
+      )
     }
+    expect(screen.getByText('16px（optical padding）')).toBeInTheDocument()
 
     expect(screen.getByText(/C100 M80 Y0 K0/)).toBeInTheDocument()
     expect(screen.getByLabelText('Primer semantic colors remain distinct')).toHaveTextContent(

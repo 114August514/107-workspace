@@ -1,103 +1,42 @@
-export type BrandMarkCandidate = 1 | 2 | 3
+/**
+ * Issue #64 终局确认的 107 Brand Mark。
+ *
+ * 几何来自 owner 提供的 107pig.svg，是独立的产品资产：不引用或复刻 USTC 校徽、
+ * 校名等官方资产，也没有运行时的 Mark 切换。16 px 与 favicon 使用相同的 path 加
+ * optical padding（viewBox="-6 -6 112 112"）。
+ */
 
 interface Props {
-  candidate: BrandMarkCandidate
   size: 16 | 24 | 32
   label?: string
   decorative?: boolean
 }
 
-const candidateTitles: Record<BrandMarkCandidate, string> = {
-  1: '候选 1：开放数字',
-  2: '候选 2：节点连接',
-  3: '候选 3：数字方章',
-}
-
-/**
- * Issue #64 人工视觉门使用的三个 107 产品标识候选。
- *
- * 这些几何图形只来自数字与计算节点母题，不包含或改造 USTC 校徽、校名等官方资产。
- * 人工选定方案后删除未采用的 candidate 分支，不把候选切换能力带入产品 runtime。
- */
-export function BrandMark({ candidate, size, label, decorative = false }: Props) {
+export function BrandMark({ size, label, decorative = false }: Props) {
   const accessibility = decorative
     ? { 'aria-hidden': true as const }
-    : { role: 'img', 'aria-label': label ?? candidateTitles[candidate] }
+    : { role: 'img', 'aria-label': label ?? '107 Brand Mark' }
 
   return (
     <svg
       {...accessibility}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={size === 16 ? '-6 -6 112 112' : '0 0 100 100'}
       width={size}
       height={size}
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
       focusable="false"
     >
-      {candidate === 1 ? <OpenNumeral /> : null}
-      {candidate === 2 ? <NodeNumeral /> : null}
-      {candidate === 3 ? <TileNumeral /> : null}
+      <g fill="var(--brandColor-primary)">
+        <path d="m99 51.2c0 26.8-19.4 41.8-32.1 45.9 7.6-4.6 17.7-12.6 17.7-28.6 0-6.9-2.4-13.6-7.1-20.8 5.1-3.1 6.9-8.3 6.8-15.7-0.1-5.1-0.3-6.5-2-6.8-1-0.1-2.1-0.2-3.3-0.2-6.9-0.1-14.4 2.1-18 8.4-2.9-1.3-6.1-2.6-11-2.7-3.3 0-6.9 0.7-10.8 2.7-2.9-5.4-8.3-8.5-17.1-8.5-1.2 0-2.5 0.1-4 0.2-1 0.1-1.7 0.5-1.9 1.9-1.3 11.6 1.5 17.4 6.3 20.7-4.2 5.7-7 12.9-7 20.6 0.1 12.8 6.6 22 17.7 28.6l-0.1 0.2c-14.6-4.9-32.1-20.6-32.1-45.6 0-22.6 18.4-48.8 49-48.7 24.3 0 49 19.4 49 48.4z" />
+        <path d="m50 68.6c-7.6 0-12.4 3.7-12.4 9.4 0 4.7 4.4 8.6 12.4 8.6s12.4-3.3 12.4-8.6c0-4.6-3.8-9.4-12.4-9.4z" />
+        <path d="m65.6 50.5c-4.9 0-10.1 3.7-11 9.2-1.1-0.7-2.7-1.3-4.6-1.3s-3.2 0.5-4.7 1.2c-0.8-4.9-5.2-9.1-10.9-9.1-5.3 0-11.1 4.5-11.1 10.9 0.1 5.5 4.4 11.4 11.2 11.4 5.2 0 10.2-3.5 10.8-10 1.2-0.7 2.3-1.5 4.7-1.5 1.9 0 3.5 0.7 4.6 1.5 0.6 4.9 4.9 10.1 11 10.1 6.3 0 11.1-5 11.1-11.5 0-5.9-5-10.9-11.1-10.9z" />
+      </g>
+      <g fill="var(--brandColor-on-primary)">
+        <path d="m34.5 53.5c-4.3 0-8.3 3.6-8.3 7.9 0 4.2 3.4 8.2 8.3 8.2 4 0 8-3.1 8-8.1 0-4.5-3.7-8-8-8z" />
+        <path d="m65.6 53.5c-4.5 0-8.1 3.8-8.1 7.8 0 4.6 3.6 8.3 8.1 8.3 4.4 0 8.2-3.2 8.2-8.2-0.1-4.5-3.9-7.9-8.2-7.9z" />
+        <path d="m45.7 74.9c-0.9 0-2 0.9-2 2.8 0 1.4 0.8 2.9 2 2.9s2.1-1.3 2.1-2.9c0-1.8-1.1-2.8-2.1-2.8z" />
+        <path d="m54.1 74.9c-1 0-2.2 1-2.2 2.9 0 1.7 1 2.8 2 2.8 1.5 0 2.4-1.5 2.4-2.9 0-1.9-1.2-2.8-2.2-2.8z" />
+      </g>
     </svg>
-  )
-}
-
-function OpenNumeral() {
-  return (
-    <g
-      stroke="var(--brandColor-primary)"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3.5 10.5 7 7.5V24.5" />
-      <rect x="11" y="7.5" width="9" height="17" rx="4.5" />
-      <path d="M23 8H30L25 24.5" />
-    </g>
-  )
-}
-
-function NodeNumeral() {
-  return (
-    <>
-      <rect
-        x="1.5"
-        y="4.5"
-        width="29"
-        height="23"
-        rx="7"
-        stroke="var(--brandColor-primary)"
-        strokeWidth="2"
-      />
-      <circle cx="1.75" cy="16" r="2" fill="var(--brandColor-primary)" />
-      <circle cx="30.25" cy="16" r="2" fill="var(--brandColor-primary)" />
-      <g
-        stroke="var(--brandColor-primary)"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M5 12.5 7.5 10.5V21.5" />
-        <rect x="11" y="10.5" width="7" height="11" rx="3.5" />
-        <path d="M21 10.5H27L23 21.5" />
-      </g>
-    </>
-  )
-}
-
-function TileNumeral() {
-  return (
-    <>
-      <rect width="32" height="32" rx="7" fill="var(--brandColor-primary)" />
-      <g
-        stroke="var(--brandColor-on-primary)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M3.5 11 7 8V24" />
-        <rect x="11" y="8" width="9" height="16" rx="4.5" />
-        <path d="M23 8.5H29L25 24" />
-      </g>
-    </>
   )
 }

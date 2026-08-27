@@ -1,5 +1,4 @@
 .identityGrid,
-.candidateGrid,
 .paletteGrid,
 .iconGrid {
   display: grid;
@@ -15,27 +14,12 @@
   color: var(--fgColor-muted);
 }
 
-.candidateGrid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.candidateCard {
+.specimenCard {
   min-width: 0;
   padding: var(--base-size-16);
   border: var(--borderWidth-thin) solid var(--borderColor-default);
   border-radius: var(--borderRadius-medium);
   background: var(--bgColor-default);
-}
-
-.candidateHeading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--base-size-8);
-}
-
-.candidateHeading h3 {
-  margin: 0;
 }
 
 .topbarSpecimen {
@@ -246,7 +230,6 @@
 }
 
 @media (max-width: 64rem) {
-  .candidateGrid,
   .identityGrid {
     grid-template-columns: 1fr;
   }

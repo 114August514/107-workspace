@@ -3,9 +3,9 @@ import { Heading, IconButton, PageHeader, Stack, Text } from '@primer/react'
 import { Card } from '@primer/react/experimental'
 
 import {
+  BrandMarkSpecimen,
   ColorOwnership,
   IdentityBoundary,
-  MarkCandidates,
   ProductIconMapping,
 } from './BrandReference'
 import { CompositionRecipes } from './CompositionRecipes'
@@ -201,7 +201,7 @@ export function DesignSystemPage() {
           <SectionHeading
             id="brand-identity-heading"
             title="Brand"
-            description="区分 USTC 学校归属、107 产品身份与 Primer 功能图标；当前 Mark 候选只供人工视觉门比较。"
+            description="区分 USTC 学校归属、107 产品身份与 Primer 功能图标。"
           />
           <IdentityBoundary />
         </section>
@@ -210,16 +210,16 @@ export function DesignSystemPage() {
           <SectionHeading
             id="brand-marks-heading"
             title="Marks"
-            description="三个候选共享同一 neutral TopBar、wordmark 与 16 / 24 / 32 px 样本，不预先替换真实 AppShell。"
+            description="最终 107 Brand Mark 在 neutral TopBar 与 16 / 24 / 32 px 样本中的呈现；16 px 使用 optical padding。"
           />
-          <MarkCandidates />
+          <BrandMarkSpecimen />
         </section>
 
         <section aria-labelledby="brand-colors-heading">
           <SectionHeading
             id="brand-colors-heading"
             title="Colors"
-            description="官方 CMYK 输入、临时 web adaptation 与 Primer semantic colors 的职责边界。"
+            description="官方 CMYK 输入、107 web adaptation 与 Primer semantic colors 的职责边界。"
           />
           <ColorOwnership />
         </section>
