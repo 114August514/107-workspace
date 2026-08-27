@@ -78,18 +78,20 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
     navigate(`/projects/${run.project_id}/runs/${run.id}`, { replace: true })
   }, [navigate, projectId, run])
 
-  const syncAndReload = useCallback(async () => {
-    await api.syncRuns().catch(() => undefined)
-    detail.reload()
-    logs.reload()
-  }, [detail, logs])
+  const syncAndReload = useCallback(
+    async (silent = true) => {
+      await api.syncRuns().catch(() => undefined)
+      await Promise.all([detail.reload({ silent }), logs.reload({ silent })])
+    },
+    [detail, logs],
+  )
 
-  usePolling(() => void syncAndReload(), POLL_INTERVAL_MS, active)
+  usePolling(() => syncAndReload(true), POLL_INTERVAL_MS, active)
 
   const refresh = async () => {
     setRefreshing(true)
     setFeedback(null)
-    await syncAndReload()
+    await syncAndReload(false)
     setRefreshing(false)
   }
 
@@ -104,7 +106,7 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
         title: '已请求取消 Run',
         description: '最终状态以调度系统同步结果为准。',
       })
-      await syncAndReload()
+      await syncAndReload(true)
     } catch (error) {
       const view = toAsyncError(error as Error)
       setFeedback({
