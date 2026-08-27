@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import ensure_user_group
 from workspace107.domain import ids
-from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
+from workspace107.infrastructure.db.tables import (
+    EnvironmentRow,
+    EnvironmentVersionRow,
+    ProjectRow,
+    ProjectVersionRow,
+)
 
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
+FULL_OID = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 
 
 async def _group_environment_version(session: AsyncSession, user_group_id: str) -> str:
@@ -229,6 +238,18 @@ async def test_public_version_can_be_forked_to_requesting_user_owner(client, ses
     files = await client.get(f"/api/v1/projects/{forked_id}/files", headers=BOB)
     assert files.status_code == 200
     assert [f["path"] for f in files.json()] == ["main.py"]
+    fork_project_row = await session.get(ProjectRow, forked_id)
+    assert fork_project_row is not None
+    fork_version_row = (
+        await session.execute(
+            select(ProjectVersionRow).where(ProjectVersionRow.project_id == forked_id)
+        )
+    ).scalar_one()
+    assert fork_version_row.repository_identity == fork_project_row.repository_identity
+    assert FULL_OID.fullmatch(fork_version_row.commit_oid)
+    assert FULL_OID.fullmatch(fork_version_row.tree_oid)
+    assert fork_version_row.file_count == 1
+    assert fork_version_row.total_size == len(b"print('ok')")
     copied = await client.get(f"/api/v1/projects/{forked_id}/run-configurations", headers=BOB)
     assert copied.status_code == 200
     assert copied.json() == []

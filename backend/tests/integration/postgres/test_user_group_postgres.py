@@ -70,6 +70,7 @@ async def test_postgresql_workspace_cutover_roundtrip(tmp_path: Path) -> None:
                 ),
                 {"now": now},
             )
+
             await connection.execute(
                 text(
                     "INSERT INTO user_groups (id, name, description, created_by_id, created_at) "
@@ -163,7 +164,6 @@ async def test_postgresql_owner_race_serializes_transfer_and_removal(tmp_path: P
     settings = Settings(
         database_url=url,
         storage_root=tmp_path / "storage",
-        run_sync_interval_seconds=0,
     )
     context = build_context(settings)
     try:

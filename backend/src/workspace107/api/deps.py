@@ -24,7 +24,6 @@ from ..application.identity_service import IdentityService
 from ..application.notifier import NotificationService, Notifier
 from ..application.project_service import ProjectService
 from ..application.run_configuration_service import RunConfigurationService
-from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
 from ..application.scoped_config_resolver import ScopedConfigResolver
 from ..application.shared_resource_service import SharedResourceService
@@ -34,8 +33,8 @@ from ..domain.models import User
 from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.notification import NotificationPublisher
+from ..domain.ports.project_content import ProjectContentPort
 from ..domain.ports.repositories import Repositories
-from ..domain.ports.scheduler import SchedulerPort
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import StoragePort
 from ..infrastructure.db.notifications import DatabaseNotificationPublisher
@@ -54,7 +53,7 @@ class AppContext:
     engine: AsyncEngine
     session_factory: async_sessionmaker[AsyncSession]
     storage: StoragePort
-    scheduler: SchedulerPort
+    project_content: ProjectContentPort
     clock: Clock
 
 
@@ -79,7 +78,6 @@ class Services:
     runs: RunService
     catalog: CatalogService
     health: HealthService
-    lifecycle: RunLifecycleService
     activities: ActivityService
     notifications: NotificationService
     shared_resources: SharedResourceService
@@ -112,7 +110,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             repos,
             guard,
             context.clock,
-            context.storage,
+            context.project_content,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
         ),
@@ -122,17 +120,12 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             guard,
             context.clock,
             context.storage,
-            context.scheduler,
             vault,
             activity,
-            notifier,
             config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
         catalog=CatalogService(repos),
         health=HealthService(repos),
-        lifecycle=RunLifecycleService(
-            repos, context.clock, context.storage, context.scheduler, activity, notifier, session
-        ),
         notifications=NotificationService(repos, context.clock),
         activities=ActivityService(repos, guard),
         shared_resources=SharedResourceService(

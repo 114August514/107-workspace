@@ -115,6 +115,7 @@ class Project:
     id: str
     name: str
     owner: OwnerReference
+    repository_identity: str = ""
     description: str = ""
     status: ProjectStatus = ProjectStatus.ACTIVE
     visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE
@@ -128,10 +129,7 @@ class Project:
 
 @dataclass(slots=True)
 class ProjectFile:
-    """Project Working Tree 中的一个文件。
-
-    内容存放在存储层，这里只保存元数据和内容摘要。
-    """
+    """Project Git Working State 中的一个 file fact."""
 
     project_id: str
     path: str
@@ -142,7 +140,7 @@ class ProjectFile:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVersionFile:
-    """Project Version 中的一个文件条目。不可变。"""
+    """由 Project Version 的精确 Git tree 导出的不可变文件事实。"""
 
     path: str
     size: int
@@ -151,27 +149,25 @@ class ProjectVersionFile:
 
 @dataclass(frozen=True, slots=True)
 class ProjectVersion:
-    """Project 在确定时刻保存的不可变内容版本。
-
-    被归档或源 Project 后续变化，都不改变已有版本的内容。
-    """
+    """Project 的不可变 Git commit identity 与其 API content projection."""
 
     id: str
     project_id: str
+    repository_identity: str
     sequence: int
     """在该 Project 内自增，用于展示为 v1、v2……"""
     message: str
-    files: tuple[ProjectVersionFile, ...]
     created_by: str
     created_at: datetime
+    commit_oid: str
+    tree_oid: str
+    file_count: int
+    total_size: int
+    files: tuple[ProjectVersionFile, ...] = ()
 
     @property
     def label(self) -> str:
         return f"v{self.sequence}"
-
-    @property
-    def total_size(self) -> int:
-        return sum(f.size for f in self.files)
 
 
 # --------------------------------------------------------------------------

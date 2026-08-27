@@ -44,6 +44,18 @@ class ValidationFailed(DomainError):
     code = "validation_failed"
 
 
+class ProjectContentMissing(DomainError):
+    """The project Git repository or requested immutable content is missing."""
+
+    code = "project_content_missing"
+
+
+class ProjectContentIdentityMismatch(DomainError):
+    """Repository, ref, commit, or tree identity does not match persisted facts."""
+
+    code = "project_content_identity_mismatch"
+
+
 class ConflictError(DomainError):
     """与现有状态冲突，例如重名或状态不允许。"""
 
@@ -70,3 +82,27 @@ class SchedulerError(DomainError):
     """底层调度系统返回错误。"""
 
     code = "scheduler_error"
+
+
+class SchedulerProtocolError(SchedulerError):
+    """调度 API 返回的成功响应不符合已配置的 schema profile。"""
+
+    code = "scheduler_protocol_error"
+
+
+class SchedulerSubmissionRejected(SchedulerError):
+    """请求发出前被本地校验拒绝；未来远端拒绝必须先有人工核验 allowlist。"""
+
+    code = "scheduler_submission_rejected"
+
+
+class SchedulerSubmissionUncertain(SchedulerError):
+    """提交可能已经被接受，必须按 correlation 恢复，禁止盲目重试。"""
+
+    code = "scheduler_submission_uncertain"
+
+
+class SchedulerJobNotFound(SchedulerError):
+    """指定 job id 在调度端不可见；不能当作取消成功。"""
+
+    code = "scheduler_job_not_found"

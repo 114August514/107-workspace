@@ -12,13 +12,19 @@ from __future__ import annotations
 
 import asyncio
 import os
+import signal
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import IO
 from uuid import uuid4
 
 from ...domain.errors import SchedulerError
-from ...domain.ports.scheduler import SchedulerJobState, SchedulerState, SchedulerSubmission
+from ...domain.ports.scheduler import (
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+    SchedulerSubmission,
+)
 from .script import render_sbatch_script
 
 # 用户作业只继承这些基础变量。
@@ -37,6 +43,7 @@ def build_job_environment(submission: SchedulerSubmission) -> dict[str, str]:
 @dataclass
 class _MockJob:
     process: asyncio.subprocess.Process
+    correlation: str
     stdout: IO[bytes]
     stderr: IO[bytes]
     started_at: datetime
@@ -49,7 +56,10 @@ class MockScheduler:
 
     name = "mock"
 
-    def __init__(self) -> None:
+    def __init__(self, *, cancel_grace_seconds: float = 1.0) -> None:
+        if cancel_grace_seconds < 0:
+            raise ValueError("cancel_grace_seconds must be non-negative")
+        self._cancel_grace_seconds = cancel_grace_seconds
         self._jobs: dict[str, _MockJob] = {}
 
     async def submit(self, submission: SchedulerSubmission) -> str:
@@ -60,11 +70,13 @@ class MockScheduler:
         # 把渲染出的作业脚本留在 Run 目录里，用户可以直接看到平台生成了什么。
         script_path = submission.stdout_path.parent.parent / "job.sh"
         script_path.write_text(render_sbatch_script(submission), encoding="utf-8")
+        os.chown(script_path, -1, submission.stdout_path.parent.stat().st_gid)
+        script_path.chmod(0o660)
 
         environment = build_job_environment(submission)
         stdout = submission.stdout_path.open("ab")
         stderr = submission.stderr_path.open("ab")
-        shell_options = {"executable": "/bin/bash"}
+        shell_options = {"executable": "/bin/bash", "start_new_session": True}
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -83,20 +95,30 @@ class MockScheduler:
         job_id = f"mock-{uuid4().hex[:12]}"
         self._jobs[job_id] = _MockJob(
             process=process,
+            correlation=submission.correlation,
             stdout=stdout,
             stderr=stderr,
             started_at=datetime.now(UTC),
         )
         return job_id
 
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        job_ids = tuple(
+            job_id for job_id, job in self._jobs.items() if job.correlation == correlation
+        )
+        return SchedulerCorrelationResult(complete=True, job_ids=job_ids)
+
     async def poll(self, job_id: str) -> SchedulerJobState:
         job = self._jobs.get(job_id)
         if job is None:
-            # 进程注册表里没有这个任务——可能是服务重启过。
-            # 这是异常状态，交给上层保留并处置，不猜测结果。
+            # The registry is process-local. After Worker restart the backend has lost both
+            # observability and control; UNKNOWN keeps that local-only limitation explicit.
             return SchedulerJobState(
                 state=SchedulerState.UNKNOWN,
-                reason=f"调度系统中没有任务 {job_id} 的记录",
+                reason=(
+                    f"Mock task {job_id} is absent from the process-local registry; "
+                    "Worker restart loses observability and control"
+                ),
             )
 
         return_code = job.process.returncode
@@ -116,7 +138,14 @@ class MockScheduler:
                 finished_at=job.finished_at,
                 reason="任务已被取消",
             )
-
+        if return_code != 0:
+            return SchedulerJobState(
+                state=SchedulerState.FAILED,
+                exit_code=return_code,
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+                reason=f"任务退出码为 {return_code}",
+            )
         return SchedulerJobState(
             state=SchedulerState.COMPLETED,
             exit_code=return_code,
@@ -129,8 +158,32 @@ class MockScheduler:
         if job is None:
             raise SchedulerError(f"调度系统中没有任务 {job_id} 的记录")
         job.cancelled = True
-        if job.process.returncode is None:
-            job.process.terminate()
+        if job.process.returncode is not None:
+            return
+
+        process_group = job.process.pid
+        try:
+            os.killpg(process_group, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        await asyncio.sleep(self._cancel_grace_seconds)
+        try:
+            os.killpg(process_group, 0)
+        except ProcessLookupError:
+            pass
+        else:
+            os.killpg(process_group, signal.SIGKILL)
+        await job.process.wait()
+
+    async def close(self) -> None:
+        """Graceful Worker shutdown must not leave owned local workloads running."""
+        for job_id, job in tuple(self._jobs.items()):
+            if job.process.returncode is None:
+                await self.cancel(job_id)
+            if job.finished_at is None:
+                job.finished_at = datetime.now(UTC)
+                job.stdout.close()
+                job.stderr.close()
 
     async def wait_for_exit(self, job_id: str, *, seconds: float = 30.0) -> None:
         """等待任务结束。仅供测试和 demo 脚本使用，不属于 SchedulerPort。"""

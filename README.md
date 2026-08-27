@@ -5,9 +5,10 @@ Workspace 和 Project、保存 Project Version、配置并提交 Run，以及查
 Artifact。
 
 当前仓库是**可运行的开发基线**，不是 `docs/product/design.md` 路线图中 M1 已完成的声明。
-现有实现覆盖 FastAPI 后端、React 控制台、数据库迁移、本地内容存储、Mock 调度和
-Slurm REST 适配器；真实 Git、Shared FS、独立 Worker、Apptainer、学校认证和真实
-Slurm 环境仍需要按现行 Milestone 验证或实现。
+现有实现包含 immutable Git Project Version、POSIX Run workspace、PostgreSQL execution intent、
+一个独立 Worker、Mock Scheduler 与 gated single-profile Slurm REST adapter。本地 executable
+skeleton 不证明真实 107 service identity、Shared FS mapping、REST profile、credential
+lifecycle 或 authorized submit/restart 已验收。
 
 ## 事实来源
 
@@ -19,7 +20,7 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 | AI 与工程协作入口 | [`AGENTS.md`](AGENTS.md) |
 | 高影响工程决策 | [`docs/decisions/`](docs/decisions/README.md) |
 | 在途工作记录 | [`docs/journal/`](docs/journal/) |
-| 部署入口与运行边界 | [`deploy/`](deploy/README.md) 与 [`docs/operations/`](docs/operations/deployment.md) |
+| 部署入口与运行边界 | [`deploy/`](deploy/README.md)、[`docs/operations/deployment.md`](docs/operations/deployment.md) 与 [`docs/operations/107-cluster.md`](docs/operations/107-cluster.md) |
 | 前后端 API 机器契约 | [`contracts/`](contracts/README.md) |
 
 迁移来源 `workspace107@293c8d8` 的完整快照保存在
@@ -29,9 +30,9 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 ## 快速开始
 
 需要 Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 24 LTS、pnpm 11 和 GNU Make。
-支持 Linux 开发环境；Windows 主机只支持在 WSL2 中使用 Linux toolchain，并将仓库放在
-WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持，部署与运行目标
-均为 Linux。
+支持 Linux，以及把仓库和持久数据放在 Linux filesystem 并使用 Linux toolchain 的 WSL2。
+原生 Windows / PowerShell runtime 不受支持；见
+[`ADR-0005`](docs/decisions/0005-platform-support-matrix.md)。
 
 ```bash
 ./scripts/platform/posix/bootstrap.sh

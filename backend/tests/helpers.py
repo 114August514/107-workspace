@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import httpx
@@ -14,31 +13,6 @@ from workspace107.domain.compute import ResourceEntitlement
 from workspace107.infrastructure.db import tables as t
 from workspace107.infrastructure.db.repositories import SqlRepositories
 from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
-
-RUN_WAIT_TIMEOUT = 30.0
-TERMINAL = {"succeeded", "failed", "cancelled", "submit_failed"}
-
-
-async def wait_for_run(
-    client: httpx.AsyncClient, run_id: str, *, headers: dict[str, str] | None = None
-) -> dict[str, Any]:
-    """轮询直到 Run 进入终态，返回 Run 详情。
-
-    走的是真实路径：触发状态同步 -> 读取 Run。同步只会把调度系统的实际状态
-    映射过来，不会伪造结果。
-    """
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + RUN_WAIT_TIMEOUT
-    while True:
-        await client.post("/api/v1/runs/sync")
-        response = await client.get(f"/api/v1/runs/{run_id}", headers=headers)
-        response.raise_for_status()
-        detail = response.json()
-        if detail["run"]["status"] in TERMINAL:
-            return detail
-        if loop.time() > deadline:
-            raise AssertionError(f"Run {run_id} 在 {RUN_WAIT_TIMEOUT} 秒内没有结束")
-        await asyncio.sleep(0.05)
 
 
 async def ensure_user_group(

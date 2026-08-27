@@ -277,7 +277,7 @@ async def get_version(
     version_id: str, user: CurrentUser, services: ServicesDep
 ) -> s.ProjectVersionDetailOut:
     """校验所属 Project 的查看权限后，返回版本信息及完整文件清单。"""
-    version = await services.projects.get_version(user.id, version_id)
+    version = await services.projects.get_version_detail(user.id, version_id)
     return p.version_detail_out(version)
 
 

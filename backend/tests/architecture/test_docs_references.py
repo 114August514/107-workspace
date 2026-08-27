@@ -82,6 +82,7 @@ def _maintained_documents() -> list[Path]:
             REPO / "docs" / "product" / "deferred.md",
             REPO / "docs" / "contributing" / "git-workflow.md",
             REPO / "docs" / "operations" / "deployment.md",
+            REPO / "docs" / "operations" / "107-cluster.md",
             REPO / "docs" / "testing" / "README.md",
             REPO / "docs" / "journal" / "README.md",
         )

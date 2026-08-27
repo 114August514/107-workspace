@@ -27,29 +27,39 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # ---------- 运行阶段 ----------
 FROM python:3.12-slim-bookworm AS runtime
+ARG WORKSPACE107_SERVICE_UID=10001
+ARG WORKSPACE107_SERVICE_GID=10001
+ARG WORKSPACE107_STORAGE_GID=10001
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
     WORKSPACE107_STORAGE_ROOT=/var/lib/workspace107/storage
 
-# 非 root 运行。uid 写死方便挂载共享存储时对齐属主。
-RUN groupadd --gid 10001 workspace \
- && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin workspace
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends git \
+ && rm -rf /var/lib/apt/lists/*
+
+# Defaults are local-container identities only. Real deployments must rebuild with the
+# human-validated service UID/GID and separately validate compute/shared-GID access.
+RUN groupadd --gid "${WORKSPACE107_SERVICE_GID}" workspace \
+ && useradd --uid "${WORKSPACE107_SERVICE_UID}" --gid "${WORKSPACE107_SERVICE_GID}" \
+      --create-home --shell /usr/sbin/nologin workspace
 
 WORKDIR /app
 
 # 虚拟环境里的项目是可编辑安装，指向 /app/src，所以路径必须和构建阶段一致。
-COPY --from=builder --chown=10001:10001 /app/.venv /app/.venv
-COPY --chown=10001:10001 src ./src
-COPY --chown=10001:10001 migrations ./migrations
-COPY --chown=10001:10001 alembic.ini docker-entrypoint.sh ./
+COPY --from=builder --chown=workspace:workspace /app/.venv /app/.venv
+COPY --chown=workspace:workspace src ./src
+COPY --chown=workspace:workspace migrations ./migrations
+COPY --chown=workspace:workspace alembic.ini docker-entrypoint.sh ./
 
 RUN chmod +x docker-entrypoint.sh \
  && mkdir -p "$WORKSPACE107_STORAGE_ROOT" \
- && chown -R 10001:10001 "$WORKSPACE107_STORAGE_ROOT"
+ && chown -R "${WORKSPACE107_SERVICE_UID}:${WORKSPACE107_STORAGE_GID}" "$WORKSPACE107_STORAGE_ROOT" \
+ && chmod 0750 "$WORKSPACE107_STORAGE_ROOT"
 
-USER 10001:10001
+USER workspace
 EXPOSE 8000
 
 # 用 /ready 而不是 /health：compose 靠这个健康状态决定什么时候放前端进来，

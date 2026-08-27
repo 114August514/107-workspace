@@ -1,0 +1,674 @@
+"""Single-active Worker 的恢复、提交歧义与终态恢复规则。"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+
+from workspace107.application.run_worker import RunWorker
+from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfiguration
+from workspace107.domain.config_scope import ConfigScope, SecretReference
+from workspace107.domain.enums import RunStatus
+from workspace107.domain.errors import (
+    SchedulerError,
+    SchedulerSubmissionRejected,
+    SchedulerSubmissionUncertain,
+    ValidationFailed,
+)
+from workspace107.domain.execution import (
+    ExecutionIntent,
+    PendingExecution,
+    ValidatedExecutionContext,
+)
+from workspace107.domain.models import ArtifactCollectionRule, ProjectVersion, Run
+from workspace107.domain.ports.execution import RunInputUnavailable
+from workspace107.domain.ports.run_workspace import RunArtifactEvidence, RunWorkspace
+from workspace107.domain.ports.scheduler import (
+    SchedulerCorrelationResult,
+    SchedulerJobState,
+    SchedulerState,
+)
+from workspace107.domain.run_snapshot import build_snapshot
+from workspace107.domain.secrets import ResolvedEnv
+
+NOW = datetime(2026, 8, 10, 12, 0, tzinfo=UTC)
+
+
+class _Store:
+    def __init__(self, pending: PendingExecution) -> None:
+        self.pending: PendingExecution | None = pending
+        self.calls: list[tuple[str, object]] = []
+        self.finalize_error: BaseException | None = None
+        self.inputs = ()
+        self.resolve_error: RunInputUnavailable | None = None
+
+    async def next_due(self):
+        return self.pending
+
+    async def resolve_inputs(self, run_id: str):
+        self.calls.append(("resolve", run_id))
+        if self.resolve_error is not None:
+            raise self.resolve_error
+        return self.inputs
+
+    async def defer(self, run_id: str, delay: float) -> None:
+        self.calls.append(("defer", run_id))
+
+    async def arm(self, run_id: str) -> int:
+        assert self.pending is not None
+        attempt = self.pending.intent.attempt_no + 1
+        self.pending = replace(
+            self.pending,
+            intent=replace(self.pending.intent, attempt_no=attempt),
+        )
+        self.calls.append(("arm", attempt))
+        return attempt
+
+    async def attach_job(self, run_id: str, job_id: str, *, reconciled: bool) -> bool:
+        assert self.pending is not None
+        self.pending = replace(
+            self.pending,
+            run=replace(self.pending.run, scheduler_job_id=job_id, submitted_at=NOW),
+        )
+        self.calls.append(("attach", job_id))
+        return True
+
+    async def clear_reconciled_zero(self, run_id: str) -> None:
+        self.calls.append(("zero", run_id))
+
+    async def record_uncertain(self, run_id: str, code: str, detail: str) -> None:
+        assert self.pending is not None
+        self.pending = replace(
+            self.pending,
+            intent=replace(
+                self.pending.intent,
+                uncertainty_code=code,
+                uncertainty_detail=detail,
+            ),
+        )
+        self.calls.append(("uncertain", (code, detail)))
+
+    async def record_submit_failed(self, run_id: str, reason: str) -> None:
+        self.calls.append(("submit_failed", reason))
+        self.pending = None
+
+    async def cancel_without_job(self, run_id: str) -> None:
+        self.calls.append(("cancel", run_id))
+        self.pending = None
+
+    async def record_poll(
+        self,
+        run_id: str,
+        state: SchedulerJobState,
+        *,
+        cancel_failure: str | None,
+    ) -> None:
+        assert self.pending is not None
+        if state.state in {
+            SchedulerState.COMPLETED,
+            SchedulerState.FAILED,
+            SchedulerState.CANCELLED,
+        }:
+            self.pending = replace(
+                self.pending,
+                intent=replace(
+                    self.pending.intent,
+                    observed_scheduler_state=state.state.value,
+                    observed_exit_code=state.exit_code,
+                    observed_finished_at=state.finished_at or NOW,
+                ),
+            )
+        self.calls.append(("poll", (state.state, cancel_failure)))
+
+    async def finalize(self, run_id: str, artifacts) -> None:
+        self.calls.append(("finalize", tuple(artifacts)))
+        if self.finalize_error is not None:
+            error, self.finalize_error = self.finalize_error, None
+            raise error
+        self.pending = None
+
+    async def retain_secret_redactions(self, run_id: str, values: list[str]) -> None:
+        self.calls.append(("redactions", tuple(values)))
+
+
+class _ExecutionContext:
+    def __init__(
+        self,
+        values: dict[str, str] | None = None,
+        error: ValidationFailed | None = None,
+    ) -> None:
+        self.values = values or {}
+        self.error = error
+        self.calls: list[tuple[str, str]] = []
+
+    async def validate(self, run, snapshot) -> ValidatedExecutionContext:
+        self.calls.append((run.initiated_by_user_id, snapshot.id))
+        if self.error is not None:
+            raise self.error
+        return ValidatedExecutionContext(secret_values=dict(self.values))
+
+
+class _Storage:
+    def __init__(self, root: Path) -> None:
+        self.paths = RunWorkspace(
+            root=root,
+            work=root / "work",
+            inputs=root / "inputs",
+            logs=root / "logs",
+            artifact_staging=root / "artifacts",
+            identity_marker=root / ".workspace-identity.json",
+        )
+        for path in (
+            self.paths.work,
+            self.paths.inputs,
+            self.paths.logs,
+            self.paths.artifact_staging,
+        ):
+            path.mkdir(parents=True, exist_ok=True)
+        self.paths.stdout.touch()
+        self.paths.stderr.touch()
+        self.collect_calls = 0
+        self.prepare_calls: list[tuple[object, ...]] = []
+
+    async def prepare(self, *args, **kwargs) -> RunWorkspace:
+        self.prepare_calls.append(tuple(kwargs.get("inputs", ())))
+        return self.paths
+
+    async def collect_artifact(self, *args, **kwargs) -> RunArtifactEvidence:
+        self.collect_calls += 1
+        return RunArtifactEvidence(size=3, file_count=1, content_hash="a" * 64)
+
+
+class _Scheduler:
+    name = "fake"
+
+    def __init__(
+        self,
+        correlation: SchedulerCorrelationResult,
+        *,
+        submit_error: BaseException | None = None,
+        poll_state: SchedulerJobState | None = None,
+        poll_error: BaseException | None = None,
+        cancel_error: BaseException | None = None,
+    ) -> None:
+        self.correlation = correlation
+        self.submit_error = submit_error
+        self.poll_error = poll_error
+        self.cancel_error = cancel_error
+        self.poll_state = poll_state or SchedulerJobState(SchedulerState.PENDING)
+        self.submissions = 0
+        self.polls = 0
+        self.cancellations = 0
+
+    async def find_by_correlation(self, correlation: str) -> SchedulerCorrelationResult:
+        return self.correlation
+
+    async def submit(self, submission) -> str:
+        self.submissions += 1
+        if self.submit_error is not None:
+            raise self.submit_error
+        return "job-new"
+
+    async def poll(self, job_id: str) -> SchedulerJobState:
+        self.polls += 1
+        if self.poll_error is not None:
+            raise self.poll_error
+        return self.poll_state
+
+    async def cancel(self, job_id: str) -> None:
+        self.cancellations += 1
+        if self.cancel_error is not None:
+            raise self.cancel_error
+
+
+def _pending(
+    *,
+    attempt_no: int = 1,
+    cancel: bool = False,
+    job_id: str | None = None,
+    observed: SchedulerState | None = None,
+    artifact: bool = False,
+) -> PendingExecution:
+    snapshot = build_snapshot(
+        snapshot_id="snap_1",
+        project_id="prj_1",
+        project_version_id="pv_1",
+        source_run_configuration_id="rc_1",
+        working_directory=".",
+        command="true",
+        environment_version_id="ev_1",
+        environment_image="",
+        environment_setup_command="",
+        resolved_env=ResolvedEnv(literals={}, secret_refs={}),
+        input_bindings=(),
+        compute_plan_id="plan_1",
+        compute_request=ComputeRequest(
+            nodes=1, cpus=1, memory_mb=512, gpus=0, time_limit_minutes=5
+        ),
+        scheduler=ResolvedSchedulerConfiguration(
+            cluster="local",
+            account="test",
+            partition="test",
+            qos="normal",
+            nodes=1,
+            cpus=1,
+            memory_mb=512,
+            gpus=0,
+            time_limit_minutes=5,
+        ),
+        artifact_rules=(ArtifactCollectionRule(path="outputs", optional=False),)
+        if artifact
+        else (),
+        initiated_by_user_id="usr_1",
+        created_at=NOW,
+    )
+    return PendingExecution(
+        run=Run(
+            id="run_1",
+            project_id="prj_1",
+            snapshot_id="snap_1",
+            compute_plan_id="plan_1",
+            project_version_id="pv_1",
+            project_version_label="v1",
+            source_run_configuration_id="rc_1",
+            source_run_id=None,
+            name="run",
+            status=RunStatus.QUEUED,
+            initiated_by_user_id="usr_1",
+            created_at=NOW,
+            scheduler_job_id=job_id,
+        ),
+        snapshot=snapshot,
+        project_version=ProjectVersion(
+            id="pv_1",
+            project_id="prj_1",
+            repository_identity="repo_1",
+            sequence=1,
+            message="v1",
+            commit_oid="1" * 40,
+            tree_oid="2" * 40,
+            file_count=1,
+            total_size=1,
+            created_by="usr_1",
+            created_at=NOW,
+        ),
+        intent=ExecutionIntent(
+            run_id="run_1",
+            correlation="workspace107:run_1",
+            attempt_no=attempt_no,
+            next_action_at=NOW,
+            created_at=NOW,
+            updated_at=NOW,
+            cancel_requested_at=NOW if cancel else None,
+            observed_scheduler_state=observed.value if observed else None,
+            observed_exit_code=0 if observed else None,
+            observed_finished_at=NOW if observed else None,
+        ),
+    )
+
+
+async def _run(
+    tmp_path: Path,
+    pending: PendingExecution,
+    result: SchedulerCorrelationResult,
+    *,
+    scheduler: _Scheduler | None = None,
+    store: _Store | None = None,
+    storage: _Storage | None = None,
+    execution_context: _ExecutionContext | None = None,
+):
+    store = store or _Store(pending)
+    scheduler = scheduler or _Scheduler(result)
+    storage = storage or _Storage(tmp_path)
+    worker = RunWorker(
+        store=store,
+        execution_context=execution_context or _ExecutionContext(),
+        workspace=storage,
+        scheduler=scheduler,
+        action_delay_seconds=1,
+    )
+    assert await worker.run_once() is True
+    return store, scheduler, storage
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        (SchedulerCorrelationResult(complete=True, job_ids=()), "submit"),
+        (SchedulerCorrelationResult(complete=True, job_ids=("job-old",)), "attach"),
+        (SchedulerCorrelationResult(complete=True, job_ids=("job-a", "job-b")), "multiple"),
+        (SchedulerCorrelationResult(complete=False, reason="permission denied"), "incomplete"),
+    ],
+)
+async def test_correlation_zero_one_multiple_and_incomplete(
+    tmp_path: Path, result: SchedulerCorrelationResult, expected: str
+) -> None:
+    store, scheduler, _ = await _run(tmp_path, _pending(), result)
+
+    if expected == "submit":
+        assert scheduler.submissions == 1
+        assert [call[0] for call in store.calls[:4]] == ["zero", "resolve", "arm", "attach"]
+    elif expected == "attach":
+        assert scheduler.submissions == 0
+        assert ("attach", "job-old") in store.calls
+    else:
+        assert scheduler.submissions == 0
+        code = "correlation_multiple" if expected == "multiple" else "correlation_incomplete"
+        assert any(call[0] == "uncertain" and call[1][0] == code for call in store.calls)
+        assert not any(call[0] == "arm" for call in store.calls)
+
+
+@pytest.mark.asyncio
+async def test_unavailable_input_fails_run_before_workspace_or_scheduler(tmp_path: Path) -> None:
+    pending = _pending(attempt_no=0)
+    store = _Store(pending)
+    store.resolve_error = RunInputUnavailable("input content unavailable")
+    storage = _Storage(tmp_path)
+    scheduler = _Scheduler(SchedulerCorrelationResult(complete=True, job_ids=()))
+
+    await _run(
+        tmp_path,
+        pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        storage=storage,
+    )
+
+    assert ("submit_failed", "input content unavailable") in store.calls
+    assert storage.prepare_calls == []
+    assert scheduler.submissions == 0
+
+
+@pytest.mark.asyncio
+async def test_delayed_worker_revalidates_before_resolve_materialize_or_submit(
+    tmp_path: Path,
+) -> None:
+    pending = _pending(attempt_no=0)
+    store = _Store(pending)
+    context = _ExecutionContext(error=ValidationFailed("execution authority revoked"))
+    storage = _Storage(tmp_path)
+    scheduler = _Scheduler(SchedulerCorrelationResult(complete=True, job_ids=()))
+
+    await _run(
+        tmp_path,
+        pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        storage=storage,
+        execution_context=context,
+    )
+
+    assert context.calls == [("usr_1", "snap_1")]
+    assert not any(call[0] == "resolve" for call in store.calls)
+    assert storage.prepare_calls == []
+    assert scheduler.submissions == 0
+    assert not any(call[0] == "arm" for call in store.calls)
+
+
+class _WorkerCrash(BaseException):
+    pass
+
+
+@pytest.mark.asyncio
+async def test_arm_then_submit_crash_recovers_without_second_submit(tmp_path: Path) -> None:
+    store = _Store(_pending(attempt_no=0))
+    first_scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False), submit_error=_WorkerCrash()
+    )
+    worker = RunWorker(
+        store=store,
+        execution_context=_ExecutionContext(),
+        workspace=_Storage(tmp_path),
+        scheduler=first_scheduler,
+        action_delay_seconds=0,
+    )
+    with pytest.raises(_WorkerCrash):
+        await worker.run_once()
+    assert first_scheduler.submissions == 1
+    assert store.pending is not None and store.pending.intent.attempt_no == 1
+
+    restarted = _Scheduler(
+        SchedulerCorrelationResult(complete=True, job_ids=("job-created-before-crash",))
+    )
+    await _run(tmp_path, store.pending, restarted.correlation, scheduler=restarted, store=store)
+    assert restarted.submissions == 0
+    assert ("attach", "job-created-before-crash") in store.calls
+
+
+@pytest.mark.asyncio
+async def test_terminal_artifact_restart_reuses_evidence_then_finalizes(tmp_path: Path) -> None:
+    pending = _pending(observed=SchedulerState.COMPLETED, artifact=True, job_id="job-1")
+    store = _Store(pending)
+    store.finalize_error = _WorkerCrash()
+    storage = _Storage(tmp_path)
+    worker = RunWorker(
+        store=store,
+        execution_context=_ExecutionContext(),
+        workspace=storage,
+        scheduler=_Scheduler(SchedulerCorrelationResult(complete=False)),
+        action_delay_seconds=0,
+    )
+    with pytest.raises(_WorkerCrash):
+        await worker.run_once()
+    assert store.pending is not None
+
+    await _run(
+        tmp_path,
+        store.pending,
+        SchedulerCorrelationResult(complete=False),
+        store=store,
+        storage=storage,
+    )
+    assert store.pending is None
+    assert storage.collect_calls == 2
+    assert [call[0] for call in store.calls].count("finalize") == 2
+
+
+@pytest.mark.asyncio
+async def test_cancel_before_first_attempt_never_submits(tmp_path: Path) -> None:
+    store, scheduler, _ = await _run(
+        tmp_path,
+        _pending(attempt_no=0, cancel=True),
+        SchedulerCorrelationResult(complete=True, job_ids=()),
+    )
+    assert scheduler.submissions == 0
+    assert ("cancel", "run_1") in store.calls
+
+
+@pytest.mark.asyncio
+async def test_cancel_error_still_polls_terminal_then_collects_and_finalizes(
+    tmp_path: Path,
+) -> None:
+    pending = _pending(cancel=True, job_id="job-1", artifact=True)
+    store = _Store(pending)
+    storage = _Storage(tmp_path)
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        cancel_error=SchedulerError("cancel rejected"),
+        poll_state=SchedulerJobState(
+            SchedulerState.COMPLETED,
+            exit_code=0,
+            started_at=NOW,
+            finished_at=NOW,
+        ),
+    )
+
+    await _run(
+        tmp_path,
+        pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        storage=storage,
+    )
+    assert scheduler.cancellations == 1
+    assert scheduler.polls == 1
+    assert not any(call[0] == "uncertain" for call in store.calls)
+    assert ("poll", (SchedulerState.COMPLETED, "cancel rejected")) in store.calls
+    assert store.pending is not None
+
+    await _run(
+        tmp_path,
+        store.pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        storage=storage,
+    )
+    assert store.pending is None
+    assert storage.collect_calls == 1
+    assert any(call[0] == "finalize" for call in store.calls)
+
+
+@pytest.mark.asyncio
+async def test_cancel_and_poll_errors_persist_only_poll_uncertainty(tmp_path: Path) -> None:
+    pending = _pending(cancel=True, job_id="job-1")
+    store = _Store(pending)
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        cancel_error=SchedulerError("cancel request\nrejected"),
+        poll_error=SchedulerError("poll request\nfailed"),
+    )
+
+    for _ in range(2):
+        assert store.pending is not None
+        await _run(
+            tmp_path,
+            store.pending,
+            scheduler.correlation,
+            scheduler=scheduler,
+            store=store,
+        )
+
+    uncertainties = [call[1] for call in store.calls if call[0] == "uncertain"]
+    assert uncertainties == [
+        ("poll_uncertain", "poll request failed"),
+        ("poll_uncertain", "poll request failed"),
+    ]
+    assert scheduler.cancellations == scheduler.polls == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "state", [SchedulerState.PENDING, SchedulerState.RUNNING, SchedulerState.UNKNOWN]
+)
+async def test_cancel_error_with_nonterminal_or_unknown_state_retries_cancel_and_poll(
+    tmp_path: Path, state: SchedulerState
+) -> None:
+    pending = _pending(cancel=True, job_id="job-1")
+    store = _Store(pending)
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        cancel_error=SchedulerError("cancel rejected"),
+        poll_state=SchedulerJobState(state, reason="still authoritative"),
+    )
+
+    for _ in range(2):
+        assert store.pending is not None
+        await _run(
+            tmp_path,
+            store.pending,
+            scheduler.correlation,
+            scheduler=scheduler,
+            store=store,
+        )
+
+    assert scheduler.cancellations == 2
+    assert scheduler.polls == 2
+    assert store.pending is not None
+    assert [call[0] for call in store.calls].count("defer") == 2
+    assert [call[1] for call in store.calls if call[0] == "poll"] == [
+        (state, "cancel rejected"),
+        (state, "cancel rejected"),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (SchedulerSubmissionRejected("invalid account"), "submit_failed"),
+        (SchedulerSubmissionUncertain("transport lost"), "uncertain"),
+    ],
+)
+async def test_submit_error_classification_is_explicit(
+    tmp_path: Path, error: Exception, expected: str
+) -> None:
+    pending = _pending(attempt_no=0)
+    store = _Store(pending)
+    scheduler = _Scheduler(SchedulerCorrelationResult(complete=False), submit_error=error)
+    await _run(tmp_path, pending, scheduler.correlation, scheduler=scheduler, store=store)
+    assert any(call[0] == expected for call in store.calls)
+
+
+@pytest.mark.asyncio
+async def test_missing_resolved_secret_fails_before_arm_and_lists_only_names(
+    tmp_path: Path,
+) -> None:
+    pending = _pending(attempt_no=0)
+    pending = replace(
+        pending,
+        snapshot=replace(
+            pending.snapshot,
+            env_secret_refs={
+                "TOKEN": SecretReference(ConfigScope.user("usr_1"), "MISSING_TOKEN"),
+                "OTHER": SecretReference(ConfigScope.user("usr_1"), "PRESENT_TOKEN"),
+            },
+        ),
+    )
+    store = _Store(pending)
+    context = _ExecutionContext(error=ValidationFailed("缺少 exact Secret：MISSING_TOKEN"))
+    scheduler = _Scheduler(SchedulerCorrelationResult(complete=False))
+    await _run(
+        tmp_path,
+        pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        execution_context=context,
+    )
+
+    failure = next(call for call in store.calls if call[0] == "submit_failed")
+    assert "MISSING_TOKEN" in str(failure)
+    assert "resolved-value-must-not-leak" not in str(failure)
+    assert not any(call[0] == "arm" for call in store.calls)
+    assert scheduler.submissions == 0
+
+
+@pytest.mark.asyncio
+async def test_submit_failure_redacts_secret_before_normalize_and_truncate(tmp_path: Path) -> None:
+    secret = "S3CR3T-boundary-value-never-persist"
+    pending = _pending(attempt_no=0)
+    pending = replace(
+        pending,
+        snapshot=replace(
+            pending.snapshot,
+            env_secret_refs={"TOKEN": SecretReference(ConfigScope.user("usr_1"), "TOKEN")},
+        ),
+    )
+    store = _Store(pending)
+    context = _ExecutionContext(values={"TOKEN": secret})
+    scheduler = _Scheduler(
+        SchedulerCorrelationResult(complete=False),
+        submit_error=SchedulerSubmissionUncertain(f"{'x' * 495}{secret}"),
+    )
+    await _run(
+        tmp_path,
+        pending,
+        scheduler.correlation,
+        scheduler=scheduler,
+        store=store,
+        execution_context=context,
+    )
+
+    uncertain = next(call for call in store.calls if call[0] == "uncertain")
+    persisted = str(uncertain)
+    assert secret not in persisted
+    assert all(secret[index : index + 5] not in persisted for index in range(len(secret) - 4))
+    assert "***" in persisted

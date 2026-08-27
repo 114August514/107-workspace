@@ -32,10 +32,12 @@ def render_sbatch_script(submission: SchedulerSubmission) -> str:
     header = [
         "#!/bin/bash",
         f"#SBATCH --job-name={_sanitize(submission.job_name)}",
+        f"#SBATCH --comment={_correlation(submission.correlation)}",
         f"#SBATCH --account={config.account}",
         f"#SBATCH --partition={config.partition}",
         f"#SBATCH --qos={config.qos}",
         f"#SBATCH --nodes={config.nodes}",
+        "#SBATCH --ntasks-per-node=1",
         f"#SBATCH --cpus-per-task={config.cpus}",
         f"#SBATCH --mem={config.memory_mb}M",
         f"#SBATCH --time={_minutes_to_walltime(config.time_limit_minutes)}",
@@ -60,3 +62,13 @@ def _minutes_to_walltime(minutes: int) -> str:
 def _sanitize(name: str) -> str:
     cleaned = "".join(c if c.isalnum() or c in "-_." else "-" for c in name)
     return cleaned[:64] or "workspace107-run"
+
+
+def _correlation(value: str) -> str:
+    """Keep correlation exact while rejecting sbatch directive injection."""
+    safe = all(
+        character.isascii() and (character.isalnum() or character in "-_.:") for character in value
+    )
+    if not value or not safe:
+        raise ValueError("correlation contains characters unsafe for an sbatch comment")
+    return value

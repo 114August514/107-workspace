@@ -161,6 +161,7 @@ async def test_home_recent_runs_only_contains_runs_initiated_by_current_user(
                 status="succeeded",
                 initiated_by_user_id=initiator,
                 created_at=now,
+                finished_at=now,
             )
         )
     await session.commit()

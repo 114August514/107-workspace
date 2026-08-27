@@ -116,8 +116,10 @@ class ProjectRow(Base):
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    repository_identity: Mapped[str] = mapped_column(String(64))
 
     __table_args__ = (
+        UniqueConstraint("repository_identity", name="uq_projects_repository_identity"),
         Index(
             "uq_projects_owner_user_name",
             "owner_user_id",
@@ -142,16 +144,6 @@ class ProjectRow(Base):
     )
 
 
-class ProjectFileRow(Base):
-    __tablename__ = "project_files"
-
-    project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), primary_key=True)
-    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
-    size: Mapped[int] = mapped_column(Integer)
-    content_hash: Mapped[str] = mapped_column(String(64))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-
 class ProjectVersionRow(Base):
     __tablename__ = "project_versions"
 
@@ -161,17 +153,20 @@ class ProjectVersionRow(Base):
     message: Mapped[str] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    repository_identity: Mapped[str] = mapped_column(String(64))
+    commit_oid: Mapped[str] = mapped_column(String(64))
+    tree_oid: Mapped[str] = mapped_column(String(64))
+    file_count: Mapped[int] = mapped_column(Integer)
+    total_size: Mapped[int] = mapped_column(Integer)
 
-    __table_args__ = (UniqueConstraint("project_id", "sequence", name="uq_version_sequence"),)
-
-
-class ProjectVersionFileRow(Base):
-    __tablename__ = "project_version_files"
-
-    version_id: Mapped[str] = mapped_column(ID, ForeignKey("project_versions.id"), primary_key=True)
-    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
-    size: Mapped[int] = mapped_column(Integer)
-    content_hash: Mapped[str] = mapped_column(String(64))
+    __table_args__ = (
+        UniqueConstraint("project_id", "sequence", name="uq_version_sequence"),
+        UniqueConstraint("project_id", "commit_oid", name="uq_version_commit_oid"),
+        CheckConstraint("length(commit_oid) IN (40, 64)", name="ck_version_commit_oid_length"),
+        CheckConstraint("length(tree_oid) IN (40, 64)", name="ck_version_tree_oid_length"),
+        CheckConstraint("file_count >= 0", name="ck_version_file_count_nonnegative"),
+        CheckConstraint("total_size >= 0", name="ck_version_total_size_nonnegative"),
+    )
 
 
 class EnvironmentRow(Base):
@@ -271,6 +266,27 @@ class RunSnapshotRow(Base):
 
 class RunRow(Base):
     __tablename__ = "runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','succeeded','failed','cancelled','submit_failed')",
+            name="ck_runs_status",
+        ),
+        CheckConstraint(
+            "((scheduler_job_id IS NULL AND submitted_at IS NULL) OR "
+            "(scheduler_job_id IS NOT NULL AND submitted_at IS NOT NULL))",
+            name="ck_runs_scheduler_link",
+        ),
+        CheckConstraint(
+            "status <> 'running' OR scheduler_job_id IS NOT NULL",
+            name="ck_runs_running_has_job",
+        ),
+        CheckConstraint(
+            "((status IN ('queued','running') AND finished_at IS NULL) OR "
+            "(status IN ('succeeded','failed','cancelled','submit_failed') "
+            "AND finished_at IS NOT NULL))",
+            name="ck_runs_finished_at",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), index=True)
@@ -301,6 +317,37 @@ class RunRow(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RunExecutionIntentRow(Base):
+    __tablename__ = "run_execution_intents"
+    __table_args__ = (
+        CheckConstraint("attempt_no >= 0", name="ck_execution_intent_attempt_no"),
+        Index("ix_execution_intents_due", "next_action_at", "created_at"),
+    )
+
+    run_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("runs.id", ondelete="RESTRICT"), primary_key=True
+    )
+    correlation: Mapped[str] = mapped_column(String(128), unique=True)
+    attempt_no: Mapped[int] = mapped_column(Integer, default=0)
+    next_action_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    uncertainty_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    uncertainty_detail: Mapped[str] = mapped_column(Text, default="")
+    observed_scheduler_state: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    observed_exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    observed_finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    observed_reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class RunSecretRedactionRow(Base):
@@ -343,6 +390,9 @@ class RunEventRow(Base):
 
 class ArtifactRow(Base):
     __tablename__ = "artifacts"
+    __table_args__ = (
+        UniqueConstraint("run_id", "source_path", name="uq_artifact_run_source_path"),
+    )
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     run_id: Mapped[str] = mapped_column(ID, ForeignKey("runs.id"), index=True)

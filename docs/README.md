@@ -12,7 +12,7 @@
 | 测试策略、测试粒度和验证边界 | [`testing/`](testing/README.md) |
 | 前端实现、Primer 使用与迁移边界 | [`../frontend/README.md`](../frontend/README.md) |
 | API、生成类型和跨组件机器契约 | [`../contracts/`](../contracts/README.md) |
-| 部署方式与生产边界 | `operations/deployment.md`，可执行清单见 [`../deploy/`](../deploy/README.md) |
+| 部署方式与生产边界 | [`operations/deployment.md`](operations/deployment.md)，目标 107 证据与人工门见 [`operations/107-cluster.md`](operations/107-cluster.md)，可执行清单见 [`../deploy/`](../deploy/README.md) |
 | 长期工程决策及其取舍 | [`decisions/`](decisions/README.md) |
 | 在途工作、跨会话恢复、并行协作和交接 | [`journal/`](journal/README.md) |
 

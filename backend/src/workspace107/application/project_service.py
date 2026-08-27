@@ -8,7 +8,7 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 from __future__ import annotations
 
 import posixpath
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
@@ -24,6 +24,8 @@ from ..domain.errors import (
     ConflictError,
     ObjectNotFound,
     PermissionDenied,
+    ProjectContentIdentityMismatch,
+    ProjectContentMissing,
     ValidationFailed,
 )
 from ..domain.models import (
@@ -31,14 +33,13 @@ from ..domain.models import (
     Project,
     ProjectFile,
     ProjectVersion,
-    ProjectVersionFile,
     RunConfiguration,
 )
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
+from ..domain.ports.project_content import CommitManifest, ProjectContentPort
 from ..domain.ports.repositories import Repositories
-from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
 from .asset_use import (
@@ -83,7 +84,7 @@ class ProjectService:
         repos: Repositories,
         guard: AccessGuard,
         clock: Clock,
-        storage: StoragePort,
+        content: ProjectContentPort,
         activity: ActivityRecorder,
         *,
         max_file_bytes: int,
@@ -91,7 +92,7 @@ class ProjectService:
         self._repos = repos
         self._guard = guard
         self._clock = clock
-        self._storage = storage
+        self._content = content
         self._activity = activity
         # 上限从组合根注入而不是读全局配置：用例的依赖都写在构造函数上，
         # 测试要换一个小上限也不用改环境变量。
@@ -130,12 +131,15 @@ class ProjectService:
             id=ids.new_id(ids.PROJECT),
             name=name,
             owner=owner,
+            repository_identity=ids.new_id(ids.PROJECT_REPOSITORY),
             description=description,
             visibility=visibility,
             created_by=user_id,
             created_at=now,
             updated_at=now,
         )
+        await self._repos.projects.lock_writer(project.id)
+        await self._content.initialize_project(project.id, project.repository_identity)
         await self._repos.projects.add(project)
         await self._activity.record(
             actor_id=user_id,
@@ -236,17 +240,16 @@ class ProjectService:
     # -- 文件 -----------------------------------------------------------
 
     async def list_files(self, user_id: str, project_id: str) -> list[ProjectFile]:
-        await self._guard.project(user_id, project_id, owner_scope=True)
-        files = await self._repos.project_files.list_for_project(project_id)
-        return sorted(files, key=lambda f: f.path)
+        access = await self._guard.project(user_id, project_id, owner_scope=True)
+        return await self._content.list_working_files(
+            project_id, access.project.repository_identity
+        )
 
     async def read_file(self, user_id: str, project_id: str, path: str) -> bytes:
-        await self._guard.project(user_id, project_id, owner_scope=True)
-        normalized = normalize_path(path)
-        record = await self._repos.project_files.get(project_id, normalized)
-        if record is None:
-            raise ObjectNotFound("文件", normalized)
-        return await self._storage.read_blob(record.content_hash)
+        access = await self._guard.project(user_id, project_id, owner_scope=True)
+        return await self._content.read_working_file(
+            project_id, access.project.repository_identity, normalize_path(path)
+        )
 
     async def write_file(
         self, user_id: str, project_id: str, path: str, content: bytes
@@ -254,6 +257,7 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(project_id)
         normalized = normalize_path(path)
 
         # 中间件按 Content-Length 挡掉的是明显超大的请求，
@@ -265,16 +269,13 @@ class ProjectService:
                 "大数据集和模型权重应当作为共享资源管理，不要放进 Project 文件。"
             )
 
-        content_hash = await self._storage.write_blob(content)
-
-        record = ProjectFile(
-            project_id=project_id,
-            path=normalized,
-            size=len(content),
-            content_hash=content_hash,
-            updated_at=self._clock.now(),
+        record = await self._content.write_working_file(
+            project_id,
+            access.project.repository_identity,
+            normalized,
+            content,
+            self._clock.now(),
         )
-        await self._repos.project_files.upsert(record)
         await self._touch(access.project)
         return record
 
@@ -283,17 +284,10 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
-        normalized = normalize_path(path)
-
-        record = await self._repos.project_files.get(project_id, normalized)
-        if record is not None:
-            await self._repos.project_files.delete(project_id, normalized)
-            await self._touch(access.project)
-            return 1
-
-        removed = await self._repos.project_files.delete_under(project_id, normalized + "/")
-        if removed == 0:
-            raise ObjectNotFound("文件或目录", normalized)
+        await self._repos.projects.lock_writer(project_id)
+        removed = await self._content.delete_working_path(
+            project_id, access.project.repository_identity, normalize_path(path)
+        )
         await self._touch(access.project)
         return removed
 
@@ -304,6 +298,7 @@ class ProjectService:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
+        await self._repos.projects.lock_writer(project_id)
         src = normalize_path(source)
         dst = normalize_path(destination)
         if src == dst:
@@ -311,27 +306,13 @@ class ProjectService:
         if dst.startswith(src + "/"):
             raise ValidationFailed("不能把目录移动到自己的子目录中")
 
-        existing = await self._repos.project_files.list_for_project(project_id)
-        matched = [f for f in existing if f.path == src or f.path.startswith(src + "/")]
-        if not matched:
-            raise ObjectNotFound("文件或目录", src)
-
-        moved: list[ProjectFile] = []
-        now = self._clock.now()
-        for file in matched:
-            suffix = file.path[len(src) :]
-            new_path = dst + suffix
-            await self._repos.project_files.delete(project_id, file.path)
-            record = ProjectFile(
-                project_id=project_id,
-                path=new_path,
-                size=file.size,
-                content_hash=file.content_hash,
-                updated_at=now,
-            )
-            await self._repos.project_files.upsert(record)
-            moved.append(record)
-
+        moved = await self._content.move_working_path(
+            project_id,
+            access.project.repository_identity,
+            src,
+            dst,
+            self._clock.now(),
+        )
         await self._touch(access.project)
         return moved
 
@@ -353,45 +334,58 @@ class ProjectService:
             raise ObjectNotFound("Project Version", version_id) from exc
         return version
 
+    async def get_version_detail(self, user_id: str, version_id: str) -> ProjectVersion:
+        version = await self.get_version(user_id, version_id)
+        manifest = await self._verified_manifest(version)
+        return replace(version, files=manifest.files)
+
     async def working_changes(self, user_id: str, project_id: str) -> list[WorkingTreeChange]:
         """查看当前未保存的文件变更：工作区与最近一个版本的差异。"""
-        await self._guard.project(user_id, project_id, owner_scope=True)
+        access = await self._guard.project(user_id, project_id, owner_scope=True)
         latest = await self._repos.project_versions.latest(project_id)
-        baseline = {f.path: f.content_hash for f in latest.files} if latest else {}
-        current = {
-            f.path: f.content_hash
-            for f in await self._repos.project_files.list_for_project(project_id)
-        }
-        return [
-            WorkingTreeChange(path=path, change=change) for path, change in _diff(baseline, current)
-        ]
+        changes = await self._content.working_changes(
+            project_id,
+            access.project.repository_identity,
+            latest.id if latest is not None else None,
+            latest.commit_oid if latest is not None else None,
+        )
+        return [WorkingTreeChange(path=path, change=change) for path, change in changes]
 
     async def save_version(self, user_id: str, project_id: str, message: str) -> ProjectVersion:
         access = await self._guard.project(
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
-        files = await self._repos.project_files.list_for_project(project_id)
-        if not files:
-            raise ValidationFailed("Project 中没有文件，无法保存版本")
-
+        await self._repos.projects.lock_writer(project_id)
         latest = await self._repos.project_versions.latest(project_id)
-        if latest is not None:
-            baseline = {f.path: f.content_hash for f in latest.files}
-            current = {f.path: f.content_hash for f in files}
-            if baseline == current:
-                raise ConflictError("当前内容与最近一个版本相同，没有需要保存的变更")
+        if latest is not None and latest.repository_identity != access.project.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
 
-        version = ProjectVersion(
-            id=ids.new_id(ids.PROJECT_VERSION),
-            project_id=project_id,
-            sequence=await self._repos.project_versions.next_sequence(project_id),
-            message=message.strip() or "保存版本",
-            files=tuple(
-                ProjectVersionFile(path=f.path, size=f.size, content_hash=f.content_hash)
-                for f in sorted(files, key=lambda f: f.path)
-            ),
+        created_at = self._clock.now()
+        resolved_message = message.strip() or "保存版本"
+        version_id = ids.new_id(ids.PROJECT_VERSION)
+        manifest = await self._content.commit_working(
+            project_id,
+            access.project.repository_identity,
+            parent_version_id=latest.id if latest is not None else None,
+            version_id=version_id,
+            parent_commit_oid=latest.commit_oid if latest is not None else None,
+            message=resolved_message,
             created_by=user_id,
-            created_at=self._clock.now(),
+            created_at=created_at,
+        )
+        version = ProjectVersion(
+            id=version_id,
+            project_id=project_id,
+            repository_identity=access.project.repository_identity,
+            sequence=await self._repos.project_versions.next_sequence(project_id),
+            message=resolved_message,
+            files=manifest.files,
+            created_by=user_id,
+            created_at=created_at,
+            commit_oid=manifest.commit_oid,
+            tree_oid=manifest.tree_oid,
+            file_count=manifest.file_count,
+            total_size=manifest.total_size,
         )
         await self._repos.project_versions.add(version)
         await self._touch(access.project)
@@ -415,9 +409,17 @@ class ProjectService:
         if base.project_id != target.project_id:
             raise ValidationFailed("只能比较同一个 Project 的两个版本")
 
-        left = {f.path: f.content_hash for f in base.files}
-        right = {f.path: f.content_hash for f in target.files}
-        return [VersionDiffEntry(path=path, change=change) for path, change in _diff(left, right)]
+        if base.repository_identity != target.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
+        changes = await self._content.diff_commits(
+            base.project_id,
+            base.repository_identity,
+            base.id,
+            base.commit_oid,
+            target.id,
+            target.commit_oid,
+        )
+        return [VersionDiffEntry(path=path, change=change) for path, change in changes]
 
     async def restore_version(self, user_id: str, version_id: str) -> list[ProjectFile]:
         """把工作区恢复到指定历史版本。
@@ -428,22 +430,16 @@ class ProjectService:
         access = await self._guard.project(
             user_id, version.project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
-
-        for file in await self._repos.project_files.list_for_project(version.project_id):
-            await self._repos.project_files.delete(version.project_id, file.path)
-
-        now = self._clock.now()
-        restored: list[ProjectFile] = []
-        for entry in version.files:
-            record = ProjectFile(
-                project_id=version.project_id,
-                path=entry.path,
-                size=entry.size,
-                content_hash=entry.content_hash,
-                updated_at=now,
-            )
-            await self._repos.project_files.upsert(record)
-            restored.append(record)
+        await self._repos.projects.lock_writer(version.project_id)
+        if access.project.repository_identity != version.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
+        restored = await self._content.restore_working(
+            version.project_id,
+            version.repository_identity,
+            version.id,
+            version.commit_oid,
+            self._clock.now(),
+        )
 
         await self._touch(access.project)
         await self._activity.record(
@@ -459,11 +455,13 @@ class ProjectService:
 
     async def read_version_file(self, user_id: str, version_id: str, path: str) -> bytes:
         version = await self.get_version(user_id, version_id)
-        normalized = normalize_path(path)
-        for entry in version.files:
-            if entry.path == normalized:
-                return await self._storage.read_blob(entry.content_hash)
-        raise ObjectNotFound("文件", normalized)
+        return await self._content.read_commit_file(
+            version.project_id,
+            version.repository_identity,
+            version.id,
+            version.commit_oid,
+            normalize_path(path),
+        )
 
     # -- 内部 -----------------------------------------------------------
 
@@ -564,6 +562,7 @@ class ProjectService:
             id=ids.new_id(ids.PROJECT),
             name=name,
             owner=owner,
+            repository_identity=ids.new_id(ids.PROJECT_REPOSITORY),
             description=description or source_access.project.description,
             # Asset references were validated against the target owner before any writes
             # (owner-scope path). PUBLIC forkers carry no mutable references.
@@ -572,32 +571,39 @@ class ProjectService:
             created_at=now,
             updated_at=now,
         )
+        fork_message = f"Fork 自 {source_access.project.name} 的 {source_version.label}"
+        await self._repos.projects.lock_writer(project.id)
+        fork_version_id = ids.new_id(ids.PROJECT_VERSION)
+        manifest = await self._content.fork_commit(
+            source_version.project_id,
+            source_version.repository_identity,
+            source_version.id,
+            source_version.commit_oid,
+            project.id,
+            project.repository_identity,
+            version_id=fork_version_id,
+            message=fork_message,
+            created_by=user_id,
+            created_at=now,
+            expected_source_tree_oid=source_version.tree_oid,
+            expected_source_file_count=source_version.file_count,
+            expected_source_total_size=source_version.total_size,
+        )
         await self._repos.projects.add(project)
-
-        # 3. 内容：只复制 (path, size, content_hash)，一个字节都不搬。
-        #    存储是按内容寻址的，几十 GB 的数据集 Fork 一百次也只占一份。
-        for entry in source_version.files:
-            await self._repos.project_files.upsert(
-                ProjectFile(
-                    project_id=project.id,
-                    path=entry.path,
-                    size=entry.size,
-                    content_hash=entry.content_hash,
-                    updated_at=now,
-                )
-            )
-
-        # 工作区和一个起始版本都要有：只给版本的话页面上看不到文件，
-        # 只给工作区的话没有版本可跑，提交前检查会直接拦下。
         await self._repos.project_versions.add(
             ProjectVersion(
-                id=ids.new_id(ids.PROJECT_VERSION),
+                id=fork_version_id,
                 project_id=project.id,
+                repository_identity=project.repository_identity,
                 sequence=1,
-                message=(f"Fork 自 {source_access.project.name} 的 {source_version.label}"),
-                files=source_version.files,
+                message=fork_message,
+                files=manifest.files,
                 created_by=user_id,
                 created_at=now,
+                commit_oid=manifest.commit_oid,
+                tree_oid=manifest.tree_oid,
+                file_count=manifest.file_count,
+                total_size=manifest.total_size,
             )
         )
 
@@ -656,19 +662,28 @@ class ProjectService:
         await self._guard.project(user_id, project_id, needs=Capability.PROJECT_VIEW)
         return await self._repos.fork_relations.get_for_project(project_id)
 
+    async def _verified_manifest(self, version: ProjectVersion) -> CommitManifest:
+        project = await self._repos.projects.get(version.project_id)
+        if project is None:
+            raise ProjectContentMissing(f"Project {version.project_id} 不存在")
+        if project.repository_identity != version.repository_identity:
+            raise ProjectContentIdentityMismatch("Project Version repository identity 不一致")
+        manifest = await self._content.manifest(
+            version.project_id,
+            version.repository_identity,
+            version.id,
+            version.commit_oid,
+        )
+        if (
+            manifest.tree_oid != version.tree_oid
+            or manifest.file_count != version.file_count
+            or manifest.total_size != version.total_size
+        ):
+            raise ProjectContentIdentityMismatch(
+                f"Project Version {version.id} 的 Git manifest 与持久化 identity 不一致"
+            )
+        return manifest
+
     async def _touch(self, project: Project) -> None:
         project.updated_at = self._clock.now()
         await self._repos.projects.update(project)
-
-
-def _diff(left: dict[str, str], right: dict[str, str]) -> list[tuple[str, ChangeKind]]:
-    """比较两组 ``路径 -> 内容摘要``，返回 ``(路径, 变化类型)``。"""
-    changes: list[tuple[str, ChangeKind]] = []
-    for path in sorted(set(left) | set(right)):
-        if path not in left:
-            changes.append((path, ChangeKind.ADDED))
-        elif path not in right:
-            changes.append((path, ChangeKind.REMOVED))
-        elif left[path] != right[path]:
-            changes.append((path, ChangeKind.MODIFIED))
-    return changes
