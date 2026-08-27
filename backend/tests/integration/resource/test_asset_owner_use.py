@@ -30,8 +30,8 @@ async def _create_project_with_version(
     client: httpx.AsyncClient, user_group_id: str, *, name: str
 ) -> dict:
     response = await client.post(
-        f"/api/v1/workspaces/{user_group_id}/projects",
-        json={"name": name},
+        "/api/v1/projects",
+        json={"owner": {"kind": "user_group", "id": user_group_id}, "name": name},
         headers=ALICE,
     )
     response.raise_for_status()
@@ -108,14 +108,7 @@ async def _create_environment_version(
 async def _set_group_environment(
     session: AsyncSession, client: httpx.AsyncClient, user_group_id: str
 ) -> str:
-    version_id = await _create_environment_version(session, owner_user_group_id=user_group_id)
-    response = await client.patch(
-        f"/api/v1/workspaces/{user_group_id}",
-        json={"default_environment_version_id": version_id},
-        headers=ALICE,
-    )
-    response.raise_for_status()
-    return version_id
+    return await _create_environment_version(session, owner_user_group_id=user_group_id)
 
 
 async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
@@ -125,7 +118,7 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
     group_a = await _create_group(client, "Group A")
     group_b = await _create_group(client, "Group B")
     environment_version_id = await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
     resource_version_id = await _create_resource_version(client, group_b)
 
@@ -141,6 +134,7 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
             "name": "cross-owner",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",
@@ -218,20 +212,6 @@ async def test_issue_39_environment_assignment_requires_exact_project_owner(
     )
     project = await _create_project_with_version(client, group_a, name="Environment owner A")
 
-    # Group default assignment uses the exact compatibility owner, not actor discovery.
-    response = await client.patch(
-        f"/api/v1/workspaces/{group_a}",
-        json={"default_environment_version_id": environment_b},
-        headers=ALICE,
-    )
-    assert response.status_code == 404
-    response = await client.patch(
-        f"/api/v1/workspaces/{group_a}",
-        json={"default_environment_version_id": environment_a},
-        headers=ALICE,
-    )
-    assert response.status_code == 200
-
     # Project assignment rejects both another Group's asset and the actor's User asset.
     for version_id in (environment_b, user_environment):
         response = await client.patch(
@@ -273,7 +253,7 @@ async def test_issue_39_environment_assignment_requires_exact_project_owner(
     assert same_owner.status_code == 201, same_owner.text
 
     # A bypassed exact Environment reference is rejected again during Run resolution.
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     bypass_id = "rc_environment_owner_bypass"
     session.add(
         RunConfigurationRow(
@@ -317,6 +297,7 @@ async def test_issue_39_fork_validates_assets_against_target_owner(
             "name": "source config",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_a,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",
@@ -337,27 +318,30 @@ async def test_issue_39_fork_validates_assets_against_target_owner(
 
     cross_environment = await client.post(
         f"/api/v1/versions/{project['_version_id']}/fork",
-        json={"target_workspace_id": group_b, "name": "cross Environment fork"},
+        json={
+            "target_owner": {"kind": "user_group", "id": group_b},
+            "name": "cross Environment fork",
+        },
         headers=ALICE,
     )
     assert cross_environment.status_code == 404
 
     response = await client.patch(
         f"/api/v1/projects/{project['id']}",
-        json={"inherit_workspace_environment": True},
+        json={"environment_version_id": None},
         headers=ALICE,
     )
     assert response.status_code == 200
     cross_resource = await client.post(
         f"/api/v1/versions/{project['_version_id']}/fork",
-        json={"target_workspace_id": group_b, "name": "cross Resource fork"},
+        json={"target_owner": {"kind": "user_group", "id": group_b}, "name": "cross Resource fork"},
         headers=ALICE,
     )
     assert cross_resource.status_code == 404
 
     same_owner = await client.post(
         f"/api/v1/versions/{project['_version_id']}/fork",
-        json={"target_workspace_id": group_a, "name": "same owner fork"},
+        json={"target_owner": {"kind": "user_group", "id": group_a}, "name": "same owner fork"},
         headers=ALICE,
     )
     assert same_owner.status_code == 201, same_owner.text
@@ -374,7 +358,7 @@ async def test_issue_39_rerun_revalidates_snapshot_asset_owners(
     group_a = await _create_group(client, "Rerun Group A")
     group_b = await _create_group(client, "Rerun Group B")
     environment_a = await _set_group_environment(session, client, group_a)
-    await grant_test_entitlement(session, group_a)
+    await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="Rerun source")
     resource_a = await _create_resource_version(client, group_a)
     configuration = await client.post(

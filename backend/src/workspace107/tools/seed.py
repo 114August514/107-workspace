@@ -22,8 +22,9 @@ from ..api.deps import build_services
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
 from ..domain import ids
-from ..domain.enums import LegacyWorkspaceKind, MembershipRole, MembershipStatus
-from ..domain.pagination import PageRequest
+from ..domain.config_scope import ConfigScope
+from ..domain.enums import MembershipRole, MembershipStatus
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..infrastructure.db import tables as t
 from ..main import build_context
 
@@ -229,17 +230,6 @@ async def _ensure_platform_asset_group(
     )
     await session.flush()
     session.add(
-        t.LegacyWorkspaceRow(
-            id=PLATFORM_ASSET_GROUP_ID,
-            kind=LegacyWorkspaceKind.COLLABORATIVE.value,
-            name="平台资产",
-            description="平台管理员维护的运行环境和共享资源。",
-            owner_id=owner.id,
-            default_environment_version_id=None,
-            created_at=now,
-        )
-    )
-    session.add(
         t.MembershipRow(
             id=ids.new_id(ids.MEMBERSHIP),
             user_group_id=PLATFORM_ASSET_GROUP_ID,
@@ -335,18 +325,6 @@ async def seed_demo(
         )
         session.add(group)
 
-    anchor = await session.get(t.LegacyWorkspaceRow, DEMO_USER_GROUP_ID)
-    if anchor is None:
-        anchor = t.LegacyWorkspaceRow(
-            id=DEMO_USER_GROUP_ID,
-            kind=LegacyWorkspaceKind.COLLABORATIVE.value,
-            name=group.name,
-            description=group.description,
-            owner_id=user.id,
-            default_environment_version_id=None,
-            created_at=now,
-        )
-        session.add(anchor)
     await session.flush()
 
     membership = await session.get(t.MembershipRow, DEMO_OWNER_MEMBERSHIP_ID)
@@ -368,18 +346,18 @@ async def seed_demo(
     entitlement = (
         await session.execute(
             select(t.ResourceEntitlementRow).where(
-                t.ResourceEntitlementRow.workspace_id == DEMO_USER_GROUP_ID,
+                t.ResourceEntitlementRow.user_id == user.id,
                 t.ResourceEntitlementRow.compute_plan_id == "plan_cpu_quick",
             )
         )
     ).scalar_one_or_none()
     if entitlement is None:
-        # Demo data explicitly opts into the still-legacy Run qualification model.
-        # Creating a real User Group grants no Workspace-scoped entitlement.
+        # Resource Entitlement belongs to the User. This local demo fixture does
+        # not imply that User Group creation grants compute eligibility.
         session.add(
             t.ResourceEntitlementRow(
                 id=ids.new_id(ids.ENTITLEMENT),
-                workspace_id=DEMO_USER_GROUP_ID,
+                user_id=user.id,
                 compute_plan_id="plan_cpu_quick",
                 max_concurrent_runs=2,
                 expires_at=None,
@@ -387,20 +365,20 @@ async def seed_demo(
         )
         await session.flush()
 
-    # 幂等：已经载入过就直接返回，不重复创建
-    existing = await services.projects.list_for_workspace(
-        user.id, DEMO_USER_GROUP_ID, PageRequest()
-    )
-    for project in existing.items:
-        if project.name == DEMO_PROJECT:
+    # Idempotent current-owner lookup: no compatibility anchor is created.
+    existing = await services.projects.list_recent_for_user(user.id, limit=100)
+    for project in existing:
+        if (
+            project.owner == OwnerReference(OwnerKind.USER_GROUP, DEMO_USER_GROUP_ID)
+            and project.name == DEMO_PROJECT
+        ):
             return project.id
 
-    await services.legacy_workspaces.set_default_environment(
-        user.id, DEMO_USER_GROUP_ID, DEMO_ENVIRONMENT_VERSION_ID
-    )
-
-    project = await services.projects.create(
-        user.id, DEMO_USER_GROUP_ID, DEMO_PROJECT, "跑通核心闭环的演示项目"
+    project = await services.projects.create_owned(
+        user.id,
+        OwnerReference(OwnerKind.USER_GROUP, DEMO_USER_GROUP_ID),
+        DEMO_PROJECT,
+        "跑通核心闭环的演示项目",
     )
     await services.projects.write_file(user.id, project.id, "train.py", DEMO_SCRIPT.encode("utf-8"))
     await services.projects.write_file(
@@ -408,7 +386,9 @@ async def seed_demo(
     )
     await services.projects.save_version(user.id, project.id, "初始版本")
 
-    await services.legacy_workspaces.set_variable(user.id, DEMO_USER_GROUP_ID, "EPOCHS", "5")
+    await services.configuration.set_variable(
+        ConfigScope.user_group(DEMO_USER_GROUP_ID), "EPOCHS", "5"
+    )
     await services.run_configurations.create(
         user.id,
         project.id,
@@ -416,6 +396,7 @@ async def seed_demo(
             name="默认运行",
             command="python train.py",
             compute_plan_id="plan_cpu_quick",
+            environment_version_id=DEMO_ENVIRONMENT_VERSION_ID,
             description="用 CPU 快速测试方案跑一遍训练脚本",
             environment_variables={"EPOCHS": "${{ vars.EPOCHS }}", "SEED": "42"},
             artifact_rules=[{"path": "outputs", "name": "训练结果", "optional": False}],

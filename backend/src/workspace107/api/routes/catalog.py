@@ -34,6 +34,6 @@ async def list_compute_plans(
     user: CurrentUser,
     services: ServicesDep,
 ) -> list[s.ComputePlanOut]:
-    """登录后只读返回平台全部算力方案；列表不表示当前 Workspace 已获得对应权益。"""
+    """登录后只读返回平台全部算力方案；列表不表示当前 User 已获得对应权益。"""
     plans = await services.catalog.list_compute_plans()
     return [p.compute_plan_out(plan) for plan in plans]

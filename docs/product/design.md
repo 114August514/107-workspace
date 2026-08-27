@@ -85,6 +85,8 @@
 
 User Group 是平台中的用户协作组织。User 可通过独立 Membership 加入多个 User Group。跨 Owner 使用资产需要显式 USE Grant。
 
+当前治理角色采用 Owner / Admin / Member 三级模型。所有有效成员均可查看成员列表；Owner 可以邀请普通 Member、移除 Member 或 Admin，并可在 Member 与 Admin 之间显式变更角色；Admin 只能邀请普通 Member、移除普通 Member，不能变更任何成员角色或移除 Admin / Owner；Member 不具有成员治理权限。普通邀请只创建 Member，Owner 只能通过所有权转移用例产生或取消，不能通过普通角色变更完成。
+
 ```text
 User Group、成员与共享资产
 │
@@ -118,7 +120,7 @@ User Group、成员与共享资产
     ├── [Core] 使用 User Group 拥有的 Environment 和 Shared Resource 创建 Run
     ├── [Core] 查看和管理 User Group 的 Variable
     ├── [Core] 查看和管理 User Group 的 Secret（不展示 Secret 明文）
-    └── [V1] 为其他 User 或 User Group 使用本组资产建立显式 USE Grant
+    └── [V1] 为其他 User 或 User Group 建立本组资产的 USE Grant
 ```
 
 ### 2.3 Project 与项目文件
@@ -770,9 +772,13 @@ Repository 接口
 
 | 名称 | 定义 |
 | :---- | :-- |
-| Grant | 一条明确的跨 Owner 使用许可，允许 User 或 User Group 使用 Environment 或 Shared Resource |
-| Target | Grant 中“可以使用哪项资产”的对象，只能是 Environment 或 Shared Resource 本身，而不是其中某个 Version |
+| Grant | Grantor 向 Grantee 授予的跨 Owner 使用许可 |
+| Grantor | 发出 Grant 的 User 或 User Group |
+| Grantee | 获得 Grant 的 User 或 User Group |
+| Target | Grant 的作用范围：`ALL`，或某个顶层 Environment / Shared Resource；不直接指向 Version |
 | Action | Grant 中“允许做什么”的操作；当前只有 USE |
+
+`Target = ALL` 只覆盖当前 Owner 为 Grantor 的资产，包括 Grantor 后续新建或取得的资产。具体执行 Grant 操作的 User 只作为操作者记录，不改变 Grantor、Grantee 或 Target 的语义。
 
 `Membership` 的结构如下：
 
@@ -1331,8 +1337,8 @@ Activity 记录操作者（User，或适用时的平台系统）、动作、作�
 
 ```text
 Project、其从属对象或 Run ─────────────▶ Project
-Environment 或其 Version / Grant ─────▶ Environment
-Shared Resource 或其 Version / Grant ─▶ Shared Resource
+Environment 或其 Version ──────────────▶ Environment
+Shared Resource 或其 Version ──────────▶ Shared Resource
 User Group 或 Membership ──────────────▶ User Group
 ```
 
@@ -1607,7 +1613,7 @@ Activity ──▶ 操作者（User / Platform System）、作用对象
 Notification ──▶ User
 Notification ··▶ Activity / 来源对象
 
-User / User Group ── Grant(USE) ──▶ Environment / Shared Resource
+Grantor(User / User Group) ── Grant(USE, ALL / Environment / Shared Resource) ──▶ Grantee(User / User Group)
 ```
 
 这里有几个关键语义：
@@ -1649,7 +1655,7 @@ Resource Entitlement
 → 使 User 获得 Compute Plan 的使用资格；Run 使用发起 User 的资格。
 
 Grant
-→ 向 User 或 User Group 授予顶层 Environment 或 Shared Resource 的 `USE` 权限（当前仅设置了 `USE` 权限）。
+→ 由 Grantor 向 Grantee 授予 `USE`；可覆盖 Grantor 当前拥有的全部 Environment / Shared Resource，或某个具体顶层资产。
 
 Environment、Shared Resource
 → 分别由一个 User 或一个 User Group 拥有；平台提供或运营的资产由平台运营的 User Group 持有。
@@ -1731,7 +1737,7 @@ User 必须通过对应 User Group 的有效 Membership，才能以该组成员�
 
 ##### **GR-103 — Membership Role 权限**
 
-User 在一个 User Group 中可执行的操作必须受该 Membership 的 Role 和 Status 约束；同一 User 在其他 User Group 中的 Membership、Role 或 Status 不参与判断。
+User 在一个 User Group 中可执行的操作必须受该 Membership 的 Role 和 Status 约束；同一 User 在其他 User Group 中的 Membership、Role 或 Status 不参与判断。所有有效角色均可查看成员；Owner 可以邀请普通 Member、移除 Member 或 Admin、在 Member 与 Admin 之间变更角色并转移所有权；Admin 只能邀请和移除普通 Member；Member 不具有成员治理权限。普通邀请只产生 Member，Owner 身份只能通过所有权转移改变。
 
 ##### **GR-104 — User Group 所有权**
 
@@ -1829,11 +1835,11 @@ Run Snapshot 只能记录执行开始前已确定的输入和配置；Log、Arti
 
 ##### **GR-401 — Environment 与 Shared Resource 使用资格**
 
-Owner User 可以管理、发布和使用自己的 Environment 或 Shared Resource；User Group-owned 资产由具体 User 按该组有效 Membership 的 Role / Status 操作；跨 Owner 使用必须具有有效 USE Grant。
+Owner User 可以管理、发布和使用自己的 Environment 或 Shared Resource；User Group-owned 资产由具体 User 按该组有效 Membership 的 Role / Status 操作；跨 Owner 使用必须命中资产当前 Owner 作为 Grantor 发出的有效 USE Grant。
 
-##### **GR-402 — Grant Target 与版本固定分离**
+##### **GR-402 — Grant 主体、范围与版本分离**
 
-资产 Grant 只能向 User 或 User Group 授予权限，Action 只能是 `USE`，Target 只能是顶层 Environment 或 Shared Resource；Grant 不得向 Project 授权，Project 也不得作为 Target，Grant 不授予管理、发布、归档、转移等生命周期权限。
+Grantor 和 Grantee 只能是 User 或 User Group，Action 只能是 `USE`。Target 只能是 `ALL` 或顶层 Environment / Shared Resource；`ALL` 只覆盖当前 Owner 为 Grantor 的资产，包括其后续新建或取得的资产。Grant 不直接授予 Version，不以 Project 为 Grantor、Grantee 或 Target，也不授予管理、发布、归档、转移等生命周期权限。
 
 ##### **GR-403 — Input Binding 内容确定性**
 
@@ -1857,7 +1863,7 @@ Variable、Secret 的值和访问权限不得因 Fork、Template 或其他跨 Ow
 
 ##### **GR-408 — Ownership 变更后的授权失效**
 
-Ownership 转移不得改写已有 Version，也不得改变既有 Run Snapshot 中记录的身份和配置。转移完成后，原 Owner 建立的 Grant 失效，后续使用必须按新的 Owner 边界重新授权。转移不延长所引用内容的保留期限；重新执行时，仍须校验当时有效的授权和内容可用性。
+Ownership 转移不得改写已有 Version，也不得改变既有 Run Snapshot 中记录的身份和配置。Grant 仅在 Grantor 仍是目标资产当前 Owner 时作用于该资产；资产转移后，原 Grantor 的 `ALL` 或单资产 Grant 自然不再适用，新 Owner 可以重新授权。User Group 内部 `MembershipRole.OWNER` 变更不属于资产 Ownership 转移，不影响以该 User Group 为 Grantor 的 Grant。转移不延长所引用内容的保留期限；重新执行时，仍须校验当时有效的授权和内容可用性。
 
 ---
 
@@ -1953,7 +1959,7 @@ Activity 没有未读、完成或送达状态，也不替代 Notification、Audi
 
 ##### 管理 Membership
 
-User Group 可以建立 Membership、变更 Role 和 Status、退出或移除成员；变更仅影响对应 User 在该组中的成员身份和操作权限，不改变组拥有的对象，并须保持唯一有效 Owner。
+User Group 可以建立 Membership、变更 Role 和 Status、退出或移除成员；变更仅影响对应 User 在该组中的成员身份和操作权限，不改变组拥有的对象，并须保持唯一有效 Owner。普通邀请只建立 Member；只有 Owner 可以在 Member 与 Admin 之间变更 Role，Admin 只能邀请和移除普通 Member；Owner 不得通过普通 Role 变更产生或取消。
 
 ##### 转移 User Group Owner
 
@@ -2071,7 +2077,9 @@ Environment 或 Shared Resource 的 Ownership 转移遵循 GR-408。
 
 ##### 管理跨 Owner 资产 Grant
 
-Environment 或 Shared Resource Owner 可以为 User 或 User Group 建立、调整或撤销顶层资产的 USE Grant。
+Asset Owner 可以向 User 或 User Group 建立、调整或撤销 USE Grant；授权范围可以是该 Owner 当前及以后拥有的全部 Environment / Shared Resource，或某个具体顶层资产。
+
+User-owned 资产由该 User 管理 Grant；User Group-owned 资产由有效成员按该组 Membership 的 Role / Status 对应权限管理，不把 `MembershipRole.OWNER` 等同于资产 Owner。实际执行操作的 User 只作为操作者记录。
 
 ##### 管理 Compute Plan
 
@@ -2628,7 +2636,7 @@ Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式�
 当前 Roadmap 以 Competition V1 为近期目标，不绑定具体日期，并根据实现反馈持续更新。
 
 | Milestone | 核心目标 | 关键能力 | 默认推进定位 |
-| :---: | :---: | :---: | :---: |
+| :---: | :---: | :--- | :---: |
 | **M0 Engineering Baseline** | 建立可持续开发的工程基线 | Monorepo、Backend、Worker、测试、配置、统一工程入口 | 工程基线优先 |
 | **M1 Executable Skeleton** | 跑通最薄真实执行链路 | Run / Snapshot、Worker、Git / Shared FS、slurmrestd / Slurm、状态回写 | 真实链路优先 |
 | **M2 Single-user Compute Loop** | 形成单用户完整计算闭环 | User-owned Project / Version、Run Configuration、Run、Log、Artifact | 可见闭环优先 |

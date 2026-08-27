@@ -22,6 +22,7 @@ from ..domain.compute import (
     check_request_against_plan,
     resolve_scheduler_configuration,
 )
+from ..domain.config_scope import SecretReference
 from ..domain.enums import (
     ActivityAction,
     InputSourceType,
@@ -33,6 +34,7 @@ from ..domain.enums import (
 from ..domain.errors import (
     ConflictError,
     ObjectNotFound,
+    PermissionDenied,
     PreflightRejected,
     SchedulerError,
     ValidationFailed,
@@ -41,7 +43,6 @@ from ..domain.models import (
     Artifact,
     EnvironmentVersion,
     InputBinding,
-    Project,
     ProjectVersion,
     Run,
     RunConfiguration,
@@ -57,14 +58,15 @@ from ..domain.ports.scheduler import SchedulerPort, SchedulerSubmission
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import ArtifactEntry, RunInput, StoragePort
 from ..domain.run_snapshot import RunSnapshot, build_snapshot
-from ..domain.secrets import ResolvedEnv, redact, resolve_env
-from .access import AccessGuard
+from ..domain.secrets import ResolvedEnv, redact
+from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
 from .asset_use import (
     environment_version_for_owner_use,
     shared_resource_version_for_owner_use,
 )
 from .notifier import Notifier
+from .scoped_config_resolver import ScopedConfigResolver
 
 MAX_LOG_BYTES = 256 * 1024
 
@@ -92,7 +94,7 @@ class PreflightResult:
     compute_plan: ComputePlan | None = None
     compute_request: ComputeRequest | None = None
     resolved_env_literals: dict[str, str] = field(default_factory=dict)
-    resolved_env_secret_refs: dict[str, str] = field(default_factory=dict)
+    resolved_env_secret_refs: dict[str, SecretReference] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -130,6 +132,7 @@ class RunService:
         secrets: SecretVault,
         activity: ActivityRecorder,
         notifier: Notifier,
+        config_resolver: ScopedConfigResolver,
     ) -> None:
         self._repos = repos
         self._guard = guard
@@ -137,13 +140,14 @@ class RunService:
         self._storage = storage
         self._scheduler = scheduler
         self._secrets = secrets
+        self._config_resolver = config_resolver
         self._activity = activity
         self._notifier = notifier
 
     # -- 查询 -----------------------------------------------------------
 
     async def list_for_project(self, user_id: str, project_id: str, page: PageRequest) -> Page[Run]:
-        await self._guard.project(user_id, project_id)
+        await self._guard.project(user_id, project_id, owner_scope=True)
         return await self._repos.runs.list_for_project(project_id, page)
 
     async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Run]:
@@ -170,11 +174,14 @@ class RunService:
         access = await self._guard.run(user_id, run_id)
         snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
         secret_values: list[str] = []
-        if snapshot is not None and snapshot.env_secret_refs:
-            resolved = await self._secrets.resolve(
-                access.workspace.id, sorted(set(snapshot.env_secret_refs.values()))
-            )
-            secret_values = list(resolved.values())
+        if snapshot is not None:
+            secret_values = await self._secrets.redaction_values(access.run.id)
+            if (
+                access.run.submitted_at is not None
+                and snapshot.env_secret_refs
+                and not secret_values
+            ):
+                raise ValidationFailed("Run Secret redaction retention is unavailable")
 
         chunks: list[RunLogChunk] = []
         for stream in (LogStream.STDOUT, LogStream.STDERR):
@@ -241,9 +248,8 @@ class RunService:
 
         environment_version = await self._resolve_environment_version(
             user_id,
-            access.project,
             configuration,
-            access.workspace.owner_reference,
+            access.project.owner,
             problems,
         )
 
@@ -252,13 +258,13 @@ class RunService:
         if plan is None:
             problems.append("运行方案引用的算力方案已不存在")
         else:
-            entitlement = await self._repos.entitlements.get_for_plan(access.workspace.id, plan.id)
+            entitlement = await self._repos.entitlements.get_for_plan(user_id, plan.id)
             if entitlement is None:
-                problems.append(f"当前 Workspace 没有算力方案「{plan.name}」的使用权益")
+                problems.append(f"你没有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
             else:
-                problems.extend(await self._check_concurrency(access.workspace.id, entitlement))
+                problems.extend(await self._check_concurrency(user_id, entitlement))
 
             request = self._resolve_compute_request(plan, configuration, draft)
             problems.extend(check_request_against_plan(plan, request))
@@ -266,26 +272,14 @@ class RunService:
         command = (draft.command_override or configuration.command).strip()
         if not command:
             problems.append("执行命令不能为空")
-
-        variables = {
-            v.name: v.value
-            for v in await self._repos.variables.list_for_workspace(access.workspace.id)
-        }
-        resolved_env, env_problems = resolve_env(
+        resolved = await self._config_resolver.resolve(
+            access,
+            user_id,
             configuration.environment_variables,
-            variables=variables,
-            available_secrets=await self._secrets.list_names(access.workspace.id),
         )
-        problems.extend(env_problems)
+        problems.extend(resolved.problems)
 
-        problems.extend(
-            await self._check_inputs(
-                user_id,
-                configuration,
-                access.workspace.id,
-                access.workspace.owner_reference,
-            )
-        )
+        problems.extend(await self._check_inputs(user_id, configuration, access.project.owner))
 
         return PreflightResult(
             problems=problems,
@@ -293,8 +287,8 @@ class RunService:
             environment_version=environment_version,
             compute_plan=plan,
             compute_request=request,
-            resolved_env_literals=resolved_env.literals,
-            resolved_env_secret_refs=resolved_env.secret_refs,
+            resolved_env_literals=resolved.literals,
+            resolved_env_secret_refs=resolved.secret_refs,
         )
 
     # -- 创建与提交 -----------------------------------------------------
@@ -316,7 +310,7 @@ class RunService:
         access = await self._guard.project(user_id, project_id, needs=Capability.RUN_SUBMIT)
 
         replayed = await self._replay_or_reserve(
-            access.workspace.id, idempotency_key, "create_run", project_id=project_id
+            user_id, idempotency_key, "create_run", project_id=project_id
         )
         if replayed is not None:
             return RunSubmission(run=replayed, created=False)
@@ -325,14 +319,12 @@ class RunService:
         if configuration is None or configuration.project_id != project_id:
             raise ObjectNotFound("Run Configuration", draft.run_configuration_id)
 
-        # 先独占这个 Workspace 在该算力方案上的权益行，再做提交前检查。
+        # 先独占发起 User 在该算力方案上的权益行，再做提交前检查。
         #
         # 并发上限是「数一数还有几个名额 -> 创建 Run」，这两步之间不能被别的请求
         # 插进来，否则两个请求会同时读到「还没到上限」，然后都创建成功——
         # 上限就形同虚设。锁一直持有到本次请求的事务结束。
-        await self._repos.entitlements.lock_for_plan(
-            access.workspace.id, configuration.compute_plan_id
-        )
+        await self._repos.entitlements.lock_for_plan(user_id, configuration.compute_plan_id)
 
         result = await self.preflight(user_id, project_id, draft)
         if not result.ok:
@@ -362,7 +354,7 @@ class RunService:
             compute_request=result.compute_request,
             scheduler=resolve_scheduler_configuration(result.compute_plan, result.compute_request),
             artifact_rules=configuration.artifact_rules,
-            created_by=user_id,
+            initiated_by_user_id=user_id,
             created_at=now,
         )
         await self._repos.run_snapshots.add(snapshot)
@@ -370,7 +362,6 @@ class RunService:
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=project_id,
-            workspace_id=access.workspace.id,
             snapshot_id=snapshot.id,
             compute_plan_id=snapshot.compute_plan_id,
             project_version_id=snapshot.project_version_id,
@@ -379,15 +370,17 @@ class RunService:
             source_run_id=None,
             name=draft.name.strip() or f"{access.project.name} · {result.project_version.label}",
             status=RunStatus.QUEUED,
-            created_by=user_id,
+            initiated_by_user_id=user_id,
             created_at=now,
         )
         await self._repos.runs.add(run)
         await self._record_event(run.id, RunEventType.CREATED, "已固定 Run Snapshot")
-        await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
+        await self._attach_idempotency(user_id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, result.project_version, access.workspace.id)
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_SUBMITTED)
+        await self._submit(run, snapshot, result.project_version)
+        await self._record_run_activity(
+            user_id, run, access.project.owner, ActivityAction.RUN_SUBMITTED
+        )
         return RunSubmission(run=run, created=True)
 
     async def rerun(
@@ -406,7 +399,7 @@ class RunService:
         access = await self._guard.run(user_id, run_id, needs=Capability.RUN_SUBMIT)
 
         replayed = await self._replay_or_reserve(
-            access.workspace.id, idempotency_key, "rerun", source_run_id=run_id
+            user_id, idempotency_key, "rerun", source_run_id=run_id
         )
         if replayed is not None:
             return RunSubmission(run=replayed, created=False)
@@ -416,16 +409,9 @@ class RunService:
             raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
 
         # 和 create 一样要先独占权益行——重跑同样占用并发名额。
-        await self._repos.entitlements.lock_for_plan(
-            access.workspace.id, source_snapshot.compute_plan_id
-        )
+        await self._repos.entitlements.lock_for_plan(user_id, source_snapshot.compute_plan_id)
 
-        problems = await self._revalidate_snapshot(
-            user_id,
-            source_snapshot,
-            access.workspace.id,
-            access.workspace.owner_reference,
-        )
+        problems = await self._revalidate_snapshot(source_snapshot, access, user_id)
         if problems:
             raise PreflightRejected(problems)
 
@@ -433,7 +419,7 @@ class RunService:
             self._repos,
             user_id,
             source_snapshot.environment_version_id,
-            access.workspace.owner_reference,
+            access.project.owner,
         )
         plan = await self._repos.compute_plans.get(source_snapshot.compute_plan_id)
         project_version = await self._repos.project_versions.get(source_snapshot.project_version_id)
@@ -456,9 +442,9 @@ class RunService:
             input_bindings=source_snapshot.input_bindings,
             compute_plan_id=plan.id,
             compute_request=source_snapshot.compute_request,
-            scheduler=resolve_scheduler_configuration(plan, source_snapshot.compute_request),
+            scheduler=source_snapshot.scheduler,
             artifact_rules=source_snapshot.artifact_rules,
-            created_by=user_id,
+            initiated_by_user_id=user_id,
             created_at=now,
         )
         await self._repos.run_snapshots.add(snapshot)
@@ -466,7 +452,6 @@ class RunService:
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=access.run.project_id,
-            workspace_id=access.workspace.id,
             project_version_id=source_snapshot.project_version_id,
             project_version_label=project_version.label,
             snapshot_id=snapshot.id,
@@ -475,16 +460,20 @@ class RunService:
             source_run_id=access.run.id,
             name=name.strip() or f"{access.run.name}（重跑）",
             status=RunStatus.QUEUED,
-            created_by=user_id,
+            initiated_by_user_id=user_id,
             created_at=now,
         )
         await self._repos.runs.add(run)
         await self._record_event(run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 重新运行")
-        await self._attach_idempotency(access.workspace.id, idempotency_key, run.id)
+        await self._attach_idempotency(user_id, idempotency_key, run.id)
 
-        await self._submit(run, snapshot, project_version, access.workspace.id)
+        await self._submit(run, snapshot, project_version)
         await self._record_run_activity(
-            user_id, run, ActivityAction.RUN_SUBMITTED, detail=f"重跑自 {access.run.name}"
+            user_id,
+            run,
+            access.project.owner,
+            ActivityAction.RUN_SUBMITTED,
+            detail=f"重跑自 {access.run.name}",
         )
         return RunSubmission(run=run, created=True)
 
@@ -503,15 +492,83 @@ class RunService:
             run.finished_at = self._clock.now()
             await self._repos.runs.update(run)
             await self._record_event(run.id, RunEventType.CANCELLED, "任务尚未提交，已直接取消")
-        await self._record_run_activity(user_id, run, ActivityAction.RUN_CANCELLED)
+        await self._record_run_activity(
+            user_id, run, access.project.owner, ActivityAction.RUN_CANCELLED
+        )
         return run
 
     # -- 内部 -----------------------------------------------------------
+    async def validate_execution_context(
+        self, run: Run, snapshot: RunSnapshot
+    ) -> tuple[ProjectAccess, dict[str, str]]:
+        """Revalidate persisted execution identity and every exact external reference.
+
+        This boundary deliberately reads ``run.initiated_by_user_id`` and
+        ``run.project_id`` again instead of trusting request-time access. A delayed
+        Worker can call the same seam immediately before materialization.
+        """
+        try:
+            access = await self._guard.project(
+                run.initiated_by_user_id,
+                run.project_id,
+                needs=Capability.RUN_SUBMIT,
+                owner_scope=True,
+            )
+        except (ObjectNotFound, PermissionDenied) as exc:
+            raise ValidationFailed("Run 发起 User 当前已无权在来源 Project 执行") from exc
+
+        problems: list[str] = []
+        environment_version = await environment_version_for_owner_use(
+            self._repos,
+            run.initiated_by_user_id,
+            snapshot.environment_version_id,
+            access.project.owner,
+        )
+        if environment_version is None:
+            problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
+        elif not environment_version.available:
+            problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
+
+        for binding in snapshot.input_bindings:
+            if binding.source_type is InputSourceType.ARTIFACT:
+                problem = await self._artifact_input_problem(
+                    binding.source_id,
+                    binding.access_path,
+                    access.project.owner,
+                )
+            else:
+                problem = await self._check_shared_resource_version_input(
+                    run.initiated_by_user_id,
+                    binding.source_id,
+                    binding.access_path,
+                    binding.source_subpath,
+                    access.project.owner,
+                )
+            if problem is not None:
+                problems.append(problem)
+
+        secret_values, secret_problems = await self._config_resolver.validate_and_resolve(
+            access,
+            run.initiated_by_user_id,
+            snapshot.env_secret_refs,
+        )
+        problems.extend(secret_problems)
+        if problems:
+            raise ValidationFailed("; ".join(problems))
+        return access, secret_values
 
     async def _submit(
-        self, run: Run, snapshot: RunSnapshot, version: ProjectVersion, workspace_id: str
+        self,
+        run: Run,
+        snapshot: RunSnapshot,
+        version: ProjectVersion,
     ) -> None:
+        # 执行身份以持久化的 Run 记录为准（GR-307），不从调用参数传递——
+        # 快照校验、Secret 解析和通知收件人都读同一个字段。
         try:
+            _, values = await self.validate_execution_context(run, snapshot)
+            if values:
+                await self._secrets.retain_for_redaction(run.id, list(values.values()))
             inputs = await self._materialize_inputs(snapshot.input_bindings)
             paths = await self._storage.prepare_run_directory(
                 run.id,
@@ -522,14 +579,8 @@ class RunService:
             # 输入内容在执行环境中的根目录。Input Binding 的 access_path 是
             # 相对于它的绝对路径，例如 /inputs/train -> $WORKSPACE107_INPUTS_DIR/inputs/train。
             environment.setdefault("WORKSPACE107_INPUTS_DIR", str(paths.inputs))
-            if snapshot.env_secret_refs:
-                # Secret 值只在这条路径上出现，用完随进程环境交给调度器，不落库。
-                values = await self._secrets.resolve(
-                    workspace_id, sorted(set(snapshot.env_secret_refs.values()))
-                )
-                for env_name, secret_name in snapshot.env_secret_refs.items():
-                    if secret_name in values:
-                        environment[env_name] = values[secret_name]
+            for env_name in snapshot.env_secret_refs:
+                environment[env_name] = values[env_name]
 
             work_dir = paths.work
             if snapshot.working_directory not in {"", "."}:
@@ -556,12 +607,11 @@ class RunService:
             await self._repos.runs.update(run)
             await self._record_event(run.id, RunEventType.SUBMIT_FAILED, str(exc))
             # 提交失败是「交上去就没下文了」，用户不主动刷新根本不知道。
-            # 收件人是 Run 的创建人——即使就是当前操作者也要发。
+            # 收件人是 Run 的发起人——即使就是当前操作者也要发。
             await self._notifier.run_submit_failed(
-                recipient_id=run.created_by,
+                recipient_id=run.initiated_by_user_id,
                 run_id=run.id,
                 run_name=run.name,
-                workspace_id=workspace_id,
                 reason=str(exc),
             )
             return
@@ -577,11 +627,16 @@ class RunService:
         )
 
     async def _record_run_activity(
-        self, user_id: str, run: Run, action: ActivityAction, detail: str = ""
+        self,
+        user_id: str,
+        run: Run,
+        owner: OwnerReference,
+        action: ActivityAction,
+        detail: str = "",
     ) -> None:
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=run.workspace_id,
+            owner=owner,
             project_id=run.project_id,
             action=action,
             target_type=TargetType.RUN,
@@ -614,27 +669,19 @@ class RunService:
     async def _resolve_environment_version(
         self,
         user_id: str,
-        project: Project,
         configuration: RunConfiguration,
         project_owner: OwnerReference,
         problems: list[str],
     ) -> EnvironmentVersion | None:
-        """按 运行方案 -> Project -> Workspace 默认 的顺序解析实际环境。"""
-        workspace = await self._repos.legacy_workspaces.get(project.workspace_id)
-        candidate_id = (
-            configuration.environment_version_id
-            or project.environment_version_id
-            or (workspace.default_environment_version_id if workspace else None)
-        )
-        if candidate_id is None:
-            problems.append("没有可用的运行环境，请为 Project 或 Workspace 选择默认环境")
-            return None
+        """运行方案必须精确引用一个 Environment Version（#41、GR-205）。
 
+        没有任何继承或回退：运行时只使用保存运行方案时已经确定的 Environment Version。
+        """
         version = await environment_version_for_owner_use(
-            self._repos, user_id, candidate_id, project_owner
+            self._repos, user_id, configuration.environment_version_id, project_owner
         )
         if version is None:
-            problems.append("引用的运行环境版本不存在或无权供当前 Project 使用")
+            problems.append("运行方案引用的运行环境版本不存在或无权供当前 Project 使用")
             return None
         if not version.available:
             problems.append(f"运行环境版本 {version.version} 当前不可用")
@@ -652,7 +699,7 @@ class RunService:
 
     async def _replay_or_reserve(
         self,
-        workspace_id: str,
+        user_id: str,
         key: str | None,
         endpoint: str,
         *,
@@ -665,10 +712,11 @@ class RunService:
         作业提交出去，再因为键冲突回滚——数据库是干净的，但集群上已经多跑了
         一个作业，而且没人知道它属于谁。因此去重登记必须先于外部副作用落库。
 
-        **命中之后要确认这是同一件事，不能只看键相同。** 键的作用域是
-        Workspace，而一个 Workspace 里有很多 Project；客户端复用同一个键
-        （比如写死成常量，或者按天生成）在不同 Project 上提交时，
-        光按键查会把别人的 Run 原样返回——用户以为提交成功了，
+        键的作用域是发起 User（#41）：``(initiated_by_user_id, key)`` 唯一。
+
+        **命中之后要确认这是同一件事，不能只看键相同。** 同一个 User 会在
+        多个 Project 上复用同一个键（比如写死成常量，或者按天生成），
+        光按键查会把上一次的 Run 原样返回——用户以为提交成功了，
         实际上这次提交**根本没有执行**，而且他拿到的是另一个项目的结果。
         重跑和创建混用同一个键也是一样的问题。
 
@@ -679,9 +727,9 @@ class RunService:
         if not key:
             return None
 
-        record = await self._repos.idempotency.find(workspace_id, key)
+        record = await self._repos.idempotency.find(user_id, key)
         if record is None:
-            await self._repos.idempotency.reserve(workspace_id, key, endpoint)
+            await self._repos.idempotency.reserve(user_id, key, endpoint)
             return None
 
         if record.endpoint != endpoint:
@@ -707,31 +755,28 @@ class RunService:
             raise ConflictError("这个幂等键上次重跑的是另一个 Run，请换一个键")
         return run
 
-    async def _attach_idempotency(self, workspace_id: str, key: str | None, run_id: str) -> None:
+    async def _attach_idempotency(self, user_id: str, key: str | None, run_id: str) -> None:
         if key:
-            await self._repos.idempotency.attach_run(workspace_id, key, run_id)
+            await self._repos.idempotency.attach_run(user_id, key, run_id)
 
-    async def _check_concurrency(
-        self, workspace_id: str, entitlement: ResourceEntitlement
-    ) -> list[str]:
+    async def _check_concurrency(self, user_id: str, entitlement: ResourceEntitlement) -> list[str]:
         """检查并发上限。
 
-        **数的范围必须和锁的范围一致**：额度按「Workspace × 算力方案」授予，
-        锁的是那一条权益行，所以数的也只能是那个方案上的 Run。
-        早先这里数的是整个 Workspace，比锁的范围大，于是两个请求提交到
-        不同方案时锁不到一起，却读同一个计数，双双通过——上限形同虚设。
-        顺带还会串味：CPU 作业占掉 GPU 的名额。
+        **数的范围必须和锁的范围一致**：额度按「User × 算力方案」授予，
+        锁的是那个 User 的那一条权益行，所以数的也只能是该 User 在那个方案上
+        发起的 Run。数到别人的 Run 会互相挤占名额；数到别的方案则会串味：
+        CPU 作业占掉 GPU 的名额。
 
         调用方必须已经通过 ``entitlements.lock_for_plan`` 独占了权益行，
         否则这里数出来的结果在返回之前就可能过期。
         """
         active = await self._repos.runs.count_unfinished_for_plan(
-            workspace_id, entitlement.compute_plan_id
+            user_id, entitlement.compute_plan_id
         )
         if active < entitlement.max_concurrent_runs:
             return []
         return [
-            f"当前 Workspace 在这个算力方案上已有 {active} 个未结束的 Run，"
+            f"你在这个算力方案上已有 {active} 个未结束的 Run，"
             f"达到并发上限 {entitlement.max_concurrent_runs}"
         ]
 
@@ -739,18 +784,16 @@ class RunService:
         self,
         user_id: str,
         configuration: RunConfiguration,
-        workspace_id: str,
         project_owner: OwnerReference,
     ) -> list[str]:
         problems: list[str] = []
         for binding in configuration.input_bindings:
             if binding.source_type is InputSourceType.ARTIFACT:
-                artifact = await self._repos.artifacts.get(binding.source_id)
-                # 归属 Workspace 不同的一律按「不存在」处理，避免泄露跨空间对象。
-                if artifact is None or artifact.workspace_id != workspace_id:
-                    problems.append(f"输入 {binding.access_path} 引用的 Artifact 不存在或无权访问")
-                elif not artifact.is_available:
-                    problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
+                problem = await self._artifact_input_problem(
+                    binding.source_id, binding.access_path, project_owner
+                )
+                if problem is not None:
+                    problems.append(problem)
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 problem = await self._check_shared_resource_version_input(
                     user_id,
@@ -762,6 +805,24 @@ class RunService:
                 if problem is not None:
                     problems.append(problem)
         return problems
+
+    async def _artifact_input_problem(
+        self, artifact_id: str, access_path: str, project_owner: OwnerReference
+    ) -> str | None:
+        """Artifact 直接输入仅限同一 Project Owner（GR-405）。
+
+        跨 Owner 的输入必须先发布成 Shared Resource 并走 USE Grant；
+        不满足 Owner 边界的按「不存在」处理，避免泄露其他 Owner 的对象。
+        """
+        artifact = await self._repos.artifacts.get(artifact_id)
+        if artifact is None:
+            return f"输入 {access_path} 引用的 Artifact 不存在或无权访问"
+        source_project = await self._repos.projects.get(artifact.project_id)
+        if source_project is None or source_project.owner != project_owner:
+            return f"输入 {access_path} 引用的 Artifact 不存在或无权访问"
+        if not artifact.is_available:
+            return f"输入 {access_path} 引用的 Artifact 内容已被清理"
+        return None
 
     async def _check_shared_resource_version_input(
         self,
@@ -817,13 +878,11 @@ class RunService:
         return inputs
 
     async def _revalidate_snapshot(
-        self,
-        user_id: str,
-        snapshot: RunSnapshot,
-        workspace_id: str,
-        project_owner: OwnerReference,
+        self, snapshot: RunSnapshot, access: ProjectAccess, initiated_by_user_id: str
     ) -> list[str]:
         """重跑之前按当前权限和资源资格重新校验历史快照中的每一个引用。"""
+        user_id = initiated_by_user_id
+        project_owner = access.project.owner
         problems: list[str] = []
 
         version = await self._repos.project_versions.get(snapshot.project_version_id)
@@ -842,29 +901,28 @@ class RunService:
         if plan is None:
             problems.append("来源算力方案已不存在")
         else:
-            entitlement = await self._repos.entitlements.get_for_plan(workspace_id, plan.id)
+            entitlement = await self._repos.entitlements.get_for_plan(user_id, plan.id)
             if entitlement is None:
-                problems.append(f"当前 Workspace 已不再拥有算力方案「{plan.name}」的使用权益")
+                problems.append(f"你已不再拥有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
             else:
                 # 重跑同样要占并发名额。漏掉这一条，用户就能靠反复点「重新运行」
                 # 绕过上限——权益检查在最容易被反复触发的路径上失效。
-                problems.extend(await self._check_concurrency(workspace_id, entitlement))
+                problems.extend(await self._check_concurrency(user_id, entitlement))
             problems.extend(check_request_against_plan(plan, snapshot.compute_request))
-
-        available_secrets = await self._secrets.list_names(workspace_id)
-        for env_name, secret_name in snapshot.env_secret_refs.items():
-            if secret_name not in available_secrets:
-                problems.append(f"环境变量 {env_name} 引用的 Workspace Secret {secret_name} 不存在")
+        _, secret_problems = await self._config_resolver.validate_and_resolve(
+            access, initiated_by_user_id, snapshot.env_secret_refs
+        )
+        problems.extend(secret_problems)
 
         for binding in snapshot.input_bindings:
             if binding.source_type is InputSourceType.ARTIFACT:
-                artifact = await self._repos.artifacts.get(binding.source_id)
-                if artifact is None or artifact.workspace_id != workspace_id:
-                    problems.append(f"输入 {binding.access_path} 引用的 Artifact 不存在或无权访问")
-                elif not artifact.is_available:
-                    problems.append(f"输入 {binding.access_path} 引用的 Artifact 内容已被清理")
+                problem = await self._artifact_input_problem(
+                    binding.source_id, binding.access_path, project_owner
+                )
+                if problem is not None:
+                    problems.append(problem)
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 problem = await self._check_shared_resource_version_input(
                     user_id,
@@ -879,7 +937,9 @@ class RunService:
         return problems
 
 
-def _as_resolved_env(literals: dict[str, str], secret_refs: dict[str, str]) -> ResolvedEnv:
+def _as_resolved_env(
+    literals: dict[str, str], secret_refs: dict[str, SecretReference]
+) -> ResolvedEnv:
     return ResolvedEnv(literals=dict(literals), secret_refs=dict(secret_refs))
 
 

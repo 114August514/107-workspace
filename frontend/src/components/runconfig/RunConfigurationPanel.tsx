@@ -1,25 +1,19 @@
-import { PlayCircleOutlined, PlusOutlined, WarningOutlined } from '@ant-design/icons'
-import { Button, Popconfirm, Space, Table, Tag, Tooltip, Typography, message } from 'antd'
+import { PlayCircleOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type {
-  ComputePlan,
-  Environment,
-  RunConfiguration,
-  LegacyWorkspaceContext,
-} from '../../api/types'
+import type { ComputePlan, Environment, Project, RunConfiguration } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { AsyncSection } from '../common/AsyncSection'
 import { RunConfigurationModal } from './RunConfigurationModal'
-import { describeMissing, findMissingReferences } from './unresolved'
 
 interface Props {
   projectId: string
-  workspace: LegacyWorkspaceContext | undefined
+  access: Project | undefined
   defaultConfigurationId: string | null
   onSubmitRun: (configuration: RunConfiguration) => void
   onChanged: () => void
@@ -27,32 +21,18 @@ interface Props {
 
 export function RunConfigurationPanel({
   projectId,
-  workspace,
+  access,
   defaultConfigurationId,
   onSubmitRun,
   onChanged,
 }: Props) {
-  const canManage = can(workspace, 'run_configuration.manage')
-  const canSubmit = can(workspace, 'run.submit')
+  const canManage = can(access, 'run_configuration.manage')
+  const canSubmit = can(access, 'run.submit')
   const configurations = useAsync<RunConfiguration[]>(
     () => api.listRunConfigurations(projectId),
     [projectId],
   )
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
-  // 用来判断哪些引用在当前空间解析不了。Fork 过来的方案常常缺东西——
-  // 等用户点了提交才告诉他，就太晚了。
-  const secretNames = useAsync<string[]>(
-    async () => (workspace ? api.listSecretNames(workspace.id) : []),
-    [workspace?.id],
-  )
-  const variables = useAsync(
-    async () => (workspace ? api.listVariables(workspace.id) : []),
-    [workspace?.id],
-  )
-  const available = {
-    secrets: secretNames.data ?? [],
-    variables: (variables.data ?? []).map((v) => v.name),
-  }
   const environments = useAsync<Environment[]>(() => api.environments(), [])
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<RunConfiguration | null>(null)
@@ -72,22 +52,12 @@ export function RunConfigurationPanel({
     {
       title: '名称',
       dataIndex: field<RunConfiguration>('name'),
-      render: (name: string, configuration) => {
-        const missing = findMissingReferences(configuration.environment_variables, available)
-        return (
-          <Space wrap size={4}>
-            <Typography.Text strong>{name}</Typography.Text>
-            {configuration.id === defaultConfigurationId && <Tag color="blue">默认</Tag>}
-            {missing.length > 0 && (
-              <Tooltip title={`${describeMissing(missing)}，在这个 Workspace 里不存在`}>
-                <Tag color="warning" icon={<WarningOutlined />}>
-                  未解析
-                </Tag>
-              </Tooltip>
-            )}
-          </Space>
-        )
-      },
+      render: (name: string, configuration) => (
+        <Space wrap size={4}>
+          <Typography.Text strong>{name}</Typography.Text>
+          {configuration.id === defaultConfigurationId && <Tag color="blue">默认</Tag>}
+        </Space>
+      ),
     },
     {
       title: '执行命令',

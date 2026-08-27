@@ -51,7 +51,9 @@ async def preflight(
         compute_plan_id=result.compute_plan.id if result.compute_plan else None,
         compute_request=p.compute_request_out(result.compute_request),
         resolved_environment_variables=result.resolved_env_literals,
-        secret_references=result.resolved_env_secret_refs,
+        secret_references={
+            name: ref.as_key() for name, ref in result.resolved_env_secret_refs.items()
+        },
     )
 
 
@@ -87,10 +89,11 @@ async def create_run(
 
 @router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
 async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
-    """仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。"""
+    """Return a Run only when the current User has owner-scope Project authority."""
     detail = await services.runs.get_detail(user.id, run_id)
+    project_access = await services.projects.get(user.id, detail.run.project_id)
     return s.RunDetailOut(
-        run=p.run_out(detail.run),
+        run=p.run_out(detail.run, capabilities=project_access.capabilities),
         snapshot=p.snapshot_out(detail.snapshot),
         events=[p.run_event_out(e) for e in detail.events],
         artifacts=[p.artifact_out(a) for a in detail.artifacts],

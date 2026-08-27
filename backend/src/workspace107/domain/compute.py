@@ -95,13 +95,14 @@ class ComputeRequest:
 
 @dataclass(frozen=True, slots=True)
 class ResourceEntitlement:
-    """Workspace 获得的算力方案使用资格。
+    """User 获得的算力方案使用资格（设计稿 §Resource Entitlement）。
 
-    只代表使用资格，不代表数据访问权限。
+    只表示 User 对 Compute Plan 的算力使用资格，不代表数据访问权限；
+    User Group Ownership / Membership 不转移这个资格。
     """
 
     id: str
-    workspace_id: str
+    user_id: str
     compute_plan_id: str
     max_concurrent_runs: int
     expires_at: str | None = None

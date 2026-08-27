@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any
 
 from .compute import ComputeRequest, ResolvedSchedulerConfiguration
+from .config_scope import SecretReference
 from .enums import InputSourceType
 from .errors import ValidationFailed
 from .models import ArtifactCollectionRule, InputBinding
@@ -43,17 +44,19 @@ class RunSnapshot:
     environment_image: str
     environment_setup_command: str
     env_literals: dict[str, str]
-    env_secret_refs: dict[str, str]
-    """环境变量名 -> Workspace Secret 名称。值不在这里，执行时才注入。"""
+    env_secret_refs: dict[str, SecretReference]
+    """环境变量名 -> scope-qualified Secret reference; never plaintext."""
     input_bindings: tuple[InputBinding, ...]
     compute_plan_id: str
     compute_request: ComputeRequest
     scheduler: ResolvedSchedulerConfiguration
     artifact_rules: tuple[ArtifactCollectionRule, ...]
-    created_by: str
+    initiated_by_user_id: str
     created_at: datetime
 
     def __post_init__(self) -> None:
+        if any(not isinstance(ref, SecretReference) for ref in self.env_secret_refs.values()):
+            raise ValidationFailed("Run Snapshot Secret references must be scope-qualified")
         # 工作目录必须留在 Run 目录里。它会被拼成执行时的 cwd
         # （`paths.work / working_directory`），逃出去就等于让用户程序
         # 在平台任意目录下运行。
@@ -86,7 +89,7 @@ class RunSnapshot:
             },
             "env": {
                 "literals": dict(self.env_literals),
-                "secret_refs": dict(self.env_secret_refs),
+                "secret_refs": {name: ref.as_key() for name, ref in self.env_secret_refs.items()},
             },
             "input_bindings": [b.as_payload() for b in self.input_bindings],
             "compute": {
@@ -95,7 +98,7 @@ class RunSnapshot:
                 "scheduler": self.scheduler.as_payload(),
             },
             "artifact_rules": [r.as_payload() for r in self.artifact_rules],
-            "created_by": self.created_by,
+            "initiated_by_user_id": self.initiated_by_user_id,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -115,7 +118,9 @@ class RunSnapshot:
             environment_image=environment["image"],
             environment_setup_command=environment.get("setup_command", ""),
             env_literals=dict(env["literals"]),
-            env_secret_refs=dict(env["secret_refs"]),
+            env_secret_refs={
+                name: SecretReference.from_key(value) for name, value in env["secret_refs"].items()
+            },
             input_bindings=tuple(
                 InputBinding(
                     source_type=InputSourceType(b["source_type"]),
@@ -136,7 +141,7 @@ class RunSnapshot:
                 )
                 for r in payload["artifact_rules"]
             ),
-            created_by=payload["created_by"],
+            initiated_by_user_id=payload["initiated_by_user_id"],
             created_at=datetime.fromisoformat(payload["created_at"]),
         )
 
@@ -158,7 +163,7 @@ def build_snapshot(
     compute_request: ComputeRequest,
     scheduler: ResolvedSchedulerConfiguration,
     artifact_rules: tuple[ArtifactCollectionRule, ...],
-    created_by: str,
+    initiated_by_user_id: str,
     created_at: datetime,
 ) -> RunSnapshot:
     """组装 Run Snapshot。
@@ -183,6 +188,6 @@ def build_snapshot(
         compute_request=compute_request,
         scheduler=scheduler,
         artifact_rules=artifact_rules,
-        created_by=created_by,
+        initiated_by_user_id=initiated_by_user_id,
         created_at=created_at,
     )

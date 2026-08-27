@@ -13,7 +13,9 @@ class UserGroupCapability(StrEnum):
     USER_GROUP_VIEW = "user_group.view"
     USER_GROUP_UPDATE = "user_group.update"
     MEMBER_VIEW = "member.view"
-    MEMBER_MANAGE = "member.manage"
+    MEMBER_INVITE = "member.invite"
+    MEMBER_REMOVE = "member.remove"
+    MEMBER_ROLE_MANAGE = "member.role.manage"
     OWNERSHIP_TRANSFER = "ownership.transfer"
 
 
@@ -26,11 +28,16 @@ _USER_GROUP_VIEW: frozenset[UserGroupCapability] = frozenset(
 
 _USER_GROUP_ADMINISTER: frozenset[UserGroupCapability] = _USER_GROUP_VIEW | {
     UserGroupCapability.USER_GROUP_UPDATE,
-    UserGroupCapability.MEMBER_MANAGE,
+    UserGroupCapability.MEMBER_INVITE,
+    UserGroupCapability.MEMBER_REMOVE,
 }
 
 USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability]] = {
-    MembershipRole.OWNER: _USER_GROUP_ADMINISTER | {UserGroupCapability.OWNERSHIP_TRANSFER},
+    MembershipRole.OWNER: _USER_GROUP_ADMINISTER
+    | {
+        UserGroupCapability.MEMBER_ROLE_MANAGE,
+        UserGroupCapability.OWNERSHIP_TRANSFER,
+    },
     MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
     MembershipRole.MEMBER: _USER_GROUP_VIEW,
 }
@@ -54,15 +61,15 @@ class Capability(StrEnum):
 
     # -- 成员 ------------------------------------------------------------
     MEMBER_VIEW = "member.view"
-    MEMBER_MANAGE = "member.manage"
-    """邀请、移除、修改角色。"""
+    MEMBER_INVITE = "member.invite"
+    MEMBER_REMOVE = "member.remove"
+    MEMBER_ROLE_MANAGE = "member.role.manage"
     OWNERSHIP_TRANSFER = "ownership.transfer"
 
-    # -- 配置与权益 ------------------------------------------------------
+    # -- 配置 ------------------------------------------------------------
     CONFIG_VIEW = "config.view"
     """查看 Variable 的值和 Secret 的名称；任何角色都读不到 Secret 值（§3.1.4）。"""
     CONFIG_MANAGE = "config.manage"
-    ENTITLEMENT_VIEW = "entitlement.view"
 
     # -- Project ---------------------------------------------------------
     PROJECT_VIEW = "project.view"
@@ -88,13 +95,16 @@ class Capability(StrEnum):
     SHARED_RESOURCE_VERSION_CREATE = "shared_resource.version.create"
     """为 Shared Resource 上传文件形成新的不可变版本。"""
 
+    # -- Grant -------------------------------------------------------------
+    GRANT_MANAGE = "grant.manage"
+    """管理跨 Owner USE Grant（创建、查看、撤销）。"""
+
 
 _VIEW_ONLY: frozenset[Capability] = frozenset(
     {
         Capability.USER_GROUP_VIEW,
         Capability.MEMBER_VIEW,
         Capability.CONFIG_VIEW,
-        Capability.ENTITLEMENT_VIEW,
         Capability.PROJECT_VIEW,
         Capability.RUN_VIEW,
         Capability.SHARED_RESOURCE_VIEW,
@@ -113,16 +123,21 @@ _CONTRIBUTE: frozenset[Capability] = _VIEW_ONLY | {
     Capability.SHARED_RESOURCE_VERSION_CREATE,
 }
 
-# 管空间需要的能力：改设置、管人、管配置。
+# 管空间需要的能力：改设置、邀请和移除普通成员、管配置。
 _ADMINISTER: frozenset[Capability] = _CONTRIBUTE | {
     Capability.USER_GROUP_UPDATE,
-    Capability.MEMBER_MANAGE,
+    Capability.MEMBER_INVITE,
+    Capability.MEMBER_REMOVE,
     Capability.CONFIG_MANAGE,
+    Capability.GRANT_MANAGE,
 }
 
 ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
-    # Owner 比 Admin 只多一样：转让所有权。这件事不可逆，只能由所有者本人做。
-    MembershipRole.OWNER: _ADMINISTER | {Capability.OWNERSHIP_TRANSFER},
+    MembershipRole.OWNER: _ADMINISTER
+    | {
+        Capability.MEMBER_ROLE_MANAGE,
+        Capability.OWNERSHIP_TRANSFER,
+    },
     MembershipRole.ADMIN: _ADMINISTER,
     MembershipRole.MEMBER: _CONTRIBUTE,
 }
@@ -132,11 +147,12 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.USER_GROUP_VIEW: "查看 User Group",
     Capability.USER_GROUP_UPDATE: "修改 User Group 设置",
     Capability.MEMBER_VIEW: "查看成员",
-    Capability.MEMBER_MANAGE: "管理成员",
+    Capability.MEMBER_INVITE: "邀请成员",
+    Capability.MEMBER_REMOVE: "移除成员",
+    Capability.MEMBER_ROLE_MANAGE: "修改成员角色",
     Capability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
     Capability.CONFIG_VIEW: "查看配置",
     Capability.CONFIG_MANAGE: "管理配置变量与 Secret",
-    Capability.ENTITLEMENT_VIEW: "查看资源权益",
     Capability.PROJECT_VIEW: "查看 Project",
     Capability.PROJECT_CREATE: "创建 Project",
     Capability.PROJECT_UPDATE: "修改 Project 设置",
@@ -148,13 +164,16 @@ CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.SHARED_RESOURCE_VIEW: "查看 Shared Resource",
     Capability.SHARED_RESOURCE_MANAGE: "管理 Shared Resource",
     Capability.SHARED_RESOURCE_VERSION_CREATE: "上传 Shared Resource 版本",
+    Capability.GRANT_MANAGE: "管理 USE Grant",
 }
 
 USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {
     UserGroupCapability.USER_GROUP_VIEW: "查看 User Group",
     UserGroupCapability.USER_GROUP_UPDATE: "修改 User Group 设置",
     UserGroupCapability.MEMBER_VIEW: "查看成员",
-    UserGroupCapability.MEMBER_MANAGE: "管理成员",
+    UserGroupCapability.MEMBER_INVITE: "邀请成员",
+    UserGroupCapability.MEMBER_REMOVE: "移除成员",
+    UserGroupCapability.MEMBER_ROLE_MANAGE: "修改成员角色",
     UserGroupCapability.OWNERSHIP_TRANSFER: "转让 User Group 所有权",
 }
 

@@ -6,8 +6,6 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from workspace107.domain.enums import LegacyWorkspaceKind
-from workspace107.domain.models import LegacyWorkspace
 from workspace107.infrastructure.db.repositories import SqlRepositories
 
 ALICE = {"X-User": "alice"}
@@ -32,11 +30,10 @@ async def _invite(
     username: str,
     *,
     headers: dict[str, str] = ALICE,
-    role: str = "member",
 ) -> httpx.Response:
     return await client.post(
         f"/api/v1/user-groups/{group_id}/members",
-        json={"username": username, "role": role},
+        json={"username": username},
         headers=headers,
     )
 
@@ -73,47 +70,21 @@ async def _assert_exactly_one_active_owner(client: httpx.AsyncClient, group_id: 
 
 
 @pytest.mark.asyncio
-async def test_new_user_does_not_create_personal_workspace(
-    client: httpx.AsyncClient, session: AsyncSession
+async def test_new_user_home_uses_direct_user_execution_context(
+    client: httpx.AsyncClient,
 ) -> None:
     response = await client.get("/api/v1/me", headers=ALICE)
 
     assert response.status_code == 200
     body = response.json()
     assert body["user_groups"] == []
-    assert body["personal_resource_context_id"] is None
+    assert body["personal_execution_context"]["owner"] == {
+        "kind": "user",
+        "id": body["user"]["id"],
+        "display_name": body["user"]["display_name"],
+    }
+    assert "personal_resource_context_id" not in body
     assert "workspaces" not in body
-
-    repos = SqlRepositories(session)
-    alice = await repos.users.get_by_username("alice")
-    assert alice is not None
-    assert await repos.legacy_workspaces.get_personal(alice.id) is None
-
-
-@pytest.mark.asyncio
-async def test_home_discovers_existing_personal_resources_only_for_the_owner(
-    client: httpx.AsyncClient, session: AsyncSession
-) -> None:
-    await client.get("/api/v1/me", headers=ALICE)
-    await client.get("/api/v1/me", headers=BOB)
-    repos = SqlRepositories(session)
-    alice = await repos.users.get_by_username("alice")
-    assert alice is not None
-    await repos.legacy_workspaces.add(
-        LegacyWorkspace(
-            id="ws_personal_alice",
-            kind=LegacyWorkspaceKind.PERSONAL,
-            name="Alice personal data",
-            owner_id=alice.id,
-        )
-    )
-    await session.commit()
-
-    home = (await client.get("/api/v1/me", headers=ALICE)).json()
-    assert home["personal_resource_context_id"] == "ws_personal_alice"
-    assert (
-        await client.get("/api/v1/workspaces/ws_personal_alice", headers=BOB)
-    ).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -127,14 +98,17 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
     group_id = str(group["id"])
     expected = {
         "owner": [
-            "member.manage",
+            "member.invite",
+            "member.remove",
+            "member.role.manage",
             "member.view",
             "ownership.transfer",
             "user_group.update",
             "user_group.view",
         ],
         "admin": [
-            "member.manage",
+            "member.invite",
+            "member.remove",
             "member.view",
             "user_group.update",
             "user_group.view",
@@ -143,11 +117,8 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
     }
     assert group["capabilities"] == expected["owner"]
 
-    for username, role, headers in (
-        ("bob", "admin", BOB),
-        ("carol", "member", CAROL),
-    ):
-        assert (await _invite(client, group_id, username, role=role)).status_code == 201
+    for username, headers in (("bob", BOB), ("carol", CAROL)):
+        assert (await _invite(client, group_id, username)).status_code == 201
         assert (
             await client.post(
                 f"/api/v1/user-groups/{group_id}/invitation",
@@ -155,6 +126,16 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
                 headers=headers,
             )
         ).status_code == 204
+
+    members = (await client.get(f"/api/v1/user-groups/{group_id}/members", headers=ALICE)).json()
+    bob_id = next(member["user_id"] for member in members if member["username"] == "bob")
+    assert (
+        await client.patch(
+            f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+            json={"role": "admin"},
+            headers=ALICE,
+        )
+    ).status_code == 200
 
     for role, headers in (
         ("owner", ALICE),
@@ -179,13 +160,9 @@ async def test_group_creation_has_exactly_one_active_owner(client: httpx.AsyncCl
         headers=ALICE,
     )
     assert updated.status_code == 200
-    legacy = (await client.get(f"/api/v1/workspaces/{group['id']}", headers=ALICE)).json()
-    assert (legacy["name"], legacy["owner_id"]) == ("Renamed Lab", group["created_by_id"])
     owners = [m for m in members if m["role"] == "owner" and m["status"] == "active"]
     assert [m["username"] for m in owners] == ["alice"]
-    entitlements = (
-        await client.get(f"/api/v1/workspaces/{group['id']}/entitlements", headers=ALICE)
-    ).json()
+    entitlements = (await client.get("/api/v1/me/entitlements", headers=ALICE)).json()
     assert entitlements == []
 
 
@@ -229,28 +206,117 @@ async def test_invitation_accept_reject_and_cross_group_404(
 
 
 @pytest.mark.asyncio
-async def test_admin_and_member_roles_change_through_ordinary_update(
+async def test_owner_changes_roles_and_admin_cannot(
     client: httpx.AsyncClient,
 ) -> None:
+    for headers in (BOB, CAROL):
+        await client.get("/api/v1/me", headers=headers)
     group_id, bob_id = await _group_with_active_bob(client, "Role Change Lab")
+    assert (await _invite(client, group_id, "carol")).status_code == 201
+    assert (
+        await client.post(
+            f"/api/v1/user-groups/{group_id}/invitation",
+            json={"accept": True},
+            headers=CAROL,
+        )
+    ).status_code == 204
+    members = (await client.get(f"/api/v1/user-groups/{group_id}/members", headers=ALICE)).json()
+    carol_id = next(member["user_id"] for member in members if member["username"] == "carol")
+
+    assert (
+        await client.patch(
+            f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+            json={"role": "admin"},
+            headers=ALICE,
+        )
+    ).status_code == 200
+    assert (
+        await client.patch(
+            f"/api/v1/user-groups/{group_id}/members/{carol_id}",
+            json={"role": "admin"},
+            headers=BOB,
+        )
+    ).status_code == 403
 
     promoted = await client.patch(
-        f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+        f"/api/v1/user-groups/{group_id}/members/{carol_id}",
         json={"role": "admin"},
         headers=ALICE,
     )
     assert promoted.status_code == 200
-    members = (await client.get(f"/api/v1/user-groups/{group_id}/members", headers=ALICE)).json()
-    assert next(member for member in members if member["user_id"] == bob_id)["role"] == "admin"
-
+    assert promoted.json()["role"] == "admin"
     demoted = await client.patch(
-        f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+        f"/api/v1/user-groups/{group_id}/members/{carol_id}",
         json={"role": "member"},
         headers=ALICE,
     )
     assert demoted.status_code == 200
+    assert demoted.json()["role"] == "member"
+
+
+@pytest.mark.asyncio
+async def test_admin_governs_only_ordinary_members(client: httpx.AsyncClient) -> None:
+    for headers in (BOB, CAROL, DAVE):
+        await client.get("/api/v1/me", headers=headers)
+    group_id, bob_id = await _group_with_active_bob(client, "Admin Governance Lab")
+    assert (await _invite(client, group_id, "carol")).status_code == 201
+    assert (
+        await client.post(
+            f"/api/v1/user-groups/{group_id}/invitation",
+            json={"accept": True},
+            headers=CAROL,
+        )
+    ).status_code == 204
     members = (await client.get(f"/api/v1/user-groups/{group_id}/members", headers=ALICE)).json()
-    assert next(member for member in members if member["user_id"] == bob_id)["role"] == "member"
+    alice_id = next(member["user_id"] for member in members if member["username"] == "alice")
+    carol_id = next(member["user_id"] for member in members if member["username"] == "carol")
+    assert (
+        await client.patch(
+            f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+            json={"role": "admin"},
+            headers=ALICE,
+        )
+    ).status_code == 200
+
+    admin_members = (
+        await client.get(f"/api/v1/user-groups/{group_id}/members", headers=BOB)
+    ).json()
+    assert (
+        next(member for member in admin_members if member["user_id"] == alice_id)["capabilities"]
+        == []
+    )
+    assert (
+        next(member for member in admin_members if member["user_id"] == bob_id)["capabilities"]
+        == []
+    )
+    assert next(member for member in admin_members if member["user_id"] == carol_id)[
+        "capabilities"
+    ] == ["member.remove"]
+
+    assert (
+        await client.post(
+            f"/api/v1/user-groups/{group_id}/members",
+            json={"username": "dave", "role": "admin"},
+            headers=BOB,
+        )
+    ).status_code == 422
+    invited = await _invite(client, group_id, "dave", headers=BOB)
+    assert invited.status_code == 201
+    assert invited.json()["role"] == "member"
+    assert (await _invite(client, group_id, "dave", headers=CAROL)).status_code == 403
+
+    assert (
+        await client.delete(f"/api/v1/user-groups/{group_id}/members/{bob_id}", headers=BOB)
+    ).status_code == 403
+    assert (
+        await client.delete(f"/api/v1/user-groups/{group_id}/members/{alice_id}", headers=BOB)
+    ).status_code == 403
+    assert (
+        await client.delete(f"/api/v1/user-groups/{group_id}/members/{carol_id}", headers=BOB)
+    ).status_code == 204
+    assert (
+        await client.delete(f"/api/v1/user-groups/{group_id}/members/{bob_id}", headers=ALICE)
+    ).status_code == 204
 
 
 @pytest.mark.asyncio
@@ -260,7 +326,13 @@ async def test_owner_role_only_changes_through_atomic_transfer(client: httpx.Asy
     group = await _create_group(client, ALICE, "Transfer Lab")
     group_id = str(group["id"])
 
-    assert (await _invite(client, group_id, "bob", role="owner")).status_code == 409
+    assert (
+        await client.post(
+            f"/api/v1/user-groups/{group_id}/members",
+            json={"username": "bob", "role": "owner"},
+            headers=ALICE,
+        )
+    ).status_code == 422
     assert (await _invite(client, group_id, "bob")).status_code == 201
     assert (await _invite(client, group_id, "carol")).status_code == 201
     for headers in (BOB, CAROL):
@@ -347,8 +419,6 @@ async def test_owner_cannot_leave_or_be_removed_then_former_owner_can_leave(
             f"/api/v1/user-groups/{group_id}/transfer-ownership/{bob_id}", headers=ALICE
         )
     ).status_code == 204
-    legacy = (await client.get(f"/api/v1/workspaces/{group_id}", headers=BOB)).json()
-    assert legacy["owner_id"] == bob_id
     assert (
         await client.post(f"/api/v1/user-groups/{group_id}/leave", headers=ALICE)
     ).status_code == 204
@@ -370,7 +440,7 @@ async def test_concurrent_transfer_and_remove_preserve_an_active_owner(
         client.delete(f"/api/v1/user-groups/{group_id}/members/{bob_id}", headers=ALICE),
     )
 
-    assert (transfer.status_code, remove.status_code) in {(204, 409), (404, 204)}
+    assert (transfer.status_code, remove.status_code) in {(204, 403), (404, 204)}
     await _assert_exactly_one_active_owner(client, group_id)
 
 
@@ -404,5 +474,5 @@ async def test_concurrent_transfer_and_role_change_preserve_an_active_owner(
         ),
     )
 
-    assert (transfer.status_code, role_change.status_code) in {(204, 409), (204, 200)}
+    assert (transfer.status_code, role_change.status_code) in {(204, 403), (204, 200)}
     await _assert_exactly_one_active_owner(client, group_id)

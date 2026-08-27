@@ -9,6 +9,7 @@ from uuid import uuid4
 
 USER = "usr"
 USER_GROUP = "grp"
+LEGACY_WORKSPACE = "ws"
 MEMBERSHIP = "mbr"
 PROJECT = "prj"
 PROJECT_VERSION = "pv"
@@ -26,6 +27,7 @@ NOTIFICATION = "ntf"
 FORK_RELATION = "fork"
 SHARED_RESOURCE = "shr"
 SHARED_RESOURCE_VERSION = "shrv"
+GRANT = "gnt"
 
 
 def new_id(prefix: str) -> str:

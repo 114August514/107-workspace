@@ -6,10 +6,12 @@ import asyncio
 from typing import Any
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from workspace107.domain import ids
 from workspace107.domain.compute import ResourceEntitlement
+from workspace107.infrastructure.db import tables as t
 from workspace107.infrastructure.db.repositories import SqlRepositories
 from workspace107.infrastructure.db.tables import EnvironmentRow, EnvironmentVersionRow
 
@@ -58,15 +60,24 @@ async def ensure_user_group(
 
 
 async def grant_test_entitlement(
-    session: AsyncSession, workspace_id: str, compute_plan_id: str = "plan_cpu_quick"
+    session: AsyncSession,
+    username: str,
+    compute_plan_id: str = "plan_cpu_quick",
+    *,
+    max_concurrent_runs: int = 2,
+    expires_at: str | None = None,
 ) -> None:
-    """Seed only the entitlement required by a test; UserGroup creation grants none."""
+    """Seed the entitlement of the user named ``username``; nothing grants one implicitly."""
+    user = (
+        await session.execute(select(t.UserRow).where(t.UserRow.username == username))
+    ).scalar_one()
     await SqlRepositories(session).entitlements.add(
         ResourceEntitlement(
             id=ids.new_id(ids.ENTITLEMENT),
-            workspace_id=workspace_id,
+            user_id=user.id,
             compute_plan_id=compute_plan_id,
-            max_concurrent_runs=2,
+            max_concurrent_runs=max_concurrent_runs,
+            expires_at=expires_at,
         )
     )
     await session.commit()
@@ -80,12 +91,16 @@ async def create_project_with_version(
     headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """创建 Project、写入文件并保存一个版本，返回 Project。"""
-    workspace_id = await ensure_user_group(client, headers=headers)
+    user_group_id = await ensure_user_group(client, headers=headers)
 
     project = (
         await client.post(
-            f"/api/v1/workspaces/{workspace_id}/projects",
-            json={"name": name, "description": "测试用"},
+            "/api/v1/projects",
+            json={
+                "owner": {"kind": "user_group", "id": user_group_id},
+                "name": name,
+                "description": "测试用",
+            },
             headers=headers,
         )
     ).json()
@@ -112,9 +127,9 @@ async def use_default_environment(
     client: httpx.AsyncClient,
     *,
     headers: dict[str, str] | None = None,
-) -> str:
-    """Create the group's own default environment and return its compatibility ID."""
-    workspace_id = await ensure_user_group(client, headers=headers)
+) -> tuple[str, str]:
+    """Create the group's own Environment Version and return its current owner id."""
+    user_group_id = await ensure_user_group(client, headers=headers)
     environment_id = ids.new_id(ids.ENVIRONMENT)
     version_id = ids.new_id(ids.ENVIRONMENT_VERSION)
     session.add(
@@ -122,7 +137,7 @@ async def use_default_environment(
             id=environment_id,
             name="Test Environment",
             description="测试环境",
-            owner_user_group_id=workspace_id,
+            owner_user_group_id=user_group_id,
         )
     )
     await session.flush()
@@ -137,10 +152,4 @@ async def use_default_environment(
         )
     )
     await session.commit()
-    response = await client.patch(
-        f"/api/v1/workspaces/{workspace_id}",
-        json={"default_environment_version_id": version_id},
-        headers=headers,
-    )
-    response.raise_for_status()
-    return workspace_id
+    return user_group_id, version_id

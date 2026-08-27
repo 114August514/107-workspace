@@ -129,7 +129,7 @@ export function RunConfigurationModal({
       command: values.command,
       working_directory: values.working_directory || '.',
       compute_plan_id: values.compute_plan_id,
-      environment_version_id: values.environment_version_id ?? null,
+      environment_version_id: values.environment_version_id ?? '',
       environment_variables: Object.fromEntries(
         (values.env ?? []).filter((row) => row?.name).map((row) => [row.name, row.value ?? '']),
       ),
@@ -224,9 +224,10 @@ export function RunConfigurationModal({
         <Form.Item
           name="environment_version_id"
           label="运行环境"
-          extra="留空表示继承 Project 或 Workspace 的默认环境"
+          rules={[{ required: true, message: '请选择运行环境' }]}
+          extra="运行方案固定引用这个版本；创建 Run 时不会再继承默认环境"
         >
-          <Select allowClear placeholder="继承默认环境" options={environmentOptions} />
+          <Select placeholder="选择运行环境" options={environmentOptions} />
         </Form.Item>
 
         <Form.Item
@@ -292,7 +293,8 @@ export function RunConfigurationModal({
         <Typography.Title level={5}>环境变量</Typography.Title>
         <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
           值可以是字面量，也可以用 <Typography.Text code>{'${{ vars.NAME }}'}</Typography.Text> 或{' '}
-          <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text> 引用 Workspace 的配置。
+          <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text> 引用 Project / Project
+          Owner scope；发起 User 配置使用显式 user namespace。
         </Typography.Paragraph>
         <Form.List name="env">
           {(fields, { add, remove }) => (

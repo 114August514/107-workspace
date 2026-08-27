@@ -143,7 +143,6 @@ class SharedResourceService:
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_MANAGE
         )
         resource = access.resource
-        activity_workspace_id = self._activity_user_group_id(resource.owner)
         if name is not None:
             name = name.strip()
             if not name:
@@ -158,15 +157,14 @@ class SharedResourceService:
                 )
             resource.description = description
         await self._repos.shared_resources.update(resource)
-        if activity_workspace_id is not None:
-            await self._activity.record(
-                actor_id=user_id,
-                workspace_id=activity_workspace_id,
-                action=ActivityAction.SHARED_RESOURCE_UPDATED,
-                target_type=TargetType.SHARED_RESOURCE,
-                target_id=resource.id,
-                target_name=resource.name,
-            )
+        await self._activity.record(
+            actor_id=user_id,
+            owner=resource.owner,
+            action=ActivityAction.SHARED_RESOURCE_UPDATED,
+            target_type=TargetType.SHARED_RESOURCE,
+            target_id=resource.id,
+            target_name=resource.name,
+        )
         return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
 
     async def publish_version(
@@ -186,7 +184,6 @@ class SharedResourceService:
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_VERSION_CREATE
         )
         resource = access.resource
-        activity_workspace_id = self._activity_user_group_id(resource.owner)
         if not uploads:
             raise ValidationFailed("版本必须至少包含一个文件")
         if len(description) > MAX_VERSION_DESCRIPTION_LEN:
@@ -224,16 +221,15 @@ class SharedResourceService:
             created_at=self._clock.now(),
         )
         await self._repos.shared_resources.add_version(version)
-        if activity_workspace_id is not None:
-            await self._activity.record(
-                actor_id=user_id,
-                workspace_id=activity_workspace_id,
-                action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
-                target_type=TargetType.SHARED_RESOURCE_VERSION,
-                target_id=version.id,
-                target_name=f"{resource.name} · {version.label}",
-                detail=version.description,
-            )
+        await self._activity.record(
+            actor_id=user_id,
+            owner=resource.owner,
+            action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
+            target_type=TargetType.SHARED_RESOURCE_VERSION,
+            target_id=version.id,
+            target_name=f"{resource.name} · {version.label}",
+            detail=version.description,
+        )
         return version
 
     async def read_version_file(self, user_id: str, version_id: str, path: str) -> bytes:
@@ -282,22 +278,15 @@ class SharedResourceService:
             created_at=self._clock.now(),
         )
         await self._repos.shared_resources.add(resource)
-        activity_workspace_id = self._activity_user_group_id(owner)
-        if activity_workspace_id is not None:
-            await self._activity.record(
-                actor_id=user_id,
-                workspace_id=activity_workspace_id,
-                action=ActivityAction.SHARED_RESOURCE_CREATED,
-                target_type=TargetType.SHARED_RESOURCE,
-                target_id=resource.id,
-                target_name=resource.name,
-            )
+        await self._activity.record(
+            actor_id=user_id,
+            owner=owner,
+            action=ActivityAction.SHARED_RESOURCE_CREATED,
+            target_type=TargetType.SHARED_RESOURCE,
+            target_id=resource.id,
+            target_name=resource.name,
+        )
         return resource
-
-    @staticmethod
-    def _activity_user_group_id(owner: OwnerReference) -> str | None:
-        """Activity is UserGroup-scoped; User-owned assets have no fake Workspace feed."""
-        return owner.id if owner.kind is OwnerKind.USER_GROUP else None
 
     async def _views(self, resources: list[SharedResource]) -> list[SharedResourceView]:
         owners = await owner_summaries(self._repos, (resource.owner for resource in resources))

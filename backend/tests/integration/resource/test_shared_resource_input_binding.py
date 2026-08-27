@@ -54,13 +54,13 @@ async def _create_resource_with_version(
     client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情（含 files）。"""
-    workspace_id = await _user_group(client)
+    user_group_id = await _user_group(client)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": name,
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
@@ -88,6 +88,7 @@ async def _run_with_input(
     version: dict,
     script: str,
     entry: str,
+    environment_version_id: str,
     access_path: str = "/inputs/dataset",
 ) -> dict:
     await client.put(
@@ -107,6 +108,7 @@ async def _run_with_input(
             "name": f"消费-{entry}",
             "command": f"python {entry}",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",
@@ -136,8 +138,8 @@ async def test_shared_resource_version_可以作为_run_输入(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """最关键的闭环：上传文件 → 引用 → Run 真的读到。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
+    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client, name="预训练权重", files=[("weights.txt", b"model-params")]
     )
@@ -145,7 +147,12 @@ async def test_shared_resource_version_可以作为_run_输入(
         client, name="消费资源", files={"placeholder.py": "pass"}, headers=ALICE
     )
     detail = await _run_with_input(
-        client, project=project, version=version, script=CONSUMER, entry="consume.py"
+        client,
+        project=project,
+        version=version,
+        script=CONSUMER,
+        entry="consume.py",
+        environment_version_id=env_version_id,
     )
 
     logs = (await client.get(f"/api/v1/runs/{detail['run']['id']}/logs", headers=ALICE)).json()
@@ -171,8 +178,8 @@ async def test_shared_resource_输入以只读方式提供(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """GR-404：输入只读，Run 不得原地修改。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
+    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client, name="只读验证", files=[("weights.txt", b"original")]
     )
@@ -180,7 +187,12 @@ async def test_shared_resource_输入以只读方式提供(
         client, name="尝试篡改", files={"placeholder.py": "pass"}, headers=ALICE
     )
     detail = await _run_with_input(
-        client, project=project, version=version, script=WRITER, entry="write.py"
+        client,
+        project=project,
+        version=version,
+        script=WRITER,
+        entry="write.py",
+        environment_version_id=env_version_id,
     )
 
     logs = (await client.get(f"/api/v1/runs/{detail['run']['id']}/logs", headers=ALICE)).json()
@@ -201,8 +213,8 @@ async def test_shared_resource_支持多文件和子目录(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """版本里多文件 + 子目录结构，物化到 inputs 后保持原相对路径。"""
-    workspace_id = await use_default_environment(session, client, headers=ALICE)
-    await grant_test_entitlement(session, workspace_id)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
+    await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
         name="多文件资源",
@@ -222,7 +234,12 @@ for p in sorted(root.rglob("*")):
         print(str(p.relative_to(root).as_posix()), "=", p.read_text())
 """
     detail = await _run_with_input(
-        client, project=project, version=version, script=listing_script, entry="list.py"
+        client,
+        project=project,
+        version=version,
+        script=listing_script,
+        entry="list.py",
+        environment_version_id=env_version_id,
     )
 
     logs = (await client.get(f"/api/v1/runs/{detail['run']['id']}/logs", headers=ALICE)).json()
@@ -244,7 +261,7 @@ for p in sorted(root.rglob("*")):
 async def test_引用不存在的_version_会挡在运行方案保存前(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     project = await create_project_with_version(
         client, name="错误输入", files={"main.py": "pass"}, headers=ALICE
     )
@@ -254,6 +271,7 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
             "name": "跑一下",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",
@@ -268,10 +286,10 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
     assert response.json()["code"] == "not_found"
 
 
-# -- 跨 Workspace 引用 -------------------------------------------------------
+# -- 跨 Owner 引用 -------------------------------------------------------
 
 
-async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存前(
+async def test_跨_owner_引用_user_group_shared_resource_被挡在运行方案保存前(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     """Bob cannot persist an asset owned by Alice's exact User Group."""
@@ -280,11 +298,13 @@ async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存�
         client, name="Alice 私有", files=[("a.txt", b"x")]
     )
     bob_headers = {"X-User": "bob"}
-    bob_ws = await use_default_environment(session, client, headers=bob_headers)
+    bob_group_id, bob_env_version_id = await use_default_environment(
+        session, client, headers=bob_headers
+    )
     project = (
         await client.post(
-            f"/api/v1/workspaces/{bob_ws}/projects",
-            json={"name": "Bob 项目"},
+            "/api/v1/projects",
+            json={"owner": {"kind": "user_group", "id": bob_group_id}, "name": "Bob 项目"},
             headers=bob_headers,
         )
     ).json()
@@ -294,6 +314,7 @@ async def test_跨_workspace_引用_shared_resource_被挡在运行方案保存�
             "name": "引用 Alice 的",
             "command": "python main.py",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": bob_env_version_id,
             "input_bindings": [
                 {
                     "source_type": "shared_resource_version",

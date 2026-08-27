@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import pytest
 
 from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfiguration
+from workspace107.domain.config_scope import ConfigScope, SecretReference
 from workspace107.domain.enums import InputSourceType
 from workspace107.domain.errors import ValidationFailed
 from workspace107.domain.models import ArtifactCollectionRule, InputBinding
@@ -29,7 +30,7 @@ def make_snapshot() -> RunSnapshot:
         environment_setup_command="pip install -r requirements.txt",
         resolved_env=ResolvedEnv(
             literals={"EPOCHS": "5"},
-            secret_refs={"TOKEN": "HF_TOKEN"},
+            secret_refs={"TOKEN": SecretReference(ConfigScope.user("owner"), "HF_TOKEN")},
         ),
         input_bindings=(
             InputBinding(
@@ -55,7 +56,7 @@ def make_snapshot() -> RunSnapshot:
             time_limit_minutes=15,
         ),
         artifact_rules=(ArtifactCollectionRule(path="outputs", name="结果", optional=False),),
-        created_by="usr_1",
+        initiated_by_user_id="usr_1",
         created_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
     )
 

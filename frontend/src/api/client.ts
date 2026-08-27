@@ -25,7 +25,6 @@ import type {
   FileContent,
   Home,
   Invitation,
-  LegacyWorkspaceContext,
   LogChunk,
   Member,
   MembershipRole,
@@ -35,7 +34,6 @@ import type {
   ForkSource,
   Project,
   ProjectFile,
-  ProjectPage,
   ProjectVersion,
   ProjectVersionPage,
   ProjectVersionDetail,
@@ -51,7 +49,6 @@ import type {
   SharedResourceUpdate,
   SharedResourceVersion,
   SharedResourceVersionDetail,
-  Variable,
   VersionDiff,
   WorkingChange,
   UserGroup,
@@ -206,24 +203,6 @@ export const api = {
       }),
     ),
 
-  getLegacyWorkspaceContext: async (id: string): Promise<LegacyWorkspaceContext> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setLegacyDefaultEnvironment: async (
-    id: string,
-    defaultEnvironmentVersionId: string | null,
-  ): Promise<LegacyWorkspaceContext> =>
-    unwrap(
-      await http.PATCH('/api/v1/workspaces/{workspace_id}', {
-        params: { path: { workspace_id: id } },
-        body: { default_environment_version_id: defaultEnvironmentVersionId },
-      }),
-    ),
-
   listMembers: async (id: string): Promise<Member[]> =>
     unwrap(
       await http.GET('/api/v1/user-groups/{user_group_id}/members', {
@@ -231,11 +210,11 @@ export const api = {
       }),
     ),
 
-  inviteMember: async (id: string, username: string, role: MembershipRole): Promise<Member> =>
+  inviteMember: async (id: string, username: string): Promise<Member> =>
     unwrap(
       await http.POST('/api/v1/user-groups/{user_group_id}/members', {
         params: { path: { user_group_id: id } },
-        body: { username, role },
+        body: { username },
       }),
     ),
 
@@ -255,6 +234,14 @@ export const api = {
     )
   },
 
+  transferUserGroupOwnership: async (id: string, userId: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/user-groups/{user_group_id}/transfer-ownership/{target_user_id}', {
+        params: { path: { user_group_id: id, target_user_id: userId } },
+      }),
+    )
+  },
+
   /** 我收到的、还没处理的邀请。 */
   listInvitations: async (): Promise<Invitation[]> => unwrap(await http.GET('/api/v1/invitations')),
 
@@ -267,76 +254,10 @@ export const api = {
     )
   },
 
-  listEntitlements: async (id: string): Promise<Entitlement[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/entitlements', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  listVariables: async (id: string): Promise<Variable[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/variables', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setVariable: async (id: string, name: string, value: string): Promise<Variable> =>
-    unwrap(
-      await http.PUT('/api/v1/workspaces/{workspace_id}/variables', {
-        params: { path: { workspace_id: id } },
-        body: { name, value },
-      }),
-    ),
-
-  deleteVariable: async (id: string, name: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/variables/{name}', {
-        params: { path: { workspace_id: id, name } },
-      }),
-    )
-  },
-
-  /** 只返回名称。Secret 的值没有任何读取接口（docs/product/design.md 第 3.1.4 节）。 */
-  listSecretNames: async (id: string): Promise<string[]> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/secrets', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setSecret: async (id: string, name: string, value: string): Promise<void> => {
-    unwrap(
-      await http.PUT('/api/v1/workspaces/{workspace_id}/secrets', {
-        params: { path: { workspace_id: id } },
-        body: { name, value },
-      }),
-    )
-  },
-
-  deleteSecret: async (id: string, name: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/workspaces/{workspace_id}/secrets/{name}', {
-        params: { path: { workspace_id: id, name } },
-      }),
-    )
-  },
+  listEntitlements: async (): Promise<Entitlement[]> =>
+    unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
-  listProjects: async (workspaceId: string, query: PageQuery = {}): Promise<ProjectPage> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/projects', {
-        params: { path: { workspace_id: workspaceId }, query },
-      }),
-    ),
-
-  createProject: async (workspaceId: string, name: string, description: string): Promise<Project> =>
-    unwrap(
-      await http.POST('/api/v1/workspaces/{workspace_id}/projects', {
-        params: { path: { workspace_id: workspaceId } },
-        body: { name, description },
-      }),
-    ),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
@@ -349,7 +270,6 @@ export const api = {
       name?: string
       description?: string
       environment_version_id?: string | null
-      inherit_workspace_environment?: boolean
       default_run_configuration_id?: string
     },
   ): Promise<Project> =>
@@ -446,6 +366,20 @@ export const api = {
     unwrap(
       await http.POST('/api/v1/versions/{version_id}/restore', {
         params: { path: { version_id: versionId } },
+      }),
+    ),
+
+  listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/variables', {
+        params: { path: { project_id: projectId } },
+      }),
+    ),
+
+  listProjectSecrets: async (projectId: string): Promise<string[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/secrets', {
+        params: { path: { project_id: projectId } },
       }),
     ),
 
@@ -677,15 +611,17 @@ export const api = {
   // -- Fork --------------------------------------------------------------
   forkVersion: async (
     versionId: string,
-    payload: { target_workspace_id: string; name?: string; description?: string },
+    payload: {
+      target_owner: { kind: 'user' | 'user_group'; id: string }
+      name?: string
+      description?: string
+    },
   ): Promise<Project> =>
     unwrap(
       await http.POST('/api/v1/versions/{version_id}/fork', {
         params: { path: { version_id: versionId } },
-        // 契约里这两项带默认值所以是必填。调用方省略时补空串，
-        // 后端会沿用源 Project 的名称和说明。
         body: {
-          target_workspace_id: payload.target_workspace_id,
+          target_owner: payload.target_owner,
           name: payload.name ?? '',
           description: payload.description ?? '',
         },
@@ -701,10 +637,10 @@ export const api = {
     ) ?? null,
 
   // -- 活动流 ------------------------------------------------------------
-  listWorkspaceActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
+  listUserGroupActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
     unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/activities', {
-        params: { path: { workspace_id: id }, query },
+      await http.GET('/api/v1/user-groups/{user_group_id}/activities', {
+        params: { path: { user_group_id: id }, query },
       }),
     ),
 

@@ -7,6 +7,8 @@ from fastapi import APIRouter
 from ..schemas import ErrorOut
 from . import (
     catalog,
+    configuration,
+    grants,
     health,
     home,
     notifications,
@@ -14,7 +16,6 @@ from . import (
     runs,
     shared_resources,
     user_groups,
-    workspaces,
 )
 
 # 错误响应也是契约的一部分。不声明的话 OpenAPI 里就没有它，
@@ -32,11 +33,12 @@ api_router = APIRouter(prefix="/api/v1", responses=COMMON_ERRORS)
 api_router.include_router(health.router)
 api_router.include_router(home.router)
 api_router.include_router(user_groups.router)
-api_router.include_router(workspaces.router)
+api_router.include_router(configuration.router)
 api_router.include_router(projects.router)
 api_router.include_router(runs.router)
 api_router.include_router(catalog.router)
 api_router.include_router(notifications.router)
 api_router.include_router(shared_resources.router)
+api_router.include_router(grants.router)
 
 __all__ = ["api_router"]

@@ -11,10 +11,10 @@ from ..domain.capabilities import (
     describe,
     user_group_capabilities_of,
 )
-from ..domain.enums import MembershipRole
+from ..domain.enums import MembershipRole, ProjectVisibility
 from ..domain.errors import ObjectNotFound, PermissionDenied
 from ..domain.models import (
-    LegacyWorkspace,
+    Environment,
     Project,
     Run,
     SharedResource,
@@ -43,32 +43,16 @@ class UserGroupAccess:
 
 
 @dataclass(frozen=True, slots=True)
-class LegacyWorkspaceAccess:
-    """Private access context for unmigrated child-domain rows."""
-
-    workspace: LegacyWorkspace
-    role: MembershipRole
-
-    @property
-    def capabilities(self) -> frozenset[Capability]:
-        return capabilities_of(self.role)
-
-    def can(self, capability: Capability) -> bool:
-        return capability in self.capabilities
-
-    def require(self, capability: Capability) -> None:
-        if not self.can(capability):
-            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
-
-
-@dataclass(frozen=True, slots=True)
 class ProjectAccess:
     project: Project
-    workspace: LegacyWorkspace
-    role: MembershipRole
+    role: MembershipRole | None
+    owner_scope: bool
 
     @property
     def capabilities(self) -> frozenset[Capability]:
+        if self.role is None:
+            # PUBLIC reader: metadata + immutable version read only.
+            return _PUBLIC_READER_CAPABILITIES
         return capabilities_of(self.role)
 
     def can(self, capability: Capability) -> bool:
@@ -76,14 +60,21 @@ class ProjectAccess:
 
     def require(self, capability: Capability) -> None:
         if not self.can(capability):
-            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
+            label = "公开读者" if self.role is None else self.role.value
+            raise PermissionDenied(f"当前角色（{label}）无权{describe(capability)}")
+
+    def require_owner_scope(self) -> None:
+        if not self.owner_scope:
+            raise PermissionDenied("当前 Project 仅公开其元数据和不可变版本")
+
+
+_PUBLIC_READER_CAPABILITIES = frozenset({Capability.PROJECT_VIEW})
 
 
 @dataclass(frozen=True, slots=True)
 class RunAccess:
     run: Run
     project: Project
-    workspace: LegacyWorkspace
     role: MembershipRole
 
     @property
@@ -103,6 +94,25 @@ class SharedResourceAccess:
     """Current User's role-derived access to a repository-visible resource."""
 
     resource: SharedResource
+    role: MembershipRole
+
+    @property
+    def capabilities(self) -> frozenset[Capability]:
+        return capabilities_of(self.role)
+
+    def can(self, capability: Capability) -> bool:
+        return capability in self.capabilities
+
+    def require(self, capability: Capability) -> None:
+        if not self.can(capability):
+            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
+
+
+@dataclass(frozen=True, slots=True)
+class EnvironmentAccess:
+    """Current User's role-derived access to a repository-visible environment."""
+
+    environment: Environment
     role: MembershipRole
 
     @property
@@ -139,35 +149,49 @@ class AccessGuard:
             access.require(needs)
         return access
 
-    async def legacy_workspace(
-        self, user_id: str, workspace_id: str, *, needs: Capability | None = None
-    ) -> LegacyWorkspaceAccess:
-        workspace = await self._repos.legacy_workspaces.get(workspace_id)
-        if workspace is None:
-            raise ObjectNotFound("Workspace compatibility context", workspace_id)
-        role = await self._resolve_legacy_role(user_id, workspace)
-        if role is None:
-            raise ObjectNotFound("Workspace compatibility context", workspace_id)
-        access = LegacyWorkspaceAccess(workspace=workspace, role=role)
-        if needs is not None:
-            access.require(needs)
-        return access
+    async def scoped_config_group(self, user_id: str, user_group_id: str, *, manage: bool) -> None:
+        """Authorize config without exposing governance capability projections."""
+        group = await self._repos.user_groups.get_for_active_member(user_group_id, user_id)
+        membership = await self._repos.memberships.get(user_group_id, user_id)
+        if group is None or membership is None or not membership.is_active:
+            raise ObjectNotFound("User Group", user_group_id)
+        required = Capability.CONFIG_MANAGE if manage else Capability.CONFIG_VIEW
+        if required not in capabilities_of(membership.role):
+            raise PermissionDenied(f"当前角色（{membership.role.value}）无权{describe(required)}")
 
     async def project(
-        self, user_id: str, project_id: str, *, needs: Capability | None = None
+        self,
+        user_id: str,
+        project_id: str,
+        *,
+        needs: Capability | None = None,
+        owner_scope: bool = False,
     ) -> ProjectAccess:
         project = await self._repos.projects.get(project_id)
         if project is None:
             raise ObjectNotFound("Project", project_id)
-        try:
-            workspace_access = await self.legacy_workspace(user_id, project.workspace_id)
-        except ObjectNotFound as exc:
-            # 归属 Workspace 不可见时，Project 同样视为不存在。
-            raise ObjectNotFound("Project", project_id) from exc
 
-        access = ProjectAccess(
-            project=project, workspace=workspace_access.workspace, role=workspace_access.role
-        )
+        role: MembershipRole | None = None
+        is_owner = False
+        if project.owner.kind is OwnerKind.USER:
+            if project.owner.id == user_id:
+                is_owner = True
+                role = MembershipRole.OWNER
+        else:
+            membership = await self._repos.memberships.get(project.owner.id, user_id)
+            if membership is not None and membership.is_active:
+                is_owner = True
+                role = membership.role
+
+        if not is_owner:
+            if project.visibility is not ProjectVisibility.PUBLIC:
+                raise ObjectNotFound("Project", project_id)
+            if owner_scope:
+                # Owner-scope operations (working state, runs, configs) never
+                # cross into the public read boundary.
+                raise ObjectNotFound("Project", project_id)
+
+        access = ProjectAccess(project=project, role=role, owner_scope=is_owner)
         if needs is not None:
             access.require(needs)
         return access
@@ -177,15 +201,19 @@ class AccessGuard:
         if run is None:
             raise ObjectNotFound("Run", run_id)
         try:
-            project_access = await self.project(user_id, run.project_id)
+            project_access = await self.project(user_id, run.project_id, owner_scope=True)
         except ObjectNotFound as exc:
             raise ObjectNotFound("Run", run_id) from exc
+        # owner_scope=True above guarantees project_access.role is a real membership
+        # role, never the PUBLIC reader's None.
+        role = project_access.role
+        if role is None:  # pragma: no cover - enforced by the guard above
+            raise ObjectNotFound("Run", run_id)
 
         access = RunAccess(
             run=run,
             project=project_access.project,
-            workspace=project_access.workspace,
-            role=project_access.role,
+            role=role,
         )
         if needs is not None:
             access.require(needs)
@@ -214,6 +242,29 @@ class AccessGuard:
             access.require(needs)
         return access
 
+    async def environment(
+        self, user_id: str, environment_id: str, *, needs: Capability | None = None
+    ) -> EnvironmentAccess:
+        environment = await self._repos.environments.get_discoverable_for_user(
+            user_id, environment_id
+        )
+        if environment is None:
+            raise ObjectNotFound("Environment", environment_id)
+
+        if environment.owner.kind is OwnerKind.USER:
+            # Repository visibility already proved the exact User owner is the actor.
+            role = MembershipRole.OWNER
+        else:
+            membership = await self._repos.memberships.get(environment.owner.id, user_id)
+            if membership is None or not membership.is_active:  # pragma: no cover - SQL guard
+                raise ObjectNotFound("Environment", environment_id)
+            role = membership.role
+
+        access = EnvironmentAccess(environment=environment, role=role)
+        if needs is not None:
+            access.require(needs)
+        return access
+
     async def shared_resource_version(
         self, user_id: str, version_id: str, *, needs: Capability | None = None
     ) -> tuple[SharedResourceVersion, SharedResourceAccess]:
@@ -224,13 +275,3 @@ class AccessGuard:
             raise ObjectNotFound("Shared Resource Version", version_id)
         access = await self.shared_resource(user_id, version.shared_resource_id, needs=needs)
         return version, access
-
-    async def _resolve_legacy_role(
-        self, user_id: str, workspace: LegacyWorkspace
-    ) -> MembershipRole | None:
-        if workspace.is_personal:
-            return MembershipRole.OWNER if workspace.owner_id == user_id else None
-        membership = await self._repos.memberships.get(workspace.id, user_id)
-        if membership is None or not membership.is_active:
-            return None
-        return membership.role

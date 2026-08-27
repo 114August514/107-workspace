@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { api, ApiError } from '../../src/api/client'
-import type { LogChunk, RunDetail, LegacyWorkspaceContext } from '../../src/api/types'
+import type { LogChunk, RunDetail } from '../../src/api/types'
 import { RunPage } from '../../src/pages/RunPage'
 
 const runDetailFixture = (): RunDetail => ({
@@ -14,14 +14,14 @@ const runDetailFixture = (): RunDetail => ({
     id: 'run-1',
     name: 'test-run',
     project_id: 'project-1',
-    workspace_id: 'workspace-1',
+    capabilities: ['run.submit', 'run.cancel'],
     project_version_id: 'version-1',
     project_version_label: 'v1',
     snapshot_id: 'snapshot-1',
     source_run_id: null,
     source_run_configuration_id: null,
     status: 'succeeded',
-    created_by: 'student',
+    initiated_by_user_id: 'student',
     created_at: '2026-08-15T08:00:00Z',
     submitted_at: '2026-08-15T08:01:00Z',
     started_at: '2026-08-15T08:02:00Z',
@@ -52,7 +52,7 @@ const runDetailFixture = (): RunDetail => ({
     artifact_rules: [],
     input_bindings: [],
     created_at: '2026-08-15T08:00:00Z',
-    created_by: 'student',
+    initiated_by_user_id: 'student',
     project_id: 'project-1',
     project_version_id: 'version-1',
     scheduler: {
@@ -70,16 +70,6 @@ const runDetailFixture = (): RunDetail => ({
     source_run_configuration_id: null,
     working_directory: '',
   },
-})
-
-const workspaceFixture = (): LegacyWorkspaceContext => ({
-  id: 'workspace-1',
-  name: 'test-workspace',
-  kind: 'personal',
-  role: 'owner',
-  capabilities: ['run.submit', 'run.cancel'],
-  default_environment_version_id: null,
-  owner_id: 'student',
 })
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -116,7 +106,6 @@ describe('RunPage backend unavailable', () => {
     })
 
     vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
-    vi.spyOn(api, 'getLegacyWorkspaceContext').mockResolvedValue(workspaceFixture())
 
     render(
       <Wrapper>

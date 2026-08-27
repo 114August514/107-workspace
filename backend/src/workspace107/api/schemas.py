@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,12 +17,12 @@ from ..domain.enums import (
     ArtifactStatus,
     ChangeKind,
     InputSourceType,
-    LegacyWorkspaceKind,
     LogStream,
     MembershipRole,
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     TargetType,
@@ -78,33 +79,18 @@ class UserGroupUpdateIn(Model):
     description: str | None = None
 
 
-class LegacyWorkspaceContextOut(Model):
-    """Deprecated context for child domains still keyed by workspace_id."""
-
-    id: str
-    kind: LegacyWorkspaceKind
-    name: str
-    owner_id: str
-    default_environment_version_id: str | None
-    role: MembershipRole
-    capabilities: list[Capability] = Field(default_factory=list)
-
-
-class LegacyWorkspaceUpdateIn(Model):
-    default_environment_version_id: str | None = None
-
-
 class MemberOut(Model):
     user_id: str
     username: str
     display_name: str
     role: MembershipRole
     status: MembershipStatus
+    capabilities: list[UserGroupCapability] = Field(default_factory=list)
 
 
 class MemberInviteIn(Model):
+    model_config = ConfigDict(extra="forbid")
     username: str
-    role: MembershipRole = MembershipRole.MEMBER
 
 
 class MemberRoleUpdateIn(Model):
@@ -121,12 +107,12 @@ class VariableOut(Model):
 
 
 class VariableIn(Model):
-    name: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     value: str
 
 
 class SecretIn(Model):
-    name: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     value: str = Field(min_length=1)
 
 
@@ -143,15 +129,17 @@ class EntitlementOut(Model):
 
 class ProjectOut(Model):
     id: str
-    workspace_id: str
+    owner: OwnerSummaryOut
     name: str
     description: str
     status: ProjectStatus
+    visibility: ProjectVisibility
     environment_version_id: str | None
     default_run_configuration_id: str | None
     created_by: str
     created_at: datetime | None
     updated_at: datetime | None
+    capabilities: list[Capability] = Field(default_factory=list)
 
 
 class ProjectCreateIn(Model):
@@ -159,13 +147,18 @@ class ProjectCreateIn(Model):
     description: str = ""
 
 
+class ProjectCreateOwnedIn(ProjectCreateIn):
+    owner: OwnerReferenceIn
+    visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE
+
+
 class ProjectUpdateIn(Model):
     name: str | None = None
     description: str | None = None
     environment_version_id: str | None = None
-    inherit_workspace_environment: bool | None = None
     default_run_configuration_id: str | None = None
     status: ProjectStatus | None = None
+    visibility: ProjectVisibility | None = None
 
 
 class ProjectFileOut(Model):
@@ -290,6 +283,7 @@ class SharedResourceOut(Model):
     description: str
     owner: OwnerSummaryOut
     created_at: datetime
+    capabilities: list[Capability] = Field(default_factory=list)
 
 
 class SharedResourceVersionFileOut(Model):
@@ -331,6 +325,29 @@ class SharedResourceUpdateIn(Model):
     description: str | None = Field(default=None, max_length=4096)
 
 
+# -- Grant ------------------------------------------------------------------
+
+
+class GrantOut(Model):
+    id: str
+    grantor: OwnerSummaryOut
+    grantee: OwnerSummaryOut
+    target_kind: Literal["environment", "shared_resource", "all"]
+    target_id: str
+    action: Literal["use"]
+    granted_by: OwnerSummaryOut
+    created_at: datetime
+
+
+class GrantCreateIn(Model):
+    target_kind: Literal["environment", "shared_resource", "all"]
+    target_id: str = ""
+    grantee: OwnerReferenceIn
+    grantor: OwnerReferenceIn | None = None
+    """Required for ALL grants (who issues the grant); omitted for asset grants
+    (derived from the target asset's current owner)."""
+
+
 # -- 运行方案 ---------------------------------------------------------------
 
 
@@ -365,9 +382,10 @@ class RunConfigurationIn(Model):
     name: str = Field(min_length=1, max_length=128)
     command: str = Field(min_length=1)
     compute_plan_id: str
+    environment_version_id: str
+    """精确引用的 Environment Version；不继承其他对象的默认值。"""
     working_directory: str = "."
     description: str = ""
-    environment_version_id: str | None = None
     environment_variables: dict[str, str] = Field(default_factory=dict)
     input_bindings: list[InputBindingModel] = Field(default_factory=list)
     compute_request: ComputeRequestModel | None = None
@@ -381,7 +399,7 @@ class RunConfigurationOut(Model):
     description: str
     working_directory: str
     command: str
-    environment_version_id: str | None
+    environment_version_id: str
     environment_variables: dict[str, str]
     input_bindings: list[InputBindingModel]
     compute_plan_id: str
@@ -423,7 +441,6 @@ class PreflightOut(Model):
 class RunOut(Model):
     id: str
     project_id: str
-    workspace_id: str
     snapshot_id: str
     source_run_configuration_id: str | None
     project_version_id: str
@@ -434,13 +451,15 @@ class RunOut(Model):
     scheduler_job_id: str | None
     exit_code: int | None
     failure_reason: str
-    created_by: str
+    initiated_by_user_id: str
+    """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
     created_at: datetime | None
     submitted_at: datetime | None
     started_at: datetime | None
     finished_at: datetime | None
     queued_seconds: float | None = None
     running_seconds: float | None = None
+    capabilities: list[Capability] = Field(default_factory=list)
 
 
 class RunEventOut(Model):
@@ -499,7 +518,7 @@ class RunSnapshotOut(Model):
     compute_request: ComputeRequestModel
     scheduler: ResolvedSchedulerOut
     artifact_rules: list[ArtifactRuleModel]
-    created_by: str
+    initiated_by_user_id: str
     created_at: datetime
 
 
@@ -528,10 +547,17 @@ class SyncOut(Model):
 # -- 首页 -------------------------------------------------------------------
 
 
+class PersonalExecutionContextOut(Model):
+    """The current User's direct ownership and compute entitlement context."""
+
+    owner: OwnerSummaryOut
+    entitlements: list[EntitlementOut]
+
+
 class HomeOut(Model):
     user: UserOut
     user_groups: list[UserGroupOut]
-    personal_resource_context_id: str | None
+    personal_execution_context: PersonalExecutionContextOut
     recent_projects: list[ProjectOut]
     recent_runs: list[RunOut]
 
@@ -559,7 +585,7 @@ class ActivityOut(Model):
     """
 
     id: str
-    workspace_id: str
+    owner: OwnerReferenceIn
     project_id: str | None
     actor_id: str
     actor_name: str
@@ -582,7 +608,6 @@ class NotificationOut(Model):
     type: NotificationType
     title: str
     body: str
-    workspace_id: str | None
     target_type: TargetType | None
     target_id: str | None
     mandatory: bool
@@ -596,7 +621,7 @@ class UnreadCountOut(Model):
 
 
 class ForkIn(Model):
-    target_workspace_id: str
+    target_owner: OwnerReferenceIn
     name: str = ""
     """留空表示沿用源 Project 的名称。"""
     description: str = ""
@@ -611,7 +636,7 @@ class ForkSourceOut(Model):
 
     source_project_id: str
     source_version_id: str
-    source_workspace_id: str
+    source_owner: OwnerReferenceIn
     source_project_name: str
     source_version_label: str
     created_at: datetime
