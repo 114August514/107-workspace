@@ -1,5 +1,5 @@
 # issue47-working-state-file-core
-- 状态：PR #73 评审修复与最终验收完成；`make check` 通过（backend 311 passed / 3 skipped；frontend 24 files / 139 tests；contract check）
+- 状态：PR #73 评审修复与最终验收完成；`make check` 通过（backend 311 passed / 3 skipped；frontend 24 files / 134 tests；contract check）
 - 写入边界：`/home/august/Projects/ustc_107/107-workspace-pr-73`（分支 `feat/47-working-state-file-core`，sole writer）
 - 分支：`feat/47-working-state-file-core`
 - 当前合并底座 / 评审起始 pushed head：`origin/main` `de6df22` / `feat/47-working-state-file-core` `246bc84`
@@ -34,15 +34,17 @@
 
 ## 测试
 
-- 后端 `tests/integration/test_project_working_state.py`（22 个）：复制 / 建目录 / 压缩包安全场景
-  （穿越、符号链接、加密、条目数与总量超限、非法 zip，以及中央目录可读但成员内容 CRC
-  损坏）/ 下载头 / 三类变更详情 / 放弃后版本不变与幂等 / PUBLIC 读者读写越权边界
-  （读 404、写 403）。损坏成员在 `archive.open` / `member.read` 抛出的
-  `zipfile.BadZipFile` 会转换为清晰的 422 validation 响应；整个压缩包在任何写入前完成读取，
-  因而同包中更早的合法成员也不会部分落盘。settings fixture 收紧上限以触发超限分支。
-- 前端 `FileBrowser.test.tsx`（9 个）与 `VersionPanelChanges.test.tsx`（4 个）：上传成败分离状态、
-  危险操作确认、只读无写入口、嵌套目录与目录操作、详情两侧展示、详情加载失败 / 重试、
-  放弃需确认且刷新。
+- 后端 `tests/integration/test_project_working_state.py`（22 个）：复制（含真实源子树的自复制拒绝与
+  缺失源区分）/ 空目录经目录路径移动、删除的可操作性 / 压缩包安全场景（穿越、符号链接、加密、
+  条目数与总量超限、非法 zip，以及中央目录可读但成员内容 CRC 损坏）/ 下载头 / 三类变更详情 /
+  放弃后版本不变与幂等 / PUBLIC 读者读写越权边界（读 404、写 403）。损坏成员在
+  `archive.open` / `member.read` 抛出的 `zipfile.BadZipFile` 会转换为清晰的 422 validation
+  响应；整个压缩包在任何写入前完成读取，因而同包中更早的合法成员也不会部分落盘。settings
+  fixture 收紧上限以触发超限分支。
+- 前端 `FileBrowser.test.tsx`（4 个）：多文件上传从上传中进入明确的成功 / 失败终态、压缩包整体
+  拒绝原因、嵌套目录投影与目录路径危险操作后的可见刷新结果、具体只读 Project 不暴露写入口。
+  `VersionPanelChanges.test.tsx`（4 个）：内容级差异两侧展示、放弃需确认且刷新、具体只读
+  Project 不暴露保存 / 恢复 / 放弃入口、详情加载失败后可重试。
 - 已知坑：antd Button 对两个中文字符自动插空格（"确 定"），断言须用 `\s*` 容忍。
 
 ## 2026-08-28 PR #73 final candidate evidence
@@ -52,7 +54,7 @@
   validation 响应。GREEN：同一定向测试 `1 passed in 0.36s`；完整 working-state integration
   文件 `22 passed in 4.15s`。
 - 最终 `make check`：workflow `15 tests`；backend `311 passed, 3 skipped in 31.35s`；
-  frontend `24` files / `139` tests，format、lint、typecheck、build 均通过；OpenAPI 与 frontend
+  frontend `24` files / `134` tests，format、lint、typecheck、build 均通过；OpenAPI 与 frontend
   types 一致。前端测试保留既有 jsdom `getComputedStyle(..., pseudoElt)` 与 React 19 / antd 5
   警告，未构成失败。
 - 实际应用：标准 `make dev` 因同机另一个受管 worktree 已占用固定 `127.0.0.1:8000` 而无法并行；
