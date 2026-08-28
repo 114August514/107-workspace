@@ -1,9 +1,10 @@
 """Shared Resource use cases with typed User/UserGroup ownership.
 
-Resources are mutable metadata with immutable content versions (GR-201). Discovery is
-repository-scoped to the exact User owner or active Membership of the owning UserGroup;
-#40 may later add USE Grant discovery. Content storage continues to use the shared
-content-addressed blob store.
+Resources are mutable metadata with immutable content versions (GR-201). Repository
+discovery includes exact User ownership, active Membership of the owning UserGroup,
+and valid USE Grants issued by the resource's current Owner to the actor or an active
+grantee group. Grants add discovery and use qualification, never management authority.
+Content storage continues to use the shared content-addressed blob store.
 """
 
 from __future__ import annotations

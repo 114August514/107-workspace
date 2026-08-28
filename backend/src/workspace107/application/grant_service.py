@@ -1,9 +1,10 @@
 """Cross-owner USE Grant use cases.
 
-A Grantor (User or User Group) creates a USE Grant to let another User or User
-Group (Grantee) reference the Grantor's top-level Environment or Shared Resource
-from their own Project.  Target can also be ALL to cover all current and future
-Grantor assets.
+A Grantor (User or User Group) creates a USE Grant over a top-level Environment,
+Shared Resource, or ALL current and future Grantor assets. A direct User Grant
+follows that actor into any Project where they may submit; a UserGroup Grant
+requires the exact grantee group as Project.owner and an active actor Membership.
+Run Preflight remains the concrete authorization decision for that Project.owner.
 
 Grant management requires the ``GRANT_MANAGE`` capability, which is available to
 ADMIN and OWNER roles in UserGroup-owned assets, and to the exact User for
