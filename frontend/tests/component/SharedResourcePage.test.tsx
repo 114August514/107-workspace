@@ -46,7 +46,7 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     description: 'imagenet-subset',
     owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
     created_at: '2026-08-14T10:00:00Z',
-    use_qualifications: [{ scope: 'owner', grants: [] }],
+    use_qualifications: [{ scope: 'owner' }],
     versions: [],
     capabilities: ['shared_resource.view'],
     ...overrides,
@@ -253,10 +253,10 @@ describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
         use_qualifications: [
           {
             scope: 'user_grant',
+            grantee: { kind: 'user', id: 'usr_bob', display_name: 'Bob' },
             grants: [
               {
                 id: 'grant_1',
-                grantee: { kind: 'user', id: 'usr_bob', display_name: 'Bob' },
                 target_all: false,
                 created_at: '2026-08-20T10:00:00Z',
               },
@@ -284,10 +284,10 @@ describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
         use_qualifications: [
           {
             scope: 'user_group_grant',
+            grantee: { kind: 'user_group', id: 'grp_ml', display_name: 'ML 组' },
             grants: [
               {
                 id: 'grant_2',
-                grantee: { kind: 'user_group', id: 'grp_ml', display_name: 'ML 组' },
                 target_all: true,
                 created_at: '2026-08-20T10:00:00Z',
               },

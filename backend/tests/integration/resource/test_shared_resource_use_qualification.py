@@ -91,14 +91,14 @@ async def test_owner_scope_qualification_in_list_and_detail(
     listing.raise_for_status()
     for resource_id in (user_resource_id, group_resource_id):
         qualifications = _qualifications_in_list(listing.json(), resource_id)
-        assert qualifications == [{"scope": "owner", "grants": []}]
+        assert qualifications == [{"scope": "owner"}]
 
     detail = await client.get(f"/api/v1/shared-resources/{group_resource_id}", headers=ALICE)
     detail.raise_for_status()
     body = detail.json()
     assert body["owner"]["kind"] == "user_group"
     assert body["owner"]["display_name"] == "Availability Owner Group"
-    assert body["use_qualifications"] == [{"scope": "owner", "grants": []}]
+    assert body["use_qualifications"] == [{"scope": "owner"}]
 
 
 async def test_unrelated_user_neither_discovers_nor_uses(
@@ -141,8 +141,8 @@ async def test_user_grant_qualification_with_summary(
     assert len(qualifications) == 1
     qualification = qualifications[0]
     assert qualification["scope"] == "user_grant"
+    assert qualification["grantee"]["id"] == bob_id
     assert [summary["id"] for summary in qualification["grants"]] == [grant_id]
-    assert qualification["grants"][0]["grantee"]["id"] == bob_id
     assert qualification["grants"][0]["target_all"] is False
 
     detail = await client.get(f"/api/v1/shared-resources/{resource_id}", headers=BOB)
@@ -168,9 +168,7 @@ async def test_user_grant_qualification_with_summary(
     # Owner still sees owner scope, not the grant issued to Bob.
     owner_listing = await client.get("/api/v1/shared-resources", headers=ALICE)
     owner_listing.raise_for_status()
-    assert _qualifications_in_list(owner_listing.json(), resource_id) == [
-        {"scope": "owner", "grants": []}
-    ]
+    assert _qualifications_in_list(owner_listing.json(), resource_id) == [{"scope": "owner"}]
 
 
 async def test_user_group_grant_summary_names_exact_project_owner_group(
@@ -185,11 +183,18 @@ async def test_user_group_grant_summary_names_exact_project_owner_group(
     resource_id, _ = await _create_resource_with_version(
         client, owner={"kind": "user_group", "id": group_b}, name="group granted"
     )
-    await _grant(
+    exact_grant_id = await _grant(
         client,
         target_kind="shared_resource",
         target_id=resource_id,
         grantee={"kind": "user_group", "id": group_a},
+    )
+    all_grant_id = await _grant(
+        client,
+        target_kind="all",
+        target_id="",
+        grantee={"kind": "user_group", "id": group_a},
+        grantor={"kind": "user_group", "id": group_b},
     )
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
@@ -198,11 +203,14 @@ async def test_user_group_grant_summary_names_exact_project_owner_group(
     assert qualifications is not None
     qualification = qualifications[0]
     assert qualification["scope"] == "user_group_grant"
-    assert qualification["grants"][0]["grantee"] == {
+    assert qualification["grantee"] == {
         "kind": "user_group",
         "id": group_a,
         "display_name": "Grantee Group A",
     }
+    grants = {summary["id"]: summary for summary in qualification["grants"]}
+    assert grants[exact_grant_id]["target_all"] is False
+    assert grants[all_grant_id]["target_all"] is True
 
     # Bob loses membership in the grantee group: the grant no longer reaches him.
     membership = (

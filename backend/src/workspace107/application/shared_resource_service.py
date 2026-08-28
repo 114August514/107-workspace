@@ -50,28 +50,37 @@ def _normalize_path(raw: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class UseGrantSummaryView:
-    """解释当前 User 使用资格的单条 USE Grant 摘要。"""
-
-    grant: Grant
-    grantee: OwnerSummary
-
-
-@dataclass(frozen=True, slots=True)
 class UseQualificationView:
-    """One actor-level way to use a resource.
-
-    Grant qualifications always contain at least one Grant. Each UserGroup Grant
-    qualification contains only Grants whose grantee is the same UserGroup.
-    """
+    """One actor-level way to use a resource, grouped by Grant grantee."""
 
     scope: UseQualificationScope
-    grants: tuple[UseGrantSummaryView, ...]
+    grantee: OwnerSummary | None
+    grants: tuple[Grant, ...]
+
+    def __post_init__(self) -> None:
+        is_owner = self.scope is UseQualificationScope.OWNER
+        if is_owner and (self.grantee is not None or self.grants):
+            raise ValueError("Owner qualification cannot contain a Grantee or Grants")
+        if is_owner:
+            return
+        if self.grantee is None or not self.grants:
+            raise ValueError("Grant qualification requires a Grantee and at least one Grant")
+        expected_kind = (
+            OwnerKind.USER
+            if self.scope is UseQualificationScope.USER_GRANT
+            else OwnerKind.USER_GROUP
+        )
+        if self.grantee.kind is not expected_kind or any(
+            grant.grantee.kind is not expected_kind or grant.grantee.id != self.grantee.id
+            for grant in self.grants
+        ):
+            raise ValueError("Grant qualification must contain Grants for exactly its Grantee")
 
 
 _OWNER_QUALIFICATIONS = (
     UseQualificationView(
         scope=UseQualificationScope.OWNER,
+        grantee=None,
         grants=(),
     ),
 )
@@ -443,13 +452,8 @@ class SharedResourceService:
             qualifications.append(
                 UseQualificationView(
                     scope=UseQualificationScope.USER_GRANT,
-                    grants=tuple(
-                        UseGrantSummaryView(
-                            grant=grant,
-                            grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
-                        )
-                        for grant in user_grants
-                    ),
+                    grantee=grantees[(OwnerKind.USER, user_id)],
+                    grants=user_grants,
                 )
             )
 
@@ -457,18 +461,12 @@ class SharedResourceService:
         for grant in grants:
             if grant.grantee.kind is OwnerKind.USER_GROUP:
                 grants_by_group.setdefault(grant.grantee.id, []).append(grant)
-        for group_grants in grants_by_group.values():
-            assert group_grants
+        for group_id, group_grants in grants_by_group.items():
             qualifications.append(
                 UseQualificationView(
                     scope=UseQualificationScope.USER_GROUP_GRANT,
-                    grants=tuple(
-                        UseGrantSummaryView(
-                            grant=grant,
-                            grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
-                        )
-                        for grant in group_grants
-                    ),
+                    grantee=grantees[(OwnerKind.USER_GROUP, group_id)],
+                    grants=tuple(group_grants),
                 )
             )
         return tuple(qualifications)

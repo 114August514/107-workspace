@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -279,26 +279,40 @@ class ComputePlanOut(Model):
 
 
 class UseGrantSummaryOut(Model):
-    """解释当前 User 使用资格的单条 USE Grant 摘要。"""
+    """One USE Grant contributing to the enclosing qualification."""
 
     id: str
-    grantee: OwnerSummaryOut
     target_all: bool
     created_at: datetime
 
 
-class SharedResourceUseQualificationOut(Model):
-    """An actor-level qualification, not authorization for a concrete Run.
+class SharedResourceOwnerQualificationOut(Model):
+    """Use in a Project whose Owner is the resource Owner."""
 
-    ``owner`` applies only when the consuming Project has the resource Owner.
+    scope: Literal[UseQualificationScope.OWNER] = UseQualificationScope.OWNER
+
+
+class SharedResourceGrantQualificationOut(Model):
+    """Actor-level Grant qualification, not authorization for a concrete Run.
+
     ``user_grant`` follows the actor into any Project where they may submit.
-    Each ``user_group_grant`` entry contains one or more Grants to the same User
-    Group; it applies only while the actor is an active member, that group owns the
-    consuming Project, and the actor may submit there.
+    ``user_group_grant`` applies only while the actor is an active member, the
+    Grantee User Group owns the consuming Project, and the actor may submit there.
+    Grants is non-empty and contains every matching Grant for this one Grantee.
     """
 
-    scope: UseQualificationScope
-    grants: list[UseGrantSummaryOut]
+    scope: Literal[
+        UseQualificationScope.USER_GRANT,
+        UseQualificationScope.USER_GROUP_GRANT,
+    ]
+    grantee: OwnerSummaryOut
+    grants: list[UseGrantSummaryOut] = Field(min_length=1)
+
+
+SharedResourceUseQualificationOut = Annotated[
+    SharedResourceOwnerQualificationOut | SharedResourceGrantQualificationOut,
+    Field(discriminator="scope"),
+]
 
 
 class SharedResourceOut(Model):

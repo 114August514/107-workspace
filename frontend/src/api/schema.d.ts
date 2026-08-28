@@ -2489,9 +2489,28 @@ export interface components {
             name: string;
             owner: components["schemas"]["OwnerSummaryOut"];
             /** Use Qualifications */
-            use_qualifications: components["schemas"]["SharedResourceUseQualificationOut"][];
+            use_qualifications: (components["schemas"]["SharedResourceOwnerQualificationOut"] | components["schemas"]["SharedResourceGrantQualificationOut"])[];
             /** Versions */
             versions: components["schemas"]["SharedResourceVersionOut"][];
+        };
+        /**
+         * SharedResourceGrantQualificationOut
+         * @description Actor-level Grant qualification, not authorization for a concrete Run.
+         *
+         *     ``user_grant`` follows the actor into any Project where they may submit.
+         *     ``user_group_grant`` applies only while the actor is an active member, the
+         *     Grantee User Group owns the consuming Project, and the actor may submit there.
+         *     Grants is non-empty and contains every matching Grant for this one Grantee.
+         */
+        SharedResourceGrantQualificationOut: {
+            grantee: components["schemas"]["OwnerSummaryOut"];
+            /** Grants */
+            grants: components["schemas"]["UseGrantSummaryOut"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scope: "user_grant" | "user_group_grant";
         };
         /** SharedResourceOut */
         SharedResourceOut: {
@@ -2510,7 +2529,18 @@ export interface components {
             name: string;
             owner: components["schemas"]["OwnerSummaryOut"];
             /** Use Qualifications */
-            use_qualifications: components["schemas"]["SharedResourceUseQualificationOut"][];
+            use_qualifications: (components["schemas"]["SharedResourceOwnerQualificationOut"] | components["schemas"]["SharedResourceGrantQualificationOut"])[];
+        };
+        /**
+         * SharedResourceOwnerQualificationOut
+         * @description Use in a Project whose Owner is the resource Owner.
+         */
+        SharedResourceOwnerQualificationOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scope: "owner";
         };
         /** SharedResourceUpdateIn */
         SharedResourceUpdateIn: {
@@ -2518,21 +2548,6 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string | null;
-        };
-        /**
-         * SharedResourceUseQualificationOut
-         * @description An actor-level qualification, not authorization for a concrete Run.
-         *
-         *     ``owner`` applies only when the consuming Project has the resource Owner.
-         *     ``user_grant`` follows the actor into any Project where they may submit.
-         *     Each ``user_group_grant`` entry contains one or more Grants to the same User
-         *     Group; it applies only while the actor is an active member, that group owns the
-         *     consuming Project, and the actor may submit there.
-         */
-        SharedResourceUseQualificationOut: {
-            /** Grants */
-            grants: components["schemas"]["UseGrantSummaryOut"][];
-            scope: components["schemas"]["UseQualificationScope"];
         };
         /** SharedResourceVersionDetailOut */
         SharedResourceVersionDetailOut: {
@@ -2614,7 +2629,7 @@ export interface components {
         };
         /**
          * UseGrantSummaryOut
-         * @description 解释当前 User 使用资格的单条 USE Grant 摘要。
+         * @description One USE Grant contributing to the enclosing qualification.
          */
         UseGrantSummaryOut: {
             /**
@@ -2622,23 +2637,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            grantee: components["schemas"]["OwnerSummaryOut"];
             /** Id */
             id: string;
             /** Target All */
             target_all: boolean;
         };
-        /**
-         * UseQualificationScope
-         * @description How the acting User qualifies to use an asset in a Project owner context.
-         *
-         *     This is actor-level qualification, not a Run preflight decision. ``OWNER`` is
-         *     limited to Projects whose Owner equals the asset Owner. ``USER_GRANT`` follows
-         *     the acting User into any Project owner context where that User can submit.
-         *     ``USER_GROUP_GRANT`` is limited to the grantee UserGroup as Project Owner.
-         * @enum {string}
-         */
-        UseQualificationScope: "owner" | "user_grant" | "user_group_grant";
         /**
          * UserGroupCapability
          * @description Stable public capabilities for User Group and Membership governance.

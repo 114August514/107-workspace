@@ -77,9 +77,8 @@ export type SharedResourceVersionDetail = Schemas['SharedResourceVersionDetailOu
 export type SharedResourceVersionFile = Schemas['SharedResourceVersionFileOut']
 export type SharedResourceCreate = Schemas['CanonicalSharedResourceCreateIn']
 export type SharedResourceUpdate = Schemas['SharedResourceUpdateIn']
-export type UseQualificationScope = Schemas['UseQualificationScope']
 export type UseGrantSummary = Schemas['UseGrantSummaryOut']
-export type SharedResourceUseQualification = Schemas['SharedResourceUseQualificationOut']
+export type SharedResourceUseQualification = SharedResource['use_qualifications'][number]
 
 // -- 运行方案 ---------------------------------------------------------------
 

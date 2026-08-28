@@ -2628,7 +2628,22 @@
           },
           "use_qualifications": {
             "items": {
-              "$ref": "#/components/schemas/SharedResourceUseQualificationOut"
+              "discriminator": {
+                "mapping": {
+                  "owner": "#/components/schemas/SharedResourceOwnerQualificationOut",
+                  "user_grant": "#/components/schemas/SharedResourceGrantQualificationOut",
+                  "user_group_grant": "#/components/schemas/SharedResourceGrantQualificationOut"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SharedResourceOwnerQualificationOut"
+                },
+                {
+                  "$ref": "#/components/schemas/SharedResourceGrantQualificationOut"
+                }
+              ]
             },
             "title": "Use Qualifications",
             "type": "array"
@@ -2651,6 +2666,37 @@
           "versions"
         ],
         "title": "SharedResourceDetailOut",
+        "type": "object"
+      },
+      "SharedResourceGrantQualificationOut": {
+        "description": "Actor-level Grant qualification, not authorization for a concrete Run.\n\n``user_grant`` follows the actor into any Project where they may submit.\n``user_group_grant`` applies only while the actor is an active member, the\nGrantee User Group owns the consuming Project, and the actor may submit there.\nGrants is non-empty and contains every matching Grant for this one Grantee.",
+        "properties": {
+          "grantee": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/UseGrantSummaryOut"
+            },
+            "minItems": 1,
+            "title": "Grants",
+            "type": "array"
+          },
+          "scope": {
+            "enum": [
+              "user_grant",
+              "user_group_grant"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "grantee",
+          "grants"
+        ],
+        "title": "SharedResourceGrantQualificationOut",
         "type": "object"
       },
       "SharedResourceOut": {
@@ -2684,7 +2730,22 @@
           },
           "use_qualifications": {
             "items": {
-              "$ref": "#/components/schemas/SharedResourceUseQualificationOut"
+              "discriminator": {
+                "mapping": {
+                  "owner": "#/components/schemas/SharedResourceOwnerQualificationOut",
+                  "user_grant": "#/components/schemas/SharedResourceGrantQualificationOut",
+                  "user_group_grant": "#/components/schemas/SharedResourceGrantQualificationOut"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SharedResourceOwnerQualificationOut"
+                },
+                {
+                  "$ref": "#/components/schemas/SharedResourceGrantQualificationOut"
+                }
+              ]
             },
             "title": "Use Qualifications",
             "type": "array"
@@ -2699,6 +2760,19 @@
           "use_qualifications"
         ],
         "title": "SharedResourceOut",
+        "type": "object"
+      },
+      "SharedResourceOwnerQualificationOut": {
+        "description": "Use in a Project whose Owner is the resource Owner.",
+        "properties": {
+          "scope": {
+            "const": "owner",
+            "default": "owner",
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "title": "SharedResourceOwnerQualificationOut",
         "type": "object"
       },
       "SharedResourceUpdateIn": {
@@ -2730,27 +2804,6 @@
           }
         },
         "title": "SharedResourceUpdateIn",
-        "type": "object"
-      },
-      "SharedResourceUseQualificationOut": {
-        "description": "An actor-level qualification, not authorization for a concrete Run.\n\n``owner`` applies only when the consuming Project has the resource Owner.\n``user_grant`` follows the actor into any Project where they may submit.\nEach ``user_group_grant`` entry contains one or more Grants to the same User\nGroup; it applies only while the actor is an active member, that group owns the\nconsuming Project, and the actor may submit there.",
-        "properties": {
-          "grants": {
-            "items": {
-              "$ref": "#/components/schemas/UseGrantSummaryOut"
-            },
-            "title": "Grants",
-            "type": "array"
-          },
-          "scope": {
-            "$ref": "#/components/schemas/UseQualificationScope"
-          }
-        },
-        "required": [
-          "scope",
-          "grants"
-        ],
-        "title": "SharedResourceUseQualificationOut",
         "type": "object"
       },
       "SharedResourceVersionDetailOut": {
@@ -2933,15 +2986,12 @@
         "type": "object"
       },
       "UseGrantSummaryOut": {
-        "description": "解释当前 User 使用资格的单条 USE Grant 摘要。",
+        "description": "One USE Grant contributing to the enclosing qualification.",
         "properties": {
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
-          },
-          "grantee": {
-            "$ref": "#/components/schemas/OwnerSummaryOut"
           },
           "id": {
             "title": "Id",
@@ -2954,22 +3004,11 @@
         },
         "required": [
           "id",
-          "grantee",
           "target_all",
           "created_at"
         ],
         "title": "UseGrantSummaryOut",
         "type": "object"
-      },
-      "UseQualificationScope": {
-        "description": "How the acting User qualifies to use an asset in a Project owner context.\n\nThis is actor-level qualification, not a Run preflight decision. ``OWNER`` is\nlimited to Projects whose Owner equals the asset Owner. ``USER_GRANT`` follows\nthe acting User into any Project owner context where that User can submit.\n``USER_GROUP_GRANT`` is limited to the grantee UserGroup as Project Owner.",
-        "enum": [
-          "owner",
-          "user_grant",
-          "user_group_grant"
-        ],
-        "title": "UseQualificationScope",
-        "type": "string"
       },
       "UserGroupCapability": {
         "description": "Stable public capabilities for User Group and Membership governance.",

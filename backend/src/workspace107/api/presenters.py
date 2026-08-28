@@ -378,16 +378,18 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
 def use_qualification_out(
     view: UseQualificationView,
 ) -> s.SharedResourceUseQualificationOut:
-    return s.SharedResourceUseQualificationOut(
+    if view.grantee is None:
+        return s.SharedResourceOwnerQualificationOut()
+    return s.SharedResourceGrantQualificationOut(
         scope=view.scope,
+        grantee=owner_summary_out(view.grantee),
         grants=[
             s.UseGrantSummaryOut(
-                id=summary.grant.id,
-                grantee=owner_summary_out(summary.grantee),
-                target_all=summary.grant.target_kind is GrantTargetKind.ALL,
-                created_at=summary.grant.created_at,
+                id=grant.id,
+                target_all=grant.target_kind is GrantTargetKind.ALL,
+                created_at=grant.created_at,
             )
-            for summary in view.grants
+            for grant in view.grants
         ],
     )
 
