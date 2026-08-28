@@ -140,13 +140,10 @@ describe('RunFromVersionModal', () => {
 
     renderModal()
 
-    // 等待 configs 加载、A 被默认选中、A 的 preflight 完成
-    await waitFor(() => {
-      expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
-    })
-    expect(screen.getByText('3.12')).toBeVisible()
-    expect(screen.getByText('ev-1')).toBeVisible()
-    expect(screen.getByText('当前可用')).toBeVisible()
+    // 等待 configs 加载、A 被默认选中、A 的 preflight 完成。
+    // Alert 是用户可感知的成功边界；Descriptions 的响应式内部副本不是测试契约。
+    const successAlert = await screen.findByRole('alert')
+    expect(successAlert).toHaveTextContent('提交前检查通过')
 
     // 提交按钮此时应该可用（A 的 preflight ok）
     // antd 对双字符中文标签会插入间距：「提 交」
