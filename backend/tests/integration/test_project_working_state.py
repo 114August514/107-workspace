@@ -85,6 +85,21 @@ def with_encrypted_flag(data: bytes) -> bytes:
     return bytes(mutable)
 
 
+def with_corrupt_member(data: bytes, member_name: str) -> bytes:
+    """破坏指定 stored 条目内容，同时保留可读取的中央目录。"""
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        info = archive.getinfo(member_name)
+        assert info.compress_type == zipfile.ZIP_STORED
+        header = data[info.header_offset : info.header_offset + 30]
+        filename_length = int.from_bytes(header[26:28], "little")
+        extra_length = int.from_bytes(header[28:30], "little")
+        content_offset = info.header_offset + 30 + filename_length + extra_length
+
+    mutable = bytearray(data)
+    mutable[content_offset] ^= 0xFF
+    return bytes(mutable)
+
+
 # -- 复制 ----------------------------------------------------------------------
 
 
@@ -386,6 +401,23 @@ async def test_upload_archive_enforces_entry_count_and_total_budget(client) -> N
     response = await upload_archive(client, project_id, single_oversize)
     assert response.status_code == 422
     assert "单个文件上限" in response.json()["message"]
+
+
+@pytest.mark.asyncio
+async def test_upload_archive_rejects_corrupt_member_without_partial_write(client) -> None:
+    project_id = await create_owned_project(client, "损坏压缩包")
+    payload = with_corrupt_member(
+        make_zip_entries([("safe.txt", "would be partial"), ("corrupt.txt", "damaged")]),
+        "corrupt.txt",
+    )
+
+    response = await upload_archive(client, project_id, payload, filename="damaged.zip")
+
+    assert response.status_code == 422
+    assert "damaged.zip" in response.json()["message"]
+    assert "损坏" in response.json()["message"]
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert listing == []
 
 
 @pytest.mark.asyncio

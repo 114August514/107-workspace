@@ -543,8 +543,13 @@ class ProjectService:
             for info, name in members:
                 # 声明大小之外再多读一个字节：头部谎报大小时在这里暴露，
                 # 内存占用也始终有界。
-                with archive.open(info) as member:
-                    payload = member.read(self._max_file_bytes + 1)
+                try:
+                    with archive.open(info) as member:
+                        payload = member.read(self._max_file_bytes + 1)
+                except zipfile.BadZipFile as exc:
+                    raise ValidationFailed(
+                        f"压缩包「{filename}」已损坏，无法读取条目「{name}」"
+                    ) from exc
                 if len(payload) != info.file_size:
                     raise ValidationFailed(
                         f"压缩包内的「{name}」实际内容与声明大小不符，已拒绝展开"
