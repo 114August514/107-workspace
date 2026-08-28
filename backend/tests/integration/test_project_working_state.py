@@ -179,6 +179,39 @@ async def test_copy_rejects_same_path_own_subtree_and_missing_source(client) -> 
     assert missing.status_code == 404
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["move", "copy"])
+async def test_move_and_copy_reject_marker_mapping_without_mutation(client, operation: str) -> None:
+    project_id = await create_owned_project(client, f"保留占位文件映射 {operation}")
+    await write_file(client, project_id, "notes.txt", "original notes")
+    before = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+
+    response = await client.post(
+        f"/api/v1/projects/{project_id}/files/{operation}",
+        json={"source": "notes.txt", "destination": "docs/.gitkeep"},
+        headers=ALICE,
+    )
+
+    assert response.status_code == 422
+    after = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert after == before
+
+    source = await client.get(
+        f"/api/v1/projects/{project_id}/files/content",
+        params={"path": "notes.txt"},
+        headers=ALICE,
+    )
+    assert source.status_code == 200
+    assert source.json()["content"] == "original notes"
+
+    destination = await client.get(
+        f"/api/v1/projects/{project_id}/files/content",
+        params={"path": "docs/.gitkeep"},
+        headers=ALICE,
+    )
+    assert destination.status_code == 404
+
+
 # -- 目录 ----------------------------------------------------------------------
 
 

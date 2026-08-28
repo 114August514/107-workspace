@@ -2,7 +2,7 @@
 - 状态：PR #73 单一剩余 blocker 已修复；格式化后的 final candidate 通过完整 `make check`
 - 写入边界：`/home/august/Projects/ustc_107/107-workspace-pr-73`（分支 `feat/47-working-state-file-core`，sole writer）
 - 分支：`feat/47-working-state-file-core`
-- 当前合并底座 / 本轮评审起始 pushed head：`origin/main` `de6df22` / `feat/47-working-state-file-core` `9a808898c62da69b2773420e31547027e13ee9c3`
+- 当前合并底座 / 本轮评审起始 pushed head：`origin/main` `de6df22` / `feat/47-working-state-file-core` `4dcb9f85ce32042f8b8b69d85965a7d4ba091561`
 - 开始：2026-08-25 +0800
 - 关联：Issue #47；Parent #43；Depends on #36（已合并）；不承担 #20 Primer 迁移、#36 Ownership
 
@@ -17,9 +17,12 @@
 - **目录表示与保留名**：目录不是实体，靠文件路径前缀存在。`.gitkeep` 是 Project Working
   State 内部保留的空目录占位文件；只有 `mkdir` 可以物化 `<dir>/.gitkeep`。普通文本写入、
   multipart 上传和压缩包成员只要规范化后 basename 恰为 `.gitkeep`，就以 `ValidationFailed`
-  返回 422；move / copy / delete / version restore / discard 仍可处理既有 marker。目标目录已有
-  精确 marker 或任意 `<dir>/` 文件前缀时，重复 `mkdir` 在 blob / upsert / touch 前以
-  `ConflictError` 返回 409；目录路径已有同名文件也保持 409。
+  返回 422。move / copy 仍可处理既有 marker，但完整生成每个规范化 `(old_path, new_path)` 映射后，
+  必须满足两侧 basename 为 `.gitkeep` 的 marker kind 相等；普通→marker 与 marker→普通都在 namespace
+  校验以及 delete / upsert / touch 前以 `ValidationFailed` 返回 422。目录映射
+  `foo/.gitkeep -> bar/.gitkeep` 和保持普通 basename 的文件映射仍允许；delete / version restore /
+  discard 仍可处理既有 marker。目标目录已有精确 marker 或任意 `<dir>/` 文件前缀时，重复 `mkdir`
+  在 blob / upsert / touch 前以 `ConflictError` 返回 409；目录路径已有同名文件也保持 409。
 - **压缩包**：只支持 zip。展开前整体校验（不做部分展开）：逐条目经 `normalize_path`
   （拒绝路径穿越 / 绝对路径），拒绝符号链接条目与加密条目；按声明的 file_size 预检单文件上限与
   解压后总量预算（防 zip 炸弹），读取时多读一字节暴露头部谎报。预算经组合根注入：
@@ -38,15 +41,16 @@
 
 ## 测试
 
-- 后端 `tests/integration/test_project_working_state.py`（25 cases）：复制（含真实源子树的自复制拒绝与
-  缺失源区分）/ 空目录经目录路径移动、删除的可操作性 / `.gitkeep` 普通 PUT 与 marker-only
-  multipart 的 422 且无隐藏文件 / safe + marker 压缩包的 422 原子拒绝 / 重复 `mkdir`、隐式
-  非空目录与同名文件的 409 且 listing 不变 / 压缩包安全场景（穿越、符号链接、加密、条目数与
-  总量超限、非法 zip，以及中央目录可读但成员内容 CRC 损坏）/ 下载头 / 三类变更详情 / 放弃后
-  版本不变与幂等 / PUBLIC 读者读写越权边界（读 404、写 403）。损坏成员在 `archive.open` /
-  `member.read` 抛出的 `zipfile.BadZipFile` 会转换为清晰的 422 validation 响应；整个压缩包在
-  任何写入前完成读取，因而同包中更早的合法成员也不会部分落盘。settings fixture 收紧上限以
-  触发超限分支。
+- 后端 `tests/integration/test_project_working_state.py`（27 cases）：复制（含真实源子树的自复制拒绝与
+  缺失源区分）/ move 与 copy 将普通 `notes.txt` 映射到 `docs/.gitkeep` 的 422，且 listing、源内容
+  不变、目标不存在 / 空目录 marker 经目录路径移动、删除的可操作性 / `.gitkeep` 普通 PUT 与
+  marker-only multipart 的 422 且无隐藏文件 / safe + marker 压缩包的 422 原子拒绝 / 重复
+  `mkdir`、隐式非空目录与同名文件的 409 且 listing 不变 / 压缩包安全场景（穿越、符号链接、
+  加密、条目数与总量超限、非法 zip，以及中央目录可读但成员内容 CRC 损坏）/ 下载头 / 三类变更
+  详情 / 放弃后版本不变与幂等 / PUBLIC 读者读写越权边界（读 404、写 403）。损坏成员在
+  `archive.open` / `member.read` 抛出的 `zipfile.BadZipFile` 会转换为清晰的 422 validation 响应；
+  整个压缩包在任何写入前完成读取，因而同包中更早的合法成员也不会部分落盘。settings fixture
+  收紧上限以触发超限分支。
 - 前端 `FileBrowser.test.tsx`（4 个）：多文件上传从上传中进入明确的成功 / 失败终态、压缩包整体
   拒绝原因、嵌套目录投影与目录路径危险操作后的可见刷新结果、具体只读 Project 不暴露写入口。
   `VersionPanelChanges.test.tsx`（4 个）：内容级差异两侧展示、放弃需确认且刷新、具体只读
@@ -55,18 +59,41 @@
 
 ## 2026-08-28 PR #73 final candidate evidence
 
+### Reserved user-input marker blocker
+
 - 本轮 RED（production source 修改前）：
   `test_reserved_gitkeep_basename_is_rejected_without_hidden_file` 的 PUT 与 multipart 两个 case
   都收到 200 而非 422，定向 pytest 为 `2 failed in 0.61s`，复现了用户输入可写入隐藏 marker。
 - 本轮 GREEN：保留名 / archive 原子性 / mkdir 冲突三个行为测试（参数化后 4 cases）
   `4 passed in 0.87s`；完整 working-state integration 文件 `25 passed in 4.84s`。
-- 格式化后的 final candidate 重新执行完整 `make check`，最终 `All requested checks passed`：
+- 格式化后的该轮 candidate 重新执行完整 `make check`，最终 `All requested checks passed`：
   workflow `15 tests`；backend format `156 files already formatted`，backend
   `314 passed, 3 skipped in 32.27s`；frontend `24` files / `134` tests；backend / frontend lint、
   frontend format / typecheck / build、OpenAPI contract 均通过。此前 pre-format canonical run
   的唯一失败项是 backend format；按 formatter diff 修正两个本轮文件后，本次 canonical run
   已覆盖并通过该项。前端测试保留既有 jsdom `getComputedStyle(..., pseudoElt)` 与
   React 19 / antd 5 警告，未构成失败。
+
+### Marker mapping final blocker
+
+- 根因：保留 marker 的 exact-basename 校验只覆盖普通 PUT、multipart 和 archive 输入；move / copy
+  完整生成的 `proposed` 映射直接进入 namespace 校验与持久化，因此普通文件可被映射成隐藏 marker。
+- RED（production source 修改前）：新增的单一 move / copy 参数化 public API test 两个 case 都收到
+  200 而非 422，定向 pytest 为 `2 failed in 0.63s`。
+- 实现边界：复用一个 exact-basename predicate；在 move 与 copy 各自完整生成 `proposed` 后、
+  `_validate_file_namespace` 前逐对执行
+  `is_marker(old_path) == is_marker(new_path)`。kind 不同即抛现有 `ValidationFailed`，因此发生在
+  delete / upsert / touch 前，并对普通→marker 与 marker→普通双向生效。
+- GREEN：新增参数化回归 `2 passed in 0.59s`；连同既有 marker→marker 空目录移动正向覆盖的定向选择
+  `3 passed in 0.85s`；完整 working-state integration 文件为 `27 passed in 5.54s`。
+- 两个 Python 文件执行 formatter：`1 file reformatted, 1 file left unchanged`。随后唯一一次 final
+  `make check` 返回 `All requested checks passed`：workflow `15 tests`；backend format
+  `156 files already formatted`；backend `316 passed, 3 skipped in 37.30s`；frontend `24` files /
+  `134` tests；backend / frontend lint、frontend format / typecheck / build、OpenAPI contract 均通过。
+  前端测试仍只有既有 jsdom `getComputedStyle(..., pseudoElt)` 与 React 19 / antd 5 警告，未构成失败。
+
+### Earlier runtime and UI evidence
+
 - 实际应用：标准 `make dev` 因同机另一个受管 worktree 已占用固定 `127.0.0.1:8000` 而无法并行；
   随后使用仓库同一 uvicorn / Vite 开发入口在 `8073` / `5175` 启动 final candidate，并以真实
   SQLite backend 创建 Project 与嵌套 `src/lib`、`docs` 文件。桌面树表正确展开嵌套目录，

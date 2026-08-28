@@ -74,10 +74,14 @@ def normalize_path(raw: str) -> str:
     return normalized
 
 
+def _is_directory_marker(path: str) -> bool:
+    return path.rsplit("/", 1)[-1] == ".gitkeep"
+
+
 def _validate_user_file_paths(paths: Iterable[str]) -> None:
     """Reject the reserved marker from user-supplied file inputs."""
     for path in paths:
-        if path.rsplit("/", 1)[-1] == ".gitkeep":
+        if _is_directory_marker(path):
             raise ValidationFailed("「.gitkeep」是系统保留的空目录占位文件名")
 
 
@@ -383,6 +387,11 @@ class ProjectService:
         for file in matched:
             suffix = file.path[len(src) :]
             proposed.append((file, dst + suffix))
+        for file, new_path in proposed:
+            if _is_directory_marker(file.path) != _is_directory_marker(new_path):
+                raise ValidationFailed(
+                    "不能在普通文件和系统保留的「.gitkeep」占位文件之间移动或复制"
+                )
         _validate_file_namespace(
             (file.path for file in existing),
             (new_path for _, new_path in proposed),
@@ -429,6 +438,11 @@ class ProjectService:
         if not matched:
             raise ObjectNotFound("文件或目录", src)
         proposed = [(file, dst + file.path[len(src) :]) for file in matched]
+        for file, new_path in proposed:
+            if _is_directory_marker(file.path) != _is_directory_marker(new_path):
+                raise ValidationFailed(
+                    "不能在普通文件和系统保留的「.gitkeep」占位文件之间移动或复制"
+                )
         _validate_file_namespace(
             (file.path for file in existing),
             (new_path for _, new_path in proposed),
