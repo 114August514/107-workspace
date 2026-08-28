@@ -1,5 +1,5 @@
 # issue47-working-state-file-core
-- 状态：PR #73 单一剩余 blocker 已修复；`make check` 的测试 / lint / typecheck / build / contract 均通过，唯一 backend format finding 已修复并定向复验通过
+- 状态：PR #73 单一剩余 blocker 已修复；格式化后的 final candidate 通过完整 `make check`
 - 写入边界：`/home/august/Projects/ustc_107/107-workspace-pr-73`（分支 `feat/47-working-state-file-core`，sole writer）
 - 分支：`feat/47-working-state-file-core`
 - 当前合并底座 / 本轮评审起始 pushed head：`origin/main` `de6df22` / `feat/47-working-state-file-core` `9a808898c62da69b2773420e31547027e13ee9c3`
@@ -60,12 +60,13 @@
   都收到 200 而非 422，定向 pytest 为 `2 failed in 0.61s`，复现了用户输入可写入隐藏 marker。
 - 本轮 GREEN：保留名 / archive 原子性 / mkdir 冲突三个行为测试（参数化后 4 cases）
   `4 passed in 0.87s`；完整 working-state integration 文件 `25 passed in 4.84s`。
-- 单次 `make check`：workflow `15 tests`；backend `314 passed, 3 skipped in 31.56s`；
-  frontend `24` files / `134` tests；backend / frontend lint、frontend format / typecheck / build、
-  OpenAPI contract 均通过。该次命令唯一失败项是 backend format，精确指出本轮两个文件；
-  按 formatter diff 修正后，定向
-  `ruff format --check project_service.py test_project_working_state.py` 为 `2 files already formatted`。
-  前端测试保留既有 jsdom `getComputedStyle(..., pseudoElt)` 与 React 19 / antd 5 警告，未构成失败。
+- 格式化后的 final candidate 重新执行完整 `make check`，最终 `All requested checks passed`：
+  workflow `15 tests`；backend format `156 files already formatted`，backend
+  `314 passed, 3 skipped in 32.27s`；frontend `24` files / `134` tests；backend / frontend lint、
+  frontend format / typecheck / build、OpenAPI contract 均通过。此前 pre-format canonical run
+  的唯一失败项是 backend format；按 formatter diff 修正两个本轮文件后，本次 canonical run
+  已覆盖并通过该项。前端测试保留既有 jsdom `getComputedStyle(..., pseudoElt)` 与
+  React 19 / antd 5 警告，未构成失败。
 - 实际应用：标准 `make dev` 因同机另一个受管 worktree 已占用固定 `127.0.0.1:8000` 而无法并行；
   随后使用仓库同一 uvicorn / Vite 开发入口在 `8073` / `5175` 启动 final candidate，并以真实
   SQLite backend 创建 Project 与嵌套 `src/lib`、`docs` 文件。桌面树表正确展开嵌套目录，
