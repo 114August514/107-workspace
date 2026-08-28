@@ -218,16 +218,55 @@ async def test_created_empty_directory_supports_directory_path_operations(client
 
 
 @pytest.mark.asyncio
-async def test_create_directory_conflicts_with_existing_file(client) -> None:
+async def test_create_directory_conflicts_with_existing_path_without_mutation(client) -> None:
     project_id = await create_owned_project(client, "目录冲突")
     await write_file(client, project_id, "a.txt", "x")
+    await write_file(client, project_id, "existing/child.txt", "y")
 
-    conflict = await client.post(
+    created = await client.post(
         f"/api/v1/projects/{project_id}/files/mkdir",
-        json={"path": "a.txt"},
+        json={"path": "empty"},
         headers=ALICE,
     )
-    assert conflict.status_code == 409
+    assert created.status_code == 200, created.text
+
+    before = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    for path in ("a.txt", "existing", "empty"):
+        conflict = await client.post(
+            f"/api/v1/projects/{project_id}/files/mkdir",
+            json={"path": path},
+            headers=ALICE,
+        )
+        assert conflict.status_code == 409
+
+    after = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert after == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["write", "upload"])
+async def test_reserved_gitkeep_basename_is_rejected_without_hidden_file(
+    client, operation: str
+) -> None:
+    project_id = await create_owned_project(client, f"保留占位文件 {operation}")
+
+    if operation == "write":
+        response = await client.put(
+            f"/api/v1/projects/{project_id}/files",
+            json={"path": "notes/.gitkeep", "content": "user content"},
+            headers=ALICE,
+        )
+    else:
+        response = await client.post(
+            f"/api/v1/projects/{project_id}/files/upload",
+            files={"files": (".gitkeep", b"user content", "application/octet-stream")},
+            params={"prefix": "notes"},
+            headers=ALICE,
+        )
+
+    assert response.status_code == 422
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert listing == []
 
 
 @pytest.mark.asyncio
@@ -322,6 +361,20 @@ async def test_upload_archive_rejects_traversal_without_partial_write(client) ->
     assert "evil" in response.json()["message"]
 
     # 整体拒绝：合法条目也不能落进去。
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert listing == []
+
+
+@pytest.mark.asyncio
+async def test_upload_archive_rejects_reserved_gitkeep_atomically(client) -> None:
+    project_id = await create_owned_project(client, "压缩包保留占位文件")
+    payload = make_zip_entries(
+        [("safe.txt", "must not be written"), ("empty/.gitkeep", "reserved")]
+    )
+
+    response = await upload_archive(client, project_id, payload)
+
+    assert response.status_code == 422
     listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
     assert listing == []
 

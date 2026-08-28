@@ -74,6 +74,13 @@ def normalize_path(raw: str) -> str:
     return normalized
 
 
+def _validate_user_file_paths(paths: Iterable[str]) -> None:
+    """Reject the reserved marker from user-supplied file inputs."""
+    for path in paths:
+        if path.rsplit("/", 1)[-1] == ".gitkeep":
+            raise ValidationFailed("「.gitkeep」是系统保留的空目录占位文件名")
+
+
 def _validate_file_namespace(
     existing_paths: Iterable[str],
     proposed_paths: Iterable[str],
@@ -302,6 +309,7 @@ class ProjectService:
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
         normalized = normalize_path(path)
+        _validate_user_file_paths([normalized])
         existing = await self._repos.project_files.list_for_project(project_id)
         _validate_file_namespace((file.path for file in existing), [normalized])
         record = await self._store_entry(project_id, normalized, content)
@@ -453,6 +461,10 @@ class ProjectService:
         )
         normalized = normalize_path(path)
         existing = await self._repos.project_files.list_for_project(project_id)
+        if any(
+            file.path == normalized or file.path.startswith(normalized + "/") for file in existing
+        ):
+            raise ConflictError(f"目录「{normalized}」已存在")
         placeholder = f"{normalized}/.gitkeep"
         _validate_file_namespace((file.path for file in existing), [placeholder])
 
@@ -480,6 +492,7 @@ class ProjectService:
             )
             for relative_path, payload in entries
         ]
+        _validate_user_file_paths(target for target, _ in target_entries)
         existing = await self._repos.project_files.list_for_project(project_id)
         _validate_file_namespace(
             (file.path for file in existing),
