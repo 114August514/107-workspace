@@ -9,10 +9,8 @@ acting User (Grantee) allows use.  A Grant with Target = ALL covers all Grantor 
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseQualificationScope
-from ..domain.models import Environment, EnvironmentVersion, SharedResource, SharedResourceVersion
+from ..domain.grant import GrantTargetKind
+from ..domain.models import Environment, EnvironmentVersion, SharedResourceVersion
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.repositories import Repositories
 
@@ -124,79 +122,3 @@ async def _has_use_grant(
     # A personal User-level Grant for the acting user also authorizes use.
     user_grantee = OwnerReference(kind=OwnerKind.USER, id=user_id)
     return await repos.grants.exists_use_grant(user_grantee, target_kind, target_id, asset_owner)
-
-
-@dataclass(frozen=True, slots=True)
-class SharedResourceUseQualification:
-    """One actor-level route for using a Shared Resource in Project owner contexts."""
-
-    scope: UseQualificationScope
-    eligible_project_owner: OwnerReference | None
-    grants: tuple[Grant, ...]
-
-
-async def shared_resource_use_qualifications(
-    repos: Repositories,
-    user_id: str,
-    resource: SharedResource,
-    *,
-    active_group_ids: frozenset[str],
-) -> tuple[SharedResourceUseQualification, ...]:
-    """Describe actor qualifications without making a concrete preflight decision.
-
-    Owner qualification is limited to the asset Owner context. A direct User Grant
-    follows the actor into any Project owner context where they can submit. Each
-    UserGroup Grant names the exact grantee group that must own the Project.
-    """
-    owner = resource.owner
-    qualifications: list[SharedResourceUseQualification] = []
-    if (owner.kind is OwnerKind.USER and owner.id == user_id) or (
-        owner.kind is OwnerKind.USER_GROUP and owner.id in active_group_ids
-    ):
-        qualifications.append(
-            SharedResourceUseQualification(
-                scope=UseQualificationScope.OWNER,
-                eligible_project_owner=None,
-                grants=(),
-            )
-        )
-
-    covering = [
-        grant
-        for grant in await repos.grants.list_for_grantor(owner)
-        if grant.action is GrantAction.USE
-        and (
-            grant.target_kind is GrantTargetKind.ALL
-            or (
-                grant.target_kind is GrantTargetKind.SHARED_RESOURCE
-                and grant.target_id == resource.id
-            )
-        )
-    ]
-    user_grants = tuple(
-        grant
-        for grant in covering
-        if grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id
-    )
-    if user_grants:
-        qualifications.append(
-            SharedResourceUseQualification(
-                scope=UseQualificationScope.USER_GRANT,
-                eligible_project_owner=None,
-                grants=user_grants,
-            )
-        )
-
-    grants_by_group: dict[str, list[Grant]] = {}
-    for grant in covering:
-        if grant.grantee.kind is OwnerKind.USER_GROUP and grant.grantee.id in active_group_ids:
-            grants_by_group.setdefault(grant.grantee.id, []).append(grant)
-    qualifications.extend(
-        SharedResourceUseQualification(
-            scope=UseQualificationScope.USER_GROUP_GRANT,
-            eligible_project_owner=OwnerReference(OwnerKind.USER_GROUP, group_id),
-            grants=tuple(grants),
-        )
-        for group_id, grants in grants_by_group.items()
-    )
-    return tuple(qualifications)

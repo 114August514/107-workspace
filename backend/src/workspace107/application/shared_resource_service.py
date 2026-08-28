@@ -16,7 +16,7 @@ from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.enums import ActivityAction, TargetType
 from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
-from ..domain.grant import Grant, UseQualificationScope
+from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseQualificationScope
 from ..domain.models import (
     SharedResource,
     SharedResourceFile,
@@ -28,7 +28,6 @@ from ..domain.ports.repositories import Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, SharedResourceAccess
 from .activity import ActivityRecorder
-from .asset_use import SharedResourceUseQualification, shared_resource_use_qualifications
 from .ownership import OwnerSummary, owner_summaries
 
 MAX_RESOURCE_NAME_LEN = 128
@@ -337,63 +336,141 @@ class SharedResourceService:
     ) -> list[SharedResourceView]:
         owners = await owner_summaries(self._repos, (resource.owner for resource in resources))
         active_group_ids = await self._active_group_ids(user_id)
-        raw_by_resource = [
-            await shared_resource_use_qualifications(
-                self._repos, user_id, resource, active_group_ids=active_group_ids
+        grants_by_owner = {
+            owner: await self._repos.grants.list_for_grantor(owner)
+            for owner in {resource.owner for resource in resources}
+        }
+        grants_by_resource = [
+            self._eligible_use_grants(
+                user_id,
+                resource,
+                active_group_ids,
+                grants_by_owner[resource.owner],
             )
             for resource in resources
         ]
-        grantee_refs = {
-            grant.grantee
-            for qualifications in raw_by_resource
-            for qualification in qualifications
-            for grant in qualification.grants
-        }
+        grantee_refs = {grant.grantee for grants in grants_by_resource for grant in grants}
         grantees = await owner_summaries(self._repos, grantee_refs)
         return [
             SharedResourceView(
                 resource=resource,
                 owner=owners[(resource.owner.kind, resource.owner.id)],
-                use_qualifications=self._qualification_views(qualifications, grantees),
+                use_qualifications=self._qualification_views(
+                    user_id,
+                    resource,
+                    active_group_ids,
+                    grants,
+                    grantees,
+                ),
             )
-            for resource, qualifications in zip(resources, raw_by_resource, strict=True)
+            for resource, grants in zip(resources, grants_by_resource, strict=True)
         ]
 
     async def _qualifications(
         self, user_id: str, resource: SharedResource
     ) -> tuple[UseQualificationView, ...]:
         active_group_ids = await self._active_group_ids(user_id)
-        raw = await shared_resource_use_qualifications(
-            self._repos, user_id, resource, active_group_ids=active_group_ids
+        grants = self._eligible_use_grants(
+            user_id,
+            resource,
+            active_group_ids,
+            await self._repos.grants.list_for_grantor(resource.owner),
         )
-        grantees = await owner_summaries(
-            self._repos, {grant.grantee for item in raw for grant in item.grants}
+        grantees = await owner_summaries(self._repos, {grant.grantee for grant in grants})
+        return self._qualification_views(
+            user_id,
+            resource,
+            active_group_ids,
+            grants,
+            grantees,
         )
-        return self._qualification_views(raw, grantees)
 
     async def _active_group_ids(self, user_id: str) -> frozenset[str]:
         groups = await self._repos.user_groups.list_for_user(user_id)
         return frozenset(group.id for group in groups)
 
     @staticmethod
+    def _eligible_use_grants(
+        user_id: str,
+        resource: SharedResource,
+        active_group_ids: frozenset[str],
+        grants: list[Grant],
+    ) -> tuple[Grant, ...]:
+        """Return current grants that explain this actor's resource discovery."""
+        return tuple(
+            grant
+            for grant in grants
+            if grant.action is GrantAction.USE
+            and (
+                grant.target_kind is GrantTargetKind.ALL
+                or (
+                    grant.target_kind is GrantTargetKind.SHARED_RESOURCE
+                    and grant.target_id == resource.id
+                )
+            )
+            and (
+                (grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id)
+                or (
+                    grant.grantee.kind is OwnerKind.USER_GROUP
+                    and grant.grantee.id in active_group_ids
+                )
+            )
+        )
+
+    @staticmethod
     def _qualification_views(
-        raw: tuple[SharedResourceUseQualification, ...],
+        user_id: str,
+        resource: SharedResource,
+        active_group_ids: frozenset[str],
+        grants: tuple[Grant, ...],
         grantees: dict[tuple[OwnerKind, str], OwnerSummary],
     ) -> tuple[UseQualificationView, ...]:
-        return tuple(
+        qualifications: list[UseQualificationView] = []
+        owner = resource.owner
+        if (owner.kind is OwnerKind.USER and owner.id == user_id) or (
+            owner.kind is OwnerKind.USER_GROUP and owner.id in active_group_ids
+        ):
+            qualifications.extend(_OWNER_QUALIFICATIONS)
+
+        user_grants = tuple(
+            grant
+            for grant in grants
+            if grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id
+        )
+        if user_grants:
+            qualifications.append(
+                UseQualificationView(
+                    scope=UseQualificationScope.USER_GRANT,
+                    eligible_project_owner=None,
+                    grants=tuple(
+                        UseGrantSummaryView(
+                            grant=grant,
+                            grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
+                        )
+                        for grant in user_grants
+                    ),
+                )
+            )
+
+        grants_by_group: dict[str, list[Grant]] = {}
+        for grant in grants:
+            if grant.grantee.kind is OwnerKind.USER_GROUP:
+                grants_by_group.setdefault(grant.grantee.id, []).append(grant)
+        qualifications.extend(
             UseQualificationView(
-                scope=qualification.scope,
-                eligible_project_owner=qualification.eligible_project_owner,
+                scope=UseQualificationScope.USER_GROUP_GRANT,
+                eligible_project_owner=OwnerReference(OwnerKind.USER_GROUP, group_id),
                 grants=tuple(
                     UseGrantSummaryView(
                         grant=grant,
                         grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
                     )
-                    for grant in qualification.grants
+                    for grant in group_grants
                 ),
             )
-            for qualification in raw
+            for group_id, group_grants in grants_by_group.items()
         )
+        return tuple(qualifications)
 
     async def _owner(self, owner: OwnerReference) -> OwnerSummary:
         return (await owner_summaries(self._repos, (owner,)))[(owner.kind, owner.id)]
