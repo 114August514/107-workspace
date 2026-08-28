@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -32,9 +32,25 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../src/api/client', () => ({ api: mocks }))
 
-const writer = {
+const writer: Project = {
   capabilities: ['project.content.write'],
-} as Project
+  created_at: '2026-08-12T10:00:00Z',
+  created_by: 'user-1',
+  default_run_configuration_id: null,
+  description: '测试项目',
+  environment_version_id: null,
+  id: 'proj-1',
+  name: '测试项目',
+  owner: { display_name: 'Alice', id: 'user-1', kind: 'user' },
+  status: 'active',
+  updated_at: '2026-08-12T10:00:00Z',
+  visibility: 'owner_scope',
+}
+
+const reader: Project = {
+  ...writer,
+  capabilities: ['project.view'],
+}
 
 function makeVersionPage(): ProjectVersionPage {
   return {
@@ -77,7 +93,7 @@ const addedDetail: WorkingChangeDetail = {
   current: { path: 'new.txt', content: 'brand new', truncated: false },
 }
 
-function renderPanel(access: Project | undefined, onVersionSaved = () => {}) {
+function renderPanel(access: Project, onVersionSaved = () => {}) {
   return render(
     <MemoryRouter>
       <VersionPanel
@@ -139,19 +155,20 @@ describe('VersionPanel 未保存变更', () => {
     })
   })
 
-  it('只读角色能看到变更标签但没有放弃入口', async () => {
+  it('只读场景不暴露任何版本写入口', async () => {
     mocks.listVersions.mockResolvedValue(makeVersionPage())
     mocks.workingChanges.mockResolvedValue(changes)
     mocks.workingChangeDetail.mockResolvedValue(detail)
 
-    renderPanel(undefined)
+    renderPanel(reader)
     await screen.findByText(/有 2 处未保存的变更/)
 
+    expect(screen.queryByRole('button', { name: /保存 Project Version/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /恢复到此版本/ })).not.toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
-    await waitFor(() => {
-      expect(screen.getByText('original a')).toBeInTheDocument()
-    })
-    expect(screen.queryByRole('button', { name: /放弃此变更/ })).toBeNull()
+    await screen.findByText('original a')
+    expect(screen.queryByRole('button', { name: /放弃此变更/ })).not.toBeInTheDocument()
   })
 
   it('详情加载失败时显示错误并可重试', async () => {
@@ -167,11 +184,8 @@ describe('VersionPanel 未保存变更', () => {
     opener.focus()
     expect(opener).toHaveFocus()
     fireEvent.click(opener)
-
-    const errorText = await screen.findByText('详情暂时不可用')
-    const errorAlert = errorText.closest<HTMLElement>('[role="alert"]')
-    if (!errorAlert) throw new Error('找不到详情错误提示')
-    fireEvent.click(within(errorAlert).getByRole('button', { name: /重\s*试/ }))
+    await screen.findByText('详情暂时不可用')
+    fireEvent.click(await screen.findByRole('button', { name: /重\s*试/ }))
 
     expect(await screen.findByText('changed a')).toBeInTheDocument()
     expect(mocks.workingChangeDetail).toHaveBeenCalledTimes(2)

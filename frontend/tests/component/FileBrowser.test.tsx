@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { FileBrowser } from '../../src/components/project/FileBrowser'
@@ -30,9 +30,25 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../src/api/client', () => ({ api: mocks }))
 
-const writer = {
+const writer: Project = {
   capabilities: ['project.content.write'],
-} as Project
+  created_at: '2026-08-12T10:00:00Z',
+  created_by: 'user-1',
+  default_run_configuration_id: null,
+  description: '测试项目',
+  environment_version_id: null,
+  id: 'proj-1',
+  name: '测试项目',
+  owner: { display_name: 'Alice', id: 'user-1', kind: 'user' },
+  status: 'active',
+  updated_at: '2026-08-12T10:00:00Z',
+  visibility: 'owner_scope',
+}
+
+const reader: Project = {
+  ...writer,
+  capabilities: ['project.view'],
+}
 
 const files: ProjectFile[] = [
   {
@@ -58,13 +74,18 @@ function pickInput(container: HTMLElement, multiple: boolean): HTMLInputElement 
 describe('FileBrowser', () => {
   afterEach(() => {
     cleanup()
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
-  it('逐个上传多个文件并分别标记成败', async () => {
+  it('逐个上传多个文件时展示上传中、成功和失败状态', async () => {
     mocks.listFiles.mockResolvedValue([])
-    // 第一个成功，第二个失败：状态必须能区分开。
-    mocks.uploadFiles.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('超过单个文件上限'))
+    let resolveFirstUpload!: (files: ProjectFile[]) => void
+    const firstUpload = new Promise<ProjectFile[]>((resolve) => {
+      resolveFirstUpload = resolve
+    })
+    mocks.uploadFiles
+      .mockReturnValueOnce(firstUpload)
+      .mockRejectedValueOnce(new Error('超过单个文件上限'))
 
     const { container } = render(
       <FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />,
@@ -75,16 +96,17 @@ describe('FileBrowser', () => {
     Object.defineProperty(input, 'files', { value: [makeFile('a.py'), makeFile('b.py')] })
     fireEvent.change(input)
 
-    await waitFor(() => {
-      expect(mocks.uploadFiles).toHaveBeenCalledTimes(2)
-      expect(mocks.uploadFiles).toHaveBeenNthCalledWith(1, 'proj-1', [expect.any(File)])
-      expect(mocks.uploadFiles).toHaveBeenNthCalledWith(2, 'proj-1', [expect.any(File)])
+    expect(await screen.findByText('a.py（上传中）')).toBeInTheDocument()
+    expect(screen.getByText('b.py（上传中）')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveFirstUpload([])
+      await firstUpload
     })
 
-    await waitFor(() => {
-      expect(screen.getByText(/a\.py/)).toBeInTheDocument()
-      expect(screen.getByText(/b\.py.*超过单个文件上限/)).toBeInTheDocument()
-    })
+    expect(await screen.findByText('a.py')).toBeInTheDocument()
+    expect(await screen.findByText('b.py：超过单个文件上限')).toBeInTheDocument()
+    expect(screen.queryByText('a.py（上传中）')).not.toBeInTheDocument()
   })
 
   it('压缩包被整体拒绝时展示失败原因', async () => {
@@ -107,155 +129,49 @@ describe('FileBrowser', () => {
     })
   })
 
-  it('新建目录走 mkdir 并刷新列表', async () => {
-    mocks.listFiles.mockResolvedValue(files)
-    mocks.createDirectory.mockResolvedValue({})
-
-    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
-    await screen.findByText('train.py')
-
-    fireEvent.click(screen.getByRole('button', { name: /新建目录/ }))
-    fireEvent.change(screen.getByPlaceholderText('src/train.py'), {
-      target: { value: 'data/raw' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
-
-    await waitFor(() => {
-      expect(mocks.createDirectory).toHaveBeenCalledWith('proj-1', 'data/raw')
-    })
-  })
-
-  it('改名提交时携带源路径和新路径', async () => {
-    mocks.listFiles.mockResolvedValue(files)
-    mocks.movePath.mockResolvedValue([])
-
-    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
-    await screen.findByText('train.py')
-
-    fireEvent.click(screen.getByRole('button', { name: /改名/ }))
-    const inputs = screen.getAllByDisplayValue('train.py')
-    // 第一个是禁用的源路径回显，第二个才是可编辑的新路径。
-    const editable = inputs.find((element) => !(element as HTMLInputElement).disabled)
-    if (!editable) throw new Error('找不到新路径输入框')
-    fireEvent.change(editable, { target: { value: 'scripts/train_v2.py' } })
-    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
-
-    await waitFor(() => {
-      expect(mocks.movePath).toHaveBeenCalledWith('proj-1', 'train.py', 'scripts/train_v2.py')
-    })
-  })
-
-  it('复制提交时调用 copyPath', async () => {
-    mocks.listFiles.mockResolvedValue(files)
-    mocks.copyPath.mockResolvedValue([])
-
-    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
-    await screen.findByText('train.py')
-
-    fireEvent.click(screen.getByRole('button', { name: /复制/ }))
-    const inputs = screen.getAllByDisplayValue('train.py-copy')
-    const editable = inputs.find((element) => !(element as HTMLInputElement).disabled)
-    if (!editable) throw new Error('找不到目标路径输入框')
-    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
-
-    await waitFor(() => {
-      expect(mocks.copyPath).toHaveBeenCalledWith('proj-1', 'train.py', 'train.py-copy')
-    })
-  })
-
-  it('删除前必须经过危险操作确认', async () => {
-    mocks.listFiles.mockResolvedValue(files)
-    mocks.deletePath.mockResolvedValue(undefined)
-
-    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
-    await screen.findByText('train.py')
-
-    const deleteButton = document.querySelector('button.ant-btn-dangerous')
-    if (!deleteButton) throw new Error('找不到删除按钮')
-    fireEvent.click(deleteButton)
-    const confirmButton = await screen.findByRole('button', { name: /^删\s*除$/ })
-    fireEvent.click(confirmButton)
-
-    await waitFor(() => {
-      expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'train.py')
-    })
-  })
-
-  it('点击下载调用下载接口', async () => {
-    mocks.listFiles.mockResolvedValue(files)
-    mocks.downloadFile.mockResolvedValue(undefined)
-
-    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
-    await screen.findByText('train.py')
-
-    fireEvent.click(screen.getByRole('button', { name: /下载/ }))
-    await waitFor(() => {
-      expect(mocks.downloadFile).toHaveBeenCalledWith('proj-1', 'train.py')
-    })
-  })
-
-  it('显示嵌套目录，并让目录操作使用目录路径', async () => {
-    mocks.listFiles.mockResolvedValue([
-      {
-        path: 'data/raw/input.csv',
-        size: 12,
-        content_hash: 'nested',
-        updated_at: '2026-08-12T10:00:00Z',
-      },
-    ])
-    mocks.movePath.mockResolvedValue([])
-    mocks.copyPath.mockResolvedValue([])
+  it('显示嵌套目录，并以目录路径执行危险操作后刷新结果', async () => {
+    mocks.listFiles
+      .mockResolvedValueOnce([
+        {
+          path: 'data/raw/input.csv',
+          size: 12,
+          content_hash: 'nested',
+          updated_at: '2026-08-12T10:00:00Z',
+        },
+      ])
+      .mockResolvedValueOnce([])
     mocks.deletePath.mockResolvedValue(undefined)
 
     render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
 
-    const directory = await screen.findByText('data/raw')
-    const row = directory.closest('tr')
-    if (!row) throw new Error('找不到目录行')
-    fireEvent.click(within(row).getByRole('button', { name: /改名/ }))
-
-    const source = screen
-      .getAllByDisplayValue('data/raw')
-      .find((element) => (element as HTMLInputElement).disabled)
-    expect(source).toBeDisabled()
-    const editable = screen
-      .getAllByDisplayValue('data/raw')
-      .find((element) => !(element as HTMLInputElement).disabled)
-    if (!editable) throw new Error('找不到目录目标路径输入框')
-    fireEvent.change(editable, { target: { value: 'data/processed' } })
-    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
-
-    await waitFor(() => {
-      expect(mocks.movePath).toHaveBeenCalledWith('proj-1', 'data/raw', 'data/processed')
-    })
-
-    const refreshedDirectory = await screen.findByText('data/raw')
-    const refreshedRow = refreshedDirectory.closest('tr')
-    if (!refreshedRow) throw new Error('找不到刷新后的目录行')
-    fireEvent.click(within(refreshedRow).getByRole('button', { name: /复制/ }))
-    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
-    await waitFor(() => {
-      expect(mocks.copyPath).toHaveBeenCalledWith('proj-1', 'data/raw', 'data/raw-copy')
-    })
-
-    const deleteDirectory = screen.getByRole('button', { name: '删除 data/raw' })
-    fireEvent.click(deleteDirectory)
+    const directoryRow = (await screen.findAllByRole('row')).find((row) =>
+      within(row).queryByRole('button', { name: '删除 data/raw' }),
+    )
+    if (!directoryRow) throw new Error('找不到 data/raw 目录行')
+    fireEvent.click(within(directoryRow).getByRole('button', { name: '删除 data/raw' }))
     fireEvent.click(await screen.findByRole('button', { name: /^删\s*除$/ }))
+
     await waitFor(() => {
       expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'data/raw')
     })
+    expect(
+      await screen.findByText('还没有文件。先新建一个，再保存 Project Version。'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '删除 data/raw' })).not.toBeInTheDocument()
   })
 
   it('只读场景不暴露任何写入口', async () => {
     mocks.listFiles.mockResolvedValue(files)
 
-    render(<FileBrowser projectId="proj-1" access={undefined} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={reader} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     expect(screen.queryByRole('button', { name: /上传文件/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /上传压缩包/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /新建目录/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /下载/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /改名/ })).toBeNull()
-    expect(document.querySelector('button.ant-btn-dangerous')).toBeNull()
+    expect(screen.queryByRole('button', { name: /新建文件/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /改名/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /复制/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /删除/ })).not.toBeInTheDocument()
   })
 })

@@ -155,6 +155,7 @@ async def test_copy_file_and_directory(client) -> None:
 async def test_copy_rejects_same_path_own_subtree_and_missing_source(client) -> None:
     project_id = await create_owned_project(client, "复制负向")
     await write_file(client, project_id, "a.txt", "hi")
+    await write_file(client, project_id, "src/main.py", "print(1)")
 
     same = await client.post(
         f"/api/v1/projects/{project_id}/files/copy",
@@ -182,7 +183,7 @@ async def test_copy_rejects_same_path_own_subtree_and_missing_source(client) -> 
 
 
 @pytest.mark.asyncio
-async def test_create_directory_writes_placeholder_visible_in_listing(client) -> None:
+async def test_created_empty_directory_supports_directory_path_operations(client) -> None:
     project_id = await create_owned_project(client, "目录")
 
     created = await client.post(
@@ -191,19 +192,29 @@ async def test_create_directory_writes_placeholder_visible_in_listing(client) ->
         headers=ALICE,
     )
     assert created.status_code == 200, created.text
-    assert created.json()["path"] == "data/raw/.gitkeep"
+
+    moved = await client.post(
+        f"/api/v1/projects/{project_id}/files/move",
+        json={"source": "data/raw", "destination": "data/processed"},
+        headers=ALICE,
+    )
+    assert moved.status_code == 200, moved.text
 
     listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
-    assert [f["path"] for f in listing] == ["data/raw/.gitkeep"]
-    # 占位文件是空文件。
-    preview = (
-        await client.get(
-            f"/api/v1/projects/{project_id}/files/content",
-            params={"path": "data/raw/.gitkeep"},
-            headers=ALICE,
-        )
-    ).json()
-    assert preview["content"] == ""
+    moved_paths = {file["path"] for file in listing}
+    assert moved_paths
+    assert all(path.startswith("data/processed/") for path in moved_paths)
+    assert not any(path.startswith("data/raw/") for path in moved_paths)
+
+    deleted = await client.delete(
+        f"/api/v1/projects/{project_id}/files",
+        params={"path": "data/processed"},
+        headers=ALICE,
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert listing == []
 
 
 @pytest.mark.asyncio
