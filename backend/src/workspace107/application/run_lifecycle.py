@@ -81,6 +81,9 @@ class RunLifecycleService:
         run = await self._repos.runs.get(run_id)
         if run is None or run.is_terminal:
             return False
+        project = await self._repos.projects.get(run.project_id)
+        if project is None:  # pragma: no cover - runs.project_id is a foreign key
+            return False
         if not run.scheduler_job_id:
             # 尚未提交成功，没有可同步的调度任务。
             return False
@@ -146,8 +149,8 @@ class RunLifecycleService:
             # actor 记的是提交这次 Run 的人。结束不是他「做」的，但这条活动
             # 说的是他那次运行的结果——写成系统账号反而更难读。
             await self._activity.record(
-                actor_id=run.created_by,
-                workspace_id=run.workspace_id,
+                actor_id=run.initiated_by_user_id,
+                owner=project.owner,
                 project_id=run.project_id,
                 action=ActivityAction.RUN_FINISHED,
                 target_type=TargetType.RUN,
@@ -159,10 +162,9 @@ class RunLifecycleService:
             # 取消是用户自己刚做的动作，不用再通知一遍。
             if run.status is not RunStatus.CANCELLED:
                 await self._notifier.run_finished(
-                    recipient_id=run.created_by,
+                    recipient_id=run.initiated_by_user_id,
                     run_id=run.id,
                     run_name=run.name,
-                    workspace_id=run.workspace_id,
                     succeeded=run.status is RunStatus.SUCCEEDED,
                     reason=run.failure_reason or "",
                 )
@@ -203,7 +205,6 @@ class RunLifecycleService:
                 id=artifact_id,
                 run_id=run_id,
                 project_id=run.project_id,
-                workspace_id=run.workspace_id,
                 name=rule.name or rule.path,
                 source_path=rule.path,
                 size=content.size,

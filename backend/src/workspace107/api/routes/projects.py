@@ -52,7 +52,12 @@ async def create_owned_project(
         payload.description,
         visibility=payload.visibility,
     )
-    return p.project_out(project, owner=await services.projects.owner_summary(project))
+    access = await services.projects.get(user.id, project.id)
+    return p.project_out(
+        project,
+        owner=await services.projects.owner_summary(project),
+        capabilities=access.capabilities,
+    )
 
 
 @router.get(
@@ -67,6 +72,7 @@ async def get_project(project_id: str, user: CurrentUser, services: ServicesDep)
         access.project,
         owner=await services.projects.owner_summary(access.project),
         owner_scope=access.owner_scope,
+        capabilities=access.capabilities,
     )
 
 
@@ -88,7 +94,7 @@ async def update_project(
         name=payload.name,
         description=payload.description,
         environment_version_id=payload.environment_version_id,
-        inherit_workspace_environment=bool(payload.inherit_workspace_environment),
+        update_environment_version="environment_version_id" in payload.model_fields_set,
         default_run_configuration_id=payload.default_run_configuration_id,
         visibility=payload.visibility,
     )
@@ -96,7 +102,12 @@ async def update_project(
         project = await services.projects.set_status(
             user.id, project_id, ProjectStatus(payload.status)
         )
-    return p.project_out(project, owner=await services.projects.owner_summary(project))
+    access = await services.projects.get(user.id, project.id)
+    return p.project_out(
+        project,
+        owner=await services.projects.owner_summary(project),
+        capabilities=access.capabilities,
+    )
 
 
 # -- 文件 -------------------------------------------------------------------
@@ -325,29 +336,25 @@ async def fork_version(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.ProjectOut:
-    """两侧都会校验：源版本可读、目标 Owner 下可创建。
+    """Validate source visibility and explicit target Owner create authority.
 
-    ``target_workspace_id`` 与 ``target_owner`` 二选一；显式 Owner 形态是
-    #36 的正路，workspace 形态是过渡兼容。复制内容、运行方案和环境选择；
-    **不复制**权益、凭据、成员权限和 Run 历史（GR-503）。Secret 只复制
-    引用表达式，目标空间缺同名 Secret 时提交前检查会拦下（GR-407）。
-
-    PUBLIC 读者只能 Fork 出只含文件与不可变版本的新 Project。
+    The fork copies content and eligible configuration references, never entitlement,
+    credential values, Membership, or Run history. PUBLIC readers only copy immutable files.
     """
-    target_owner = (
-        OwnerReference(kind=payload.target_owner.kind, id=payload.target_owner.id)
-        if payload.target_owner
-        else None
-    )
+    target_owner = OwnerReference(kind=payload.target_owner.kind, id=payload.target_owner.id)
     project = await services.projects.fork(
         user.id,
         version_id,
-        payload.target_workspace_id,
-        target_owner=target_owner,
+        target_owner,
         name=payload.name,
         description=payload.description,
     )
-    return p.project_out(project, owner=await services.projects.owner_summary(project))
+    access = await services.projects.get(user.id, project.id)
+    return p.project_out(
+        project,
+        owner=await services.projects.owner_summary(project),
+        capabilities=access.capabilities,
+    )
 
 
 @router.get(
@@ -380,6 +387,20 @@ async def restore_version(
 
 
 # -- 运行方案 ---------------------------------------------------------------
+
+
+@router.get(
+    "/projects/{project_id}/environments",
+    response_model=list[s.EnvironmentOut],
+    summary="列出 Project 当前可用的 Environment",
+)
+async def list_project_environments(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> list[s.EnvironmentOut]:
+    views = await services.catalog.list_for_project(user.id, project_id)
+    return [p.environment_out(view) for view in views]
 
 
 @router.get(

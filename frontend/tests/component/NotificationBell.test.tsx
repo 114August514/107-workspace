@@ -20,7 +20,6 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
     created_at: '2026-08-15T08:00:00Z',
     target_id: 'run-1',
     target_type: 'run',
-    workspace_id: 'ws-1',
     ...overrides,
   }
 }
@@ -117,15 +116,18 @@ describe('NotificationBell 通知浮层', () => {
     expect(link).toHaveAttribute('href', '/runs/run-1')
   })
 
-  it('User Group 邀请链接到新的治理页面', async () => {
+  it.each([
+    ['user_group_invited', '你收到一个 User Group 邀请'],
+    ['member_removed', '你已被移出 User Group'],
+  ] as const)('%s 通知没有不可访问的导航链接', async (type, title) => {
     vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
     vi.spyOn(api, 'listNotifications').mockResolvedValue(
       makePage([
         makeNotification({
-          type: 'user_group_invited',
-          title: '你收到一个 User Group 邀请',
-          target_id: 'grp-1',
-          target_type: 'user_group',
+          type,
+          title,
+          target_id: null,
+          target_type: null,
         }),
       ]),
     )
@@ -133,11 +135,8 @@ describe('NotificationBell 通知浮层', () => {
     renderBell()
     fireEvent.click(await screen.findByRole('button', { name: '通知，1 条未读' }))
 
-    expect(await screen.findByText('邀请')).toBeVisible()
-    expect(screen.getByRole('link', { name: '你收到一个 User Group 邀请' })).toHaveAttribute(
-      'href',
-      '/user-groups/grp-1',
-    )
+    expect(await screen.findByText(title)).toBeVisible()
+    expect(screen.queryByRole('link', { name: title })).not.toBeInTheDocument()
   })
 
   it('点击未读条目标记已读并刷新未读数', async () => {

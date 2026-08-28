@@ -15,7 +15,6 @@ from ..domain.enums import MembershipRole, ProjectVisibility
 from ..domain.errors import ObjectNotFound, PermissionDenied
 from ..domain.models import (
     Environment,
-    LegacyWorkspace,
     Project,
     Run,
     SharedResource,
@@ -44,28 +43,8 @@ class UserGroupAccess:
 
 
 @dataclass(frozen=True, slots=True)
-class LegacyWorkspaceAccess:
-    """Private access context for unmigrated child-domain rows."""
-
-    workspace: LegacyWorkspace
-    role: MembershipRole
-
-    @property
-    def capabilities(self) -> frozenset[Capability]:
-        return capabilities_of(self.role)
-
-    def can(self, capability: Capability) -> bool:
-        return capability in self.capabilities
-
-    def require(self, capability: Capability) -> None:
-        if not self.can(capability):
-            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
-
-
-@dataclass(frozen=True, slots=True)
 class ProjectAccess:
     project: Project
-    workspace: LegacyWorkspace
     role: MembershipRole | None
     owner_scope: bool
 
@@ -96,7 +75,6 @@ _PUBLIC_READER_CAPABILITIES = frozenset({Capability.PROJECT_VIEW})
 class RunAccess:
     run: Run
     project: Project
-    workspace: LegacyWorkspace
     role: MembershipRole
 
     @property
@@ -186,20 +164,6 @@ class AccessGuard:
         if required not in capabilities_of(membership.role):
             raise PermissionDenied(f"当前角色（{membership.role.value}）无权{describe(required)}")
 
-    async def legacy_workspace(
-        self, user_id: str, workspace_id: str, *, needs: Capability | None = None
-    ) -> LegacyWorkspaceAccess:
-        workspace = await self._repos.legacy_workspaces.get(workspace_id)
-        if workspace is None:
-            raise ObjectNotFound("Workspace compatibility context", workspace_id)
-        role = await self._resolve_legacy_role(user_id, workspace)
-        if role is None:
-            raise ObjectNotFound("Workspace compatibility context", workspace_id)
-        access = LegacyWorkspaceAccess(workspace=workspace, role=role)
-        if needs is not None:
-            access.require(needs)
-        return access
-
     async def project(
         self,
         user_id: str,
@@ -232,19 +196,10 @@ class AccessGuard:
                 # cross into the public read boundary.
                 raise ObjectNotFound("Project", project_id)
 
-        workspace = await self._compatibility_workspace(project)
-        access = ProjectAccess(
-            project=project, workspace=workspace, role=role, owner_scope=is_owner
-        )
+        access = ProjectAccess(project=project, role=role, owner_scope=is_owner)
         if needs is not None:
             access.require(needs)
         return access
-
-    async def _compatibility_workspace(self, project: Project) -> LegacyWorkspace:
-        workspace = await self._repos.legacy_workspaces.get(project.workspace_id)
-        if workspace is None:
-            raise ObjectNotFound("Project", project.id)
-        return workspace
 
     async def run(self, user_id: str, run_id: str, *, needs: Capability | None = None) -> RunAccess:
         run = await self._repos.runs.get(run_id)
@@ -263,7 +218,6 @@ class AccessGuard:
         access = RunAccess(
             run=run,
             project=project_access.project,
-            workspace=project_access.workspace,
             role=role,
         )
         if needs is not None:
@@ -327,13 +281,3 @@ class AccessGuard:
             raise ObjectNotFound("Shared Resource Version", version_id)
         access = await self.shared_resource(user_id, version.shared_resource_id, needs=needs)
         return version, access
-
-    async def _resolve_legacy_role(
-        self, user_id: str, workspace: LegacyWorkspace
-    ) -> MembershipRole | None:
-        if workspace.is_personal:
-            return MembershipRole.OWNER if workspace.owner_id == user_id else None
-        membership = await self._repos.memberships.get(workspace.id, user_id)
-        if membership is None or not membership.is_active:
-            return None
-        return membership.role

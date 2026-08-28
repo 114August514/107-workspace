@@ -5,11 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourceVersionPage } from '../../src/pages/SharedResourceVersionPage'
-import type {
-  LegacyWorkspaceContext,
-  SharedResourceDetail,
-  SharedResourceVersionDetail,
-} from '../../src/api/types'
+import type { SharedResourceDetail, SharedResourceVersionDetail } from '../../src/api/types'
 
 /**
  * SharedResourceVersionPage 文件预览状态。
@@ -22,8 +18,6 @@ import type {
 
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
-const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
-const mockHome = vi.hoisted(() => vi.fn())
 const mockReadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
 const mockDownloadSharedResourceVersionFile = vi.hoisted(() => vi.fn())
 
@@ -31,8 +25,6 @@ vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResourceVersion: mockGetSharedResourceVersion,
     getSharedResource: mockGetSharedResource,
-    getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
-    home: mockHome,
     readSharedResourceVersionFile: mockReadSharedResourceVersionFile,
     downloadSharedResourceVersionFile: mockDownloadSharedResourceVersionFile,
   },
@@ -63,28 +55,8 @@ const resource: SharedResourceDetail = {
   description: '',
   owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
   created_at: '2026-08-14T10:00:00Z',
-  availability: { usable: true, source: 'owner', grants: [] },
+  use_qualifications: [{ scope: 'owner', eligible_project_owner: null, grants: [] }],
   versions: [],
-}
-
-const ownerContext: LegacyWorkspaceContext = {
-  id: 'ws_test',
-  name: 'Test 空间',
-  kind: 'collaborative',
-  owner_id: 'owner',
-  default_environment_version_id: null,
-  capabilities: [],
-  role: 'admin',
-}
-
-const personalContext: LegacyWorkspaceContext = {
-  id: 'ws_personal',
-  name: '个人资源',
-  kind: 'personal',
-  owner_id: 'usr_student',
-  default_environment_version_id: null,
-  capabilities: [],
-  role: 'owner',
 }
 
 function renderPage(versionId = 'ver_test') {
@@ -105,7 +77,6 @@ describe('SharedResourceVersionPage 文件预览', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     mockGetSharedResourceVersion.mockResolvedValue(version)
     mockGetSharedResource.mockResolvedValue(resource)
-    mockGetLegacyWorkspaceContext.mockResolvedValue(ownerContext)
   })
 
   afterEach(() => {
@@ -213,19 +184,14 @@ describe('SharedResourceVersionPage 文件预览', () => {
     expect(download).toHaveAttribute('download', 'weights.bin')
   })
 
-  it('面包屑从 canonical owner context 链接 owner workspace 和共享资源列表', async () => {
-    mockReadSharedResourceVersionFile.mockResolvedValue('content')
+  it('面包屑使用 canonical User Group route', async () => {
     renderPage()
 
-    // 面包屑：首页 → canonical owner workspace → 共享资源列表 → 预训练权重。
     expect(await screen.findByRole('link', { name: 'Test 空间' })).toHaveAttribute(
       'href',
-      '/workspaces/ws_test',
+      '/user-groups/ws_test',
     )
-    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
-      'href',
-      '/workspaces/ws_test/shared-resources',
-    )
+    expect(screen.getByText('共享资源')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '预训练权重' })).toHaveAttribute(
       'href',
       '/shared-resources/res_test',
@@ -236,25 +202,14 @@ describe('SharedResourceVersionPage 文件预览', () => {
     expect(screen.queryByRole('link', { name: 'v1' })).not.toBeInTheDocument()
   })
 
-  it('User owner 等于当前 User 时链接 personal resource context', async () => {
+  it('User owner 直接显示当前 Owner，不伪造个人 Workspace 链接', async () => {
     mockGetSharedResource.mockResolvedValue({
       ...resource,
       owner: { kind: 'user', id: 'usr_student', display_name: 'Student' },
     })
-    mockHome.mockResolvedValue({
-      user: { id: 'usr_student' },
-      personal_resource_context_id: 'ws_personal',
-    })
-    mockGetLegacyWorkspaceContext.mockResolvedValue(personalContext)
     renderPage()
 
-    expect(await screen.findByRole('link', { name: 'Student' })).toHaveAttribute(
-      'href',
-      '/workspaces/ws_personal',
-    )
-    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
-      'href',
-      '/workspaces/ws_personal/shared-resources',
-    )
+    expect(await screen.findByText('Student')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Student' })).not.toBeInTheDocument()
   })
 })

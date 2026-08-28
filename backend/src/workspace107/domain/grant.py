@@ -37,19 +37,18 @@ class GrantTargetKind(StrEnum):
     SHARED_RESOURCE = "shared_resource"
 
 
-class UseAvailabilitySource(StrEnum):
-    """当前 User 对资产的使用资格来源。
+class UseQualificationScope(StrEnum):
+    """How the acting User qualifies to use an asset in a Project owner context.
 
-    与 Run preflight 的授权语义（见 ``application/asset_use.py``）对齐：
-    ``OWNER`` 对应同 Owner 路径，``USER_GRANT`` / ``USER_GROUP_GRANT`` 对应
-    Grant 路径（组 Grant 要求当前 User 是该 Grantee 组的有效成员），
-    ``UNAVAILABLE`` 表示当前无使用资格。
+    This is actor-level qualification, not a Run preflight decision. ``OWNER`` is
+    limited to Projects whose Owner equals the asset Owner. ``USER_GRANT`` follows
+    the acting User into any Project owner context where that User can submit.
+    ``USER_GROUP_GRANT`` is limited to the grantee UserGroup as Project Owner.
     """
 
     OWNER = "owner"
     USER_GRANT = "user_grant"
     USER_GROUP_GRANT = "user_group_grant"
-    UNAVAILABLE = "unavailable"
 
 
 @dataclass(frozen=True, slots=True)

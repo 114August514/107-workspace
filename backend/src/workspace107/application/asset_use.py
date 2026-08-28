@@ -11,10 +11,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseAvailabilitySource
-from ..domain.models import EnvironmentVersion, SharedResource, SharedResourceVersion
+from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseQualificationScope
+from ..domain.models import Environment, EnvironmentVersion, SharedResource, SharedResourceVersion
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.repositories import Repositories
+
+
+async def environment_for_owner_use(
+    repos: Repositories,
+    user_id: str,
+    environment_id: str,
+    target_owner: OwnerReference,
+) -> Environment | None:
+    """Return an Environment authorized for one consuming Owner context."""
+    environment = await repos.environments.get_discoverable_for_user(user_id, environment_id)
+    if environment is not None and environment.owner == target_owner:
+        return environment
+
+    environment = await repos.environments.get_by_id(environment_id)
+    if environment is None or environment.owner == target_owner:
+        return None
+    if await _has_use_grant(
+        repos,
+        user_id,
+        target_owner,
+        GrantTargetKind.ENVIRONMENT,
+        environment.id,
+        environment.owner,
+    ):
+        return environment
+    return None
 
 
 async def environment_version_for_owner_use(
@@ -23,24 +49,14 @@ async def environment_version_for_owner_use(
     version_id: str,
     target_owner: OwnerReference,
 ) -> EnvironmentVersion | None:
-    """Return an Environment Version authorized for ``target_owner`` use.
-
-    1. Same-owner discovery path (Issue #39): actor-discoverable version whose
-       Environment is owned by ``target_owner``.
-    2. Grant path (Issue #40): trusted lookup of version + environment; if the
-       environment Owner differs from ``target_owner``, a USE Grant for either
-       ``target_owner`` or the acting user (as a User grantee) authorizes use.
-    """
-    # 1. Same-owner path (Issue #39 logic unchanged)
-    version = await repos.environments.get_version_discoverable_for_user(user_id, version_id)
-    if version is not None:
-        environment = await repos.environments.get_discoverable_for_user(
-            user_id, version.environment_id
-        )
-        if environment is not None and environment.owner == target_owner:
-            return version
-    # 2. Grant path: cross-owner use
-    return await _environment_version_for_grant_use(repos, user_id, version_id, target_owner)
+    """Return one exact version when its Environment is authorized for the Owner."""
+    version = await repos.environments.get_version_by_id(version_id)
+    if version is None:
+        return None
+    environment = await environment_for_owner_use(
+        repos, user_id, version.environment_id, target_owner
+    )
+    return version if environment is not None else None
 
 
 async def shared_resource_version_for_owner_use(
@@ -63,34 +79,6 @@ async def shared_resource_version_for_owner_use(
             return version
     # 2. Grant path: cross-owner use
     return await _shared_resource_version_for_grant_use(repos, user_id, version_id, target_owner)
-
-
-async def _environment_version_for_grant_use(
-    repos: Repositories,
-    user_id: str,
-    version_id: str,
-    target_owner: OwnerReference,
-) -> EnvironmentVersion | None:
-    version = await repos.environments.get_version_by_id(version_id)  # trusted lookup
-    if version is None:
-        return None
-    environment = await repos.environments.get_by_id(version.environment_id)  # trusted lookup
-    if environment is None:
-        return None
-    # Cross-owner use only: if the asset Owner IS the target_owner, discovery
-    # should have found it in the same-owner path above.  Fail closed here.
-    if environment.owner == target_owner:
-        return None
-    if await _has_use_grant(
-        repos,
-        user_id,
-        target_owner,
-        GrantTargetKind.ENVIRONMENT,
-        environment.id,
-        environment.owner,
-    ):
-        return version
-    return None
 
 
 async def _shared_resource_version_for_grant_use(
@@ -139,41 +127,39 @@ async def _has_use_grant(
 
 
 @dataclass(frozen=True, slots=True)
-class SharedResourceUseAvailability:
-    """当前 User 对某个 Shared Resource 的使用资格。
+class SharedResourceUseQualification:
+    """One actor-level route for using a Shared Resource in Project owner contexts."""
 
-    ``grants`` 只包含解释当前资格来源、且覆盖该资源的 USE Grant
-    （Target = ALL 或精确指向该资源）；``OWNER`` 与 ``UNAVAILABLE`` 时为空。
-    """
-
-    source: UseAvailabilitySource
+    scope: UseQualificationScope
+    eligible_project_owner: OwnerReference | None
     grants: tuple[Grant, ...]
 
-    @property
-    def usable(self) -> bool:
-        return self.source is not UseAvailabilitySource.UNAVAILABLE
 
-
-async def shared_resource_use_availability(
+async def shared_resource_use_qualifications(
     repos: Repositories,
     user_id: str,
     resource: SharedResource,
     *,
     active_group_ids: frozenset[str],
-) -> SharedResourceUseAvailability:
-    """Compute the acting User's USE availability for ``resource``.
+) -> tuple[SharedResourceUseQualification, ...]:
+    """Describe actor qualifications without making a concrete preflight decision.
 
-    Mirrors the two preflight paths of :func:`shared_resource_version_for_owner_use`:
-    owner scope first (same-owner path), then USE Grants issued by the resource's
-    current Owner to the acting User personally or to a UserGroup they actively
-    belong to (grant path).  Discovery itself is not extended here.
+    Owner qualification is limited to the asset Owner context. A direct User Grant
+    follows the actor into any Project owner context where they can submit. Each
+    UserGroup Grant names the exact grantee group that must own the Project.
     """
     owner = resource.owner
-    if owner.kind is OwnerKind.USER:
-        if owner.id == user_id:
-            return SharedResourceUseAvailability(source=UseAvailabilitySource.OWNER, grants=())
-    elif owner.id in active_group_ids:
-        return SharedResourceUseAvailability(source=UseAvailabilitySource.OWNER, grants=())
+    qualifications: list[SharedResourceUseQualification] = []
+    if (owner.kind is OwnerKind.USER and owner.id == user_id) or (
+        owner.kind is OwnerKind.USER_GROUP and owner.id in active_group_ids
+    ):
+        qualifications.append(
+            SharedResourceUseQualification(
+                scope=UseQualificationScope.OWNER,
+                eligible_project_owner=None,
+                grants=(),
+            )
+        )
 
     covering = [
         grant
@@ -187,22 +173,30 @@ async def shared_resource_use_availability(
             )
         )
     ]
-    user_grants = [
+    user_grants = tuple(
         grant
         for grant in covering
         if grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id
-    ]
+    )
     if user_grants:
-        return SharedResourceUseAvailability(
-            source=UseAvailabilitySource.USER_GRANT, grants=tuple(user_grants)
+        qualifications.append(
+            SharedResourceUseQualification(
+                scope=UseQualificationScope.USER_GRANT,
+                eligible_project_owner=None,
+                grants=user_grants,
+            )
         )
-    group_grants = [
-        grant
-        for grant in covering
-        if grant.grantee.kind is OwnerKind.USER_GROUP and grant.grantee.id in active_group_ids
-    ]
-    if group_grants:
-        return SharedResourceUseAvailability(
-            source=UseAvailabilitySource.USER_GROUP_GRANT, grants=tuple(group_grants)
+
+    grants_by_group: dict[str, list[Grant]] = {}
+    for grant in covering:
+        if grant.grantee.kind is OwnerKind.USER_GROUP and grant.grantee.id in active_group_ids:
+            grants_by_group.setdefault(grant.grantee.id, []).append(grant)
+    qualifications.extend(
+        SharedResourceUseQualification(
+            scope=UseQualificationScope.USER_GROUP_GRANT,
+            eligible_project_owner=OwnerReference(OwnerKind.USER_GROUP, group_id),
+            grants=tuple(grants),
         )
-    return SharedResourceUseAvailability(source=UseAvailabilitySource.UNAVAILABLE, grants=())
+        for group_id, grants in grants_by_group.items()
+    )
+    return tuple(qualifications)

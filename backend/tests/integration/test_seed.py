@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from workspace107.api.deps import build_services
-from workspace107.domain.enums import LegacyWorkspaceKind, MembershipRole, MembershipStatus
+from workspace107.domain.enums import MembershipRole, MembershipStatus
 from workspace107.infrastructure.db import tables as t
 from workspace107.tools.seed import DEMO_PROJECT, DEMO_USER, seed_demo
 
@@ -192,11 +192,6 @@ async def test_issue_35_demo_seed_uses_only_its_deterministic_group(context, ses
     assert demo_group is not None
     assert demo_group.created_by_id == user.id
 
-    demo_anchor = await session.get(t.LegacyWorkspaceRow, DEMO_USER_GROUP_ID)
-    assert demo_anchor is not None
-    assert demo_anchor.kind == LegacyWorkspaceKind.COLLABORATIVE.value
-    assert demo_anchor.owner_id == user.id
-
     demo_owner = await session.get(t.MembershipRow, DEMO_OWNER_MEMBERSHIP_ID)
     assert demo_owner is not None
     assert (
@@ -227,14 +222,14 @@ async def test_issue_35_demo_seed_uses_only_its_deterministic_group(context, ses
     demo_projects = list(
         (
             await session.execute(
-                select(t.ProjectRow).where(t.ProjectRow.workspace_id == DEMO_USER_GROUP_ID)
+                select(t.ProjectRow).where(t.ProjectRow.owner_user_group_id == DEMO_USER_GROUP_ID)
             )
         ).scalars()
     )
     unrelated_projects = list(
         (
             await session.execute(
-                select(t.ProjectRow).where(t.ProjectRow.workspace_id == unrelated.id)
+                select(t.ProjectRow).where(t.ProjectRow.owner_user_group_id == unrelated.id)
             )
         ).scalars()
     )

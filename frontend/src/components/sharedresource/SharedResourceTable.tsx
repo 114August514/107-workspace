@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import type { SharedResource } from '../../api/types'
 import { PrimerRelativeTime } from '../primer/PrimerMono'
-import { AvailabilityLabel } from './SharedResourceAvailability'
+import { QualificationLabels } from './SharedResourceQualification'
 import styles from './sharedResource.module.css'
 
 interface Props {
@@ -25,7 +25,7 @@ export function SharedResourceTable({ resources }: Props) {
           <th className={`${styles.th} ${styles.colName}`}>名称</th>
           <th className={styles.th}>说明</th>
           <th className={`${styles.th} ${styles.colOwner}`}>归属</th>
-          <th className={`${styles.th} ${styles.colStatus}`}>使用状态</th>
+          <th className={`${styles.th} ${styles.colStatus}`}>使用资格</th>
           <th className={`${styles.th} ${styles.colCreated}`}>创建时间</th>
         </tr>
       </thead>
@@ -44,7 +44,7 @@ export function SharedResourceTable({ resources }: Props) {
             </td>
             <td className={styles.td}>{resource.owner.display_name}</td>
             <td className={styles.td}>
-              <AvailabilityLabel availability={resource.availability} />
+              <QualificationLabels qualifications={resource.use_qualifications} />
             </td>
             <td className={styles.td}>
               <PrimerRelativeTime value={resource.created_at} />

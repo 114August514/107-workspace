@@ -13,12 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
-import type {
-  PreflightResult,
-  Run,
-  RunConfiguration,
-  LegacyWorkspaceContext,
-} from '../../api/types'
+import type { PreflightResult, Run, RunConfiguration } from '../../api/types'
 import { describeComputeRequest } from '../../utils/format'
 
 interface Props {
@@ -27,7 +22,6 @@ interface Props {
   versionLabel: string
   projectId: string
   defaultRunConfigurationId: string | null
-  workspace: LegacyWorkspaceContext | undefined
   onClose: () => void
   onSubmitted: (run: Run) => void
 }
@@ -259,7 +253,19 @@ export function RunFromVersionModal({
               {
                 key: 'environment',
                 label: '运行环境版本',
-                children: preflight?.environment_version_id ?? (checking ? '检查中…' : '—'),
+                children: preflight?.environment_version ? (
+                  <Space wrap size={6}>
+                    <Typography.Text>{preflight.environment_version.version}</Typography.Text>
+                    <Tag color={preflight.environment_version.available ? 'green' : 'orange'}>
+                      {preflight.environment_version.available ? '当前可用' : '当前不可用'}
+                    </Tag>
+                    <Typography.Text code>{preflight.environment_version.id}</Typography.Text>
+                  </Space>
+                ) : checking ? (
+                  '检查中…'
+                ) : (
+                  '—'
+                ),
               },
               {
                 key: 'compute',

@@ -23,7 +23,6 @@ type Schemas = components['schemas']
 // 这些在契约里带取值列表，所以派生出来是联合类型而不是 string。
 // switch / Record 少写一个分支，TypeScript 会直接报错。
 
-export type LegacyWorkspaceKind = Schemas['LegacyWorkspaceKind']
 export type MembershipRole = Schemas['MembershipRole']
 export type Capability = Schemas['Capability']
 export type UserGroupCapability = Schemas['UserGroupCapability']
@@ -40,7 +39,6 @@ export type ChangeKind = Schemas['ChangeKind']
 
 export type User = Schemas['UserOut']
 export type UserGroup = Schemas['UserGroupOut']
-export type LegacyWorkspaceContext = Schemas['LegacyWorkspaceContextOut']
 export type Member = Schemas['MemberOut']
 export type Invitation = Schemas['InvitationOut']
 export type Variable = Schemas['VariableOut']
@@ -79,9 +77,9 @@ export type SharedResourceVersionDetail = Schemas['SharedResourceVersionDetailOu
 export type SharedResourceVersionFile = Schemas['SharedResourceVersionFileOut']
 export type SharedResourceCreate = Schemas['CanonicalSharedResourceCreateIn']
 export type SharedResourceUpdate = Schemas['SharedResourceUpdateIn']
-export type UseAvailabilitySource = Schemas['UseAvailabilitySource']
+export type UseQualificationScope = Schemas['UseQualificationScope']
 export type UseGrantSummary = Schemas['UseGrantSummaryOut']
-export type SharedResourceAvailability = Schemas['SharedResourceAvailabilityOut']
+export type SharedResourceUseQualification = Schemas['SharedResourceUseQualificationOut']
 
 // -- 运行方案 ---------------------------------------------------------------
 

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SharedResourcePage } from '../../src/pages/SharedResourcePage'
 import type {
-  LegacyWorkspaceContext,
   SharedResourceDetail,
   SharedResourceVersion,
   SharedResourceVersionDetail,
@@ -24,15 +23,11 @@ import type {
  */
 
 const mockGetSharedResource = vi.hoisted(() => vi.fn())
-const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
-const mockHome = vi.hoisted(() => vi.fn())
 const mockGetSharedResourceVersion = vi.hoisted(() => vi.fn())
 
 vi.mock('../../src/api/client', () => ({
   api: {
     getSharedResource: mockGetSharedResource,
-    getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
-    home: mockHome,
     getSharedResourceVersion: mockGetSharedResourceVersion,
   },
 }))
@@ -44,18 +39,6 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
-function makeWorkspace(caps: string[]): LegacyWorkspaceContext {
-  return {
-    id: 'ws_test',
-    name: 'Test 空间',
-    kind: 'collaborative',
-    owner_id: 'owner',
-    default_environment_version_id: null,
-    capabilities: caps as LegacyWorkspaceContext['capabilities'],
-    role: 'admin',
-  }
-}
-
 function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedResourceDetail {
   return {
     id: 'res_test',
@@ -63,8 +46,9 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     description: 'imagenet-subset',
     owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
     created_at: '2026-08-14T10:00:00Z',
-    availability: { usable: true, source: 'owner', grants: [] },
+    use_qualifications: [{ scope: 'owner', eligible_project_owner: null, grants: [] }],
     versions: [],
+    capabilities: ['shared_resource.view'],
     ...overrides,
   }
 }
@@ -117,9 +101,11 @@ describe('SharedResourcePage 权限与空态', () => {
   })
 
   it('有发布权限时显示「发布版本」，空态给出 CTA 且不绑定物理位置', async () => {
-    mockGetSharedResource.mockResolvedValue(makeResource({ versions: [] }))
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view', 'shared_resource.version.create']),
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        versions: [],
+        capabilities: ['shared_resource.view', 'shared_resource.version.create'],
+      }),
     )
 
     renderPage()
@@ -138,9 +124,6 @@ describe('SharedResourcePage 权限与空态', () => {
 
   it('无发布权限时不显示「发布版本」，空态也不给 CTA', async () => {
     mockGetSharedResource.mockResolvedValue(makeResource({ versions: [] }))
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
 
     renderPage()
 
@@ -156,14 +139,15 @@ describe('SharedResourcePage 权限与空态', () => {
   })
 
   it('有 manage 权限时显示「修改共享资源」', async () => {
-    mockGetSharedResource.mockResolvedValue(makeResource({ versions: [] }))
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace([
-        'workspace.view',
-        'shared_resource.view',
-        'shared_resource.manage',
-        'shared_resource.version.create',
-      ]),
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        versions: [],
+        capabilities: [
+          'shared_resource.view',
+          'shared_resource.manage',
+          'shared_resource.version.create',
+        ],
+      }),
     )
 
     renderPage()
@@ -179,10 +163,6 @@ describe('SharedResourcePage 权限与空态', () => {
         owner: { kind: 'user', id: 'usr_alice', display_name: 'Alice' },
       }),
     )
-    mockHome.mockResolvedValue({
-      user: { id: 'usr_alice' },
-      personal_resource_context_id: null,
-    })
 
     renderPage()
 
@@ -200,9 +180,6 @@ describe('SharedResourcePage 权限与空态', () => {
         versions: [makeVersionSummary('ver_2', 'v2', 2), makeVersionSummary('ver_1', 'v1', 1)],
       }),
     )
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
     mockGetSharedResourceVersion.mockResolvedValue(makeVersionDetail('ver_2', 'v2', 2))
 
     renderPage()
@@ -219,9 +196,6 @@ describe('SharedResourcePage 权限与空态', () => {
         versions: [makeVersionSummary('ver_2', 'v2', 2), makeVersionSummary('ver_1', 'v1', 1)],
       }),
     )
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
     mockGetSharedResourceVersion.mockImplementation((id: string) =>
       Promise.resolve(
         id === 'ver_1'
@@ -236,35 +210,22 @@ describe('SharedResourcePage 权限与空态', () => {
     expect(await screen.findByRole('button', { name: 'old.py' })).toBeInTheDocument()
   })
 
-  it('面包屑引导回到所属工作区的「共享资源」深链路', async () => {
+  it('面包屑使用当前 User Group route', async () => {
     mockGetSharedResource.mockResolvedValue(makeResource())
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
 
     renderPage()
 
-    // 面包屑：首页 → canonical owner → 共享资源（当前页不在面包屑里）
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Test 空间' })).toHaveAttribute(
         'href',
-        '/workspaces/ws_test',
+        '/user-groups/ws_test',
       )
     })
-    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
-      'href',
-      '/workspaces/ws_test/shared-resources',
-    )
-    // 当前页「预训练权重」由 TitleArea 呈现为 h1 标题，不是链接
-    const current = screen.getByRole('heading', { name: '预训练权重', level: 1 })
-    expect(current).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '预训练权重' })).not.toBeInTheDocument()
-    // 标题旁直接展示 API 返回的 canonical owner summary。
-    expect(screen.getByText('归属：Test 空间')).toBeInTheDocument()
+    expect(screen.getByText('共享资源')).toBeInTheDocument()
   })
 })
 
-describe('SharedResourcePage 可用状态展示（Issue #55）', () => {
+describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
   })
@@ -275,99 +236,77 @@ describe('SharedResourcePage 可用状态展示（Issue #55）', () => {
     vi.unstubAllGlobals()
   })
 
-  it('Owner 范围内展示「可用」并解释可以直接使用', async () => {
-    mockGetSharedResource.mockResolvedValue(
-      makeResource({ availability: { usable: true, source: 'owner', grants: [] } }),
-    )
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
+  it('Owner 资格明确限定为资源 Owner 相同的 Project', async () => {
+    mockGetSharedResource.mockResolvedValue(makeResource())
 
     renderPage()
 
-    await waitFor(() => {
-      expect(screen.getByText('可用')).toBeInTheDocument()
-    })
-    expect(screen.getByText('你在这个资源的 Owner 范围内，可以直接使用。')).toBeInTheDocument()
+    expect(await screen.findByText('资源 Owner 范围')).toBeInTheDocument()
+    expect(
+      screen.getByText('你具备在 Owner 与此资源相同的 Project 中引用它的资格。'),
+    ).toBeInTheDocument()
   })
 
-  it('User Grant 可用时展示「可用 · 授权」并解释授权来源', async () => {
+  it('直接 User Grant 说明可跟随 actor，而不冒充全局 Preflight 结果', async () => {
     mockGetSharedResource.mockResolvedValue(
       makeResource({
-        availability: {
-          usable: true,
-          source: 'user_grant',
-          grants: [
-            {
-              id: 'grant_1',
-              grantee: { kind: 'user', id: 'usr_bob', display_name: 'Bob' },
-              target_all: false,
-              created_at: '2026-08-20T10:00:00Z',
-            },
-          ],
-        },
+        use_qualifications: [
+          {
+            scope: 'user_grant',
+            eligible_project_owner: null,
+            grants: [
+              {
+                id: 'grant_1',
+                grantee: { kind: 'user', id: 'usr_bob', display_name: 'Bob' },
+                target_all: false,
+                created_at: '2026-08-20T10:00:00Z',
+              },
+            ],
+          },
+        ],
       }),
-    )
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
     )
 
     renderPage()
 
-    await waitFor(() => {
-      expect(screen.getByText('可用 · 授权')).toBeInTheDocument()
-    })
+    expect(await screen.findByText('个人 USE 授权')).toBeInTheDocument()
     expect(
-      screen.getByText('Owner 已向你授予使用授权，你可以在自己的 Project 中引用它。'),
+      screen.getByText('Owner 已直接授权给你；可在你有权提交的任何 Project 中引用它。'),
     ).toBeInTheDocument()
-    expect(screen.getByText(/使用授权：授予 Bob（仅限此资源）/)).toBeInTheDocument()
+    expect(
+      screen.getByText('这里仅说明当前账号的使用资格，不代表具体 Run 已通过 Preflight。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/USE 授权：授予 Bob（仅限此资源）/)).toBeInTheDocument()
   })
 
-  it('UserGroup Grant 可用时提示需要保持有效成员身份', async () => {
+  it('UserGroup Grant 展示 exact eligible Project.owner context', async () => {
     mockGetSharedResource.mockResolvedValue(
       makeResource({
-        availability: {
-          usable: true,
-          source: 'user_group_grant',
-          grants: [
-            {
-              id: 'grant_2',
-              grantee: { kind: 'user_group', id: 'grp_ml', display_name: 'ML 组' },
-              target_all: true,
-              created_at: '2026-08-20T10:00:00Z',
-            },
-          ],
-        },
+        use_qualifications: [
+          {
+            scope: 'user_group_grant',
+            eligible_project_owner: { kind: 'user_group', id: 'grp_ml' },
+            grants: [
+              {
+                id: 'grant_2',
+                grantee: { kind: 'user_group', id: 'grp_ml', display_name: 'ML 组' },
+                target_all: true,
+                created_at: '2026-08-20T10:00:00Z',
+              },
+            ],
+          },
+        ],
       }),
     )
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
 
     renderPage()
 
-    await waitFor(() => {
-      expect(screen.getByText('可用 · 组授权')).toBeInTheDocument()
-    })
+    expect(await screen.findByText('ML 组 USE 授权')).toBeInTheDocument()
     expect(
-      screen.getByText('Owner 已向「ML 组」授予使用授权；实际使用要求你保持该组的有效成员身份。'),
+      screen.getByText(
+        'Owner 已授权给「ML 组」；需保持该组有效成员身份，并在该组作为 Owner 的 Project 中引用它。',
+      ),
     ).toBeInTheDocument()
-    expect(screen.getByText(/使用授权：授予 ML 组（覆盖 Owner 全部资产）/)).toBeInTheDocument()
-  })
-
-  it('不可用时展示「不可用」并说明不能用于 Run', async () => {
-    mockGetSharedResource.mockResolvedValue(
-      makeResource({ availability: { usable: false, source: 'unavailable', grants: [] } }),
-    )
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['workspace.view', 'shared_resource.view']),
-    )
-
-    renderPage()
-
-    await waitFor(() => {
-      expect(screen.getByText('不可用')).toBeInTheDocument()
-    })
-    expect(screen.getByText('当前没有有效的使用资格，这个资源不能用于 Run。')).toBeInTheDocument()
+    expect(screen.getByText(/USE 授权：授予 ML 组（覆盖 Owner 全部资产）/)).toBeInTheDocument()
   })
 })

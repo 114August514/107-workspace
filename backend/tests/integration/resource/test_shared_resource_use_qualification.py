@@ -1,9 +1,7 @@
-"""Issue #55: Shared Resource availability and USE Grant boundary presentation.
+"""Actor-level Shared Resource qualification and discovery boundaries.
 
-Discovery covers owner scope plus resources reachable through a valid USE Grant
-issued under the resource's current Owner.  Availability tells the acting User
-why they can (or cannot) use a resource: owner scope, personal User Grant, or
-UserGroup Grant with active membership.
+The response explains which Project owner contexts may qualify the actor. It is
+not a global runnable verdict: concrete authorization remains in Run Preflight.
 """
 
 from __future__ import annotations
@@ -69,17 +67,17 @@ async def _grant(
     return str(response.json()["id"])
 
 
-def _availability_in_list(body: list[dict], resource_id: str) -> dict | None:
+def _qualifications_in_list(body: list[dict], resource_id: str) -> list[dict] | None:
     for entry in body:
         if entry["id"] == resource_id:
-            return entry["availability"]
+            return entry["use_qualifications"]
     return None
 
 
-async def test_owner_scope_availability_in_list_and_detail(
+async def test_owner_scope_qualification_in_list_and_detail(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """User-owned and UserGroup-owned resources show source=owner with no grants."""
+    """Owner qualification applies in the resource Owner's Project context."""
     alice_id = await _get_user_id(client, ALICE)
     group_a = await _create_group(client, "Availability Owner Group")
     user_resource_id, _ = await _create_resource_with_version(
@@ -92,16 +90,17 @@ async def test_owner_scope_availability_in_list_and_detail(
     listing = await client.get("/api/v1/shared-resources", headers=ALICE)
     listing.raise_for_status()
     for resource_id in (user_resource_id, group_resource_id):
-        availability = _availability_in_list(listing.json(), resource_id)
-        assert availability is not None
-        assert availability == {"usable": True, "source": "owner", "grants": []}
+        qualifications = _qualifications_in_list(listing.json(), resource_id)
+        assert qualifications == [{"scope": "owner", "eligible_project_owner": None, "grants": []}]
 
     detail = await client.get(f"/api/v1/shared-resources/{group_resource_id}", headers=ALICE)
     detail.raise_for_status()
     body = detail.json()
     assert body["owner"]["kind"] == "user_group"
     assert body["owner"]["display_name"] == "Availability Owner Group"
-    assert body["availability"] == {"usable": True, "source": "owner", "grants": []}
+    assert body["use_qualifications"] == [
+        {"scope": "owner", "eligible_project_owner": None, "grants": []}
+    ]
 
 
 async def test_unrelated_user_neither_discovers_nor_uses(
@@ -115,16 +114,16 @@ async def test_unrelated_user_neither_discovers_nor_uses(
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    assert _availability_in_list(listing.json(), resource_id) is None
+    assert _qualifications_in_list(listing.json(), resource_id) is None
 
     detail = await client.get(f"/api/v1/shared-resources/{resource_id}", headers=BOB)
     assert detail.status_code == 404
 
 
-async def test_user_grant_availability_with_summary(
+async def test_user_grant_qualification_with_summary(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """A personal USE Grant makes the resource discoverable with source=user_grant."""
+    """A direct User Grant is not restricted to one eligible Project Owner."""
     bob_id = await _get_user_id(client, BOB)
     group_b = await _create_group(client, "User Grant Owner Group")
     resource_id, version_id = await _create_resource_with_version(
@@ -139,17 +138,19 @@ async def test_user_grant_availability_with_summary(
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    availability = _availability_in_list(listing.json(), resource_id)
-    assert availability is not None
-    assert availability["usable"] is True
-    assert availability["source"] == "user_grant"
-    assert [summary["id"] for summary in availability["grants"]] == [grant_id]
-    assert availability["grants"][0]["grantee"]["id"] == bob_id
-    assert availability["grants"][0]["target_all"] is False
+    qualifications = _qualifications_in_list(listing.json(), resource_id)
+    assert qualifications is not None
+    assert len(qualifications) == 1
+    qualification = qualifications[0]
+    assert qualification["scope"] == "user_grant"
+    assert qualification["eligible_project_owner"] is None
+    assert [summary["id"] for summary in qualification["grants"]] == [grant_id]
+    assert qualification["grants"][0]["grantee"]["id"] == bob_id
+    assert qualification["grants"][0]["target_all"] is False
 
     detail = await client.get(f"/api/v1/shared-resources/{resource_id}", headers=BOB)
     detail.raise_for_status()
-    assert detail.json()["availability"]["source"] == "user_grant"
+    assert detail.json()["use_qualifications"][0]["scope"] == "user_grant"
     assert [version["id"] for version in detail.json()["versions"]] == [version_id]
 
     # USE Grant authorizes use, never management.
@@ -170,18 +171,15 @@ async def test_user_grant_availability_with_summary(
     # Owner still sees owner scope, not the grant issued to Bob.
     owner_listing = await client.get("/api/v1/shared-resources", headers=ALICE)
     owner_listing.raise_for_status()
-    assert _availability_in_list(owner_listing.json(), resource_id) == {
-        "usable": True,
-        "source": "owner",
-        "grants": [],
-    }
+    assert _qualifications_in_list(owner_listing.json(), resource_id) == [
+        {"scope": "owner", "eligible_project_owner": None, "grants": []}
+    ]
 
 
-async def test_user_group_grant_requires_active_membership(
+async def test_user_group_grant_names_exact_eligible_project_owner(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """A UserGroup grantee surfaces source=user_group_grant only while the
-    acting User keeps active membership; after removal the resource is gone."""
+    """Group qualification names the exact Project Owner and requires membership."""
     from workspace107.infrastructure.db.tables import MembershipRow
 
     bob_id = await _get_user_id(client, BOB)
@@ -199,11 +197,15 @@ async def test_user_group_grant_requires_active_membership(
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    availability = _availability_in_list(listing.json(), resource_id)
-    assert availability is not None
-    assert availability["usable"] is True
-    assert availability["source"] == "user_group_grant"
-    assert availability["grants"][0]["grantee"] == {
+    qualifications = _qualifications_in_list(listing.json(), resource_id)
+    assert qualifications is not None
+    qualification = qualifications[0]
+    assert qualification["scope"] == "user_group_grant"
+    assert qualification["eligible_project_owner"] == {
+        "kind": "user_group",
+        "id": group_a,
+    }
+    assert qualification["grants"][0]["grantee"] == {
         "kind": "user_group",
         "id": group_a,
         "display_name": "Grantee Group A",
@@ -223,7 +225,7 @@ async def test_user_group_grant_requires_active_membership(
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    assert _availability_in_list(listing.json(), resource_id) is None
+    assert _qualifications_in_list(listing.json(), resource_id) is None
     detail = await client.get(f"/api/v1/shared-resources/{resource_id}", headers=BOB)
     assert detail.status_code == 404
 
@@ -247,16 +249,16 @@ async def test_all_grant_summary_marks_target_all(
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    availability = _availability_in_list(listing.json(), resource_id)
-    assert availability is not None
-    assert availability["source"] == "user_grant"
-    assert availability["grants"][0]["target_all"] is True
+    qualifications = _qualifications_in_list(listing.json(), resource_id)
+    assert qualifications is not None
+    assert qualifications[0]["scope"] == "user_grant"
+    assert qualifications[0]["grants"][0]["target_all"] is True
 
 
-async def test_revoked_grant_removes_availability_on_reload(
+async def test_revoked_grant_removes_qualification_on_reload(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """After Grant revocation a reload no longer shows the resource as usable."""
+    """After Grant revocation the resource leaves grant-based discovery."""
     bob_id = await _get_user_id(client, BOB)
     group_b = await _create_group(client, "Revoke Grantor Group")
     resource_id, _ = await _create_resource_with_version(
@@ -269,14 +271,14 @@ async def test_revoked_grant_removes_availability_on_reload(
         grantee={"kind": "user", "id": bob_id},
     )
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
-    assert _availability_in_list(listing.json(), resource_id) is not None
+    assert _qualifications_in_list(listing.json(), resource_id) is not None
 
     revoke = await client.delete(f"/api/v1/grants/{grant_id}", headers=ALICE)
     assert revoke.status_code == 204
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    assert _availability_in_list(listing.json(), resource_id) is None
+    assert _qualifications_in_list(listing.json(), resource_id) is None
     detail = await client.get(f"/api/v1/shared-resources/{resource_id}", headers=BOB)
     assert detail.status_code == 404
 
@@ -301,7 +303,7 @@ async def test_grant_from_previous_owner_no_longer_surfaces(
         grantee={"kind": "user", "id": bob_id},
     )
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
-    assert _availability_in_list(listing.json(), resource_id) is not None
+    assert _qualifications_in_list(listing.json(), resource_id) is not None
 
     resource_row = (
         await session.execute(select(SharedResourceRow).where(SharedResourceRow.id == resource_id))
@@ -312,4 +314,4 @@ async def test_grant_from_previous_owner_no_longer_surfaces(
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
     listing.raise_for_status()
-    assert _availability_in_list(listing.json(), resource_id) is None
+    assert _qualifications_in_list(listing.json(), resource_id) is None

@@ -42,33 +42,6 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
-class LegacyWorkspaceRow(Base):
-    __tablename__ = "workspaces"
-
-    id: Mapped[str] = mapped_column(ID, primary_key=True)
-    kind: Mapped[str] = mapped_column(String(32))
-    name: Mapped[str] = mapped_column(String(128))
-    description: Mapped[str] = mapped_column(Text, default="")
-    owner_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), index=True)
-    default_environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-    __table_args__ = (
-        Index("ix_workspaces_owner_kind", "owner_id", "kind"),
-        # 一个用户只能有一个 Personal Workspace。先查后写挡不住并发——
-        # 新用户首屏的几个请求会同时发现「还没有」然后各建一个。
-        # 协作空间可以有多个，所以是**部分**唯一索引，只约束 personal。
-        # SQLite 和 PostgreSQL 都支持。
-        Index(
-            "uq_personal_workspace",
-            "owner_id",
-            unique=True,
-            sqlite_where=text("kind = 'personal'"),
-            postgresql_where=text("kind = 'personal'"),
-        ),
-    )
-
-
 class UserGroupRow(Base):
     __tablename__ = "user_groups"
 
@@ -128,7 +101,6 @@ class ProjectRow(Base):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     owner_user_id: Mapped[str | None] = mapped_column(
         ID, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
     )
@@ -146,7 +118,22 @@ class ProjectRow(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
-        UniqueConstraint("workspace_id", "name", name="uq_project_name"),
+        Index(
+            "uq_projects_owner_user_name",
+            "owner_user_id",
+            "name",
+            unique=True,
+            sqlite_where=text("owner_user_id IS NOT NULL"),
+            postgresql_where=text("owner_user_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_projects_owner_user_group_name",
+            "owner_user_group_id",
+            "name",
+            unique=True,
+            sqlite_where=text("owner_user_group_id IS NOT NULL"),
+            postgresql_where=text("owner_user_group_id IS NOT NULL"),
+        ),
         CheckConstraint(
             "((owner_user_id IS NOT NULL AND owner_user_group_id IS NULL) "
             "OR (owner_user_id IS NULL AND owner_user_group_id IS NOT NULL))",
@@ -265,7 +252,7 @@ class RunConfigurationRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     working_directory: Mapped[str] = mapped_column(String(1024), default=".")
     command: Mapped[str] = mapped_column(Text)
-    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    environment_version_id: Mapped[str] = mapped_column(ID)
     environment_variables: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     input_bindings: Mapped[list[Any]] = mapped_column(JSON, default=list)
     compute_plan_id: Mapped[str] = mapped_column(ID)
@@ -287,10 +274,9 @@ class RunRow(Base):
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), index=True)
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), index=True)
     snapshot_id: Mapped[str] = mapped_column(ID, ForeignKey("run_snapshots.id"))
     # 从快照里冗余出来的一列。快照是 JSON，没法索引也没法跨库稳定地查；
-    # 而当前实现的并发上限口径是「Workspace × 算力方案」，
+    # 而并发上限口径是「Initiated By User × 算力方案」（GR-307），
     # 数未结束 Run 时必须能按方案过滤。方案在快照创建时就固定、之后不再变，
     # 冗余是安全的。
     compute_plan_id: Mapped[str] = mapped_column(ID, index=True)
@@ -310,7 +296,7 @@ class RunRow(Base):
     scheduler_job_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failure_reason: Mapped[str] = mapped_column(Text, default="")
-    created_by: Mapped[str] = mapped_column(ID, index=True)
+    initiated_by_user_id: Mapped[str] = mapped_column(ID, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -332,13 +318,13 @@ class RunSecretRedactionRow(Base):
 class IdempotencyKeyRow(Base):
     """幂等登记。
 
-    复合主键 ``(workspace_id, key)`` 就是并发下的那道保证：
-    第二个同 key 的请求插不进来，会撞唯一约束。
+    复合主键 ``(initiated_by_user_id, key)`` 就是并发下的那道保证：
+    第二个同 User 同 key 的请求插不进来，会撞唯一约束。
     """
 
     __tablename__ = "idempotency_keys"
 
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"), primary_key=True)
+    initiated_by_user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), primary_key=True)
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     endpoint: Mapped[str] = mapped_column(String(64))
     run_id: Mapped[str | None] = mapped_column(ID, nullable=True)
@@ -361,7 +347,6 @@ class ArtifactRow(Base):
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     run_id: Mapped[str] = mapped_column(ID, ForeignKey("runs.id"), index=True)
     project_id: Mapped[str] = mapped_column(ID, index=True)
-    workspace_id: Mapped[str] = mapped_column(ID, index=True)
     name: Mapped[str] = mapped_column(String(255))
     source_path: Mapped[str] = mapped_column(String(1024))
     size: Mapped[int] = mapped_column(Integer)
@@ -374,23 +359,15 @@ class ArtifactRow(Base):
 
 
 class ActivityRow(Base):
-    """活动流。
-
-    actor_name 和 target_name 是写入时抄下来的快照，不是外键——
-    活动要在对象改名或删除之后仍然读得通（见 domain/models.Activity）。
-
-    两条复合索引对应两种读法：Workspace 活动流和 Project 活动流。
-    活动只按时间倒序读，所以时间列进索引。
-    """
+    """Current Owner-scoped activity history with immutable display snapshots."""
 
     __tablename__ = "activities"
-    __table_args__ = (
-        Index("ix_activities_workspace_created", "workspace_id", "created_at"),
-        Index("ix_activities_project_created", "project_id", "created_at"),
-    )
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ID, ForeignKey("workspaces.id"))
+    owner_user_id: Mapped[str | None] = mapped_column(ID, ForeignKey("users.id"), nullable=True)
+    owner_user_group_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("user_groups.id"), nullable=True
+    )
     project_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     actor_id: Mapped[str] = mapped_column(ID)
     actor_name: Mapped[str] = mapped_column(String(64))
@@ -400,6 +377,17 @@ class ActivityRow(Base):
     target_name: Mapped[str] = mapped_column(String(255))
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "((owner_user_id IS NOT NULL AND owner_user_group_id IS NULL) "
+            "OR (owner_user_id IS NULL AND owner_user_group_id IS NOT NULL))",
+            name="ck_activities_exactly_one_owner",
+        ),
+        Index("ix_activities_owner_user_created", "owner_user_id", "created_at"),
+        Index("ix_activities_owner_user_group_created", "owner_user_group_id", "created_at"),
+        Index("ix_activities_project_created", "project_id", "created_at"),
+    )
 
 
 class NotificationRow(Base):
@@ -417,7 +405,6 @@ class NotificationRow(Base):
     type: Mapped[str] = mapped_column(String(64))
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text, default="")
-    workspace_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     target_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     target_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     mandatory: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -440,11 +427,20 @@ class ForkRelationRow(Base):
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), unique=True)
     source_project_id: Mapped[str] = mapped_column(ID, index=True)
     source_version_id: Mapped[str] = mapped_column(ID)
-    source_workspace_id: Mapped[str] = mapped_column(ID)
+    source_owner_user_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    source_owner_user_group_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     source_project_name: Mapped[str] = mapped_column(String(255))
     source_version_label: Mapped[str] = mapped_column(String(32))
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(
+            "((source_owner_user_id IS NOT NULL AND source_owner_user_group_id IS NULL) "
+            "OR (source_owner_user_id IS NULL AND source_owner_user_group_id IS NOT NULL))",
+            name="ck_fork_relations_exactly_one_source_owner",
+        ),
+    )
 
 
 class SharedResourceRow(Base):
