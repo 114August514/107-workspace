@@ -59,17 +59,19 @@ class UseGrantSummaryView:
 
 @dataclass(frozen=True, slots=True)
 class UseQualificationView:
-    """One actor qualification and the Project owner context where it applies."""
+    """One actor-level way to use a resource.
+
+    Grant qualifications always contain at least one Grant. Each UserGroup Grant
+    qualification contains only Grants whose grantee is the same UserGroup.
+    """
 
     scope: UseQualificationScope
-    eligible_project_owner: OwnerReference | None
     grants: tuple[UseGrantSummaryView, ...]
 
 
 _OWNER_QUALIFICATIONS = (
     UseQualificationView(
         scope=UseQualificationScope.OWNER,
-        eligible_project_owner=None,
         grants=(),
     ),
 )
@@ -441,7 +443,6 @@ class SharedResourceService:
             qualifications.append(
                 UseQualificationView(
                     scope=UseQualificationScope.USER_GRANT,
-                    eligible_project_owner=None,
                     grants=tuple(
                         UseGrantSummaryView(
                             grant=grant,
@@ -456,20 +457,20 @@ class SharedResourceService:
         for grant in grants:
             if grant.grantee.kind is OwnerKind.USER_GROUP:
                 grants_by_group.setdefault(grant.grantee.id, []).append(grant)
-        qualifications.extend(
-            UseQualificationView(
-                scope=UseQualificationScope.USER_GROUP_GRANT,
-                eligible_project_owner=OwnerReference(OwnerKind.USER_GROUP, group_id),
-                grants=tuple(
-                    UseGrantSummaryView(
-                        grant=grant,
-                        grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
-                    )
-                    for grant in group_grants
-                ),
+        for group_grants in grants_by_group.values():
+            assert group_grants
+            qualifications.append(
+                UseQualificationView(
+                    scope=UseQualificationScope.USER_GROUP_GRANT,
+                    grants=tuple(
+                        UseGrantSummaryView(
+                            grant=grant,
+                            grantee=grantees[(grant.grantee.kind, grant.grantee.id)],
+                        )
+                        for grant in group_grants
+                    ),
+                )
             )
-            for group_id, group_grants in grants_by_group.items()
-        )
         return tuple(qualifications)
 
     async def _owner(self, owner: OwnerReference) -> OwnerSummary:

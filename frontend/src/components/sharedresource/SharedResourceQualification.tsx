@@ -6,6 +6,20 @@ interface Props {
   qualifications: SharedResourceUseQualification[]
 }
 
+function groupGrantee(qualification: SharedResourceUseQualification) {
+  const grant = qualification.grants[0]
+  if (!grant || grant.grantee.kind !== 'user_group') {
+    throw new Error('UserGroup Grant 资格必须包含同一 User Group 的 USE Grant')
+  }
+  return grant.grantee
+}
+
+function qualificationKey(qualification: SharedResourceUseQualification, index: number) {
+  return qualification.scope === 'user_group_grant'
+    ? `${qualification.scope}-${groupGrantee(qualification).id}`
+    : `${qualification.scope}-${index}`
+}
+
 export function QualificationLabels({ qualifications }: Props) {
   if (qualifications.length === 0) {
     return <Label variant="secondary">无使用资格</Label>
@@ -13,12 +27,7 @@ export function QualificationLabels({ qualifications }: Props) {
   return (
     <>
       {qualifications.map((qualification, index) => {
-        const key = `${qualification.scope}-${qualification.eligible_project_owner?.id ?? index}`
-        const groupDisplayName =
-          qualification.grants.find((grant) => grant.grantee.kind === 'user_group')?.grantee
-            .display_name ??
-          qualification.eligible_project_owner?.id ??
-          '该用户组'
+        const key = qualificationKey(qualification, index)
         switch (qualification.scope) {
           case 'owner':
             return (
@@ -35,7 +44,7 @@ export function QualificationLabels({ qualifications }: Props) {
           case 'user_group_grant':
             return (
               <Label key={key} variant="success">
-                {groupDisplayName} USE 授权
+                {groupGrantee(qualification).display_name} USE 授权
               </Label>
             )
         }
@@ -51,12 +60,8 @@ function qualificationNote(qualification: SharedResourceUseQualification): strin
     case 'user_grant':
       return 'Owner 已直接授权给你；可在你有权提交的任何 Project 中引用它。'
     case 'user_group_grant': {
-      const groupDisplayName =
-        qualification.grants.find((grant) => grant.grantee.kind === 'user_group')?.grantee
-          .display_name ??
-        qualification.eligible_project_owner?.id ??
-        '该用户组'
-      return `Owner 已授权给「${groupDisplayName}」；需保持该组有效成员身份，并在该组作为 Owner 的 Project 中引用它。`
+      const group = groupGrantee(qualification)
+      return `Owner 已授权给「${group.display_name}」；需保持该组有效成员身份，并在该组拥有且你有权提交的 Project 中引用它。`
     }
   }
 }
@@ -67,7 +72,7 @@ export function QualificationNotice({ qualifications }: Props) {
       <Text as="p">这里仅说明当前账号的使用资格，不代表具体 Run 已通过 Preflight。</Text>
       {qualifications.length === 0 && <Text as="p">当前没有可说明的使用资格。</Text>}
       {qualifications.map((qualification, index) => (
-        <div key={`${qualification.scope}-${qualification.eligible_project_owner?.id ?? index}`}>
+        <div key={qualificationKey(qualification, index)}>
           <Text as="p">{qualificationNote(qualification)}</Text>
           {qualification.grants.map((grant) => (
             <Text as="p" key={grant.id} size="small">

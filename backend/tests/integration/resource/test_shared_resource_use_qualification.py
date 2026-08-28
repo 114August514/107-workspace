@@ -91,16 +91,14 @@ async def test_owner_scope_qualification_in_list_and_detail(
     listing.raise_for_status()
     for resource_id in (user_resource_id, group_resource_id):
         qualifications = _qualifications_in_list(listing.json(), resource_id)
-        assert qualifications == [{"scope": "owner", "eligible_project_owner": None, "grants": []}]
+        assert qualifications == [{"scope": "owner", "grants": []}]
 
     detail = await client.get(f"/api/v1/shared-resources/{group_resource_id}", headers=ALICE)
     detail.raise_for_status()
     body = detail.json()
     assert body["owner"]["kind"] == "user_group"
     assert body["owner"]["display_name"] == "Availability Owner Group"
-    assert body["use_qualifications"] == [
-        {"scope": "owner", "eligible_project_owner": None, "grants": []}
-    ]
+    assert body["use_qualifications"] == [{"scope": "owner", "grants": []}]
 
 
 async def test_unrelated_user_neither_discovers_nor_uses(
@@ -123,7 +121,7 @@ async def test_unrelated_user_neither_discovers_nor_uses(
 async def test_user_grant_qualification_with_summary(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """A direct User Grant is not restricted to one eligible Project Owner."""
+    """A direct User Grant follows the actor across Projects where they can submit."""
     bob_id = await _get_user_id(client, BOB)
     group_b = await _create_group(client, "User Grant Owner Group")
     resource_id, version_id = await _create_resource_with_version(
@@ -143,7 +141,6 @@ async def test_user_grant_qualification_with_summary(
     assert len(qualifications) == 1
     qualification = qualifications[0]
     assert qualification["scope"] == "user_grant"
-    assert qualification["eligible_project_owner"] is None
     assert [summary["id"] for summary in qualification["grants"]] == [grant_id]
     assert qualification["grants"][0]["grantee"]["id"] == bob_id
     assert qualification["grants"][0]["target_all"] is False
@@ -172,14 +169,14 @@ async def test_user_grant_qualification_with_summary(
     owner_listing = await client.get("/api/v1/shared-resources", headers=ALICE)
     owner_listing.raise_for_status()
     assert _qualifications_in_list(owner_listing.json(), resource_id) == [
-        {"scope": "owner", "eligible_project_owner": None, "grants": []}
+        {"scope": "owner", "grants": []}
     ]
 
 
-async def test_user_group_grant_names_exact_eligible_project_owner(
+async def test_user_group_grant_summary_names_exact_project_owner_group(
     client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
-    """Group qualification names the exact Project Owner and requires membership."""
+    """Group qualification uses its Grant grantee and requires membership."""
     from workspace107.infrastructure.db.tables import MembershipRow
 
     bob_id = await _get_user_id(client, BOB)
@@ -201,10 +198,6 @@ async def test_user_group_grant_names_exact_eligible_project_owner(
     assert qualifications is not None
     qualification = qualifications[0]
     assert qualification["scope"] == "user_group_grant"
-    assert qualification["eligible_project_owner"] == {
-        "kind": "user_group",
-        "id": group_a,
-    }
     assert qualification["grants"][0]["grantee"] == {
         "kind": "user_group",
         "id": group_a,

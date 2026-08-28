@@ -2733,18 +2733,8 @@
         "type": "object"
       },
       "SharedResourceUseQualificationOut": {
-        "description": "An actor-level qualification, not authorization for a concrete Run.\n\n``owner`` applies only when the consuming Project has the resource Owner.\n``user_grant`` follows the actor across Project owner contexts where they can\nsubmit. ``user_group_grant`` applies only when ``eligible_project_owner`` is\nthe consuming Project Owner.",
+        "description": "An actor-level qualification, not authorization for a concrete Run.\n\n``owner`` applies only when the consuming Project has the resource Owner.\n``user_grant`` follows the actor into any Project where they may submit.\nEach ``user_group_grant`` entry contains one or more Grants to the same User\nGroup; it applies only while the actor is an active member, that group owns the\nconsuming Project, and the actor may submit there.",
         "properties": {
-          "eligible_project_owner": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OwnerReferenceIn"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "grants": {
             "items": {
               "$ref": "#/components/schemas/UseGrantSummaryOut"
@@ -2758,7 +2748,6 @@
         },
         "required": [
           "scope",
-          "eligible_project_owner",
           "grants"
         ],
         "title": "SharedResourceUseQualificationOut",

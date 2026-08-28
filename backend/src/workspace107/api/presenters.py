@@ -378,17 +378,8 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
 def use_qualification_out(
     view: UseQualificationView,
 ) -> s.SharedResourceUseQualificationOut:
-    eligible_project_owner = view.eligible_project_owner
     return s.SharedResourceUseQualificationOut(
         scope=view.scope,
-        eligible_project_owner=(
-            s.OwnerReferenceIn(
-                kind=eligible_project_owner.kind,
-                id=eligible_project_owner.id,
-            )
-            if eligible_project_owner is not None
-            else None
-        ),
         grants=[
             s.UseGrantSummaryOut(
                 id=summary.grant.id,

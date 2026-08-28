@@ -46,7 +46,7 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     description: 'imagenet-subset',
     owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
     created_at: '2026-08-14T10:00:00Z',
-    use_qualifications: [{ scope: 'owner', eligible_project_owner: null, grants: [] }],
+    use_qualifications: [{ scope: 'owner', grants: [] }],
     versions: [],
     capabilities: ['shared_resource.view'],
     ...overrides,
@@ -253,7 +253,6 @@ describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
         use_qualifications: [
           {
             scope: 'user_grant',
-            eligible_project_owner: null,
             grants: [
               {
                 id: 'grant_1',
@@ -279,13 +278,12 @@ describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
     expect(screen.getByText(/USE 授权：授予 Bob（仅限此资源）/)).toBeInTheDocument()
   })
 
-  it('UserGroup Grant 展示 exact eligible Project.owner context', async () => {
+  it('UserGroup Grant 说明仅适用于该组拥有的 Project', async () => {
     mockGetSharedResource.mockResolvedValue(
       makeResource({
         use_qualifications: [
           {
             scope: 'user_group_grant',
-            eligible_project_owner: { kind: 'user_group', id: 'grp_ml' },
             grants: [
               {
                 id: 'grant_2',
@@ -304,7 +302,7 @@ describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
     expect(await screen.findByText('ML 组 USE 授权')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Owner 已授权给「ML 组」；需保持该组有效成员身份，并在该组作为 Owner 的 Project 中引用它。',
+        'Owner 已授权给「ML 组」；需保持该组有效成员身份，并在该组拥有且你有权提交的 Project 中引用它。',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText(/USE 授权：授予 ML 组（覆盖 Owner 全部资产）/)).toBeInTheDocument()

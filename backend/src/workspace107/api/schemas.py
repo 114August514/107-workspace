@@ -291,13 +291,13 @@ class SharedResourceUseQualificationOut(Model):
     """An actor-level qualification, not authorization for a concrete Run.
 
     ``owner`` applies only when the consuming Project has the resource Owner.
-    ``user_grant`` follows the actor across Project owner contexts where they can
-    submit. ``user_group_grant`` applies only when ``eligible_project_owner`` is
-    the consuming Project Owner.
+    ``user_grant`` follows the actor into any Project where they may submit.
+    Each ``user_group_grant`` entry contains one or more Grants to the same User
+    Group; it applies only while the actor is an active member, that group owns the
+    consuming Project, and the actor may submit there.
     """
 
     scope: UseQualificationScope
-    eligible_project_owner: OwnerReferenceIn | None
     grants: list[UseGrantSummaryOut]
 
 
