@@ -8,8 +8,8 @@ from workspace107.application.access import ProjectAccess
 from workspace107.application.scoped_config_resolver import ScopedConfigResolver
 from workspace107.domain.compute import ComputeRequest, ResolvedSchedulerConfiguration
 from workspace107.domain.config_scope import ConfigScope, SecretReference
-from workspace107.domain.enums import EnvValueKind, LegacyWorkspaceKind, MembershipRole
-from workspace107.domain.models import LegacyWorkspace, Project, Variable
+from workspace107.domain.enums import EnvValueKind, MembershipRole
+from workspace107.domain.models import Project, Variable
 from workspace107.domain.ownership import OwnerKind, OwnerReference
 from workspace107.domain.run_snapshot import build_snapshot
 from workspace107.domain.secrets import EnvValue, ResolvedEnv, parse_env_map
@@ -19,8 +19,7 @@ from workspace107.infrastructure.db.secret_vault import DatabaseSecretVault
 
 def _access() -> ProjectAccess:
     return ProjectAccess(
-        Project("project", "workspace", "Project", owner=OwnerReference(OwnerKind.USER, "owner")),
-        LegacyWorkspace("workspace", LegacyWorkspaceKind.PERSONAL, "Personal", owner_id="owner"),
+        Project("project", "Project", owner=OwnerReference(OwnerKind.USER, "owner")),
         MembershipRole.OWNER,
         owner_scope=True,
     )
@@ -59,7 +58,7 @@ async def test_real_values_freeze_and_secret_rotation(context, session) -> None:
         compute_request=ComputeRequest(1, 1, 1, 0, 1),
         scheduler=ResolvedSchedulerConfiguration("c", "a", "p", "q", 1, 1, 1, 0, 1),
         artifact_rules=(),
-        created_by="owner",
+        initiated_by_user_id="owner",
         created_at=datetime.now(UTC),
     )
     await repos.variables.upsert(Variable(project, "LEVEL", "after"))

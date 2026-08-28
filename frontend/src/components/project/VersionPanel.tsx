@@ -19,11 +19,11 @@ import { api } from '../../api/client'
 import { can } from '../../api/types'
 import type {
   ChangeKind,
+  Project,
   ProjectVersion,
   ProjectVersionPage,
   WorkingChange,
   WorkingChangeDetail,
-  LegacyWorkspaceContext,
 } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
@@ -41,7 +41,7 @@ const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
 interface Props {
   projectId: string
   projectName: string
-  workspace: LegacyWorkspaceContext | undefined
+  access: Project | undefined
   refreshToken: number
   onVersionSaved: () => void
 }
@@ -54,14 +54,14 @@ interface Props {
 export function VersionPanel({
   projectId,
   projectName,
-  workspace,
+  access,
   refreshToken,
   onVersionSaved,
 }: Props) {
   const navigate = useNavigate()
   const [forking, setForking] = useState<ProjectVersion | null>(null)
   const [inspecting, setInspecting] = useState<WorkingChange | null>(null)
-  const canWrite = can(workspace, 'project.content.write')
+  const canWrite = can(access, 'project.content.write')
   const [page, setPage] = useState(1)
   const versions = useAsync<ProjectVersionPage>(
     () => api.listVersions(projectId, { page }),
@@ -173,15 +173,16 @@ export function VersionPanel({
             description={
               <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
                 {pending.map((change) => (
-                  // 点开能看内容级差异，而不是只盯着 added/modified/removed 标签猜。
-                  <Tag
+                  <Button
                     key={change.path}
-                    color={CHANGE_LABEL[change.change].color}
-                    style={{ cursor: 'pointer' }}
+                    type="link"
+                    size="small"
                     onClick={() => setInspecting(change)}
                   >
-                    {CHANGE_LABEL[change.change].text} {change.path}
-                  </Tag>
+                    <Tag color={CHANGE_LABEL[change.change].color}>
+                      {CHANGE_LABEL[change.change].text} {change.path}
+                    </Tag>
+                  </Button>
                 ))}
               </Space>
             }
@@ -260,6 +261,8 @@ function ChangeDetailDrawer({
 }) {
   const [detail, setDetail] = useState<WorkingChangeDetail | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retryToken, setRetryToken] = useState(0)
   const [discarding, setDiscarding] = useState(false)
 
   useEffect(() => {
@@ -267,19 +270,22 @@ function ChangeDetailDrawer({
     let cancelled = false
     setLoading(true)
     setDetail(null)
+    setLoadError(null)
     api
       .workingChangeDetail(projectId, change.path)
       .then((result) => {
         if (!cancelled) setDetail(result)
       })
-      .catch((error) => message.error((error as Error).message))
+      .catch((error) => {
+        if (!cancelled) setLoadError((error as Error).message)
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [projectId, change])
+  }, [projectId, change, retryToken])
 
   const discard = async () => {
     if (!change) return
@@ -320,9 +326,21 @@ function ChangeDetailDrawer({
         )
       }
     >
-      {loading || !detail ? (
+      {loading ? (
         <Spin />
-      ) : (
+      ) : loadError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="无法加载变更详情"
+          description={
+            <Space direction="vertical" size="small">
+              <Typography.Text>{loadError}</Typography.Text>
+              <Button onClick={() => setRetryToken((current) => current + 1)}>重试</Button>
+            </Space>
+          }
+        />
+      ) : detail ? (
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Space wrap size={[8, 8]}>
             <Tag color={CHANGE_LABEL[detail.change].color}>{CHANGE_LABEL[detail.change].text}</Tag>
@@ -348,7 +366,7 @@ function ChangeDetailDrawer({
             />
           </div>
         </Space>
-      )}
+      ) : null}
     </Drawer>
   )
 }

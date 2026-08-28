@@ -10,8 +10,8 @@ import type { ComputePlan, Home, Invitation } from '../api/types'
 import type { AsyncState as AsyncResource } from '../api/useAsync'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
+import { membershipRoleLabel } from '../components/workspace/memberCopy'
 import { describeComputeRequest, formatRelative, formatTime } from '../utils/format'
-import { roleLabel } from '../utils/roles'
 import { runStatusLabel } from '../utils/runStatus'
 import { homeCopy, homeTitle, invitationFailureTitle, invitationKind } from './homeCopy'
 import styles from './HomePage.module.css'
@@ -21,7 +21,7 @@ interface Props {
   home: AsyncResource<Home>
 }
 
-/** 个人首页：待处理邀请、个人资源、最近 Run 和算力方案目录。 */
+/** 个人首页：待处理邀请、当前 User 执行上下文、最近 Run 和算力方案目录。 */
 export function HomePage({ username, home }: Props) {
   const user = home.data?.user
   const runs = home.data?.recent_runs ?? []
@@ -43,23 +43,6 @@ export function HomePage({ username, home }: Props) {
           <div className={styles.dashboard}>
             <div className={styles.main}>
               <Invitations username={username} onResponded={home.reload} />
-              {home.data.personal_resource_context_id ? (
-                <Card
-                  as="section"
-                  padding="normal"
-                  className={styles.card}
-                  aria-label={homeCopy.personalResource.title}
-                >
-                  <h2 className={styles.cardTitle}>{homeCopy.personalResource.title}</h2>
-                  <p className={styles.cardDescription}>{homeCopy.personalResource.description}</p>
-                  <Link
-                    as={RouterLink}
-                    to={`/workspaces/${home.data.personal_resource_context_id}`}
-                  >
-                    {homeCopy.personalResource.action}
-                  </Link>
-                </Card>
-              ) : null}
               <Card
                 as="section"
                 padding="normal"
@@ -96,6 +79,31 @@ export function HomePage({ username, home }: Props) {
               </Card>
             </div>
             <aside className={styles.side}>
+              <Card
+                as="section"
+                padding="normal"
+                className={styles.card}
+                aria-label="个人执行上下文"
+              >
+                <h2 className={styles.cardTitle}>个人执行上下文</h2>
+                <p className={styles.cardDescription}>
+                  Owner：{home.data.personal_execution_context.owner.display_name}
+                </p>
+                {home.data.personal_execution_context.entitlements.length === 0 ? (
+                  <p className={styles.cardDescription}>当前没有可用的 Resource Entitlement。</p>
+                ) : (
+                  <ul className={styles.list}>
+                    {home.data.personal_execution_context.entitlements.map((entitlement) => (
+                      <li key={entitlement.id} className={styles.item}>
+                        <span className={styles.itemTitle}>{entitlement.compute_plan_name}</span>
+                        <span className={styles.itemDesc}>
+                          最多 {entitlement.max_concurrent_runs} 个并发 Run
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
               <ComputePlanCatalog />
               <p className={styles.clusterNote}>{homeCopy.compute.realtimeUnavailable}</p>
             </aside>
@@ -158,7 +166,7 @@ function Invitations({ username, onResponded }: { username: string; onResponded:
               <div className={styles.invitationMain}>
                 <div className={styles.invitationTitle}>{invitation.user_group_name}</div>
                 <div className={styles.invitationMeta}>
-                  {invitationKind(roleLabel(invitation.role))}
+                  {invitationKind(membershipRoleLabel(invitation.role))}
                 </div>
                 {invitation.user_group_description ? (
                   <div className={styles.invitationMeta}>{invitation.user_group_description}</div>

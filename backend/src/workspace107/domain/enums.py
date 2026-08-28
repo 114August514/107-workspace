@@ -8,13 +8,6 @@ from __future__ import annotations
 from enum import StrEnum
 
 
-class LegacyWorkspaceKind(StrEnum):
-    """Private compatibility discriminator for unmigrated child-domain rows."""
-
-    PERSONAL = "personal"
-    COLLABORATIVE = "collaborative"
-
-
 class MembershipRole(StrEnum):
     """A User's role in one exact User Group."""
 
@@ -142,8 +135,6 @@ class ActivityAction(StrEnum):
     取值只增不改。已经写进库的活动会一直用旧值，改名等于让历史记录读不出来。
     """
 
-    WORKSPACE_CREATED = "workspace_created"
-    WORKSPACE_UPDATED = "workspace_updated"
     USER_GROUP_CREATED = "user_group_created"
     USER_GROUP_UPDATED = "user_group_updated"
     MEMBER_INVITED = "member_invited"
@@ -172,7 +163,6 @@ class TargetType(StrEnum):
     分成两个枚举只会让前端的跳转逻辑写两遍。
     """
 
-    WORKSPACE = "workspace"
     USER_GROUP = "user_group"
     MEMBER = "member"
     PROJECT = "project"
@@ -190,7 +180,6 @@ class NotificationType(StrEnum):
     也可能产生一条活动和多条通知。硬凑成一个枚举会逼着两边互相迁就。
     """
 
-    WORKSPACE_INVITED = "workspace_invited"
     USER_GROUP_INVITED = "user_group_invited"
     MEMBER_REMOVED = "member_removed"
     ROLE_CHANGED = "role_changed"

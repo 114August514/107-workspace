@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { FileBrowser } from '../../src/components/project/FileBrowser'
-import type { ProjectFile, LegacyWorkspaceContext } from '../../src/api/types'
+import type { Project, ProjectFile } from '../../src/api/types'
 
 /**
  * FileBrowser 测试：Working State 文件管理 Core（Issue #47）。
@@ -32,7 +32,7 @@ vi.mock('../../src/api/client', () => ({ api: mocks }))
 
 const writer = {
   capabilities: ['project.content.write'],
-} as unknown as LegacyWorkspaceContext
+} as Project
 
 const files: ProjectFile[] = [
   {
@@ -67,7 +67,7 @@ describe('FileBrowser', () => {
     mocks.uploadFiles.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('超过单个文件上限'))
 
     const { container } = render(
-      <FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />,
+      <FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />,
     )
     await screen.findByRole('button', { name: /上传文件/ })
 
@@ -92,7 +92,7 @@ describe('FileBrowser', () => {
     mocks.uploadArchive.mockRejectedValue(new Error('压缩包包含符号链接条目「link」，已拒绝展开'))
 
     const { container } = render(
-      <FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />,
+      <FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />,
     )
     await screen.findByRole('button', { name: /上传压缩包/ })
 
@@ -111,7 +111,7 @@ describe('FileBrowser', () => {
     mocks.listFiles.mockResolvedValue(files)
     mocks.createDirectory.mockResolvedValue({})
 
-    render(<FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     fireEvent.click(screen.getByRole('button', { name: /新建目录/ }))
@@ -129,7 +129,7 @@ describe('FileBrowser', () => {
     mocks.listFiles.mockResolvedValue(files)
     mocks.movePath.mockResolvedValue([])
 
-    render(<FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     fireEvent.click(screen.getByRole('button', { name: /改名/ }))
@@ -149,7 +149,7 @@ describe('FileBrowser', () => {
     mocks.listFiles.mockResolvedValue(files)
     mocks.copyPath.mockResolvedValue([])
 
-    render(<FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     fireEvent.click(screen.getByRole('button', { name: /复制/ }))
@@ -167,13 +167,13 @@ describe('FileBrowser', () => {
     mocks.listFiles.mockResolvedValue(files)
     mocks.deletePath.mockResolvedValue(undefined)
 
-    render(<FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     const deleteButton = document.querySelector('button.ant-btn-dangerous')
     if (!deleteButton) throw new Error('找不到删除按钮')
     fireEvent.click(deleteButton)
-    const confirmButton = await screen.findByRole('button', { name: /删\s*除/ })
+    const confirmButton = await screen.findByRole('button', { name: /^删\s*除$/ })
     fireEvent.click(confirmButton)
 
     await waitFor(() => {
@@ -185,7 +185,7 @@ describe('FileBrowser', () => {
     mocks.listFiles.mockResolvedValue(files)
     mocks.downloadFile.mockResolvedValue(undefined)
 
-    render(<FileBrowser projectId="proj-1" workspace={writer} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     fireEvent.click(screen.getByRole('button', { name: /下载/ }))
@@ -194,10 +194,62 @@ describe('FileBrowser', () => {
     })
   })
 
+  it('显示嵌套目录，并让目录操作使用目录路径', async () => {
+    mocks.listFiles.mockResolvedValue([
+      {
+        path: 'data/raw/input.csv',
+        size: 12,
+        content_hash: 'nested',
+        updated_at: '2026-08-12T10:00:00Z',
+      },
+    ])
+    mocks.movePath.mockResolvedValue([])
+    mocks.copyPath.mockResolvedValue([])
+    mocks.deletePath.mockResolvedValue(undefined)
+
+    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
+
+    const directory = await screen.findByText('data/raw')
+    const row = directory.closest('tr')
+    if (!row) throw new Error('找不到目录行')
+    fireEvent.click(within(row).getByRole('button', { name: /改名/ }))
+
+    const source = screen
+      .getAllByDisplayValue('data/raw')
+      .find((element) => (element as HTMLInputElement).disabled)
+    expect(source).toBeDisabled()
+    const editable = screen
+      .getAllByDisplayValue('data/raw')
+      .find((element) => !(element as HTMLInputElement).disabled)
+    if (!editable) throw new Error('找不到目录目标路径输入框')
+    fireEvent.change(editable, { target: { value: 'data/processed' } })
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
+
+    await waitFor(() => {
+      expect(mocks.movePath).toHaveBeenCalledWith('proj-1', 'data/raw', 'data/processed')
+    })
+
+    const refreshedDirectory = await screen.findByText('data/raw')
+    const refreshedRow = refreshedDirectory.closest('tr')
+    if (!refreshedRow) throw new Error('找不到刷新后的目录行')
+    fireEvent.click(within(refreshedRow).getByRole('button', { name: /复制/ }))
+    fireEvent.click(screen.getByRole('button', { name: /确\s*定/ }))
+    await waitFor(() => {
+      expect(mocks.copyPath).toHaveBeenCalledWith('proj-1', 'data/raw', 'data/raw-copy')
+    })
+
+    const deleteDirectory = screen.getByRole('button', { name: '删除 data/raw' })
+    fireEvent.click(deleteDirectory)
+    fireEvent.click(await screen.findByRole('button', { name: /^删\s*除$/ }))
+    await waitFor(() => {
+      expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'data/raw')
+    })
+  })
+
   it('只读场景不暴露任何写入口', async () => {
     mocks.listFiles.mockResolvedValue(files)
 
-    render(<FileBrowser projectId="proj-1" workspace={undefined} onChanged={() => {}} />)
+    render(<FileBrowser projectId="proj-1" access={undefined} onChanged={() => {}} />)
     await screen.findByText('train.py')
 
     expect(screen.queryByRole('button', { name: /上传文件/ })).not.toBeInTheDocument()

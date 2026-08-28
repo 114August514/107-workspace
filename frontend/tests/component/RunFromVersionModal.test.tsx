@@ -4,12 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RunFromVersionModal } from '../../src/components/run/RunFromVersionModal'
-import type {
-  PreflightResult,
-  Run,
-  RunConfiguration,
-  LegacyWorkspaceContext,
-} from '../../src/api/types'
+import type { PreflightResult, Run, RunConfiguration } from '../../src/api/types'
 
 /**
  * RunFromVersionModal 行为测试。
@@ -48,7 +43,7 @@ function makeConfig(id: string, name: string): RunConfiguration {
     compute_request: null,
     description: '',
     environment_variables: {},
-    environment_version_id: null,
+    environment_version_id: 'ev-1',
     artifact_rules: [],
     input_bindings: [],
   }
@@ -60,7 +55,15 @@ function makePreflight(ok: boolean): PreflightResult {
     problems: ok ? [] : ['缺少 Secret'],
     compute_plan_id: 'cp-1',
     compute_request: null,
-    environment_version_id: null,
+    environment_version: {
+      id: 'ev-1',
+      environment_id: 'env-1',
+      version: '3.12',
+      description: '',
+      image: 'python:3.12',
+      setup_command: '',
+      available: true,
+    },
     project_version_id: 'ver-1',
     resolved_environment_variables: {},
     secret_references: {},
@@ -73,8 +76,8 @@ function makeRun(): Run {
     name: 'test run',
     status: 'queued',
     project_id: 'prj-1',
-    workspace_id: 'ws-1',
-    created_by: 'student',
+    capabilities: ['run.submit'],
+    initiated_by_user_id: 'student',
     created_at: '2026-08-12T10:00:00Z',
     started_at: null,
     finished_at: null,
@@ -90,21 +93,6 @@ function makeRun(): Run {
   }
 }
 
-const workspace: LegacyWorkspaceContext = {
-  id: 'ws-1',
-  name: 'Test Workspace',
-  kind: 'collaborative',
-  owner_id: 'owner',
-  default_environment_version_id: null,
-  capabilities: [
-    'user_group.view',
-    'project.view',
-    'run.view',
-    'run.submit',
-  ] as LegacyWorkspaceContext['capabilities'],
-  role: 'member',
-}
-
 function renderModal(overrides: Partial<Parameters<typeof RunFromVersionModal>[0]> = {}) {
   return render(
     <RunFromVersionModal
@@ -113,7 +101,6 @@ function renderModal(overrides: Partial<Parameters<typeof RunFromVersionModal>[0
       versionLabel="v1"
       projectId="prj-1"
       defaultRunConfigurationId={null}
-      workspace={workspace}
       onClose={() => {}}
       onSubmitted={() => {}}
       {...overrides}
@@ -155,6 +142,9 @@ describe('RunFromVersionModal', () => {
     await waitFor(() => {
       expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
     })
+    expect(screen.getByText('3.12')).toBeVisible()
+    expect(screen.getByText('ev-1')).toBeVisible()
+    expect(screen.getByText('当前可用')).toBeVisible()
 
     // 提交按钮此时应该可用（A 的 preflight ok）
     // antd 对双字符中文标签会插入间距：「提 交」

@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { VersionPanel } from '../../src/components/project/VersionPanel'
 import type {
+  Project,
   ProjectVersionPage,
   WorkingChange,
   WorkingChangeDetail,
-  LegacyWorkspaceContext,
 } from '../../src/api/types'
 
 /**
@@ -27,13 +27,14 @@ const mocks = vi.hoisted(() => ({
   restoreVersion: vi.fn(),
   workingChangeDetail: vi.fn(),
   discardChanges: vi.fn(),
+  listUserGroups: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('../../src/api/client', () => ({ api: mocks }))
 
 const writer = {
   capabilities: ['project.content.write'],
-} as unknown as LegacyWorkspaceContext
+} as Project
 
 function makeVersionPage(): ProjectVersionPage {
   return {
@@ -76,13 +77,13 @@ const addedDetail: WorkingChangeDetail = {
   current: { path: 'new.txt', content: 'brand new', truncated: false },
 }
 
-function renderPanel(workspace: LegacyWorkspaceContext | undefined, onVersionSaved = () => {}) {
+function renderPanel(access: Project | undefined, onVersionSaved = () => {}) {
   return render(
     <MemoryRouter>
       <VersionPanel
         projectId="proj-1"
         projectName="测试项目"
-        workspace={workspace}
+        access={access}
         refreshToken={0}
         onVersionSaved={onVersionSaved}
       />
@@ -104,7 +105,7 @@ describe('VersionPanel 未保存变更', () => {
     renderPanel(writer)
     await screen.findByText(/有 2 处未保存的变更/)
 
-    fireEvent.click(screen.getByText('修改 a.txt'))
+    fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
 
     await waitFor(() => {
       expect(mocks.workingChangeDetail).toHaveBeenCalledWith('proj-1', 'a.txt')
@@ -112,7 +113,7 @@ describe('VersionPanel 未保存变更', () => {
       expect(screen.getByText('changed a')).toBeInTheDocument()
     })
     // 新增路径在基线中不存在时要有明确说明，而不是渲染一个空面板。
-    fireEvent.click(screen.getByText('新增 new.txt'))
+    fireEvent.click(screen.getByRole('button', { name: '新增 new.txt' }))
     await waitFor(() => {
       expect(screen.getByText(/此路径在基线版本中不存在/)).toBeInTheDocument()
     })
@@ -128,7 +129,7 @@ describe('VersionPanel 未保存变更', () => {
     renderPanel(writer, onVersionSaved)
     await screen.findByText(/有 2 处未保存的变更/)
 
-    fireEvent.click(screen.getByText('修改 a.txt'))
+    fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
     fireEvent.click(await screen.findByRole('button', { name: /放弃此变更/ }))
     fireEvent.click(await screen.findByRole('button', { name: /放\s*弃\s*变\s*更/ }))
 
@@ -146,10 +147,33 @@ describe('VersionPanel 未保存变更', () => {
     renderPanel(undefined)
     await screen.findByText(/有 2 处未保存的变更/)
 
-    fireEvent.click(screen.getByText('修改 a.txt'))
+    fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
     await waitFor(() => {
       expect(screen.getByText('original a')).toBeInTheDocument()
     })
     expect(screen.queryByRole('button', { name: /放弃此变更/ })).toBeNull()
+  })
+
+  it('详情加载失败时显示错误并可重试', async () => {
+    mocks.listVersions.mockResolvedValue(makeVersionPage())
+    mocks.workingChanges.mockResolvedValue(changes)
+    mocks.workingChangeDetail
+      .mockRejectedValueOnce(new Error('详情暂时不可用'))
+      .mockResolvedValueOnce(detail)
+
+    renderPanel(writer)
+    await screen.findByText(/有 2 处未保存的变更/)
+    const opener = screen.getByRole('button', { name: '修改 a.txt' })
+    opener.focus()
+    expect(opener).toHaveFocus()
+    fireEvent.click(opener)
+
+    const errorText = await screen.findByText('详情暂时不可用')
+    const errorAlert = errorText.closest<HTMLElement>('[role="alert"]')
+    if (!errorAlert) throw new Error('找不到详情错误提示')
+    fireEvent.click(within(errorAlert).getByRole('button', { name: /重\s*试/ }))
+
+    expect(await screen.findByText('changed a')).toBeInTheDocument()
+    expect(mocks.workingChangeDetail).toHaveBeenCalledTimes(2)
   })
 })

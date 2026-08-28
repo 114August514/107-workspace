@@ -1,8 +1,4 @@
-"""活动记录。
-
-放在 application 层而不是仓储层，因为**只有用例知道这次操作在业务上叫什么**。
-仓储只看到「往 runs 表插了一行」，分不清这是「提交 Run」还是「重跑」。
-"""
+"""Owner-scoped activity recording and authorized aggregation."""
 
 from __future__ import annotations
 
@@ -10,10 +6,11 @@ import logging
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
-from ..domain.capabilities import Capability
+from ..domain.capabilities import Capability, UserGroupCapability
 from ..domain.enums import ActivityAction, TargetType
 from ..domain.ids import ACTIVITY, new_id
 from ..domain.models import Activity
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
@@ -23,35 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 class SupportsNestedTransaction(Protocol):
-    """能开启嵌套事务的会话。
-
-    这里只声明用得到的那一个方法，而不是直接依赖 ``AsyncSession``——
-    application 层不该认识 SQLAlchemy；这个依赖方向由
-    ``docs/product/design.md`` 第 4.3 节定义。
-    """
+    """Minimal application-facing savepoint dependency."""
 
     def begin_nested(self) -> AbstractAsyncContextManager[object]: ...
 
 
 class ActivityRecorder:
-    """把一次已经成功的操作记进活动流。
-
-    两条规则，都不能省：
-
-    **失败的操作不记活动。** 活动流回答「这里发生了什么」，不是审计日志。
-    所以调用点一律放在用例成功之后，不要放在 try 里。
-
-    **记活动失败不能让用例失败。** 用户的 Run 已经提交成功了，
-    不该因为活动表写不进去而看到报错。
-
-    第二条有个坑：光 try/except 吞掉异常是**不够**的。仓储用的是 ORM 的
-    ``add`` + ``flush``，flush 失败会把整个 session 标记成需要回滚，
-    之后请求结束时的 commit 会抛 PendingRollbackError——
-    **主用例的数据会一起丢掉**，正好是这条规则想避免的事。
-    所以写入包在 SAVEPOINT 里，失败只回滚这一小段。
-
-    SAVEPOINT 把活动记录失败限制在嵌套事务内，避免主用例数据一起回滚。
-    """
+    """Record successful business facts without failing their primary transaction."""
 
     def __init__(
         self,
@@ -67,7 +42,7 @@ class ActivityRecorder:
         self,
         *,
         actor_id: str,
-        workspace_id: str,
+        owner: OwnerReference,
         action: ActivityAction,
         target_type: TargetType,
         target_id: str,
@@ -78,53 +53,49 @@ class ActivityRecorder:
         try:
             async with self._session.begin_nested():
                 actor = await self._repos.users.get(actor_id)
-                activity = Activity(
-                    id=new_id(ACTIVITY),
-                    workspace_id=workspace_id,
-                    project_id=project_id,
-                    actor_id=actor_id,
-                    # 用户名在这里抄一份存起来。查名字这一步也放在 SAVEPOINT 里，
-                    # 因为它同样是「为了记活动」而做的事，失败了不该牵连主用例。
-                    actor_name=actor.username if actor else actor_id,
-                    action=action,
-                    target_type=target_type,
-                    target_id=target_id,
-                    target_name=target_name,
-                    detail=detail,
-                    created_at=self._clock.now(),
+                await self._repos.activities.add(
+                    Activity(
+                        id=new_id(ACTIVITY),
+                        owner=owner,
+                        project_id=project_id,
+                        actor_id=actor_id,
+                        actor_name=actor.username if actor else actor_id,
+                        action=action,
+                        target_type=target_type,
+                        target_id=target_id,
+                        target_name=target_name,
+                        detail=detail,
+                        created_at=self._clock.now(),
+                    )
                 )
-                await self._repos.activities.add(activity)
         except Exception:
-            # 记下来但不往上抛。活动流少一条，比用户的操作失败要好得多。
             logger.warning(
                 "写入活动失败，已跳过",
-                extra={"action": action.value, "workspace_id": workspace_id},
+                extra={
+                    "action": action.value,
+                    "owner_kind": owner.kind.value,
+                    "owner_id": owner.id,
+                },
                 exc_info=True,
             )
 
 
 class ActivityService:
-    """读活动流。
-
-    和 :class:`ActivityRecorder` 分开：Recorder 是写侧，被注入到各个用例里；
-    这个是读侧，直接暴露给路由。两者依赖不同（Recorder 需要 session 开
-    SAVEPOINT，读侧不需要），职责也不同，合成一个类只会让构造函数变长。
-
-    **没有单独的「查看活动」能力。** 活动回答的是「这个空间里发生了什么」，
-    能看见这个空间的人就该看得见；活动读取不额外引入一套角色语义。
-    所以复用 ``USER_GROUP_VIEW`` / ``PROJECT_VIEW``；能力矩阵定义在
-    :mod:`workspace107.domain.capabilities`，并由单元测试完整锁定。
-    """
+    """Read activity only after repository-backed current-authority checks."""
 
     def __init__(self, repos: Repositories, guard: AccessGuard) -> None:
         self._repos = repos
         self._guard = guard
 
-    async def list_for_workspace(
-        self, user_id: str, workspace_id: str, page: PageRequest
+    async def list_for_user_group(
+        self, user_id: str, user_group_id: str, page: PageRequest
     ) -> Page[Activity]:
-        await self._guard.legacy_workspace(user_id, workspace_id, needs=Capability.USER_GROUP_VIEW)
-        return await self._repos.activities.list_for_workspace(workspace_id, page)
+        await self._guard.user_group(
+            user_id, user_group_id, needs=UserGroupCapability.USER_GROUP_VIEW
+        )
+        return await self._repos.activities.list_for_owner(
+            OwnerReference(OwnerKind.USER_GROUP, user_group_id), page
+        )
 
     async def list_for_project(
         self, user_id: str, project_id: str, page: PageRequest

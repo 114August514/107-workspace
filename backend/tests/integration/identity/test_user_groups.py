@@ -6,8 +6,6 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from workspace107.domain.enums import LegacyWorkspaceKind
-from workspace107.domain.models import LegacyWorkspace
 from workspace107.infrastructure.db.repositories import SqlRepositories
 
 ALICE = {"X-User": "alice"}
@@ -72,47 +70,21 @@ async def _assert_exactly_one_active_owner(client: httpx.AsyncClient, group_id: 
 
 
 @pytest.mark.asyncio
-async def test_new_user_does_not_create_personal_workspace(
-    client: httpx.AsyncClient, session: AsyncSession
+async def test_new_user_home_uses_direct_user_execution_context(
+    client: httpx.AsyncClient,
 ) -> None:
     response = await client.get("/api/v1/me", headers=ALICE)
 
     assert response.status_code == 200
     body = response.json()
     assert body["user_groups"] == []
-    assert body["personal_resource_context_id"] is None
+    assert body["personal_execution_context"]["owner"] == {
+        "kind": "user",
+        "id": body["user"]["id"],
+        "display_name": body["user"]["display_name"],
+    }
+    assert "personal_resource_context_id" not in body
     assert "workspaces" not in body
-
-    repos = SqlRepositories(session)
-    alice = await repos.users.get_by_username("alice")
-    assert alice is not None
-    assert await repos.legacy_workspaces.get_personal(alice.id) is None
-
-
-@pytest.mark.asyncio
-async def test_home_discovers_existing_personal_resources_only_for_the_owner(
-    client: httpx.AsyncClient, session: AsyncSession
-) -> None:
-    await client.get("/api/v1/me", headers=ALICE)
-    await client.get("/api/v1/me", headers=BOB)
-    repos = SqlRepositories(session)
-    alice = await repos.users.get_by_username("alice")
-    assert alice is not None
-    await repos.legacy_workspaces.add(
-        LegacyWorkspace(
-            id="ws_personal_alice",
-            kind=LegacyWorkspaceKind.PERSONAL,
-            name="Alice personal data",
-            owner_id=alice.id,
-        )
-    )
-    await session.commit()
-
-    home = (await client.get("/api/v1/me", headers=ALICE)).json()
-    assert home["personal_resource_context_id"] == "ws_personal_alice"
-    assert (
-        await client.get("/api/v1/workspaces/ws_personal_alice", headers=BOB)
-    ).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -188,8 +160,6 @@ async def test_group_creation_has_exactly_one_active_owner(client: httpx.AsyncCl
         headers=ALICE,
     )
     assert updated.status_code == 200
-    legacy = (await client.get(f"/api/v1/workspaces/{group['id']}", headers=ALICE)).json()
-    assert (legacy["name"], legacy["owner_id"]) == ("Renamed Lab", group["created_by_id"])
     owners = [m for m in members if m["role"] == "owner" and m["status"] == "active"]
     assert [m["username"] for m in owners] == ["alice"]
     entitlements = (await client.get("/api/v1/me/entitlements", headers=ALICE)).json()
@@ -449,8 +419,6 @@ async def test_owner_cannot_leave_or_be_removed_then_former_owner_can_leave(
             f"/api/v1/user-groups/{group_id}/transfer-ownership/{bob_id}", headers=ALICE
         )
     ).status_code == 204
-    legacy = (await client.get(f"/api/v1/workspaces/{group_id}", headers=BOB)).json()
-    assert legacy["owner_id"] == bob_id
     assert (
         await client.post(f"/api/v1/user-groups/{group_id}/leave", headers=ALICE)
     ).status_code == 204

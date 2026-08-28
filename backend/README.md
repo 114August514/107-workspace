@@ -99,8 +99,8 @@ cp ../.env.example .env
 
 ## 开发模式下的身份
 
-`WORKSPACE107_AUTH_MODE=dev` 时用 `X-User` 请求头识别用户。首次出现只会建立
-User 身份，不会隐式创建 Personal Workspace：
+`WORKSPACE107_AUTH_MODE=dev` 时用 `X-User` 请求头识别用户。首次出现只建立 User 身份，
+不创建额外 ownership 容器：
 
 ```bash
 curl -H 'X-User: student' http://127.0.0.1:8000/api/v1/me
@@ -134,10 +134,9 @@ uv run alembic downgrade -1                       # 回退一步
 
 迁移文件必须提交。
 
-`e35a1d7c9b20` 在升级状态保留私有表 `legacy_personal_memberships`，以便回退时
-恢复旧 Personal Workspace Membership；`user_group_migration_provenance` 跨回退保留
-已知的 `created_by_id`，供再次升级恢复。它们不是业务查询模型。只有在明确结束
-`e35a1d7c9b20` 回退窗口并移除 Personal Workspace 兼容后，才能用独立迁移删除。
+`f42a9c7e1d30` 是开发期 schema-only cutover：按外键顺序清空不兼容的 Project 执行、
+Activity、Notification、Fork 与配置状态，随后删除 Workspace 兼容列、私有迁移表和
+`workspaces` 表。downgrade 只恢复空的前序 schema shape，不恢复已删除的数据。
 
 ## 测试
 

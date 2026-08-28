@@ -51,7 +51,7 @@ class RunSnapshot:
     compute_request: ComputeRequest
     scheduler: ResolvedSchedulerConfiguration
     artifact_rules: tuple[ArtifactCollectionRule, ...]
-    created_by: str
+    initiated_by_user_id: str
     created_at: datetime
 
     def __post_init__(self) -> None:
@@ -98,7 +98,7 @@ class RunSnapshot:
                 "scheduler": self.scheduler.as_payload(),
             },
             "artifact_rules": [r.as_payload() for r in self.artifact_rules],
-            "created_by": self.created_by,
+            "initiated_by_user_id": self.initiated_by_user_id,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -141,7 +141,7 @@ class RunSnapshot:
                 )
                 for r in payload["artifact_rules"]
             ),
-            created_by=payload["created_by"],
+            initiated_by_user_id=payload["initiated_by_user_id"],
             created_at=datetime.fromisoformat(payload["created_at"]),
         )
 
@@ -163,7 +163,7 @@ def build_snapshot(
     compute_request: ComputeRequest,
     scheduler: ResolvedSchedulerConfiguration,
     artifact_rules: tuple[ArtifactCollectionRule, ...],
-    created_by: str,
+    initiated_by_user_id: str,
     created_at: datetime,
 ) -> RunSnapshot:
     """组装 Run Snapshot。
@@ -188,6 +188,6 @@ def build_snapshot(
         compute_request=compute_request,
         scheduler=scheduler,
         artifact_rules=artifact_rules,
-        created_by=created_by,
+        initiated_by_user_id=initiated_by_user_id,
         created_at=created_at,
     )

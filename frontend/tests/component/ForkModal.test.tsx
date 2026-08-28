@@ -4,12 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../src/api/client'
-import type {
-  LegacyWorkspaceContext,
-  Project,
-  ProjectVersion,
-  UserGroup,
-} from '../../src/api/types'
+import type { Project, ProjectVersion, UserGroup } from '../../src/api/types'
 import { ForkModal } from '../../src/components/project/ForkModal'
 
 const version: ProjectVersion = {
@@ -45,18 +40,6 @@ const groups: UserGroup[] = [
   },
 ]
 
-function context(group: UserGroup, capabilities: LegacyWorkspaceContext['capabilities']) {
-  return {
-    id: group.id,
-    kind: 'collaborative' as const,
-    name: group.name,
-    owner_id: group.created_by_id ?? '',
-    default_environment_version_id: null,
-    role: group.role,
-    capabilities,
-  }
-}
-
 function renderModal() {
   return render(
     <ForkModal
@@ -75,21 +58,11 @@ describe('ForkModal target eligibility', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses transitional target context and submits the selected eligible target', async () => {
+  it('submits the selected current User Group owner', async () => {
     vi.spyOn(api, 'listUserGroups').mockResolvedValue(groups)
-    vi.spyOn(api, 'getLegacyWorkspaceContext').mockImplementation(async (id) => {
-      const group = groups.find((item) => item.id === id)
-      if (!group) throw new Error('missing group')
-      return context(
-        group,
-        id === 'grp_writer'
-          ? ['user_group.view', 'project.view', 'project.create']
-          : ['user_group.view', 'project.view'],
-      )
-    })
     const created: Project = {
       id: 'prj_forked',
-      workspace_id: 'grp_writer',
+      capabilities: ['project.view', 'project.create'],
       owner: { kind: 'user_group', id: 'grp_writer', display_name: 'Writer Lab' },
       visibility: 'owner_scope',
       name: 'Source Project',
@@ -108,23 +81,20 @@ describe('ForkModal target eligibility', () => {
     const target = await screen.findByRole('combobox', { name: '创建到哪个 User Group' })
     fireEvent.mouseDown(target)
     fireEvent.click(await screen.findByText('Writer Lab'))
-    expect(screen.queryByText('Read-only Lab')).not.toBeInTheDocument()
+    expect(screen.getByText('Read-only Lab')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }))
     await waitFor(() =>
       expect(fork).toHaveBeenCalledWith('pv_source', {
-        target_workspace_id: 'grp_writer',
+        target_owner: { kind: 'user_group', id: 'grp_writer' },
         name: 'Source Project',
         description: '',
       }),
     )
   })
 
-  it('shows a load failure instead of falling back when an anchor is missing', async () => {
-    vi.spyOn(api, 'listUserGroups').mockResolvedValue(groups)
-    vi.spyOn(api, 'getLegacyWorkspaceContext').mockRejectedValue(
-      new Error('required target context is missing'),
-    )
+  it('shows a load failure when User Groups cannot be loaded', async () => {
+    vi.spyOn(api, 'listUserGroups').mockRejectedValue(new Error('User Groups unavailable'))
 
     renderModal()
 

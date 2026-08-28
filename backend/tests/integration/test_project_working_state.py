@@ -68,6 +68,14 @@ def make_zip(members: dict[str, str]) -> bytes:
     return buffer.getvalue()
 
 
+def make_zip_entries(members: list[tuple[str, str]]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name, content in members:
+            archive.writestr(name, content)
+    return buffer.getvalue()
+
+
 def with_encrypted_flag(data: bytes) -> bytes:
     """把中央目录里第一个条目的加密标志位置 1。"""
     signature = b"PK\x01\x02"
@@ -196,6 +204,45 @@ async def test_create_directory_conflicts_with_existing_file(client) -> None:
     assert conflict.status_code == 409
 
 
+@pytest.mark.asyncio
+async def test_file_directory_namespace_is_preserved_before_mutation(client) -> None:
+    project_id = await create_owned_project(client, "路径命名空间")
+    await write_file(client, project_id, "blocked", "file")
+    await write_file(client, project_id, "src/main.py", "print(1)")
+
+    child_of_file = await client.put(
+        f"/api/v1/projects/{project_id}/files",
+        json={"path": "blocked/child.txt", "content": "no"},
+        headers=ALICE,
+    )
+    assert child_of_file.status_code == 409
+
+    file_over_directory = await client.put(
+        f"/api/v1/projects/{project_id}/files",
+        json={"path": "src", "content": "no"},
+        headers=ALICE,
+    )
+    assert file_over_directory.status_code == 409
+
+    nested_directory = await client.post(
+        f"/api/v1/projects/{project_id}/files/mkdir",
+        json={"path": "blocked/nested"},
+        headers=ALICE,
+    )
+    assert nested_directory.status_code == 409
+
+    for operation in ("copy", "move"):
+        response = await client.post(
+            f"/api/v1/projects/{project_id}/files/{operation}",
+            json={"source": "src", "destination": "blocked"},
+            headers=ALICE,
+        )
+        assert response.status_code == 409
+
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert {file["path"] for file in listing} == {"blocked", "src/main.py"}
+
+
 # -- 压缩包 --------------------------------------------------------------------
 
 
@@ -251,6 +298,46 @@ async def test_upload_archive_rejects_traversal_without_partial_write(client) ->
     # 整体拒绝：合法条目也不能落进去。
     listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
     assert listing == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "member",
+    ["/absolute.txt", "\\leading.txt", "C:\\drive.txt", "\\\\server\\share\\unc.txt"],
+)
+async def test_upload_archive_rejects_absolute_platform_paths_before_normalization(
+    client, member: str
+) -> None:
+    project_id = await create_owned_project(client, f"绝对路径 {member}")
+
+    response = await upload_archive(client, project_id, make_zip({member: "no"}))
+
+    assert response.status_code == 422
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert listing == []
+
+
+@pytest.mark.asyncio
+async def test_upload_archive_validates_complete_namespace_before_writing(client) -> None:
+    project_id = await create_owned_project(client, "压缩包命名空间")
+    await write_file(client, project_id, "blocked", "existing")
+
+    conflicts_with_existing = make_zip_entries(
+        [("safe.txt", "would be partial"), ("blocked/child.txt", "no")]
+    )
+    response = await upload_archive(client, project_id, conflicts_with_existing)
+    assert response.status_code == 409
+
+    internal_collision = make_zip_entries([("node", "file"), ("node/child.txt", "child")])
+    response = await upload_archive(client, project_id, internal_collision)
+    assert response.status_code == 409
+
+    normalized_duplicate = make_zip_entries([("same.txt", "first"), ("./same.txt", "second")])
+    response = await upload_archive(client, project_id, normalized_duplicate)
+    assert response.status_code == 409
+
+    listing = (await client.get(f"/api/v1/projects/{project_id}/files", headers=ALICE)).json()
+    assert {file["path"] for file in listing} == {"blocked"}
 
 
 @pytest.mark.asyncio

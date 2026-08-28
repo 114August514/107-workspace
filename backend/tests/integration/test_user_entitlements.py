@@ -23,7 +23,7 @@ async def _prepare_submission(
     session: AsyncSession, client: httpx.AsyncClient, headers: dict[str, str]
 ) -> tuple[str, str]:
     """建好默认环境、带版本的 Project 和运行方案，返回 (project_id, configuration_id)。"""
-    await use_default_environment(session, client, headers=headers)
+    _, env_version_id = await use_default_environment(session, client, headers=headers)
     project = await create_project_with_version(client, headers=headers)
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
@@ -31,6 +31,7 @@ async def _prepare_submission(
             "name": "默认运行",
             "command": "python -V",
             "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
         },
         headers=headers,
     )

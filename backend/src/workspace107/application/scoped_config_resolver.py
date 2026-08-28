@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..domain.config_scope import ConfigScope, SecretReference
-from ..domain.enums import EnvValueKind, LegacyWorkspaceKind
-from ..domain.errors import ValidationFailed
+from ..domain.enums import EnvValueKind
 from ..domain.models import Variable
+from ..domain.ownership import OwnerKind
 from ..domain.ports.repositories import VariableRepository
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.secrets import EnvValue
@@ -35,12 +35,13 @@ class ScopedConfigResolver:
         env: dict[str, EnvValue],
     ) -> ScopedResolution:
         project_scope = ConfigScope.project(access.project.id)
-        if access.workspace.kind is LegacyWorkspaceKind.PERSONAL:
-            owner_scope = ConfigScope.user(access.workspace.owner_id)
-        elif access.workspace.kind is LegacyWorkspaceKind.COLLABORATIVE:
-            owner_scope = ConfigScope.user_group(access.workspace.id)
+        # Owner scope 从 Project Owner 推导：USER → User scope，
+        # USER_GROUP → User Group scope。
+        owner = access.project.owner
+        if owner.kind is OwnerKind.USER:
+            owner_scope = ConfigScope.user(owner.id)
         else:
-            raise ValidationFailed(f"Unknown legacy workspace kind: {access.workspace.kind!r}")
+            owner_scope = ConfigScope.user_group(owner.id)
         user_scope = ConfigScope.user(initiated_by_user_id)
         literals: dict[str, str] = {}
         refs: dict[str, SecretReference] = {}
@@ -98,10 +99,9 @@ class ScopedConfigResolver:
             ConfigScope.project(access.project.id),
             ConfigScope.user(initiated_by_user_id),
         }
-        if access.workspace.kind is LegacyWorkspaceKind.COLLABORATIVE:
-            allowed.add(ConfigScope.user_group(access.workspace.id))
-        elif access.workspace.kind is not LegacyWorkspaceKind.PERSONAL:
-            return {}, [f"Unknown legacy workspace kind: {access.workspace.kind!r}"]
+        owner = access.project.owner
+        if owner.kind is OwnerKind.USER_GROUP:
+            allowed.add(ConfigScope.user_group(owner.id))
         problems: list[str] = []
         for env_name, ref in refs.items():
             if ref.scope not in allowed:
