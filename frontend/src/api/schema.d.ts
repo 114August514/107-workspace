@@ -2559,6 +2559,11 @@ export interface components {
              * @description 发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。
              */
             initiated_by_user_id: string;
+            /**
+             * Initiated By Username
+             * @description 当前权威 User.username；User 记录无法解析时为 null。
+             */
+            initiated_by_username: string | null;
             /** Name */
             name: string;
             /** Project Id */

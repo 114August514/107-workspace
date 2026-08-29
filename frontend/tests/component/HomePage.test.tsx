@@ -60,6 +60,7 @@ const homeData: Home = {
       snapshot_id: 's-1',
       status: 'succeeded',
       initiated_by_user_id: 'u-1',
+      initiated_by_username: 'student',
       created_at: '2026-08-15T10:00:00Z',
       submitted_at: null,
       started_at: null,
