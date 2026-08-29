@@ -10386,7 +10386,7 @@
     },
     "/api/v1/shared-resources": {
       "get": {
-        "description": "Return resources owned by the actor or by an owning UserGroup with active membership.",
+        "description": "Return actor-owned and otherwise discoverable resources.\n\nDiscovery includes active UserGroup ownership and USE Grants issued by the\nresource's current owner.",
         "operationId": "list_shared_resources_api_v1_shared_resources_get",
         "parameters": [
           {

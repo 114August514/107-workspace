@@ -1087,7 +1087,10 @@ export interface paths {
         };
         /**
          * 列出当前用户可发现的共享资源
-         * @description Return resources owned by the actor or by an owning UserGroup with active membership.
+         * @description Return actor-owned and otherwise discoverable resources.
+         *
+         *     Discovery includes active UserGroup ownership and USE Grants issued by the
+         *     resource's current owner.
          */
         get: operations["list_shared_resources_api_v1_shared_resources_get"];
         put?: never;
