@@ -11,6 +11,7 @@ from ..application.catalog_service import EnvironmentView
 from ..application.entitlement_service import EntitlementView
 from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
+from ..application.run_service import RunView
 from ..application.shared_resource_service import (
     SharedResourceAccessView,
     SharedResourceView,
@@ -30,7 +31,6 @@ from ..domain.models import (
     Project,
     ProjectFile,
     ProjectVersion,
-    Run,
     RunConfiguration,
     RunEvent,
     SharedResourcePublicationAttempt,
@@ -242,7 +242,8 @@ def run_configuration_out(configuration: RunConfiguration) -> s.RunConfiguration
     )
 
 
-def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
+def run_out(view: RunView, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
+    run = view.run
     queued_seconds: float | None = None
     running_seconds: float | None = None
     if run.submitted_at and run.started_at:
@@ -264,6 +265,7 @@ def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
         exit_code=run.exit_code,
         failure_reason=run.failure_reason,
         initiated_by_user_id=run.initiated_by_user_id,
+        initiated_by_username=view.initiated_by_username,
         created_at=run.created_at,
         submitted_at=run.submitted_at,
         started_at=run.started_at,
