@@ -10,6 +10,7 @@ import { EnvironmentsSection } from './components/usergroup/EnvironmentsSection'
 import { MembersSection } from './components/usergroup/MembersSection'
 import { OverviewSection } from './components/usergroup/OverviewSection'
 import { ProjectsSection } from './components/usergroup/ProjectsSection'
+import { SettingsSection } from './components/usergroup/SettingsSection'
 import { SharedResourcesSection } from './components/usergroup/SharedResourcesSection'
 import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
@@ -112,7 +113,7 @@ export function ProductRoutes({ username, home }: { username: string; home: Asyn
         <Route path="projects" element={<ProjectsSection />} />
         <Route path="shared-resources" element={<SharedResourcesSection />} />
         <Route path="environments" element={<EnvironmentsSection />} />
-        <Route path="settings" element={<Navigate to="." replace />} />
+        <Route path="settings" element={<SettingsSection />} />
         <Route path="*" element={<Navigate to=".." replace />} />
       </Route>
       <Route path="/environments" element={<EnvironmentListPage key={username} />} />
