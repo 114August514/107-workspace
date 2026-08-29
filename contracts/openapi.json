@@ -2383,6 +2383,18 @@
             "title": "Initiated By User Id",
             "type": "string"
           },
+          "initiated_by_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "当前权威 User.username；User 记录无法解析时为 null。",
+            "title": "Initiated By Username"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2500,6 +2512,7 @@
           "exit_code",
           "failure_reason",
           "initiated_by_user_id",
+          "initiated_by_username",
           "created_at",
           "submitted_at",
           "started_at",

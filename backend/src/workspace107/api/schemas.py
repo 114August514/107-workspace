@@ -535,6 +535,8 @@ class RunOut(Model):
     failure_reason: str
     initiated_by_user_id: str
     """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
+    initiated_by_username: str | None
+    """当前权威 User.username；User 记录无法解析时为 null。"""
     created_at: datetime | None
     submitted_at: datetime | None
     started_at: datetime | None

@@ -26,6 +26,16 @@ const columns: ColumnsType<Run> = [
     render: (name: string, run) => <Link to={`/runs/${run.id}`}>{name}</Link>,
   },
   {
+    title: '发起用户',
+    dataIndex: field<Run>('initiated_by_username'),
+    width: 120,
+    render: (username: string | null) => (
+      <Typography.Text type={username ? undefined : 'secondary'}>
+        {username ?? '未知用户'}
+      </Typography.Text>
+    ),
+  },
+  {
     title: '版本',
     dataIndex: field<Run>('project_version_label'),
     width: 80,

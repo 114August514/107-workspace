@@ -20,6 +20,7 @@ function makeRun(overrides: Partial<Run> = {}): Run {
     status: 'succeeded',
     project_id: 'proj-1',
     initiated_by_user_id: 'user-1',
+    initiated_by_username: 'alice',
     created_at: '2026-08-12T10:00:00Z',
     started_at: null,
     finished_at: null,
@@ -36,7 +37,7 @@ function makeRun(overrides: Partial<Run> = {}): Run {
   }
 }
 
-describe('RunTable 版本列', () => {
+describe('RunTable visible identity and version', () => {
   it('显示 project_version_label 并链接到 /versions/:id', () => {
     const runs = [makeRun()]
 
@@ -64,5 +65,49 @@ describe('RunTable 版本列', () => {
 
     expect(screen.getByRole('link', { name: 'v1' })).toHaveAttribute('href', '/versions/ver-1')
     expect(screen.getByRole('link', { name: 'v2' })).toHaveAttribute('href', '/versions/ver-2')
+  })
+
+  it('shows each initiator username and never uses the raw User ID as normal text', () => {
+    render(
+      <MemoryRouter>
+        <RunTable
+          runs={[
+            makeRun({
+              id: 'run-a',
+              initiated_by_user_id: 'usr_internal_alice',
+              initiated_by_username: 'alice',
+            }),
+            makeRun({
+              id: 'run-b',
+              initiated_by_user_id: 'usr_internal_bob',
+              initiated_by_username: 'bob',
+            }),
+          ]}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getAllByText('alice').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('bob').length).toBeGreaterThan(0)
+    expect(screen.queryByText('usr_internal_alice')).not.toBeInTheDocument()
+    expect(screen.queryByText('usr_internal_bob')).not.toBeInTheDocument()
+  })
+
+  it('shows an explicit fallback when the recorded User cannot be resolved', () => {
+    render(
+      <MemoryRouter>
+        <RunTable
+          runs={[
+            makeRun({
+              initiated_by_user_id: 'usr_missing',
+              initiated_by_username: null,
+            }),
+          ]}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('未知用户')).toBeInTheDocument()
+    expect(screen.queryByText('usr_missing')).not.toBeInTheDocument()
   })
 })
