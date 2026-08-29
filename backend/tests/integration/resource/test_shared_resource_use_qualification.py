@@ -10,6 +10,9 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tests.helpers import process_shared_resource_publication
+from workspace107.api.deps import AppContext
+
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
 
@@ -31,7 +34,7 @@ async def _create_group(
 
 
 async def _create_resource_with_version(
-    client: httpx.AsyncClient, *, owner: dict, name: str
+    client: httpx.AsyncClient, context: AppContext, *, owner: dict, name: str
 ) -> tuple[str, str]:
     """Create a Shared Resource + Version. Returns (resource_id, version_id)."""
     response = await client.post(
@@ -48,7 +51,8 @@ async def _create_resource_with_version(
         headers=ALICE,
     )
     response.raise_for_status()
-    return resource_id, str(response.json()["id"])
+    version_id = await process_shared_resource_publication(context, str(response.json()["id"]))
+    return resource_id, version_id
 
 
 async def _grant(
@@ -75,16 +79,16 @@ def _qualifications_in_list(body: list[dict], resource_id: str) -> list[dict] | 
 
 
 async def test_owner_scope_qualification_in_list_and_detail(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Owner qualification applies in the resource Owner's Project context."""
     alice_id = await _get_user_id(client, ALICE)
     group_a = await _create_group(client, "Availability Owner Group")
     user_resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user", "id": alice_id}, name="user owned"
+        client, context, owner={"kind": "user", "id": alice_id}, name="user owned"
     )
     group_resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user_group", "id": group_a}, name="group owned"
+        client, context, owner={"kind": "user_group", "id": group_a}, name="group owned"
     )
 
     listing = await client.get("/api/v1/shared-resources", headers=ALICE)
@@ -102,12 +106,12 @@ async def test_owner_scope_qualification_in_list_and_detail(
 
 
 async def test_unrelated_user_neither_discovers_nor_uses(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Without owner scope or Grant the resource is absent and detail 404s."""
     alice_id = await _get_user_id(client, ALICE)
     resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user", "id": alice_id}, name="alice only"
+        client, context, owner={"kind": "user", "id": alice_id}, name="alice only"
     )
 
     listing = await client.get("/api/v1/shared-resources", headers=BOB)
@@ -119,13 +123,13 @@ async def test_unrelated_user_neither_discovers_nor_uses(
 
 
 async def test_user_grant_qualification_with_summary(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """A direct User Grant follows the actor across Projects where they can submit."""
     bob_id = await _get_user_id(client, BOB)
     group_b = await _create_group(client, "User Grant Owner Group")
     resource_id, version_id = await _create_resource_with_version(
-        client, owner={"kind": "user_group", "id": group_b}, name="granted resource"
+        client, context, owner={"kind": "user_group", "id": group_b}, name="granted resource"
     )
     grant_id = await _grant(
         client,
@@ -172,7 +176,7 @@ async def test_user_grant_qualification_with_summary(
 
 
 async def test_user_group_grant_summary_names_exact_project_owner_group(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Group qualification uses its Grant grantee and requires membership."""
     from workspace107.infrastructure.db.tables import MembershipRow
@@ -181,7 +185,7 @@ async def test_user_group_grant_summary_names_exact_project_owner_group(
     group_a = await _create_group(client, "Grantee Group A", headers=BOB)
     group_b = await _create_group(client, "Grantor Group B")
     resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user_group", "id": group_b}, name="group granted"
+        client, context, owner={"kind": "user_group", "id": group_b}, name="group granted"
     )
     exact_grant_id = await _grant(
         client,
@@ -232,13 +236,13 @@ async def test_user_group_grant_summary_names_exact_project_owner_group(
 
 
 async def test_all_grant_summary_marks_target_all(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """An ALL grant covers the resource and is summarized with target_all=true."""
     bob_id = await _get_user_id(client, BOB)
     group_b = await _create_group(client, "ALL Grantor Group")
     resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user_group", "id": group_b}, name="all granted"
+        client, context, owner={"kind": "user_group", "id": group_b}, name="all granted"
     )
     await _grant(
         client,
@@ -257,13 +261,13 @@ async def test_all_grant_summary_marks_target_all(
 
 
 async def test_revoked_grant_removes_qualification_on_reload(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """After Grant revocation the resource leaves grant-based discovery."""
     bob_id = await _get_user_id(client, BOB)
     group_b = await _create_group(client, "Revoke Grantor Group")
     resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user_group", "id": group_b}, name="revoked later"
+        client, context, owner={"kind": "user_group", "id": group_b}, name="revoked later"
     )
     grant_id = await _grant(
         client,
@@ -285,7 +289,7 @@ async def test_revoked_grant_removes_qualification_on_reload(
 
 
 async def test_grant_from_previous_owner_no_longer_surfaces(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """After Ownership transfer, Grants issued under the old Owner stop matching
     (GR-408), so the resource leaves the grantee's discovery on reload."""
@@ -295,7 +299,7 @@ async def test_grant_from_previous_owner_no_longer_surfaces(
     group_b = await _create_group(client, "Transfer Grantor Group")
     group_c = await _create_group(client, "Transfer New Owner Group")
     resource_id, _ = await _create_resource_with_version(
-        client, owner={"kind": "user_group", "id": group_b}, name="transferred"
+        client, context, owner={"kind": "user_group", "id": group_b}, name="transferred"
     )
     await _grant(
         client,

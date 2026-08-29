@@ -47,8 +47,8 @@ import type {
   SharedResource,
   SharedResourceCreate,
   SharedResourceDetail,
+  SharedResourcePublicationAttempt,
   SharedResourceUpdate,
-  SharedResourceVersion,
   SharedResourceVersionDetail,
   VersionDiff,
   WorkingChange,
@@ -654,19 +654,15 @@ export const api = {
     ),
 
   /**
-   * 发布 Shared Resource 新版本。
+   * Upload a Shared Resource publication candidate.
    *
-   * 后端是 multipart/form-data：每个文件挂在 `files` 下，`description` 是普通
-   * 字段，`prefix` 走 query。openapi-fetch 的默认序列化器会把 FormData 原样
-   * 透传，浏览器自动补 Content-Type 和 boundary——所以这里手动构造 FormData。
-   *
-   * 契约里 `files` 的类型是 `string[]`（openapi-typescript 对 UploadFile 的
-   * 近似），但运行时放的是 File 对象，所以这一处要 cast。
+   * The 202 response is a durable attempt, not a Version. Callers must read the attempt
+   * until it succeeds or fails before treating any version as published.
    */
-  publishSharedResourceVersion: async (
+  createSharedResourcePublicationAttempt: async (
     resourceId: string,
     payload: { files: File[]; description: string; prefix?: string },
-  ): Promise<SharedResourceVersion> => {
+  ): Promise<SharedResourcePublicationAttempt> => {
     const form = new FormData()
     for (const file of payload.files) {
       form.append('files', file)
@@ -687,10 +683,25 @@ export const api = {
     )
   },
 
-  getSharedResourceVersion: async (versionId: string): Promise<SharedResourceVersionDetail> =>
+  getSharedResourcePublicationAttempt: async (
+    attemptId: string,
+    signal?: AbortSignal,
+  ): Promise<SharedResourcePublicationAttempt> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resource-publication-attempts/{attempt_id}', {
+        params: { path: { attempt_id: attemptId } },
+        signal,
+      }),
+    ),
+
+  getSharedResourceVersion: async (
+    versionId: string,
+    signal?: AbortSignal,
+  ): Promise<SharedResourceVersionDetail> =>
     unwrap(
       await http.GET('/api/v1/shared-resource-versions/{version_id}', {
         params: { path: { version_id: versionId } },
+        signal,
       }),
     ),
 
