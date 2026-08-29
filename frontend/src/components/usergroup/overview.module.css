@@ -1,0 +1,72 @@
+.overview {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--base-size-16);
+  align-items: start;
+}
+
+.section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-12);
+  padding: var(--base-size-16);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--fgColor-default);
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.infoGrid {
+  display: grid;
+  margin: 0;
+  grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  border: var(--borderWidth-thin) solid var(--borderColor-muted);
+  border-radius: var(--borderRadius-medium);
+}
+
+.infoGrid dt,
+.infoGrid dd {
+  margin: 0;
+  padding: var(--base-size-8) var(--base-size-12);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.infoGrid dt {
+  background: var(--bgColor-muted);
+  color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.infoGrid dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.infoGrid dt:last-of-type,
+.infoGrid dd:last-of-type {
+  border-bottom: none;
+}
+
+.countLine {
+  margin: 0;
+  color: var(--fgColor-default);
+}
+
+.cardLink {
+  color: var(--fgColor-accent);
+  font-size: var(--text-body-size-small);
+}
+
+.cardLink:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
+  outline-offset: var(--base-size-2);
+}
