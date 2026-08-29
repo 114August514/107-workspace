@@ -95,6 +95,13 @@
   gap: var(--base-size-16);
 }
 
+.membersSection {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-24);
+}
+
 @media (max-width: 34rem) {
   .assetLink {
     grid-template-columns: minmax(0, 1fr);
