@@ -1096,6 +1096,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/shared-resource-publication-attempts/{attempt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取 Shared Resource 发布校验结果
+         * @description Return an owner-scoped durable attempt without granting Shared Resource USE.
+         */
+        get: operations["get_shared_resource_publication_attempt_api_v1_shared_resource_publication_attempts__attempt_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/shared-resource-versions/{version_id}": {
         parameters: {
             query?: never;
@@ -1227,13 +1247,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 上传 Shared Resource 新版本
-         * @description 需要 Shared Resource 版本创建权限；上传文件形成新的不可变版本。
-         *
-         *     上传的文件按 ``prefix/<filename>`` 写入资源；同路径文件会被视为重复路径
-         *     导致版本发布失败。版本发布后内容不可修改。
+         * 上传 Shared Resource 发布候选
+         * @description Persist uploaded blobs and return before processor validation/publication.
          */
-        post: operations["publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post"];
+        post: operations["create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1726,6 +1743,16 @@ export interface components {
          * @enum {string}
          */
         ArtifactStatus: "available" | "cleaned";
+        /** Body_create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post */
+        Body_create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Files */
+            files: string[];
+        };
         /** Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post */
         Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post: {
             /**
@@ -1752,16 +1779,6 @@ export interface components {
             source_uri: string;
             /** Version */
             version: string;
-        };
-        /** Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post */
-        Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post: {
-            /**
-             * Description
-             * @default
-             */
-            description: string;
-            /** Files */
-            files: string[];
         };
         /** Body_upload_archive_api_v1_projects__project_id__files_archive_post */
         Body_upload_archive_api_v1_projects__project_id__files_archive_post: {
@@ -2738,6 +2755,11 @@ export interface components {
              * @description 发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。
              */
             initiated_by_user_id: string;
+            /**
+             * Initiated By Username
+             * @description 当前权威 User.username；User 记录无法解析时为 null。
+             */
+            initiated_by_username: string | null;
             /** Name */
             name: string;
             /** Project Id */
@@ -2899,6 +2921,41 @@ export interface components {
              */
             scope: "owner";
         };
+        /** SharedResourcePublicationAttemptOut */
+        SharedResourcePublicationAttemptOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Description */
+            description: string;
+            /** Failure Reason */
+            failure_reason: string | null;
+            /** File Count */
+            file_count: number;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: string;
+            /** Shared Resource Id */
+            shared_resource_id: string;
+            /** Started At */
+            started_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "processing" | "succeeded" | "failed";
+            /** Total Size */
+            total_size: number;
+            /** Validation Summary */
+            validation_summary: string;
+            /** Version Id */
+            version_id: string | null;
+        };
         /** SharedResourceUpdateIn */
         SharedResourceUpdateIn: {
             /** Description */
@@ -2925,12 +2982,16 @@ export interface components {
             id: string;
             /** Label */
             label: string;
+            /** Manifest Hash */
+            manifest_hash: string;
             /** Sequence */
             sequence: number;
             /** Shared Resource Id */
             shared_resource_id: string;
             /** Total Size */
             total_size: number;
+            /** Validation Summary */
+            validation_summary: string;
         };
         /** SharedResourceVersionFileOut */
         SharedResourceVersionFileOut: {
@@ -2958,12 +3019,16 @@ export interface components {
             id: string;
             /** Label */
             label: string;
+            /** Manifest Hash */
+            manifest_hash: string;
             /** Sequence */
             sequence: number;
             /** Shared Resource Id */
             shared_resource_id: string;
             /** Total Size */
             total_size: number;
+            /** Validation Summary */
+            validation_summary: string;
         };
         /** SyncOut */
         SyncOut: {
@@ -8126,6 +8191,84 @@ export interface operations {
             };
         };
     };
+    get_shared_resource_publication_attempt_api_v1_shared_resource_publication_attempts__attempt_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedResourcePublicationAttemptOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     get_shared_resource_version_api_v1_shared_resource_versions__version_id__get: {
         parameters: {
             query?: never;
@@ -8683,7 +8826,7 @@ export interface operations {
             };
         };
     };
-    publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post: {
+    create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post: {
         parameters: {
             query?: {
                 prefix?: string;
@@ -8698,17 +8841,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post"];
+                "multipart/form-data": components["schemas"]["Body_create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post"];
             };
         };
         responses: {
             /** @description Successful Response */
-            201: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SharedResourceVersionOut"];
+                    "application/json": components["schemas"]["SharedResourcePublicationAttemptOut"];
                 };
             };
             /** @description 请求不合法 */

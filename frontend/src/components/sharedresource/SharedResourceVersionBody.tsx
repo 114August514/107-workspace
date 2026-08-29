@@ -96,6 +96,8 @@ export function SharedResourceVersionBody({ versionId }: Props) {
         { label: '发布者', value: <PrimerMono>{version.data.created_by}</PrimerMono> },
         { label: '文件数', value: <PrimerMono>{String(version.data.file_count)}</PrimerMono> },
         { label: '总大小', value: formatBytes(version.data.total_size) },
+        { label: '校验结果', value: version.data.validation_summary },
+        { label: '清单摘要', value: <PrimerMono>{version.data.manifest_hash}</PrimerMono> },
         { label: '发布时间', value: formatTime(version.data.created_at) },
       ]
     : []

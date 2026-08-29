@@ -8,7 +8,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import grant_test_entitlement
+from tests.helpers import grant_test_entitlement, process_shared_resource_publication
+from workspace107.api.deps import AppContext
 from workspace107.domain import ids
 from workspace107.infrastructure.db.tables import (
     EnvironmentRow,
@@ -58,7 +59,7 @@ async def _create_project_with_version(
 
 
 async def _create_resource_version(
-    client: httpx.AsyncClient, user_group_id: str
+    client: httpx.AsyncClient, context: AppContext, user_group_id: str
 ) -> tuple[str, str]:
     """Create Shared Resource + Version owned by ``user_group_id``. Returns (id, version_id)."""
     response = await client.post(
@@ -78,7 +79,8 @@ async def _create_resource_version(
         headers=ALICE,
     )
     response.raise_for_status()
-    return resource_id, str(response.json()["id"])
+    version_id = await process_shared_resource_publication(context, str(response.json()["id"]))
+    return resource_id, version_id
 
 
 async def _create_environment_version(
@@ -163,7 +165,7 @@ async def _get_user_id(client: httpx.AsyncClient, headers: dict) -> str:
 
 
 async def test_user_grant_enables_cross_owner_shared_resource_use(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """A User-level USE Grant lets Alice reference Group B's resource from Group A's project."""
     group_a = await _create_group(client, "Grant Group A")
@@ -171,7 +173,7 @@ async def test_user_grant_enables_cross_owner_shared_resource_use(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     alice_id = await _get_user_id(client, ALICE)
 
@@ -234,7 +236,7 @@ async def test_user_grant_enables_cross_owner_shared_resource_use(
 
 
 async def test_user_group_grant_enables_cross_owner_environment_use(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """A UserGroup-level USE Grant lets Group A use Group B's environment."""
     group_a = await _create_group(client, "Env Grant Group A")
@@ -280,7 +282,7 @@ async def test_user_group_grant_enables_cross_owner_environment_use(
 
 
 async def test_user_group_grant_inactive_member_cannot_use(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Grant exists but Alice is removed from Group A; preflight and run create must reject."""
     from workspace107.infrastructure.db.tables import MembershipRow
@@ -288,7 +290,7 @@ async def test_user_group_grant_inactive_member_cannot_use(
     group_a = await _create_group(client, "Inactive Member Group A")
     group_b = await _create_group(client, "Inactive Member Group B")
     env_a = await _set_group_environment(session, client, group_a)
-    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
 
@@ -368,11 +370,11 @@ async def test_user_group_grant_inactive_member_cannot_use(
 
 
 async def test_grant_target_must_be_top_level_not_version(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``target_kind='shared_resource_version'`` is rejected at the schema layer (422)."""
     group_b = await _create_group(client, "Schema Validation Group B")
-    _, resource_b_version_id = await _create_resource_version(client, group_b)
+    _, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     response = await client.post(
         "/api/v1/grants",
@@ -392,12 +394,12 @@ async def test_grant_target_must_be_top_level_not_version(
 
 
 async def test_grant_does_not_grant_management_permission(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """A USE Grant does not let the grantee manage (PATCH) the resource."""
     await _create_group(client, "Mgmt Group A")
     group_b = await _create_group(client, "Mgmt Group B")
-    resource_b_id, _ = await _create_resource_version(client, group_b)
+    resource_b_id, _ = await _create_resource_version(client, context, group_b)
 
     alice_id = await _get_user_id(client, ALICE)
 
@@ -451,7 +453,7 @@ async def test_grant_does_not_grant_management_permission(
 
 
 async def test_revoke_grant_blocks_subsequent_use(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """After revoking a Grant, creating a run-configuration referencing the asset → 404."""
     group_a = await _create_group(client, "Revoke Group A")
@@ -459,7 +461,7 @@ async def test_revoke_grant_blocks_subsequent_use(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     alice_id = await _get_user_id(client, ALICE)
 
@@ -527,14 +529,14 @@ async def test_revoke_grant_blocks_subsequent_use(
 
 
 async def test_same_owner_use_requires_no_grant(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Owner-scope self-use still works without any Grant (Issue #39 regression)."""
     group_a = await _create_group(client, "Same Owner Group A")
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A self-use project")
-    _, resource_a_version_id = await _create_resource_version(client, group_a)
+    _, resource_a_version_id = await _create_resource_version(client, context, group_a)
 
     # No Grant needed: same-owner use succeeds.
     response = await client.post(
@@ -563,7 +565,7 @@ async def test_same_owner_use_requires_no_grant(
 
 
 async def test_ownership_transfer_invalidates_grant(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """After asset Ownership transfers to a new Owner, grants issued under the
     old Owner no longer authorize use (GR-408).
@@ -574,7 +576,7 @@ async def test_ownership_transfer_invalidates_grant(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     alice_id = await _get_user_id(client, ALICE)
 
@@ -649,11 +651,11 @@ async def test_ownership_transfer_invalidates_grant(
 
 
 async def test_grant_to_nonexistent_grantee_rejected(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Creating a grant for a nonexistent User or UserGroup returns 404."""
     group_b = await _create_group(client, "Grantee Validation Group B")
-    resource_b_id, _ = await _create_resource_version(client, group_b)
+    resource_b_id, _ = await _create_resource_version(client, context, group_b)
 
     # Grant to a nonexistent User.
     response = await client.post(
@@ -686,7 +688,7 @@ async def test_grant_to_nonexistent_grantee_rejected(
 
 
 async def test_all_grant_covers_current_and_future_assets(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """An ALL grant from a Grantor covers all current and future assets."""
     group_a = await _create_group(client, "ALL Grant Group A")
@@ -694,7 +696,7 @@ async def test_all_grant_covers_current_and_future_assets(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    _resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    _resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     # Without grant: referencing B's resource → 404.
     response = await client.post(
@@ -750,7 +752,9 @@ async def test_all_grant_covers_current_and_future_assets(
     assert response.status_code == 201, response.text
 
     # Create a NEW resource under Group B — ALL grant should cover it too.
-    _resource_b2_id, resource_b2_version_id = await _create_resource_version(client, group_b)
+    _resource_b2_id, resource_b2_version_id = await _create_resource_version(
+        client, context, group_b
+    )
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={
@@ -794,7 +798,7 @@ async def test_all_grant_covers_current_and_future_assets(
 
 
 async def test_new_owner_can_re_grant_after_transfer(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """After asset ownership transfers, the new owner can issue a fresh grant."""
     group_a = await _create_group(client, "ReGrant Group A")
@@ -803,7 +807,7 @@ async def test_new_owner_can_re_grant_after_transfer(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     # Grant: Group B → Group A via the Grant API (grantor derived from resource owner).
     response = await client.post(
@@ -905,7 +909,7 @@ async def test_new_owner_can_re_grant_after_transfer(
 
 
 async def test_usergroup_owner_role_transfer_preserves_grant(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Transferring the UserGroup OWNER role does not affect asset grants;
     the asset still belongs to the same UserGroup."""
@@ -914,7 +918,7 @@ async def test_usergroup_owner_role_transfer_preserves_grant(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    resource_b_id, resource_b_version_id = await _create_resource_version(client, group_b)
+    resource_b_id, resource_b_version_id = await _create_resource_version(client, context, group_b)
 
     alice_id = await _get_user_id(client, ALICE)
 
@@ -1011,14 +1015,14 @@ async def test_usergroup_owner_role_transfer_preserves_grant(
 
 
 async def test_all_grant_with_nonempty_target_id_rejected(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """ALL grant must have empty target_id; non-empty → 422."""
     group_a = await _create_group(client, "RejectAllA")
     group_b = await _create_group(client, "RejectAllB")
     await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
-    _resource_b_id, _ = await _create_resource_version(client, group_b)
+    _resource_b_id, _ = await _create_resource_version(client, context, group_b)
 
     response = await client.post(
         "/api/v1/grants",
@@ -1039,7 +1043,7 @@ async def test_all_grant_with_nonempty_target_id_rejected(
 
 
 async def test_explicit_grantor_for_asset_grant_rejected(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Asset-specific grants must not carry an explicit grantor; it is derived
     from the target asset's current owner.  An explicit grantor → 422."""
@@ -1047,7 +1051,7 @@ async def test_explicit_grantor_for_asset_grant_rejected(
     group_b = await _create_group(client, "RejectExplicitB")
     await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
-    resource_b_id, _ = await _create_resource_version(client, group_b)
+    resource_b_id, _ = await _create_resource_version(client, context, group_b)
 
     response = await client.post(
         "/api/v1/grants",
@@ -1063,7 +1067,7 @@ async def test_explicit_grantor_for_asset_grant_rejected(
 
 
 async def test_group_grant_matches_exact_project_owner_while_user_grant_follows_actor(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Qualification source does not replace authorization in a concrete Project context."""
     group_a = await _create_group(client, "Context Group A")
@@ -1074,7 +1078,7 @@ async def test_group_grant_matches_exact_project_owner_while_user_grant_follows_
     await grant_test_entitlement(session, "alice")
     project_a = await _create_project_with_version(client, group_a, name="Context A project")
     project_c = await _create_project_with_version(client, group_c, name="Context C project")
-    resource_id, resource_version_id = await _create_resource_version(client, group_b)
+    resource_id, resource_version_id = await _create_resource_version(client, context, group_b)
     alice_id = await _get_user_id(client, ALICE)
 
     await _insert_grant(

@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from workspace107.api.deps import AppContext, build_services
 from workspace107.domain import ids
 from workspace107.domain.compute import ResourceEntitlement
 from workspace107.infrastructure.db import tables as t
@@ -81,6 +82,28 @@ async def grant_test_entitlement(
         )
     )
     await session.commit()
+
+
+async def process_shared_resource_publication(context: AppContext, attempt_id: str) -> str:
+    """Exercise the real claim/commit/process/commit boundary and return the Version ID."""
+    claim_session = context.session_factory()
+    try:
+        services = build_services(context, claim_session)
+        claimed = await services.shared_resource_publications.claim_next()
+        await claim_session.commit()
+    finally:
+        await claim_session.close()
+    assert claimed is not None and claimed.id == attempt_id
+
+    process_session = context.session_factory()
+    try:
+        services = build_services(context, process_session)
+        result = await services.shared_resource_publications.process(claimed.id)
+        await process_session.commit()
+    finally:
+        await process_session.close()
+    assert result.version_id is not None
+    return result.version_id
 
 
 async def create_project_with_version(

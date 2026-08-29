@@ -120,6 +120,22 @@ class ArtifactStatus(StrEnum):
     CLEANED = "cleaned"
 
 
+class SharedResourcePublicationStatus(StrEnum):
+    """Durable publication attempt state."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {
+            SharedResourcePublicationStatus.SUCCEEDED,
+            SharedResourcePublicationStatus.FAILED,
+        }
+
+
 class InputSourceType(StrEnum):
     """Input Binding 的来源类型。
 

@@ -114,8 +114,16 @@ class RunSubmission:
 
 
 @dataclass(frozen=True, slots=True)
-class RunDetail:
+class RunView:
+    """A Run plus its current authoritative User username projection."""
+
     run: Run
+    initiated_by_username: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RunDetail:
+    run: RunView
     snapshot: RunSnapshot
     events: list[RunEvent]
     artifacts: list[Artifact]
@@ -146,12 +154,43 @@ class RunService:
 
     # -- 查询 -----------------------------------------------------------
 
-    async def list_for_project(self, user_id: str, project_id: str, page: PageRequest) -> Page[Run]:
+    async def list_for_project(
+        self, user_id: str, project_id: str, page: PageRequest
+    ) -> Page[RunView]:
         await self._guard.project(user_id, project_id, owner_scope=True)
-        return await self._repos.runs.list_for_project(project_id, page)
+        runs = await self._repos.runs.list_for_project(project_id, page)
+        return Page(
+            items=await self._views(runs.items),
+            page=runs.page,
+            page_size=runs.page_size,
+            total=runs.total,
+        )
 
-    async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Run]:
-        return await self._repos.runs.list_for_user(user_id, limit=limit)
+    async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[RunView]:
+        return await self._views(await self._repos.runs.list_for_user(user_id, limit=limit))
+
+    async def view(self, run: Run) -> RunView:
+        """Resolve one Run without substituting the current viewer's identity."""
+
+        user = await self._repos.users.get(run.initiated_by_user_id)
+        return RunView(
+            run=run,
+            initiated_by_username=user.username if user is not None else None,
+        )
+
+    async def _views(self, runs: list[Run]) -> list[RunView]:
+        users = await self._repos.users.list_by_ids({run.initiated_by_user_id for run in runs})
+        return [
+            RunView(
+                run=run,
+                initiated_by_username=(
+                    users[run.initiated_by_user_id].username
+                    if run.initiated_by_user_id in users
+                    else None
+                ),
+            )
+            for run in runs
+        ]
 
     async def get_detail(self, user_id: str, run_id: str) -> RunDetail:
         access = await self._guard.run(user_id, run_id)
@@ -159,7 +198,7 @@ class RunService:
         if snapshot is None:  # pragma: no cover - 数据损坏才会发生
             raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
         return RunDetail(
-            run=access.run,
+            run=await self.view(access.run),
             snapshot=snapshot,
             events=await self._repos.run_events.list_for_run(run_id),
             artifacts=await self._repos.artifacts.list_for_run(run_id),

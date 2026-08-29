@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * typecheck 时把关，后端改了契约前端立刻编译失败。这里只守契约管不到的
  * 那一半：运行时怎么把前端的数据结构翻译成 HTTP 请求。
  *
- * 其中最值得守的是 `publishSharedResourceVersion`：它是前端唯一一处
+ * 其中最值得守的是 `createSharedResourcePublicationAttempt`：它是前端唯一一处
  * multipart 上传。后端 `File(...)` 期待每个文件挂在 `files` 下、
  * `description` 是普通字段、`prefix` 走 query。openapi-fetch 把 FormData
  * 原样透传，浏览器补 boundary——所以只要 FormData 拼错了，文件就静默丢一个，
@@ -68,10 +68,13 @@ beforeEach(() => {
   requests.length = 0
 })
 
-describe('publishSharedResourceVersion', () => {
+describe('createSharedResourcePublicationAttempt', () => {
   it('每个文件挂在 files 下，description 作为普通字段', async () => {
     const files = [new File(['aaa'], 'a.txt'), new File(['bbb'], 'b.txt')]
-    await api.publishSharedResourceVersion('res_1', { files, description: '首个版本' })
+    await api.createSharedResourcePublicationAttempt('res_1', {
+      files,
+      description: '首个版本',
+    })
 
     expect(requests).toHaveLength(1)
     const request = lastRequest()
@@ -89,7 +92,7 @@ describe('publishSharedResourceVersion', () => {
   })
 
   it('prefix 走 query 而不是塞进 body', async () => {
-    await api.publishSharedResourceVersion('res_1', {
+    await api.createSharedResourcePublicationAttempt('res_1', {
       files: [new File(['x'], 'x.txt')],
       description: '',
       prefix: 'data/',
@@ -104,7 +107,7 @@ describe('publishSharedResourceVersion', () => {
   })
 
   it('Content-Type 让浏览器带 multipart boundary，不写成 JSON', async () => {
-    await api.publishSharedResourceVersion('res_1', {
+    await api.createSharedResourcePublicationAttempt('res_1', {
       files: [new File(['x'], 'x.txt')],
       description: '',
     })
@@ -143,6 +146,11 @@ describe('canonical Shared Resource API / getSharedResourceVersion', () => {
   it('版本详情和文件读取用各自的路径参数', async () => {
     await api.getSharedResourceVersion('ver_1')
     expect(new URL(lastRequest().url).pathname).toBe('/api/v1/shared-resource-versions/ver_1')
+
+    await api.getSharedResourcePublicationAttempt('shrpa_1')
+    expect(new URL(lastRequest().url).pathname).toBe(
+      '/api/v1/shared-resource-publication-attempts/shrpa_1',
+    )
 
     await api.readSharedResourceVersionFile('ver_1', 'data/train.py')
     const fileUrl = new URL(lastRequest().url)

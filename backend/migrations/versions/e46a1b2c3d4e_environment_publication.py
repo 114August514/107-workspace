@@ -6,7 +6,7 @@ all Environment Versions. Activity and Notification history is preserved. No Env
 Version data is preserved; downgrade restores only the predecessor schema shape.
 
 Revision ID: e46a1b2c3d4e
-Revises: f42a9c7e1d30
+Revises: ca75036247bb
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e46a1b2c3d4e"
-down_revision: str | None = "f42a9c7e1d30"
+down_revision: str | None = "ca75036247bb"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

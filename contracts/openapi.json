@@ -206,6 +206,28 @@
         "title": "ArtifactStatus",
         "type": "string"
       },
+      "Body_create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post",
+        "type": "object"
+      },
       "Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post": {
         "properties": {
           "architecture": {
@@ -243,28 +265,6 @@
           "sif"
         ],
         "title": "Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post",
-        "type": "object"
-      },
-      "Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post": {
-        "properties": {
-          "description": {
-            "default": "",
-            "title": "Description",
-            "type": "string"
-          },
-          "files": {
-            "items": {
-              "contentMediaType": "application/octet-stream",
-              "type": "string"
-            },
-            "title": "Files",
-            "type": "array"
-          }
-        },
-        "required": [
-          "files"
-        ],
-        "title": "Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post",
         "type": "object"
       },
       "Body_upload_archive_api_v1_projects__project_id__files_archive_post": {
@@ -2636,6 +2636,18 @@
             "title": "Initiated By User Id",
             "type": "string"
           },
+          "initiated_by_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "当前权威 User.username；User 记录无法解析时为 null。",
+            "title": "Initiated By Username"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -2753,6 +2765,7 @@
           "exit_code",
           "failure_reason",
           "initiated_by_user_id",
+          "initiated_by_username",
           "created_at",
           "submitted_at",
           "started_at",
@@ -3092,6 +3105,116 @@
         "title": "SharedResourceOwnerQualificationOut",
         "type": "object"
       },
+      "SharedResourcePublicationAttemptOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "file_count": {
+            "title": "File Count",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "shared_resource_id": {
+            "title": "Shared Resource Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "processing",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_size": {
+            "title": "Total Size",
+            "type": "integer"
+          },
+          "validation_summary": {
+            "title": "Validation Summary",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "id",
+          "shared_resource_id",
+          "status",
+          "description",
+          "file_count",
+          "total_size",
+          "validation_summary",
+          "failure_reason",
+          "version_id",
+          "created_by",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "SharedResourcePublicationAttemptOut",
+        "type": "object"
+      },
       "SharedResourceUpdateIn": {
         "properties": {
           "description": {
@@ -3157,6 +3280,10 @@
             "title": "Label",
             "type": "string"
           },
+          "manifest_hash": {
+            "title": "Manifest Hash",
+            "type": "string"
+          },
           "sequence": {
             "title": "Sequence",
             "type": "integer"
@@ -3168,6 +3295,10 @@
           "total_size": {
             "title": "Total Size",
             "type": "integer"
+          },
+          "validation_summary": {
+            "title": "Validation Summary",
+            "type": "string"
           }
         },
         "required": [
@@ -3178,6 +3309,8 @@
           "description",
           "file_count",
           "total_size",
+          "manifest_hash",
+          "validation_summary",
           "created_by",
           "created_at",
           "files"
@@ -3235,6 +3368,10 @@
             "title": "Label",
             "type": "string"
           },
+          "manifest_hash": {
+            "title": "Manifest Hash",
+            "type": "string"
+          },
           "sequence": {
             "title": "Sequence",
             "type": "integer"
@@ -3246,6 +3383,10 @@
           "total_size": {
             "title": "Total Size",
             "type": "integer"
+          },
+          "validation_summary": {
+            "title": "Validation Summary",
+            "type": "string"
           }
         },
         "required": [
@@ -3256,6 +3397,8 @@
           "description",
           "file_count",
           "total_size",
+          "manifest_hash",
+          "validation_summary",
           "created_by",
           "created_at"
         ],
@@ -10854,6 +10997,115 @@
         ]
       }
     },
+    "/api/v1/shared-resource-publication-attempts/{attempt_id}": {
+      "get": {
+        "description": "Return an owner-scoped durable attempt without granting Shared Resource USE.",
+        "operationId": "get_shared_resource_publication_attempt_api_v1_shared_resource_publication_attempts__attempt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedResourcePublicationAttemptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "获取 Shared Resource 发布校验结果",
+        "tags": [
+          "shared-resource"
+        ]
+      }
+    },
     "/api/v1/shared-resource-versions/{version_id}": {
       "get": {
         "description": "校验所属资源的可见性后，返回版本信息及完整文件清单。",
@@ -11642,8 +11894,8 @@
     },
     "/api/v1/shared-resources/{resource_id}/versions": {
       "post": {
-        "description": "需要 Shared Resource 版本创建权限；上传文件形成新的不可变版本。\n\n上传的文件按 ``prefix/<filename>`` 写入资源；同路径文件会被视为重复路径\n导致版本发布失败。版本发布后内容不可修改。",
-        "operationId": "publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post",
+        "description": "Persist uploaded blobs and return before processor validation/publication.",
+        "operationId": "create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post",
         "parameters": [
           {
             "in": "path",
@@ -11685,18 +11937,18 @@
           "content": {
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post"
+                "$ref": "#/components/schemas/Body_create_shared_resource_publication_attempt_api_v1_shared_resources__resource_id__versions_post"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "201": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SharedResourceVersionOut"
+                  "$ref": "#/components/schemas/SharedResourcePublicationAttemptOut"
                 }
               }
             },
@@ -11763,7 +12015,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "上传 Shared Resource 新版本",
+        "summary": "上传 Shared Resource 发布候选",
         "tags": [
           "shared-resource"
         ]

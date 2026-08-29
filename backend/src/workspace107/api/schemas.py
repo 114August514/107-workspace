@@ -398,6 +398,8 @@ class SharedResourceVersionOut(Model):
     description: str
     file_count: int
     total_size: int
+    manifest_hash: str
+    validation_summary: str
     created_by: str
     created_at: datetime
 
@@ -408,6 +410,22 @@ class SharedResourceVersionDetailOut(SharedResourceVersionOut):
 
 class SharedResourceDetailOut(SharedResourceOut):
     versions: list[SharedResourceVersionOut]
+
+
+class SharedResourcePublicationAttemptOut(Model):
+    id: str
+    shared_resource_id: str
+    status: Literal["pending", "processing", "succeeded", "failed"]
+    description: str
+    file_count: int
+    total_size: int
+    validation_summary: str
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class CanonicalSharedResourceCreateIn(Model):
@@ -551,6 +569,8 @@ class RunOut(Model):
     failure_reason: str
     initiated_by_user_id: str
     """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
+    initiated_by_username: str | None
+    """当前权威 User.username；User 记录无法解析时为 null。"""
     created_at: datetime | None
     submitted_at: datetime | None
     started_at: datetime | None

@@ -542,11 +542,76 @@ class SharedResourceVersionRow(Base):
     )
     sequence: Mapped[int] = mapped_column(Integer)
     description: Mapped[str] = mapped_column(Text, default="")
+    manifest_hash: Mapped[str] = mapped_column(String(64))
+    validation_summary: Mapped[str] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         UniqueConstraint("shared_resource_id", "sequence", name="uq_shared_resource_version_seq"),
+    )
+
+
+class SharedResourcePublicationAttemptRow(Base):
+    """Durable candidate state and validation result."""
+
+    __tablename__ = "shared_resource_publication_attempts"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    shared_resource_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("shared_resources.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    validation_summary: Mapped[str] = mapped_column(Text)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("shared_resource_versions.id"), nullable=True, unique=True
+    )
+    created_by: Mapped[str] = mapped_column(ID)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'succeeded', 'failed')",
+            name="ck_shared_resource_publication_attempt_status",
+        ),
+        CheckConstraint(
+            "(status = 'pending' AND started_at IS NULL AND finished_at IS NULL "
+            "AND version_id IS NULL AND failure_reason IS NULL) OR "
+            "(status = 'processing' AND started_at IS NOT NULL AND finished_at IS NULL "
+            "AND version_id IS NULL AND failure_reason IS NULL) OR "
+            "(status = 'succeeded' AND started_at IS NOT NULL AND finished_at IS NOT NULL "
+            "AND version_id IS NOT NULL AND failure_reason IS NULL) OR "
+            "(status = 'failed' AND started_at IS NOT NULL AND finished_at IS NOT NULL "
+            "AND version_id IS NULL AND failure_reason IS NOT NULL)",
+            name="ck_shared_resource_publication_attempt_result",
+        ),
+        Index("ix_shared_resource_publication_attempt_claim", "status", "started_at", "created_at"),
+        Index(
+            "ix_shared_resource_publication_attempt_resource", "shared_resource_id", "created_at"
+        ),
+    )
+
+
+class SharedResourcePublicationFileRow(Base):
+    """Candidate manifest entry retained independently of publication success."""
+
+    __tablename__ = "shared_resource_publication_files"
+
+    attempt_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("shared_resource_publication_attempts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    size: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64))
+
+    __table_args__ = (
+        CheckConstraint("size >= 0", name="ck_shared_resource_publication_file_size"),
     )
 
 

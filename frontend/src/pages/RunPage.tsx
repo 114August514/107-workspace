@@ -143,6 +143,11 @@ export function RunPage() {
               style={{ marginTop: 16 }}
               items={[
                 {
+                  key: 'initiator',
+                  label: '发起用户',
+                  children: run.initiated_by_username ?? '未知用户',
+                },
+                {
                   key: 'job',
                   label: '调度任务',
                   children: run.scheduler_job_id ? (

@@ -104,6 +104,40 @@ async def _environment_publication_loop(app: FastAPI, interval: float) -> None:
             logger.exception("Environment publication processing failed")
 
 
+async def _shared_resource_publication_loop(app: FastAPI, interval: float) -> None:
+    """Claim and process durable Shared Resource publication attempts."""
+    context: AppContext = app.state.context
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            claim_session = context.session_factory()
+            try:
+                services = build_services(context, claim_session)
+                attempt = await services.shared_resource_publications.claim_next()
+                await claim_session.commit()
+            finally:
+                await claim_session.close()
+            if attempt is None:
+                continue
+
+            process_session = context.session_factory()
+            try:
+                services = build_services(context, process_session)
+                result = await services.shared_resource_publications.process(attempt.id)
+                await process_session.commit()
+                logger.info(
+                    "Shared Resource 发布尝试 %s 处理完成：%s",
+                    result.id,
+                    result.status.value,
+                )
+            finally:
+                await process_session.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # pragma: no cover - interrupted claim remains durably recoverable
+            logger.exception("Shared Resource 发布处理失败")
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or get_settings()
     configure_logging(resolved.log_level, json_output=resolved.use_json_logs)
@@ -119,6 +153,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 asyncio.create_task(
                     _environment_publication_loop(
                         app, resolved.environment_publication_interval_seconds
+                    )
+                )
+            )
+        if resolved.shared_resource_publication_interval_seconds > 0:
+            tasks.append(
+                asyncio.create_task(
+                    _shared_resource_publication_loop(
+                        app, resolved.shared_resource_publication_interval_seconds
                     )
                 )
             )
