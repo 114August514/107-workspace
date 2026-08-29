@@ -1,4 +1,4 @@
-"""Platform catalog for environments and compute plans."""
+"""Environment discovery and platform Compute Plan routes."""
 
 from __future__ import annotations
 
@@ -20,9 +20,37 @@ async def list_environments(
     user: CurrentUser,
     services: ServicesDep,
 ) -> list[s.EnvironmentOut]:
-    """返回当前 User 作为 Owner 或 owning UserGroup active member 可发现的环境。"""
+    """返回当前 User 可在个人或有效 User Group Owner 上下文中使用的环境。"""
     views = await services.catalog.list_environments(user.id)
     return [p.environment_out(view) for view in views]
+
+
+@router.get(
+    "/environments/{environment_id}",
+    response_model=s.EnvironmentOut,
+    summary="获取运行环境",
+)
+async def get_environment(
+    environment_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.EnvironmentOut:
+    return p.environment_out(await services.catalog.get_environment(user.id, environment_id))
+
+
+@router.get(
+    "/environment-versions/{version_id}",
+    response_model=s.EnvironmentVersionOut,
+    summary="获取运行环境版本",
+)
+async def get_environment_version(
+    version_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.EnvironmentVersionOut:
+    return p.environment_version_out(
+        await services.catalog.get_environment_version(user.id, version_id)
+    )
 
 
 @router.get(

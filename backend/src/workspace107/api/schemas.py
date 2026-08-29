@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,7 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
+from ..domain.grant import UseQualificationScope
 from ..domain.ownership import OwnerKind
 
 
@@ -179,6 +180,20 @@ class FileMoveIn(Model):
     destination: str
 
 
+class FileCopyIn(Model):
+    source: str
+    destination: str
+
+
+class MkdirIn(Model):
+    path: str
+
+
+class DiscardChangesIn(Model):
+    paths: list[str] = Field(min_length=1)
+    """要放弃的未保存变更路径；不存在的变更按幂等跳过。"""
+
+
 class FileContentOut(Model):
     path: str
     content: str
@@ -188,6 +203,17 @@ class FileContentOut(Model):
 class WorkingChangeOut(Model):
     path: str
     change: ChangeKind
+
+
+class WorkingChangeDetailOut(Model):
+    """单个未保存变更的内容级详情。"""
+
+    path: str
+    change: ChangeKind
+    previous: FileContentOut | None = None
+    """基线（最近保存版本）中的内容预览；新增时为空。"""
+    current: FileContentOut | None = None
+    """当前工作区内容预览；删除时为空。"""
 
 
 class ProjectVersionFileOut(Model):
@@ -277,12 +303,50 @@ class ComputePlanOut(Model):
 # -- Shared Resource --------------------------------------------------------
 
 
+class UseGrantSummaryOut(Model):
+    """One USE Grant contributing to the enclosing qualification."""
+
+    id: str
+    target_all: bool
+    created_at: datetime
+
+
+class SharedResourceOwnerQualificationOut(Model):
+    """Use in a Project whose Owner is the resource Owner."""
+
+    scope: Literal[UseQualificationScope.OWNER] = UseQualificationScope.OWNER
+
+
+class SharedResourceGrantQualificationOut(Model):
+    """Actor-level Grant qualification, not authorization for a concrete Run.
+
+    ``user_grant`` follows the actor into any Project where they may submit.
+    ``user_group_grant`` applies only while the actor is an active member, the
+    Grantee User Group owns the consuming Project, and the actor may submit there.
+    Grants is non-empty and contains every matching Grant for this one Grantee.
+    """
+
+    scope: Literal[
+        UseQualificationScope.USER_GRANT,
+        UseQualificationScope.USER_GROUP_GRANT,
+    ]
+    grantee: OwnerSummaryOut
+    grants: list[UseGrantSummaryOut] = Field(min_length=1)
+
+
+SharedResourceUseQualificationOut = Annotated[
+    SharedResourceOwnerQualificationOut | SharedResourceGrantQualificationOut,
+    Field(discriminator="scope"),
+]
+
+
 class SharedResourceOut(Model):
     id: str
     name: str
     description: str
     owner: OwnerSummaryOut
     created_at: datetime
+    use_qualifications: list[SharedResourceUseQualificationOut]
     capabilities: list[Capability] = Field(default_factory=list)
 
 
@@ -430,7 +494,7 @@ class PreflightOut(Model):
     ok: bool
     problems: list[str]
     project_version_id: str | None
-    environment_version_id: str | None
+    environment_version: EnvironmentVersionOut | None
     compute_plan_id: str | None
     compute_request: ComputeRequestModel | None
     resolved_environment_variables: dict[str, str]

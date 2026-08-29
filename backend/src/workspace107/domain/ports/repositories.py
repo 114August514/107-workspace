@@ -119,6 +119,14 @@ class EnvironmentRepository(Protocol):
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
     ) -> EnvironmentVersion | None: ...
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        """Trusted owner lookup; application authorization remains authoritative."""
+        ...
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        """Trusted version lookup after the parent Environment is authorized."""
+        ...
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
@@ -238,9 +246,10 @@ class ForkRelationRepository(Protocol):
 class SharedResourceRepository(Protocol):
     """Shared Resource persistence with repository-enforced discovery.
 
-    User-facing reads always require an actor and filter by exact User ownership or
-    active Membership of the owning UserGroup. #40 may extend this predicate with a
-    valid USE Grant; #39 has no all-authenticated catalog path.
+    User-facing reads always require an actor and filter by exact User ownership,
+    active Membership of the owning UserGroup, or a valid USE Grant issued by the
+    resource's current Owner to the actor or one of their active UserGroups. Grant
+    discovery does not add management capability or an all-authenticated catalog path.
     """
 
     async def add(self, resource: SharedResource) -> None: ...

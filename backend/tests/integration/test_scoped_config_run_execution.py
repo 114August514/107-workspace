@@ -78,6 +78,10 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     assert preflight.status_code == 200
     body = preflight.json()
     assert body["problems"] == []
+    environment = body["environment_version"]
+    assert environment["id"] == env_version_id
+    assert environment["version"] == "3.12"
+    assert environment["available"] is True
     assert body["secret_references"] == {
         "TOKEN": f"project:{project['id']}:TOKEN",
         "OWNER_ONLY_SECRET": f"user_group:{group_id}:OWNER_ONLY_SECRET",

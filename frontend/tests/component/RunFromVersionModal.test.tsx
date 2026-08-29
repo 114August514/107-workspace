@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RunFromVersionModal } from '../../src/components/run/RunFromVersionModal'
-import type { PreflightResult, Run, RunConfiguration } from '../../src/api/types'
+import type { PreflightResult, Run, RunConfiguration, RunDraft } from '../../src/api/types'
 
 /**
  * RunFromVersionModal 行为测试。
@@ -55,7 +55,15 @@ function makePreflight(ok: boolean): PreflightResult {
     problems: ok ? [] : ['缺少 Secret'],
     compute_plan_id: 'cp-1',
     compute_request: null,
-    environment_version_id: null,
+    environment_version: {
+      id: 'ev-1',
+      environment_id: 'env-1',
+      version: '3.12',
+      description: '',
+      image: 'python:3.12',
+      setup_command: '',
+      available: true,
+    },
     project_version_id: 'ver-1',
     resolved_environment_variables: {},
     secret_references: {},
@@ -103,7 +111,7 @@ function renderModal(overrides: Partial<Parameters<typeof RunFromVersionModal>[0
 describe('RunFromVersionModal', () => {
   afterEach(() => {
     cleanup()
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   beforeEach(() => {
@@ -117,23 +125,25 @@ describe('RunFromVersionModal', () => {
       makeConfig('config-b', '方案 B'),
     ])
 
-    // A 的 preflight 立即返回 ok=true
-    // B 的 preflight 用 pending Promise 延迟，模拟检查进行中
+    // 把响应绑定到 configuration，而不是依赖异步 effect 的调用顺序。
+    // A 立即通过；B 保持 pending，模拟切换后的检查中状态。
     let resolveBPreflight!: (value: PreflightResult) => void
     const bPreflightPromise = new Promise<PreflightResult>((resolve) => {
       resolveBPreflight = resolve
     })
 
-    mockPreflight
-      .mockResolvedValueOnce(makePreflight(true)) // config A
-      .mockReturnValueOnce(bPreflightPromise) // config B（pending）
+    mockPreflight.mockImplementation((_projectId: string, draft: RunDraft) =>
+      draft.run_configuration_id === 'config-a'
+        ? Promise.resolve(makePreflight(true))
+        : bPreflightPromise,
+    )
 
     renderModal()
 
-    // 等待 configs 加载、A 被默认选中、A 的 preflight 完成
-    await waitFor(() => {
-      expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
-    })
+    // 等待 configs 加载、A 被默认选中、A 的 preflight 完成。
+    // Alert 是用户可感知的成功边界；Descriptions 的响应式内部副本不是测试契约。
+    const successAlert = await screen.findByRole('alert')
+    expect(successAlert).toHaveTextContent('提交前检查通过')
 
     // 提交按钮此时应该可用（A 的 preflight ok）
     // antd 对双字符中文标签会插入间距：「提 交」
@@ -182,16 +192,21 @@ describe('RunFromVersionModal', () => {
       resolveAPreflight = resolve
     })
 
-    // A 先发请求但 pending；B 随后请求并立即返回 ok
-    mockPreflight
-      .mockReturnValueOnce(aPreflightPromise) // config A（slow，pending）
-      .mockResolvedValueOnce(makePreflight(true)) // config B（fast，ok）
+    // 响应按请求中的 configuration 选择，测试只约束产品语义，不约束 effect 调度次数。
+    mockPreflight.mockImplementation((_projectId: string, draft: RunDraft) =>
+      draft.run_configuration_id === 'config-a'
+        ? aPreflightPromise
+        : Promise.resolve(makePreflight(true)),
+    )
 
     renderModal()
 
     // 等 configs 加载，A 被默认选中并触发 preflight（pending 中）
     await waitFor(() => {
-      expect(mockPreflight).toHaveBeenCalledTimes(1)
+      expect(mockPreflight).toHaveBeenCalledWith('prj-1', {
+        run_configuration_id: 'config-a',
+        project_version_id: 'ver-1',
+      })
     })
     // 提交按钮禁用（A 还在检查中）
     await waitFor(() => {
@@ -205,6 +220,10 @@ describe('RunFromVersionModal', () => {
     fireEvent.click(optionB)
 
     await waitFor(() => {
+      expect(mockPreflight).toHaveBeenCalledWith('prj-1', {
+        run_configuration_id: 'config-b',
+        project_version_id: 'ver-1',
+      })
       expect(screen.getByText('提交前检查通过')).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: /提\s*交/ })).not.toBeDisabled()

@@ -45,8 +45,10 @@ async def preflight(
         ok=result.ok,
         problems=result.problems,
         project_version_id=result.project_version.id if result.project_version else None,
-        environment_version_id=(
-            result.environment_version.id if result.environment_version else None
+        environment_version=(
+            p.environment_version_out(result.environment_version)
+            if result.environment_version
+            else None
         ),
         compute_plan_id=result.compute_plan.id if result.compute_plan else None,
         compute_request=p.compute_request_out(result.compute_request),

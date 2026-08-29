@@ -51,6 +51,7 @@ export type ProjectPage = Schemas['PageOut_ProjectOut_']
 export type ProjectFile = Schemas['ProjectFileOut']
 export type FileContent = Schemas['FileContentOut']
 export type WorkingChange = Schemas['WorkingChangeOut']
+export type WorkingChangeDetail = Schemas['WorkingChangeDetailOut']
 export type ProjectVersion = Schemas['ProjectVersionOut']
 export type ProjectVersionPage = Schemas['PageOut_ProjectVersionOut_']
 export type ProjectVersionDetail = Schemas['ProjectVersionDetailOut']
@@ -77,6 +78,8 @@ export type SharedResourceVersionDetail = Schemas['SharedResourceVersionDetailOu
 export type SharedResourceVersionFile = Schemas['SharedResourceVersionFileOut']
 export type SharedResourceCreate = Schemas['CanonicalSharedResourceCreateIn']
 export type SharedResourceUpdate = Schemas['SharedResourceUpdateIn']
+export type UseGrantSummary = Schemas['UseGrantSummaryOut']
+export type SharedResourceUseQualification = SharedResource['use_qualifications'][number]
 
 // -- 运行方案 ---------------------------------------------------------------
 

@@ -46,6 +46,7 @@ function makeResource(overrides: Partial<SharedResourceDetail> = {}): SharedReso
     description: 'imagenet-subset',
     owner: { kind: 'user_group', id: 'ws_test', display_name: 'Test 空间' },
     created_at: '2026-08-14T10:00:00Z',
+    use_qualifications: [{ scope: 'owner' }],
     versions: [],
     capabilities: ['shared_resource.view'],
     ...overrides,
@@ -221,5 +222,89 @@ describe('SharedResourcePage 权限与空态', () => {
       )
     })
     expect(screen.getByText('共享资源')).toBeInTheDocument()
+  })
+})
+
+describe('SharedResourcePage 使用资格展示（Issue #55）', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('Owner 资格明确限定为资源 Owner 相同的 Project', async () => {
+    mockGetSharedResource.mockResolvedValue(makeResource())
+
+    renderPage()
+
+    expect(await screen.findByText('资源 Owner 范围')).toBeInTheDocument()
+    expect(
+      screen.getByText('你具备在 Owner 与此资源相同的 Project 中引用它的资格。'),
+    ).toBeInTheDocument()
+  })
+
+  it('直接 User Grant 说明可跟随 actor，而不冒充全局 Preflight 结果', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        use_qualifications: [
+          {
+            scope: 'user_grant',
+            grantee: { kind: 'user', id: 'usr_bob', display_name: 'Bob' },
+            grants: [
+              {
+                id: 'grant_1',
+                target_all: false,
+                created_at: '2026-08-20T10:00:00Z',
+              },
+            ],
+          },
+        ],
+      }),
+    )
+
+    renderPage()
+
+    expect(await screen.findByText('个人 USE 授权')).toBeInTheDocument()
+    expect(
+      screen.getByText('Owner 已直接授权给你；可在你有权提交的任何 Project 中引用它。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('这里仅说明当前账号的使用资格，不代表具体 Run 已通过 Preflight。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/USE 授权：授予 Bob（仅限此资源）/)).toBeInTheDocument()
+  })
+
+  it('UserGroup Grant 说明仅适用于该组拥有的 Project', async () => {
+    mockGetSharedResource.mockResolvedValue(
+      makeResource({
+        use_qualifications: [
+          {
+            scope: 'user_group_grant',
+            grantee: { kind: 'user_group', id: 'grp_ml', display_name: 'ML 组' },
+            grants: [
+              {
+                id: 'grant_2',
+                target_all: true,
+                created_at: '2026-08-20T10:00:00Z',
+              },
+            ],
+          },
+        ],
+      }),
+    )
+
+    renderPage()
+
+    expect(await screen.findByText('ML 组 USE 授权')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Owner 已授权给「ML 组」；需保持该组有效成员身份，并在该组拥有且你有权提交的 Project 中引用它。',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/USE 授权：授予 ML 组（覆盖 Owner 全部资产）/)).toBeInTheDocument()
   })
 })

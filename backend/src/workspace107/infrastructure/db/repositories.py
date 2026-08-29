@@ -699,6 +699,28 @@ class EnvironmentRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
 
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        owner_user_id, owner_group_id = _owner_columns(owner)
+        stmt = (
+            select(t.EnvironmentRow)
+            .where(
+                t.EnvironmentRow.owner_user_id == owner_user_id,
+                t.EnvironmentRow.owner_user_group_id == owner_group_id,
+            )
+            .order_by(t.EnvironmentRow.name, t.EnvironmentRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment(row) for row in rows]
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        stmt = (
+            select(t.EnvironmentVersionRow)
+            .where(t.EnvironmentVersionRow.environment_id == environment_id)
+            .order_by(t.EnvironmentVersionRow.version.desc(), t.EnvironmentVersionRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment_version(row) for row in rows]
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentVersionRow, version_id)
@@ -1340,13 +1362,7 @@ class SharedResourceRepositoryImpl:
     async def list_discoverable_for_user(self, user_id: str) -> list[SharedResource]:
         stmt = (
             select(t.SharedResourceRow)
-            .where(
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                )
-            )
+            .where(_shared_resource_discovery_predicate(user_id))
             .order_by(t.SharedResourceRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
@@ -1357,11 +1373,7 @@ class SharedResourceRepositoryImpl:
     ) -> SharedResource | None:
         stmt = select(t.SharedResourceRow).where(
             t.SharedResourceRow.id == resource_id,
-            _asset_discovery_predicate(
-                t.SharedResourceRow.owner_user_id,
-                t.SharedResourceRow.owner_user_group_id,
-                user_id,
-            ),
+            _shared_resource_discovery_predicate(user_id),
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_shared_resource(row) if row else None
@@ -1404,11 +1416,7 @@ class SharedResourceRepositoryImpl:
             )
             .where(
                 t.SharedResourceVersionRow.id == version_id,
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                ),
+                _shared_resource_discovery_predicate(user_id),
             )
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -1434,11 +1442,7 @@ class SharedResourceRepositoryImpl:
             )
             .where(
                 t.SharedResourceRow.id == resource_id,
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                ),
+                _shared_resource_discovery_predicate(user_id),
             )
             .order_by(t.SharedResourceVersionRow.sequence.desc())
         )
@@ -1625,6 +1629,48 @@ def _asset_discovery_predicate(owner_user_column: Any, owner_group_column: Any, 
         t.MembershipRow.status == MembershipStatus.ACTIVE.value,
     )
     return (owner_user_column == user_id) | owner_group_column.in_(active_group_ids)
+
+
+def _shared_resource_discovery_predicate(user_id: str):
+    """Owner-scope discovery extended by valid USE Grants (Issue #55).
+
+    A resource is also discoverable when a USE Grant issued under its *current*
+    Owner covers it (Target = ALL or the exact resource) and the acting User is
+    the grantee personally or an active member of a grantee UserGroup.  Grants
+    never add management capability; the guard keeps role resolution owner-scoped.
+    """
+    active_group_ids = select(t.MembershipRow.user_group_id).where(
+        t.MembershipRow.user_id == user_id,
+        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+    )
+    grantor_matches = (
+        (t.GrantRow.grantor_kind == OwnerKind.USER.value)
+        & (t.GrantRow.grantor_id == t.SharedResourceRow.owner_user_id)
+    ) | (
+        (t.GrantRow.grantor_kind == OwnerKind.USER_GROUP.value)
+        & (t.GrantRow.grantor_id == t.SharedResourceRow.owner_user_group_id)
+    )
+    grantee_matches = (
+        (t.GrantRow.grantee_kind == OwnerKind.USER.value) & (t.GrantRow.grantee_id == user_id)
+    ) | (
+        (t.GrantRow.grantee_kind == OwnerKind.USER_GROUP.value)
+        & t.GrantRow.grantee_id.in_(active_group_ids)
+    )
+    target_matches = (t.GrantRow.target_kind == GrantTargetKind.ALL.value) | (
+        (t.GrantRow.target_kind == GrantTargetKind.SHARED_RESOURCE.value)
+        & (t.GrantRow.target_id == t.SharedResourceRow.id)
+    )
+    covering_use_grant = select(t.GrantRow.id).where(
+        t.GrantRow.action == GrantAction.USE.value,
+        grantor_matches,
+        grantee_matches,
+        target_matches,
+    )
+    return (
+        (t.SharedResourceRow.owner_user_id == user_id)
+        | t.SharedResourceRow.owner_user_group_id.in_(active_group_ids)
+        | covering_use_grant.exists()
+    )
 
 
 def _owner_reference(owner_user_id: str | None, owner_user_group_id: str | None) -> OwnerReference:
