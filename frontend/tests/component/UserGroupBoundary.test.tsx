@@ -89,9 +89,7 @@ describe('UserGroupPage 分区导航信息架构', () => {
     const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
     const links = within(nav).getAllByRole('link')
     const labels = links.map((link) => link.textContent)
-    expect(labels).toContain('概览')
-    expect(labels).toContain('成员')
-    expect(labels).toContain('设置')
+    expect(labels).toEqual(['概览', 'Project', '共享资源', '运行环境', '成员', '设置'])
   })
 
   it('REQ-21-02 基础 URL 渲染概览分区，成员分区渲染成员治理面板', async () => {
@@ -115,6 +113,7 @@ describe('UserGroupPage 分区导航信息架构', () => {
     const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
     expect(within(nav).queryByText('设置')).not.toBeInTheDocument()
     expect(within(nav).getByText('概览')).toBeInTheDocument()
+    expect(within(nav).getByText('Project')).toBeInTheDocument()
     expect(within(nav).getByText('成员')).toBeInTheDocument()
   })
 

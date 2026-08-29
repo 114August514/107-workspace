@@ -6,8 +6,11 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { api, getCurrentUser, setCurrentUser } from './api/client'
 import type { Home } from './api/types'
 import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
+import { EnvironmentsSection } from './components/usergroup/EnvironmentsSection'
 import { MembersSection } from './components/usergroup/MembersSection'
 import { OverviewSection } from './components/usergroup/OverviewSection'
+import { ProjectsSection } from './components/usergroup/ProjectsSection'
+import { SharedResourcesSection } from './components/usergroup/SharedResourcesSection'
 import { AppShell } from './components/layout/AppShell'
 import { HomePage } from './pages/HomePage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
@@ -106,9 +109,9 @@ export function ProductRoutes({ username, home }: { username: string; home: Asyn
       >
         <Route index element={<OverviewSection />} />
         <Route path="members" element={<MembersSection />} />
-        <Route path="projects" element={<Navigate to="." replace />} />
-        <Route path="shared-resources" element={<Navigate to="." replace />} />
-        <Route path="environments" element={<Navigate to="." replace />} />
+        <Route path="projects" element={<ProjectsSection />} />
+        <Route path="shared-resources" element={<SharedResourcesSection />} />
+        <Route path="environments" element={<EnvironmentsSection />} />
         <Route path="settings" element={<Navigate to="." replace />} />
         <Route path="*" element={<Navigate to=".." replace />} />
       </Route>

@@ -84,6 +84,15 @@ function UserGroupSectionNav({ userGroup }: { userGroup: UserGroup }) {
       <UnderlineNav.Item as={RouterLink} to=".">
         {copy.nav.overview}
       </UnderlineNav.Item>
+      <UnderlineNav.Item as={RouterLink} to="projects">
+        {copy.nav.projects}
+      </UnderlineNav.Item>
+      <UnderlineNav.Item as={RouterLink} to="shared-resources">
+        {copy.nav.sharedResources}
+      </UnderlineNav.Item>
+      <UnderlineNav.Item as={RouterLink} to="environments">
+        {copy.nav.environments}
+      </UnderlineNav.Item>
       <UnderlineNav.Item as={RouterLink} to="members">
         {copy.nav.members}
       </UnderlineNav.Item>
