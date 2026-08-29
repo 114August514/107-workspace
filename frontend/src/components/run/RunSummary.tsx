@@ -2,7 +2,10 @@ import { Link, Text } from '@primer/react'
 import { Link as RouterLink } from 'react-router-dom'
 
 import type { ComputePlan, RunConfiguration, RunDetail } from '../../api/types'
-import { describeComputeRequest, formatTime } from '../../utils/format'
+import { describeComputeRequest, formatDuration, formatTime } from '../../utils/format'
+import { RunStatusTag } from '../common/RunStatusTag'
+import { RunSnapshotCard } from './RunSnapshotCard'
+import { RunTimeline } from './RunTimeline'
 import styles from './run.module.css'
 
 function DefinitionRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -56,6 +59,17 @@ export function RunSummary({
 
   return (
     <div className={styles.summarySurface} aria-label="Run Summary">
+      <section className={styles.summarySection} aria-labelledby="run-outcome-title">
+        <h2 id="run-outcome-title">执行信息</h2>
+        <dl className={styles.definitionList}>
+          <DefinitionRow label="状态">
+            <RunStatusTag status={run.status} />
+          </DefinitionRow>
+          <DefinitionRow label="运行时间">{formatDuration(run.running_seconds)}</DefinitionRow>
+          <DefinitionRow label="排队时间">{formatDuration(run.queued_seconds)}</DefinitionRow>
+          <DefinitionRow label="运行产物">{detail.artifacts.length}</DefinitionRow>
+        </dl>
+      </section>
       <section className={styles.summarySection} aria-labelledby="run-source-title">
         <h2 id="run-source-title">来源</h2>
         <dl className={styles.definitionList}>
@@ -98,6 +112,20 @@ export function RunSummary({
           <p className={styles.provenanceText}>首次运行</p>
         )}
       </section>
+
+      <section className={styles.summaryExecution} aria-labelledby="run-events-title">
+        <h2 id="run-events-title" className={styles.sectionTitle}>
+          执行过程
+        </h2>
+        <RunTimeline events={detail.events} />
+      </section>
+
+      <details className={styles.snapshotDisclosure}>
+        <summary>完整运行快照</summary>
+        <div className={styles.snapshotDisclosureBody}>
+          <RunSnapshotCard snapshot={snapshot} />
+        </div>
+      </details>
 
       <details className={styles.diagnosticDisclosure}>
         <summary>诊断信息</summary>

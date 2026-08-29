@@ -241,29 +241,38 @@ describe('RunPage backend unavailable', () => {
       '/projects/project-1?tab=runs',
     )
 
-    expect(screen.getByText(/同学发起于/)).toBeVisible()
-    const facts = screen.getByLabelText('Run execution facts')
-    expect(within(facts).getByText('排队时间')).toBeVisible()
-    expect(within(facts).getByText('1 秒')).toBeVisible()
-    expect(within(facts).getByText('运行时间')).toBeVisible()
-    expect(within(facts).getByText('8 秒')).toBeVisible()
-    expect(within(facts).getByText('运行产物')).toBeVisible()
-    expect(within(facts).getByText('0')).toBeVisible()
-
+    const runHeader = screen.getByRole('banner', { name: 'Run header' })
+    expect(within(runHeader).getByText('同学')).toBeVisible()
+    expect(within(runHeader).getByText('运行 8 秒')).toBeVisible()
     const summary = screen.getByLabelText('Run Summary')
+    const outcome = within(summary).getByRole('heading', { name: '执行信息' }).parentElement!
+    expect(within(outcome).getByText('状态')).toBeVisible()
+    expect(within(outcome).getByText('成功')).toBeVisible()
+    expect(within(outcome).getByText('排队时间')).toBeVisible()
+    expect(within(outcome).getByText('1 秒')).toBeVisible()
+    expect(within(outcome).getByText('运行时间')).toBeVisible()
+    expect(within(outcome).getByText('8 秒')).toBeVisible()
+    expect(within(outcome).getByText('运行产物')).toBeVisible()
+    expect(within(outcome).getByText('0')).toBeVisible()
     expect(within(summary).getByRole('heading', { name: '来源' })).toBeVisible()
-    expect(within(summary).getByRole('heading', { name: '算力' })).toBeVisible()
+    const compute = within(summary).getByRole('heading', { name: '算力' }).parentElement!
     expect(within(summary).getByRole('heading', { name: '来源关系' })).toBeVisible()
     expect(within(summary).getByText('默认训练方案')).toBeVisible()
-    expect(within(summary).getByText('CPU 基础')).toBeVisible()
-    expect(within(summary).getByText('cpu-basic')).toBeVisible()
-    expect(within(summary).getByText('1 节点 · 1 核 · 1 GB · 最长 1 小时')).toBeVisible()
+    expect(within(compute).getByText('CPU 基础')).toBeVisible()
+    expect(within(compute).getByText('cpu-basic')).toBeVisible()
+    expect(within(compute).getByText('1 节点 · 1 核 · 1 GB · 最长 1 小时')).toBeVisible()
     expect(within(summary).getByText('首次运行')).toBeVisible()
+    expect(within(summary).getByRole('heading', { name: '执行过程' })).toBeVisible()
+    expect(within(summary).getByText('这个 Run 还没有执行事件。')).toBeVisible()
+    expect(within(summary).getByText('完整运行快照')).toBeVisible()
+    expect(within(summary).getByText('执行命令')).not.toBeVisible()
     expect(screen.getByText('诊断信息')).toBeVisible()
     expect(screen.getByText('调度任务')).not.toBeVisible()
+    expect(screen.queryByRole('link', { name: '执行' })).toBeNull()
+    expect(screen.queryByRole('link', { name: '运行快照' })).toBeNull()
   })
 
-  it('nests stdout and stderr under Execution instead of page-level navigation', async () => {
+  it('uses Logs as a primary intent and keeps the timeline in Summary', async () => {
     vi.spyOn(api, 'getRun').mockResolvedValue(runDetailFixture())
     vi.spyOn(api, 'readLogs').mockResolvedValue([
       { stream: 'stdout', content: 'done', truncated: false },
@@ -277,9 +286,9 @@ describe('RunPage backend unavailable', () => {
     )
 
     await screen.findByRole('heading', { name: 'test-run' })
-    expect(screen.queryByRole('link', { name: '日志' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: '执行' }))
-    expect(await screen.findByRole('heading', { name: '执行过程' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
+    fireEvent.click(screen.getByRole('link', { name: '日志' }))
+    expect(screen.queryByRole('heading', { name: '执行过程' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
     expect(screen.getByRole('link', { name: '标准输出' })).toBeVisible()
     expect(screen.getByRole('link', { name: '标准错误' })).toBeVisible()
@@ -305,14 +314,14 @@ describe('RunPage backend unavailable', () => {
     )
 
     await screen.findByRole('heading', { name: 'test-run' })
-    fireEvent.click(screen.getByRole('link', { name: '执行' }))
-    expect(await screen.findByRole('heading', { name: '执行过程' })).toBeVisible()
+    fireEvent.click(screen.getByRole('link', { name: '日志' }))
+    expect(await screen.findByRole('heading', { name: '日志' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '重新运行' }))
 
     await waitFor(() =>
       expect(screen.getByRole('link', { name: '概览' })).toHaveAttribute('aria-current', 'page'),
     )
-    expect(screen.queryByRole('heading', { name: '执行过程' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(screen.getByLabelText('Run Summary')).toBeVisible()
   })
 

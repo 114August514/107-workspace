@@ -20,15 +20,13 @@ import { AsyncState } from '../components/common/AsyncState'
 import { RunStatusTag } from '../components/common/RunStatusTag'
 import { ArtifactPanel } from '../components/run/ArtifactPanel'
 import { RunLogPanel } from '../components/run/RunLogPanel'
-import { RunSnapshotCard } from '../components/run/RunSnapshotCard'
 import { RunSummary } from '../components/run/RunSummary'
-import { RunTimeline } from '../components/run/RunTimeline'
 import styles from '../components/run/run.module.css'
 import { formatDuration, formatRelative, formatTime } from '../utils/format'
 
 const POLL_INTERVAL_MS = 2000
 
-type RunTab = 'summary' | 'execution' | 'artifacts' | 'snapshot'
+type RunTab = 'summary' | 'logs' | 'artifacts'
 
 interface Feedback {
   variant: 'success' | 'critical'
@@ -149,6 +147,13 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
     currentUser && run && currentUser.id === run.initiated_by_user_id
       ? currentUser.display_name || currentUser.username
       : '其他用户'
+  const progressLabel = !run
+    ? ''
+    : run.status === 'queued'
+      ? `已排队 ${formatDuration(run.queued_seconds)}`
+      : run.running_seconds === null || run.running_seconds === undefined
+        ? '未开始运行'
+        : `${isTerminal(run.status) ? '运行' : '已运行'} ${formatDuration(run.running_seconds)}`
 
   return (
     <AsyncState
@@ -194,7 +199,7 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
             </nav>
           </header>
 
-          <header className={styles.runHeader}>
+          <header className={styles.runHeader} aria-label="Run header">
             <Link
               as={RouterLink}
               to={`/projects/${run.project_id}?tab=runs`}
@@ -210,10 +215,13 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
                   <h1 className={styles.pageTitle}>{runTitle}</h1>
                 </div>
                 <p className={styles.triggerLine}>
-                  {initiatorLabel}发起于{' '}
+                  <span>{initiatorLabel}</span>
+                  <span aria-hidden>·</span>
                   <time dateTime={run.created_at ?? undefined} title={formatTime(run.created_at)}>
                     {formatRelative(run.created_at)}
                   </time>
+                  <span aria-hidden>·</span>
+                  <span>{progressLabel}</span>
                 </p>
               </div>
               <div className={styles.headerActions}>
@@ -255,21 +263,6 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
             </div>
           </header>
 
-          <dl className={styles.runFacts} aria-label="Run execution facts">
-            <div className={styles.runFact}>
-              <dt>排队时间</dt>
-              <dd>{formatDuration(run.queued_seconds)}</dd>
-            </div>
-            <div className={styles.runFact}>
-              <dt>运行时间</dt>
-              <dd>{formatDuration(run.running_seconds)}</dd>
-            </div>
-            <div className={styles.runFact}>
-              <dt>运行产物</dt>
-              <dd>{detail.data.artifacts.length}</dd>
-            </div>
-          </dl>
-
           {feedback ? (
             <Banner variant={feedback.variant}>
               <Banner.Title>{feedback.title}</Banner.Title>
@@ -295,10 +288,10 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
                 概览
               </UnderlineNav.Item>
               <UnderlineNav.Item
-                aria-current={tab === 'execution' ? 'page' : undefined}
-                onSelect={() => setTab('execution')}
+                aria-current={tab === 'logs' ? 'page' : undefined}
+                onSelect={() => setTab('logs')}
               >
-                执行
+                日志
               </UnderlineNav.Item>
               <UnderlineNav.Item
                 aria-current={tab === 'artifacts' ? 'page' : undefined}
@@ -306,12 +299,6 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
                 onSelect={() => setTab('artifacts')}
               >
                 运行产物
-              </UnderlineNav.Item>
-              <UnderlineNav.Item
-                aria-current={tab === 'snapshot' ? 'page' : undefined}
-                onSelect={() => setTab('snapshot')}
-              >
-                运行快照
               </UnderlineNav.Item>
             </UnderlineNav>
             <Card className={styles.tabCard}>
@@ -328,31 +315,22 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
                     computePlanError={plans.error !== undefined}
                   />
                 ) : null}
-                {tab === 'execution' ? (
-                  <div className={styles.executionStack}>
-                    <section className={styles.executionSection} aria-labelledby="run-events-title">
-                      <h2 id="run-events-title" className={styles.sectionTitle}>
-                        执行过程
-                      </h2>
-                      <RunTimeline events={detail.data.events} />
-                    </section>
-                    <section className={styles.executionSection} aria-labelledby="run-logs-title">
-                      <h2 id="run-logs-title" className={styles.sectionTitle}>
-                        日志
-                      </h2>
-                      <AsyncState
-                        loading={logs.loading}
-                        loadingText="正在读取 Run 日志…"
-                        error={contextualError(logs.error, '无法加载 Run 日志。')}
-                        onRetry={logs.reload}
-                      >
-                        <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
-                      </AsyncState>
-                    </section>
-                  </div>
+                {tab === 'logs' ? (
+                  <section className={styles.executionSection} aria-labelledby="run-logs-title">
+                    <h2 id="run-logs-title" className={styles.sectionTitle}>
+                      日志
+                    </h2>
+                    <AsyncState
+                      loading={logs.loading}
+                      loadingText="正在读取 Run 日志…"
+                      error={contextualError(logs.error, '无法加载 Run 日志。')}
+                      onRetry={logs.reload}
+                    >
+                      <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
+                    </AsyncState>
+                  </section>
                 ) : null}
                 {tab === 'artifacts' ? <ArtifactPanel artifacts={detail.data.artifacts} /> : null}
-                {tab === 'snapshot' ? <RunSnapshotCard snapshot={detail.data.snapshot} /> : null}
               </div>
             </Card>
           </section>

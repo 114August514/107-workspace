@@ -140,35 +140,6 @@
   font-size: var(--text-body-size-small);
 }
 
-.runFacts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
-}
-
-.runFact {
-  padding: var(--base-size-12) var(--base-size-16);
-  border-right: var(--borderWidth-thin) solid var(--borderColor-muted);
-}
-
-.runFact:last-child {
-  border-right: none;
-}
-
-.runFact dt {
-  color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
-}
-
-.runFact dd {
-  margin: var(--base-size-4) 0 0;
-  color: var(--fgColor-default);
-  font-size: var(--text-title-size-medium);
-  font-weight: var(--base-text-weight-semibold);
-}
-
 .runNavigation {
   font-size: var(--text-body-size-small);
 }
@@ -207,6 +178,11 @@
   gap: var(--base-size-16);
   padding: var(--base-size-16) 0;
   border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.summarySection:first-child {
+  padding-top: 0;
+  border-top: none;
 }
 
 .summarySection h2 {
@@ -248,10 +224,12 @@
   margin: 0;
 }
 
+.snapshotDisclosure,
 .diagnosticDisclosure {
   border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
+.snapshotDisclosure > summary,
 .diagnosticDisclosure > summary {
   padding: var(--base-size-12) 0;
   color: var(--fgColor-muted);
@@ -260,28 +238,27 @@
   font-weight: var(--base-text-weight-semibold);
 }
 
+.snapshotDisclosure > summary:focus-visible,
 .diagnosticDisclosure > summary:focus-visible {
   outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
   outline-offset: 2px;
+}
+
+.snapshotDisclosureBody {
+  padding-bottom: var(--base-size-16);
+}
+
+.summaryExecution {
+  padding: var(--base-size-16) 0;
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .diagnosticList {
   padding-bottom: var(--base-size-8);
 }
 
-.executionStack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--base-size-16);
-}
-
 .executionSection {
   min-width: 0;
-}
-
-.executionSection + .executionSection {
-  padding-top: var(--base-size-16);
-  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .sectionTitle {
@@ -579,10 +556,6 @@
 
   .headerActions > * {
     flex: 1 1 auto;
-  }
-
-  .runFact {
-    padding: var(--base-size-8);
   }
 
   .snapshotRow {

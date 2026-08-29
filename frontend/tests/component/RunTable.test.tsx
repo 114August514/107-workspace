@@ -75,9 +75,8 @@ describe('RunTable 用户语义', () => {
       'href',
       '/projects/proj-1/runs/run_abcdef123456',
     )
-    expect(screen.getByText('由 user-1 发起')).toBeVisible()
     expect(screen.getByText('运行 8 秒')).toBeVisible()
-    expect(screen.getByText('排队 2 秒')).toBeVisible()
+    expect(screen.queryByText(/user-1/)).toBeNull()
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       '状态',
       'Run',
