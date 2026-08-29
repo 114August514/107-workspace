@@ -43,9 +43,7 @@ export function ProjectsSection() {
                   </span>
                 </span>
                 <span className={styles.itemLabels}>
-                  {project.status === 'archived' ? (
-                    <Label variant="attention">已归档</Label>
-                  ) : null}
+                  {project.status === 'archived' ? <Label variant="attention">已归档</Label> : null}
                   {project.updated_at ? (
                     <Label size="small" variant="default">
                       更新于 {formatRelative(project.updated_at)}

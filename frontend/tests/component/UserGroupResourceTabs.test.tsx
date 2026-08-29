@@ -122,7 +122,13 @@ describe('User Group 资源分区', () => {
   it('REQ-21-06 Project 分区只显示组拥有的 Project 并链接详情页', async () => {
     const listProjects = vi
       .spyOn(api, 'listProjects')
-      .mockResolvedValue({ items: [groupProject, otherProject, userProject], page: 1, page_size: 200, total: 3, has_more: false })
+      .mockResolvedValue({
+        items: [groupProject, otherProject, userProject],
+        page: 1,
+        page_size: 200,
+        total: 3,
+        has_more: false,
+      })
 
     renderSection('/user-groups/grp_lab/projects')
 
@@ -135,8 +141,20 @@ describe('User Group 资源分区', () => {
 
   it('REQ-21-07 Project 分区跟随分页并标记归档状态', async () => {
     vi.spyOn(api, 'listProjects')
-      .mockResolvedValueOnce({ items: [groupProject], page: 1, page_size: 200, total: 2, has_more: true })
-      .mockResolvedValueOnce({ items: [archivedProject], page: 2, page_size: 200, total: 2, has_more: false })
+      .mockResolvedValueOnce({
+        items: [groupProject],
+        page: 1,
+        page_size: 200,
+        total: 2,
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [archivedProject],
+        page: 2,
+        page_size: 200,
+        total: 2,
+        has_more: false,
+      })
 
     renderSection('/user-groups/grp_lab/projects')
 
@@ -149,7 +167,13 @@ describe('User Group 资源分区', () => {
     const listProjects = vi
       .spyOn(api, 'listProjects')
       .mockRejectedValueOnce(new ApiError(500, 'internal_error', 'Project 列表加载失败', []))
-      .mockResolvedValueOnce({ items: [groupProject], page: 1, page_size: 200, total: 1, has_more: false })
+      .mockResolvedValueOnce({
+        items: [groupProject],
+        page: 1,
+        page_size: 200,
+        total: 1,
+        has_more: false,
+      })
 
     renderSection('/user-groups/grp_lab/projects')
 
@@ -163,7 +187,12 @@ describe('User Group 资源分区', () => {
   })
 
   it('REQ-21-09 共享资源分区过滤并链接详情页', async () => {
-    const otherResource = { ...groupResource, id: 'sr_other', name: 'Other Resource', owner: ownerRef('grp_other', 'Other Lab') }
+    const otherResource = {
+      ...groupResource,
+      id: 'sr_other',
+      name: 'Other Resource',
+      owner: ownerRef('grp_other', 'Other Lab'),
+    }
     vi.spyOn(api, 'listSharedResources').mockResolvedValue([groupResource, otherResource])
 
     renderSection('/user-groups/grp_lab/shared-resources')
@@ -174,7 +203,12 @@ describe('User Group 资源分区', () => {
   })
 
   it('REQ-21-10 运行环境分区显示版本可用计数', async () => {
-    const otherEnv = { ...groupEnvironment, id: 'env_other', name: 'Other Env', owner: ownerRef('grp_other', 'Other Lab') }
+    const otherEnv = {
+      ...groupEnvironment,
+      id: 'env_other',
+      name: 'Other Env',
+      owner: ownerRef('grp_other', 'Other Lab'),
+    }
     vi.spyOn(api, 'environments').mockResolvedValue([groupEnvironment, otherEnv])
 
     renderSection('/user-groups/grp_lab/environments')
@@ -186,7 +220,13 @@ describe('User Group 资源分区', () => {
   })
 
   it('REQ-21-11 空状态文案区分三种资源', async () => {
-    vi.spyOn(api, 'listProjects').mockResolvedValue({ items: [], page: 1, page_size: 200, total: 0, has_more: false })
+    vi.spyOn(api, 'listProjects').mockResolvedValue({
+      items: [],
+      page: 1,
+      page_size: 200,
+      total: 0,
+      has_more: false,
+    })
     renderSection('/user-groups/grp_lab/projects')
     expect(await screen.findByText('这个 User Group 还没有 Project。')).toBeInTheDocument()
     cleanup()

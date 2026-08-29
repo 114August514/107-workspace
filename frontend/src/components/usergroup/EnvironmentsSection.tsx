@@ -33,8 +33,9 @@ export function EnvironmentsSection() {
       >
         <ul className={styles.assetList} aria-label="运行环境列表">
           {items.map((environment) => {
-            const availableCount = environment.versions.filter((version) => version.available)
-              .length
+            const availableCount = environment.versions.filter(
+              (version) => version.available,
+            ).length
             return (
               <li key={environment.id}>
                 <RouterLink className={styles.assetLink} to={`/environments/${environment.id}`}>

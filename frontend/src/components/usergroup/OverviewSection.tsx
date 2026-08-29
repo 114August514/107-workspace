@@ -9,11 +9,7 @@ import { AsyncState } from '../common/AsyncState'
 import { PrimerListCard } from '../primer/PrimerListCard'
 import { formatTime } from '../../utils/format'
 import type { UserGroupOutletContext } from '../../pages/UserGroupPage'
-import {
-  loadGroupEnvironments,
-  loadGroupProjects,
-  loadGroupSharedResources,
-} from './groupAssets'
+import { loadGroupEnvironments, loadGroupProjects, loadGroupSharedResources } from './groupAssets'
 import { userGroupRoleLabel } from './userGroupCopy'
 import styles from './overview.module.css'
 
