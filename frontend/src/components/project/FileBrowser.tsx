@@ -1,4 +1,13 @@
-import { DeleteOutlined, FileAddOutlined } from '@ant-design/icons'
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  FolderOutlined,
+  FileAddOutlined,
+  FolderAddOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import {
   Alert,
   Button,
@@ -8,15 +17,16 @@ import {
   Popconfirm,
   Space,
   Table,
+  Tag,
   Typography,
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { ProjectFile, LegacyWorkspaceContext } from '../../api/types'
+import type { Project, ProjectFile } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { formatBytes, formatRelative } from '../../utils/format'
@@ -24,15 +34,85 @@ import { AsyncSection } from '../common/AsyncSection'
 
 interface Props {
   projectId: string
-  /** 用来判断当前用户能不能改内容。undefined 表示还没加载出来，一律按不能处理。 */
-  workspace: LegacyWorkspaceContext | undefined
+  /** Current Project authority; undefined while the detail request is pending. */
+  access: Project | undefined
   onChanged: () => void
 }
 
+/** 路径输入抽屉的四种用途。rename/copy 带源路径，其余只收一个目标路径。 */
+type PathPromptMode = 'new-file' | 'mkdir' | 'rename' | 'copy'
+
+interface PathPrompt {
+  mode: PathPromptMode
+  source?: string
+}
+
+interface UploadTask {
+  key: string
+  name: string
+  status: 'uploading' | 'success' | 'failed'
+  detail?: string
+}
+
+const PATH_PROMPT_COPY: Record<PathPromptMode, { title: string; label: string; extra?: string }> = {
+  'new-file': {
+    title: '新建文件',
+    label: '文件路径',
+    extra: '相对于 Project 根目录，例如 src/train.py',
+  },
+  mkdir: {
+    title: '新建目录',
+    label: '目录路径',
+    extra: '空目录以 .gitkeep 占位文件存在，这样才能出现在列表里并保存进版本。',
+  },
+  rename: { title: '重命名 / 移动', label: '新路径', extra: '目录会连同其中所有文件一起移动。' },
+  copy: { title: '复制', label: '目标路径', extra: '目标已存在的同路径文件会被覆盖。' },
+}
+
+interface FileTreeNode {
+  key: string
+  path: string
+  isDirectory: boolean
+  file?: ProjectFile
+  children?: FileTreeNode[]
+}
+
+/** ProjectFile only stores files; derive directory rows from every path prefix. */
+function projectFileTree(files: ProjectFile[]): FileTreeNode[] {
+  const roots: FileTreeNode[] = []
+  const directories = new Map<string, FileTreeNode>()
+
+  for (const file of [...files].sort((left, right) => left.path.localeCompare(right.path))) {
+    const parts = file.path.split('/')
+    let children = roots
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      const path = parts.slice(0, index + 1).join('/')
+      let directory = directories.get(path)
+      if (!directory) {
+        directory = { key: `directory:${path}`, path, isDirectory: true, children: [] }
+        directories.set(path, directory)
+        children.push(directory)
+      }
+      children = directory.children ?? []
+    }
+
+    if (parts.at(-1) !== '.gitkeep') {
+      children.push({
+        key: `file:${file.path}`,
+        path: file.path,
+        isDirectory: false,
+        file,
+      })
+    }
+  }
+  return roots
+}
+
 /** Project Working Tree：可编辑的当前文件状态。 */
-export function FileBrowser({ projectId, workspace, onChanged }: Props) {
-  const canWrite = can(workspace, 'project.content.write')
+export function FileBrowser({ projectId, access, onChanged }: Props) {
+  const canWrite = can(access, 'project.content.write')
   const files = useAsync<ProjectFile[]>(() => api.listFiles(projectId), [projectId])
+  const tree = useMemo(() => projectFileTree(files.data ?? []), [files.data])
   const [editing, setEditing] = useState<{
     path: string
     content: string
@@ -40,8 +120,22 @@ export function FileBrowser({ projectId, workspace, onChanged }: Props) {
     truncated: boolean
   } | null>(null)
   const [saving, setSaving] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createForm] = Form.useForm<{ path: string }>()
+  const [prompt, setPrompt] = useState<PathPrompt | null>(null)
+  const [promptForm] = Form.useForm<{ path: string }>()
+  const [uploads, setUploads] = useState<UploadTask[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const archiveInputRef = useRef<HTMLInputElement>(null)
+
+  const refresh = () => {
+    files.reload()
+    onChanged()
+  }
+
+  const patchUpload = (key: string, patch: Partial<UploadTask>) => {
+    setUploads((current) =>
+      current.map((task) => (task.key === key ? { ...task, ...patch } : task)),
+    )
+  }
 
   const openFile = async (path: string) => {
     try {
@@ -59,8 +153,7 @@ export function FileBrowser({ projectId, workspace, onChanged }: Props) {
       await api.writeFile(projectId, editing.path, editing.content)
       message.success(`已保存 ${editing.path}`)
       setEditing(null)
-      files.reload()
-      onChanged()
+      refresh()
     } catch (error) {
       message.error((error as Error).message)
     } finally {
@@ -68,15 +161,65 @@ export function FileBrowser({ projectId, workspace, onChanged }: Props) {
     }
   }
 
-  const createFile = async () => {
-    const values = await createForm.validateFields()
+  /** 上传入口统一走这里：逐个文件一个请求，成败互不影响。 */
+  const uploadOneByOne = async (picked: File[]) => {
+    if (!canWrite || picked.length === 0) return
+    const batch = picked.map((file, index) => ({
+      key: `${file.name}-${file.size}-${index}`,
+      name: file.name,
+      status: 'uploading' as const,
+    }))
+    setUploads((current) => [...current, ...batch])
+
+    for (const [index, task] of batch.entries()) {
+      const file = picked[index]
+      if (!file) continue
+      try {
+        await api.uploadFiles(projectId, [file])
+        patchUpload(task.key, { status: 'success' })
+      } catch (error) {
+        patchUpload(task.key, { status: 'failed', detail: (error as Error).message })
+      }
+    }
+    refresh()
+  }
+
+  const uploadArchive = async (picked: FileList | null) => {
+    const archive = picked?.[0]
+    if (!canWrite || !archive) return
+    const key = `archive-${archive.name}-${archive.size}`
+    setUploads((current) => [...current, { key, name: archive.name, status: 'uploading' }])
     try {
-      await api.writeFile(projectId, values.path, '')
-      createForm.resetFields()
-      setCreating(false)
-      files.reload()
-      onChanged()
-      await openFile(values.path)
+      await api.uploadArchive(projectId, archive)
+      patchUpload(key, { status: 'success' })
+      refresh()
+    } catch (error) {
+      // 整体拒绝时后端不做部分展开，工作区保持原样，可以直接换包重传。
+      patchUpload(key, { status: 'failed', detail: (error as Error).message })
+    }
+  }
+
+  const submitPrompt = async () => {
+    if (!prompt) return
+    const values = await promptForm.validateFields()
+    try {
+      switch (prompt.mode) {
+        case 'new-file':
+          await api.writeFile(projectId, values.path, '')
+          break
+        case 'mkdir':
+          await api.createDirectory(projectId, values.path)
+          break
+        case 'rename':
+          await api.movePath(projectId, prompt.source ?? '', values.path)
+          break
+        case 'copy':
+          await api.copyPath(projectId, prompt.source ?? '', values.path)
+          break
+      }
+      promptForm.resetFields()
+      setPrompt(null)
+      refresh()
     } catch (error) {
       message.error((error as Error).message)
     }
@@ -86,54 +229,192 @@ export function FileBrowser({ projectId, workspace, onChanged }: Props) {
     try {
       await api.deletePath(projectId, path)
       message.success(`已删除 ${path}`)
-      files.reload()
-      onChanged()
+      refresh()
     } catch (error) {
       message.error((error as Error).message)
     }
   }
 
-  const columns: ColumnsType<ProjectFile> = [
+  const downloadFile = async (path: string) => {
+    try {
+      await api.downloadFile(projectId, path)
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const columns: ColumnsType<FileTreeNode> = [
     {
       title: '路径',
-      dataIndex: field<ProjectFile>('path'),
-      render: (path: string) => (
-        <Typography.Link onClick={() => openFile(path)}>{path}</Typography.Link>
-      ),
+      dataIndex: field<FileTreeNode>('path'),
+      render: (path: string, node) =>
+        node.isDirectory ? (
+          <Space size="small">
+            <FolderOutlined />
+            <Typography.Text>{path}</Typography.Text>
+          </Space>
+        ) : (
+          <Button type="link" size="small" onClick={() => openFile(path)}>
+            {path}
+          </Button>
+        ),
     },
-    { title: '大小', dataIndex: field<ProjectFile>('size'), width: 110, render: formatBytes },
+    {
+      title: '大小',
+      width: 110,
+      render: (_, node) => (node.file ? formatBytes(node.file.size) : '—'),
+    },
     {
       title: '修改时间',
-      dataIndex: field<ProjectFile>('updated_at'),
       width: 130,
-      render: formatRelative,
+      render: (_, node) => (node.file ? formatRelative(node.file.updated_at) : '—'),
     },
     {
       title: '操作',
-      width: 80,
+      width: 260,
       key: 'actions',
-      render: (_, file) =>
+      render: (_, node) =>
         !canWrite ? null : (
-          <Popconfirm
-            title={`删除 ${file.path}？`}
-            okText="删除"
-            cancelText="取消"
-            onConfirm={() => removePath(file.path)}
-          >
-            <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-          </Popconfirm>
+          <Space size={0}>
+            {node.file && (
+              <Button
+                type="link"
+                size="small"
+                icon={<DownloadOutlined />}
+                onClick={() => downloadFile(node.path)}
+              >
+                下载
+              </Button>
+            )}
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => {
+                promptForm.setFieldsValue({ path: node.path })
+                setPrompt({ mode: 'rename', source: node.path })
+              }}
+            >
+              改名
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={() => {
+                promptForm.setFieldsValue({ path: `${node.path}-copy` })
+                setPrompt({ mode: 'copy', source: node.path })
+              }}
+            >
+              复制
+            </Button>
+            <Popconfirm
+              title={`删除 ${node.path}？`}
+              description="目录会连同其中所有文件一起删除。"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => removePath(node.path)}
+            >
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                aria-label={`删除 ${node.path}`}
+              />
+            </Popconfirm>
+          </Space>
         ),
     },
   ]
 
+  const failedUploads = uploads.filter((task) => task.status !== 'success')
+
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       {canWrite && (
-        <Space>
-          <Button icon={<FileAddOutlined />} onClick={() => setCreating(true)}>
-            新建文件
-          </Button>
-        </Space>
+        <>
+          <Space wrap>
+            <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+              上传文件
+            </Button>
+            <Button icon={<UploadOutlined />} onClick={() => archiveInputRef.current?.click()}>
+              上传压缩包（zip）
+            </Button>
+            <Button
+              icon={<FolderAddOutlined />}
+              onClick={() => {
+                promptForm.resetFields()
+                setPrompt({ mode: 'mkdir' })
+              }}
+            >
+              新建目录
+            </Button>
+            <Button
+              icon={<FileAddOutlined />}
+              onClick={() => {
+                promptForm.resetFields()
+                setPrompt({ mode: 'new-file' })
+              }}
+            >
+              新建文件
+            </Button>
+            {/* 隐藏 input 换取对上传行为的完全控制；label 由上面的按钮承担。 */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                void uploadOneByOne(Array.from(event.target.files ?? []))
+                event.target.value = ''
+              }}
+            />
+            <input
+              ref={archiveInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              hidden
+              onChange={(event) => {
+                void uploadArchive(event.target.files)
+                event.target.value = ''
+              }}
+            />
+          </Space>
+
+          {uploads.length > 0 && (
+            <Alert
+              type={failedUploads.length > 0 ? 'warning' : 'success'}
+              showIcon
+              message={
+                <Space wrap size={[8, 8]}>
+                  {uploads.map((task) => (
+                    <Tag
+                      key={task.key}
+                      color={
+                        task.status === 'success'
+                          ? 'green'
+                          : task.status === 'failed'
+                            ? 'red'
+                            : 'blue'
+                      }
+                    >
+                      {task.name}
+                      {task.status === 'uploading' && '（上传中）'}
+                      {task.status === 'failed' && `：${task.detail ?? '失败'}`}
+                    </Tag>
+                  ))}
+                </Space>
+              }
+              action={
+                <Button size="small" onClick={() => setUploads([])}>
+                  清除记录
+                </Button>
+              }
+            />
+          )}
+        </>
       )}
 
       <AsyncSection
@@ -145,19 +426,21 @@ export function FileBrowser({ projectId, workspace, onChanged }: Props) {
         }
       >
         <Table
-          rowKey="path"
+          rowKey="key"
           size="small"
-          dataSource={files.data ?? []}
+          dataSource={tree}
           columns={columns}
+          defaultExpandAllRows
           pagination={false}
+          scroll={{ x: true }}
         />
       </AsyncSection>
 
-      <Modalish
-        open={creating}
-        onCancel={() => setCreating(false)}
-        onOk={createFile}
-        form={createForm}
+      <PathPromptDrawer
+        prompt={prompt}
+        form={promptForm}
+        onCancel={() => setPrompt(null)}
+        onOk={submitPrompt}
       />
 
       <Drawer
@@ -205,36 +488,55 @@ export function FileBrowser({ projectId, workspace, onChanged }: Props) {
   )
 }
 
-/** 新建文件的小弹窗，单独抽出来让 FileBrowser 的主流程保持清爽。 */
-function Modalish({
-  open,
+/** 新建 / 建目录 / 改名 / 复制共用的小抽屉，差别只在文案和提交动作。 */
+function PathPromptDrawer({
+  prompt,
+  form,
   onCancel,
   onOk,
-  form,
 }: {
-  open: boolean
+  prompt: PathPrompt | null
+  form: ReturnType<typeof Form.useForm<{ path: string }>>[0]
   onCancel: () => void
   onOk: () => void
-  form: ReturnType<typeof Form.useForm<{ path: string }>>[0]
 }) {
+  const copy = prompt ? PATH_PROMPT_COPY[prompt.mode] : null
   return (
-    <Drawer open={open} title="新建文件" placement="right" width={420} onClose={onCancel}>
-      <Form form={form} layout="vertical" onFinish={onOk}>
-        <Form.Item
-          name="path"
-          label="路径"
-          rules={[{ required: true, message: '请填写文件路径' }]}
-          extra="相对于 Project 根目录，例如 src/train.py"
-        >
-          <Input placeholder="train.py" />
-        </Form.Item>
-        <Space>
-          <Button type="primary" onClick={onOk}>
-            创建
-          </Button>
-          <Button onClick={onCancel}>取消</Button>
-        </Space>
-      </Form>
+    <Drawer
+      open={prompt !== null}
+      title={copy?.title}
+      placement="right"
+      width={420}
+      onClose={onCancel}
+    >
+      {prompt && (
+        <Form form={form} layout="vertical" onFinish={onOk}>
+          {prompt.mode === 'rename' && (
+            <Form.Item label="原路径">
+              <Input value={prompt.source} disabled />
+            </Form.Item>
+          )}
+          {prompt.mode === 'copy' && (
+            <Form.Item label="源路径">
+              <Input value={prompt.source} disabled />
+            </Form.Item>
+          )}
+          <Form.Item
+            name="path"
+            label={copy?.label}
+            rules={[{ required: true, message: '请填写路径' }]}
+            extra={copy?.extra}
+          >
+            <Input placeholder="src/train.py" />
+          </Form.Item>
+          <Space>
+            <Button type="primary" onClick={onOk}>
+              确定
+            </Button>
+            <Button onClick={onCancel}>取消</Button>
+          </Space>
+        </Form>
+      )}
     </Drawer>
   )
 }

@@ -56,7 +56,7 @@ def make_snapshot() -> RunSnapshot:
             time_limit_minutes=15,
         ),
         artifact_rules=(ArtifactCollectionRule(path="outputs", name="结果", optional=False),),
-        created_by="usr_1",
+        initiated_by_user_id="usr_1",
         created_at=datetime(2026, 7, 26, 12, 0, tzinfo=UTC),
     )
 

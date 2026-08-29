@@ -41,13 +41,13 @@ async def _create_resource_with_version(
     files: list[tuple[str, bytes]],
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情。"""
-    workspace_id = await _user_group(client)
+    user_group_id = await _user_group(client)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": name,
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
@@ -76,6 +76,7 @@ async def _run_listing_input(
     version: dict,
     access_path: str,
     subpath: str,
+    environment_version_id: str,
 ) -> dict:
     """提交一个引用 SR 版本（带子路径）的 Run，Run 把 inputs 树打印出来。"""
     # access_path 在 storage 端被 lstrip("/") 后挂到 inputs 根下，所以这里也用相对路径拼。
@@ -103,6 +104,7 @@ for p in sorted(root.rglob("*")):
                 "name": "子路径消费",
                 "command": "python list.py",
                 "compute_plan_id": "plan_cpu_quick",
+                "environment_version_id": environment_version_id,
                 "input_bindings": [
                     {
                         "source_type": "shared_resource_version",
@@ -143,7 +145,7 @@ async def test_子路径指向目录只物化该目录并剥前缀(
     client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``dataset/train/`` 子目录 → 在 Run 中暴露为 ``/inputs/train`` 下的内容（剥前缀）。"""
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
@@ -160,7 +162,12 @@ async def test_子路径指向目录只物化该目录并剥前缀(
         client, name="消费子目录", files={"placeholder.py": "pass"}, headers=ALICE
     )
     detail = await _run_listing_input(
-        client, project=project, version=version, access_path="/inputs/train", subpath="train/"
+        client,
+        project=project,
+        version=version,
+        access_path="/inputs/train",
+        subpath="train/",
+        environment_version_id=env_version_id,
     )
     stdout = await _stdout_lines(client, detail)
     assert "a.py = 训练A" in stdout, stdout
@@ -173,7 +180,7 @@ async def test_子路径指向目录只物化该目录并剥前缀(
 async def test_子路径深层目录同样剥前缀(
     client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
@@ -189,7 +196,12 @@ async def test_子路径深层目录同样剥前缀(
         client, name="消费深层", files={"placeholder.py": "pass"}, headers=ALICE
     )
     detail = await _run_listing_input(
-        client, project=project, version=version, access_path="/inputs/d", subpath="a/b/"
+        client,
+        project=project,
+        version=version,
+        access_path="/inputs/d",
+        subpath="a/b/",
+        environment_version_id=env_version_id,
     )
     stdout = await _stdout_lines(client, detail)
     assert "c.py = 深" in stdout, stdout
@@ -204,7 +216,7 @@ async def test_子路径按目录边界匹配不误纳同前缀目录(
     client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``subpath="train"`` 只匹配 ``train/`` 下文件，不误纳 ``training/``。"""
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
@@ -219,7 +231,12 @@ async def test_子路径按目录边界匹配不误纳同前缀目录(
         client, name="同前缀消费", files={"placeholder.py": "pass"}, headers=ALICE
     )
     detail = await _run_listing_input(
-        client, project=project, version=version, access_path="/inputs/x", subpath="train"
+        client,
+        project=project,
+        version=version,
+        access_path="/inputs/x",
+        subpath="train",
+        environment_version_id=env_version_id,
     )
     stdout = await _stdout_lines(client, detail)
     assert "a.py = 对的" in stdout, stdout
@@ -234,7 +251,7 @@ async def test_子路径指向单个文件物化到_basename(
     client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``subpath="train"`` 命名一个文件时，物化到 ``access_path/train``，不剥到空串崩掉。"""
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
@@ -273,6 +290,7 @@ print("exists_other=", (base / "other.txt").exists())
                 "name": "单文件消费",
                 "command": "python read.py",
                 "compute_plan_id": "plan_cpu_quick",
+                "environment_version_id": env_version_id,
                 "input_bindings": [
                     {
                         "source_type": "shared_resource_version",
@@ -304,7 +322,7 @@ print("exists_other=", (base / "other.txt").exists())
 async def test_子路径不存在被挡在提交前(
     client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client, context, name="不存在子路径", files=[("a.txt", b"x")]
@@ -319,6 +337,7 @@ async def test_子路径不存在被挡在提交前(
                 "name": "跑一下",
                 "command": "python main.py",
                 "compute_plan_id": "plan_cpu_quick",
+                "environment_version_id": env_version_id,
                 "input_bindings": [
                     {
                         "source_type": "shared_resource_version",
@@ -347,7 +366,7 @@ async def test_空子路径物化整份内容(
     client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """不传 source_subpath（默认空）→ 物化整份内容，与既有行为一致。"""
-    await use_default_environment(session, client, headers=ALICE)
+    _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
@@ -359,7 +378,12 @@ async def test_空子路径物化整份内容(
         client, name="全量消费", files={"placeholder.py": "pass"}, headers=ALICE
     )
     detail = await _run_listing_input(
-        client, project=project, version=version, access_path="/inputs/d", subpath=""
+        client,
+        project=project,
+        version=version,
+        access_path="/inputs/d",
+        subpath="",
+        environment_version_id=env_version_id,
     )
     stdout = await _stdout_lines(client, detail)
     assert "top.txt = 顶层" in stdout, stdout

@@ -30,7 +30,6 @@ from ..application.scoped_config_resolver import ScopedConfigResolver
 from ..application.shared_resource_publication import SharedResourcePublicationProcessor
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
-from ..application.workspace_service import LegacyWorkspaceService
 from ..config import Settings
 from ..domain.models import User
 from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
@@ -75,7 +74,6 @@ class Services:
     identity: IdentityService
     user_groups: UserGroupService
     configuration: ConfigurationService
-    legacy_workspaces: LegacyWorkspaceService
     entitlements: EntitlementService
     projects: ProjectService
     run_configurations: RunConfigurationService
@@ -111,7 +109,6 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         identity=IdentityService(repos, context.clock, session),
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
         configuration=ConfigurationService(repos, guard, vault),
-        legacy_workspaces=LegacyWorkspaceService(repos, guard),
         entitlements=EntitlementService(repos),
         projects=ProjectService(
             repos,
@@ -120,6 +117,8 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.storage,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
+            max_archive_total_bytes=context.settings.max_archive_total_bytes,
+            max_archive_entries=context.settings.max_archive_entries,
         ),
         run_configurations=RunConfigurationService(repos, guard),
         runs=RunService(
@@ -133,7 +132,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             notifier,
             config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
-        catalog=CatalogService(repos),
+        catalog=CatalogService(repos, guard),
         health=HealthService(repos),
         lifecycle=RunLifecycleService(
             repos, context.clock, context.storage, context.scheduler, activity, notifier, session
@@ -181,7 +180,7 @@ async def get_current_user(
     services: Annotated[Services, Depends(get_services)],
     x_user: Annotated[str | None, Header(alias=DEV_USER_HEADER)] = None,
 ) -> User:
-    """Resolve the dev identity without creating a Personal Workspace."""
+    """Resolve the dev identity without creating any ownership container."""
     username = (x_user or DEFAULT_DEV_USER).strip() or DEFAULT_DEV_USER
     return await services.identity.ensure_user(username)
 

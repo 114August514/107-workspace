@@ -19,11 +19,11 @@ from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
     InputSourceType,
-    LegacyWorkspaceKind,
     MembershipRole,
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     SharedResourcePublicationStatus,
@@ -40,7 +40,6 @@ from ...domain.models import (
     ForkRelation,
     IdempotencyRecord,
     InputBinding,
-    LegacyWorkspace,
     Membership,
     Notification,
     Project,
@@ -77,8 +76,10 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
         "有其他人同时保存了这个 Project 的版本，请刷新后重试",
     ),
     (("users.username",), "这个用户名已经被占用"),
-    (("uq_personal_workspace",), "这个用户已经有 Personal Workspace 了"),
-    (("uq_project_name", "projects.name"), "当前 Workspace 中已存在同名 Project"),
+    (
+        ("uq_projects_owner_user_name", "uq_projects_owner_user_group_name", "projects.name"),
+        "当前 Owner 中已存在同名 Project",
+    ),
     (("uq_user_group_membership", "memberships.user_id"), "该用户已经是成员或已被邀请"),
     (("uq_membership_active_owner", "memberships.user_group_id"), "User Group 已有有效 Owner"),
     (
@@ -178,49 +179,6 @@ class UserRepositoryImpl:
         stmt = select(t.UserRow).where(t.UserRow.id.in_(user_ids))
         rows = (await self._session.execute(stmt)).scalars().all()
         return {row.id: _to_user(row) for row in rows}
-
-
-class LegacyWorkspaceRepositoryImpl:
-    """Private anchors for downstream workspace_id foreign keys."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-
-    async def add(self, workspace: LegacyWorkspace) -> None:
-        self._session.add(
-            t.LegacyWorkspaceRow(
-                id=workspace.id,
-                kind=workspace.kind.value,
-                name=workspace.name,
-                description=workspace.description,
-                owner_id=workspace.owner_id,
-                default_environment_version_id=workspace.default_environment_version_id,
-                created_at=workspace.created_at or datetime.now(UTC),
-            )
-        )
-        await _flush(self._session)
-
-    async def get(self, workspace_id: str) -> LegacyWorkspace | None:
-        row = await self._session.get(t.LegacyWorkspaceRow, workspace_id)
-        return _to_legacy_workspace(row) if row else None
-
-    async def update(self, workspace: LegacyWorkspace) -> None:
-        row = await self._session.get(t.LegacyWorkspaceRow, workspace.id)
-        if row is None:
-            return
-        row.name = workspace.name
-        row.description = workspace.description
-        row.owner_id = workspace.owner_id
-        row.default_environment_version_id = workspace.default_environment_version_id
-        await _flush(self._session)
-
-    async def get_personal(self, owner_id: str) -> LegacyWorkspace | None:
-        stmt = select(t.LegacyWorkspaceRow).where(
-            t.LegacyWorkspaceRow.owner_id == owner_id,
-            t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.PERSONAL.value,
-        )
-        row = (await self._session.execute(stmt)).scalars().first()
-        return _to_legacy_workspace(row) if row else None
 
 
 class UserGroupRepositoryImpl:
@@ -420,13 +378,16 @@ class ProjectRepositoryImpl:
         self._session = session
 
     async def add(self, project: Project) -> None:
+        owner_user_id, owner_user_group_id = _owner_columns(project.owner)
         self._session.add(
             t.ProjectRow(
                 id=project.id,
-                workspace_id=project.workspace_id,
+                owner_user_id=owner_user_id,
+                owner_user_group_id=owner_user_group_id,
                 name=project.name,
                 description=project.description,
                 status=project.status.value,
+                visibility=project.visibility.value,
                 environment_version_id=project.environment_version_id,
                 default_run_configuration_id=project.default_run_configuration_id,
                 created_by=project.created_by,
@@ -444,38 +405,63 @@ class ProjectRepositoryImpl:
         row = await self._session.get(t.ProjectRow, project.id)
         if row is None:
             return
+        owner_user_id, owner_user_group_id = _owner_columns(project.owner)
         row.name = project.name
+        row.owner_user_id = owner_user_id
+        row.owner_user_group_id = owner_user_group_id
         row.description = project.description
         row.status = project.status.value
+        row.visibility = project.visibility.value
         row.environment_version_id = project.environment_version_id
         row.default_run_configuration_id = project.default_run_configuration_id
         row.updated_at = project.updated_at or datetime.now(UTC)
         await _flush(self._session)
 
-    async def list_for_workspace(self, workspace_id: str, page: PageRequest) -> Page[Project]:
-        stmt = (
-            select(t.ProjectRow)
-            .where(t.ProjectRow.workspace_id == workspace_id)
-            .order_by(t.ProjectRow.updated_at.desc())
-        )
-        return await _paginate(self._session, stmt, page, _to_project)
-
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
-        visible = _visible_workspace_ids(user_id)
+        # Owner-scope only (no PUBLIC discovery): /me recent_projects shows what
+        # the User owns or their User Groups own.
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
         stmt = (
             select(t.ProjectRow)
-            .where(t.ProjectRow.workspace_id.in_(visible))
+            .where(
+                (t.ProjectRow.owner_user_id == user_id)
+                | t.ProjectRow.owner_user_group_id.in_(group_ids)
+            )
             .order_by(t.ProjectRow.updated_at.desc())
             .limit(limit)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
 
-    async def name_exists(self, workspace_id: str, name: str) -> bool:
+    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
+        # Owner scope + PUBLIC projects the User can discover.
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
+        owner_scope = (
+            t.ProjectRow.owner_user_id == user_id
+        ) | t.ProjectRow.owner_user_group_id.in_(group_ids)
+        stmt = (
+            select(t.ProjectRow)
+            .where((t.ProjectRow.visibility == ProjectVisibility.PUBLIC.value) | owner_scope)
+            .order_by(t.ProjectRow.updated_at.desc())
+        )
+        return await _paginate(self._session, stmt, page, _to_project)
+
+    async def name_exists(self, owner: OwnerReference, name: str) -> bool:
+        owner_column = (
+            t.ProjectRow.owner_user_id
+            if owner.kind is OwnerKind.USER
+            else t.ProjectRow.owner_user_group_id
+        )
         stmt = (
             select(func.count())
             .select_from(t.ProjectRow)
-            .where(t.ProjectRow.workspace_id == workspace_id, t.ProjectRow.name == name)
+            .where(owner_column == owner.id, t.ProjectRow.name == name)
         )
         return bool((await self._session.execute(stmt)).scalar_one())
 
@@ -715,6 +701,28 @@ class EnvironmentRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
 
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        owner_user_id, owner_group_id = _owner_columns(owner)
+        stmt = (
+            select(t.EnvironmentRow)
+            .where(
+                t.EnvironmentRow.owner_user_id == owner_user_id,
+                t.EnvironmentRow.owner_user_group_id == owner_group_id,
+            )
+            .order_by(t.EnvironmentRow.name, t.EnvironmentRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment(row) for row in rows]
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        stmt = (
+            select(t.EnvironmentVersionRow)
+            .where(t.EnvironmentVersionRow.environment_id == environment_id)
+            .order_by(t.EnvironmentVersionRow.version.desc(), t.EnvironmentVersionRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment_version(row) for row in rows]
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentVersionRow, version_id)
@@ -881,7 +889,6 @@ class RunRepositoryImpl:
             t.RunRow(
                 id=run.id,
                 project_id=run.project_id,
-                workspace_id=run.workspace_id,
                 snapshot_id=run.snapshot_id,
                 compute_plan_id=run.compute_plan_id,
                 project_version_id=run.project_version_id,
@@ -893,7 +900,7 @@ class RunRepositoryImpl:
                 scheduler_job_id=run.scheduler_job_id,
                 exit_code=run.exit_code,
                 failure_reason=run.failure_reason,
-                created_by=run.created_by,
+                initiated_by_user_id=run.initiated_by_user_id,
                 created_at=run.created_at or datetime.now(UTC),
                 submitted_at=run.submitted_at,
                 started_at=run.started_at,
@@ -929,10 +936,20 @@ class RunRepositoryImpl:
         return await _paginate(self._session, stmt, page, _to_run)
 
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Run]:
-        visible = _visible_workspace_ids(user_id)
+        # Home recent Runs are personal execution history: the User must be both the
+        # initiator and currently able to see the owning Project.
+        group_ids = select(t.MembershipRow.user_group_id).where(
+            t.MembershipRow.user_id == user_id,
+            t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+        )
         stmt = (
             select(t.RunRow)
-            .where(t.RunRow.workspace_id.in_(visible))
+            .join(t.ProjectRow, t.ProjectRow.id == t.RunRow.project_id)
+            .where(
+                t.RunRow.initiated_by_user_id == user_id,
+                (t.ProjectRow.owner_user_id == user_id)
+                | t.ProjectRow.owner_user_group_id.in_(group_ids),
+            )
             .order_by(t.RunRow.created_at.desc())
             .limit(limit)
         )
@@ -976,15 +993,15 @@ class RunRepositoryImpl:
         """数「这个 User 在这个算力方案上」还有几个未结束的 Run。
 
         并发额度按「User × 方案」授予，锁的也是那个 User 的那一条权益行，
-        所以只数该 User 发起（created_by）的 Run。**计数范围大于加锁范围
-        就等于没锁**——计数范围里混进别人的 Run，会读出一个比实际大的数，
-        让本来还有名额的请求被误拒，或反过来。
+        所以只数该 User 发起（initiated_by_user_id）的 Run。**计数范围大于
+        加锁范围就等于没锁**——计数范围里混进别人的 Run，会读出一个比实际
+        大的数，让本来还有名额的请求被误拒，或反过来。
         """
         stmt = (
             select(func.count())
             .select_from(t.RunRow)
             .where(
-                t.RunRow.created_by == user_id,
+                t.RunRow.initiated_by_user_id == user_id,
                 t.RunRow.compute_plan_id == compute_plan_id,
                 t.RunRow.status.in_([RunStatus.QUEUED.value, RunStatus.RUNNING.value]),
             )
@@ -996,19 +1013,19 @@ class IdempotencyRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find(self, workspace_id: str, key: str) -> IdempotencyRecord | None:
-        row = await self._session.get(t.IdempotencyKeyRow, (workspace_id, key))
+    async def find(self, user_id: str, key: str) -> IdempotencyRecord | None:
+        row = await self._session.get(t.IdempotencyKeyRow, (user_id, key))
         if row is None:
             return None
         return IdempotencyRecord(
-            workspace_id=row.workspace_id,
+            initiated_by_user_id=row.initiated_by_user_id,
             key=row.key,
             endpoint=row.endpoint,
             run_id=row.run_id,
             created_at=_required(row.created_at),
         )
 
-    async def reserve(self, workspace_id: str, key: str, endpoint: str) -> None:
+    async def reserve(self, user_id: str, key: str, endpoint: str) -> None:
         """登记这个 key 并立刻落库。
 
         立刻 flush 是关键：复合主键的冲突要在这一刻就暴露出来，
@@ -1016,7 +1033,7 @@ class IdempotencyRepositoryImpl:
         """
         self._session.add(
             t.IdempotencyKeyRow(
-                workspace_id=workspace_id,
+                initiated_by_user_id=user_id,
                 key=key,
                 endpoint=endpoint,
                 run_id=None,
@@ -1025,8 +1042,8 @@ class IdempotencyRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def attach_run(self, workspace_id: str, key: str, run_id: str) -> None:
-        row = await self._session.get(t.IdempotencyKeyRow, (workspace_id, key))
+    async def attach_run(self, user_id: str, key: str, run_id: str) -> None:
+        row = await self._session.get(t.IdempotencyKeyRow, (user_id, key))
         if row is None:  # pragma: no cover - reserve 一定先于它调用
             return
         row.run_id = run_id
@@ -1078,7 +1095,6 @@ class ArtifactRepositoryImpl:
                 id=artifact.id,
                 run_id=artifact.run_id,
                 project_id=artifact.project_id,
-                workspace_id=artifact.workspace_id,
                 name=artifact.name,
                 source_path=artifact.source_path,
                 size=artifact.size,
@@ -1118,16 +1134,18 @@ class ArtifactRepositoryImpl:
 
 
 class ActivityRepositoryImpl:
-    """活动仓储：只写不改，只按时间倒序读。"""
+    """Append-only activity persistence scoped by current Owner authority."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def add(self, activity: Activity) -> None:
+        owner_user_id, owner_user_group_id = _owner_columns(activity.owner)
         self._session.add(
             t.ActivityRow(
                 id=activity.id,
-                workspace_id=activity.workspace_id,
+                owner_user_id=owner_user_id,
+                owner_user_group_id=owner_user_group_id,
                 project_id=activity.project_id,
                 actor_id=activity.actor_id,
                 actor_name=activity.actor_name,
@@ -1141,10 +1159,15 @@ class ActivityRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def list_for_workspace(self, workspace_id: str, page: PageRequest) -> Page[Activity]:
+    async def list_for_owner(self, owner: OwnerReference, page: PageRequest) -> Page[Activity]:
+        owner_column = (
+            t.ActivityRow.owner_user_id
+            if owner.kind is OwnerKind.USER
+            else t.ActivityRow.owner_user_group_id
+        )
         stmt = (
             select(t.ActivityRow)
-            .where(t.ActivityRow.workspace_id == workspace_id)
+            .where(owner_column == owner.id)
             .order_by(t.ActivityRow.created_at.desc(), t.ActivityRow.id.desc())
         )
         return await _paginate(self._session, stmt, page, _to_activity)
@@ -1161,7 +1184,7 @@ class ActivityRepositoryImpl:
 def _to_activity(row: t.ActivityRow) -> Activity:
     return Activity(
         id=row.id,
-        workspace_id=row.workspace_id,
+        owner=_owner_reference(row.owner_user_id, row.owner_user_group_id),
         project_id=row.project_id,
         actor_id=row.actor_id,
         actor_name=row.actor_name,
@@ -1170,8 +1193,6 @@ def _to_activity(row: t.ActivityRow) -> Activity:
         target_id=row.target_id,
         target_name=row.target_name,
         detail=row.detail,
-        # SQLite 读回来的时间没有时区。不补的话 Pydantic 序列化出来不带 Z，
-        # 前端会按本地时区解析，「刚刚」就变成了「8 小时前」。
         created_at=_required(row.created_at),
     )
 
@@ -1194,7 +1215,6 @@ class NotificationRepositoryImpl:
                 type=notification.type.value,
                 title=notification.title,
                 body=notification.body,
-                workspace_id=notification.workspace_id,
                 target_type=notification.target_type.value if notification.target_type else None,
                 target_id=notification.target_id,
                 mandatory=notification.mandatory,
@@ -1259,7 +1279,6 @@ def _to_notification(row: t.NotificationRow) -> Notification:
         type=NotificationType(row.type),
         title=row.title,
         body=row.body,
-        workspace_id=row.workspace_id,
         target_type=TargetType(row.target_type) if row.target_type else None,
         target_id=row.target_id,
         mandatory=row.mandatory,
@@ -1274,13 +1293,15 @@ class ForkRelationRepositoryImpl:
         self._session = session
 
     async def add(self, relation: ForkRelation) -> None:
+        source_owner_user_id, source_owner_user_group_id = _owner_columns(relation.source_owner)
         self._session.add(
             t.ForkRelationRow(
                 id=relation.id,
                 project_id=relation.project_id,
                 source_project_id=relation.source_project_id,
                 source_version_id=relation.source_version_id,
-                source_workspace_id=relation.source_workspace_id,
+                source_owner_user_id=source_owner_user_id,
+                source_owner_user_group_id=source_owner_user_group_id,
                 source_project_name=relation.source_project_name,
                 source_version_label=relation.source_version_label,
                 created_by=relation.created_by,
@@ -1304,7 +1325,7 @@ def _to_fork_relation(row: t.ForkRelationRow) -> ForkRelation:
         project_id=row.project_id,
         source_project_id=row.source_project_id,
         source_version_id=row.source_version_id,
-        source_workspace_id=row.source_workspace_id,
+        source_owner=_owner_reference(row.source_owner_user_id, row.source_owner_user_group_id),
         source_project_name=row.source_project_name,
         source_version_label=row.source_version_label,
         created_by=row.created_by,
@@ -1343,13 +1364,7 @@ class SharedResourceRepositoryImpl:
     async def list_discoverable_for_user(self, user_id: str) -> list[SharedResource]:
         stmt = (
             select(t.SharedResourceRow)
-            .where(
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                )
-            )
+            .where(_shared_resource_discovery_predicate(user_id))
             .order_by(t.SharedResourceRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
@@ -1360,11 +1375,7 @@ class SharedResourceRepositoryImpl:
     ) -> SharedResource | None:
         stmt = select(t.SharedResourceRow).where(
             t.SharedResourceRow.id == resource_id,
-            _asset_discovery_predicate(
-                t.SharedResourceRow.owner_user_id,
-                t.SharedResourceRow.owner_user_group_id,
-                user_id,
-            ),
+            _shared_resource_discovery_predicate(user_id),
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_shared_resource(row) if row else None
@@ -1503,11 +1514,7 @@ class SharedResourceRepositoryImpl:
             )
             .where(
                 t.SharedResourceVersionRow.id == version_id,
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                ),
+                _shared_resource_discovery_predicate(user_id),
             )
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -1533,11 +1540,7 @@ class SharedResourceRepositoryImpl:
             )
             .where(
                 t.SharedResourceRow.id == resource_id,
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                ),
+                _shared_resource_discovery_predicate(user_id),
             )
             .order_by(t.SharedResourceVersionRow.sequence.desc())
         )
@@ -1717,7 +1720,6 @@ class SqlRepositories:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.users = UserRepositoryImpl(session)
-        self.legacy_workspaces = LegacyWorkspaceRepositoryImpl(session)
         self.user_groups = UserGroupRepositoryImpl(session)
         self.memberships = MembershipRepositoryImpl(session)
         self.variables = VariableRepositoryImpl(session)
@@ -1762,6 +1764,48 @@ def _asset_discovery_predicate(owner_user_column: Any, owner_group_column: Any, 
     return (owner_user_column == user_id) | owner_group_column.in_(active_group_ids)
 
 
+def _shared_resource_discovery_predicate(user_id: str):
+    """Owner-scope discovery extended by valid USE Grants (Issue #55).
+
+    A resource is also discoverable when a USE Grant issued under its *current*
+    Owner covers it (Target = ALL or the exact resource) and the acting User is
+    the grantee personally or an active member of a grantee UserGroup.  Grants
+    never add management capability; the guard keeps role resolution owner-scoped.
+    """
+    active_group_ids = select(t.MembershipRow.user_group_id).where(
+        t.MembershipRow.user_id == user_id,
+        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+    )
+    grantor_matches = (
+        (t.GrantRow.grantor_kind == OwnerKind.USER.value)
+        & (t.GrantRow.grantor_id == t.SharedResourceRow.owner_user_id)
+    ) | (
+        (t.GrantRow.grantor_kind == OwnerKind.USER_GROUP.value)
+        & (t.GrantRow.grantor_id == t.SharedResourceRow.owner_user_group_id)
+    )
+    grantee_matches = (
+        (t.GrantRow.grantee_kind == OwnerKind.USER.value) & (t.GrantRow.grantee_id == user_id)
+    ) | (
+        (t.GrantRow.grantee_kind == OwnerKind.USER_GROUP.value)
+        & t.GrantRow.grantee_id.in_(active_group_ids)
+    )
+    target_matches = (t.GrantRow.target_kind == GrantTargetKind.ALL.value) | (
+        (t.GrantRow.target_kind == GrantTargetKind.SHARED_RESOURCE.value)
+        & (t.GrantRow.target_id == t.SharedResourceRow.id)
+    )
+    covering_use_grant = select(t.GrantRow.id).where(
+        t.GrantRow.action == GrantAction.USE.value,
+        grantor_matches,
+        grantee_matches,
+        target_matches,
+    )
+    return (
+        (t.SharedResourceRow.owner_user_id == user_id)
+        | t.SharedResourceRow.owner_user_group_id.in_(active_group_ids)
+        | covering_use_grant.exists()
+    )
+
+
 def _owner_reference(owner_user_id: str | None, owner_user_group_id: str | None) -> OwnerReference:
     if owner_user_id is not None and owner_user_group_id is None:
         return OwnerReference(OwnerKind.USER, owner_user_id)
@@ -1776,42 +1820,12 @@ def _owner_columns(owner: OwnerReference) -> tuple[str | None, str | None]:
     return None, owner.id
 
 
-def _visible_workspace_ids(user_id: str):
-    """Resolve private legacy anchors without exposing Workspace governance."""
-    group_ids = select(t.MembershipRow.user_group_id).where(
-        t.MembershipRow.user_id == user_id,
-        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
-    )
-    return select(t.LegacyWorkspaceRow.id).where(
-        (
-            (t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.PERSONAL.value)
-            & (t.LegacyWorkspaceRow.owner_id == user_id)
-        )
-        | (
-            (t.LegacyWorkspaceRow.kind == LegacyWorkspaceKind.COLLABORATIVE.value)
-            & t.LegacyWorkspaceRow.id.in_(group_ids)
-        )
-    )
-
-
 def _to_user(row: t.UserRow) -> User:
     return User(
         id=row.id,
         username=row.username,
         display_name=row.display_name,
         email=row.email,
-        created_at=_aware(row.created_at),
-    )
-
-
-def _to_legacy_workspace(row: t.LegacyWorkspaceRow) -> LegacyWorkspace:
-    return LegacyWorkspace(
-        id=row.id,
-        kind=LegacyWorkspaceKind(row.kind),
-        name=row.name,
-        description=row.description,
-        owner_id=row.owner_id,
-        default_environment_version_id=row.default_environment_version_id,
         created_at=_aware(row.created_at),
     )
 
@@ -1838,12 +1852,14 @@ def _to_membership(row: t.MembershipRow) -> Membership:
 
 
 def _to_project(row: t.ProjectRow) -> Project:
+    owner = _owner_reference(row.owner_user_id, row.owner_user_group_id)
     return Project(
         id=row.id,
-        workspace_id=row.workspace_id,
         name=row.name,
+        owner=owner,
         description=row.description,
         status=ProjectStatus(row.status),
+        visibility=ProjectVisibility(row.visibility),
         environment_version_id=row.environment_version_id,
         default_run_configuration_id=row.default_run_configuration_id,
         created_by=row.created_by,
@@ -1961,7 +1977,6 @@ def _to_run(row: t.RunRow) -> Run:
     return Run(
         id=row.id,
         project_id=row.project_id,
-        workspace_id=row.workspace_id,
         project_version_id=row.project_version_id,
         project_version_label=row.project_version_label,
         snapshot_id=row.snapshot_id,
@@ -1973,7 +1988,7 @@ def _to_run(row: t.RunRow) -> Run:
         scheduler_job_id=row.scheduler_job_id,
         exit_code=row.exit_code,
         failure_reason=row.failure_reason,
-        created_by=row.created_by,
+        initiated_by_user_id=row.initiated_by_user_id,
         created_at=_aware(row.created_at),
         submitted_at=_aware(row.submitted_at),
         started_at=_aware(row.started_at),
@@ -1986,7 +2001,6 @@ def _to_artifact(row: t.ArtifactRow) -> Artifact:
         id=row.id,
         run_id=row.run_id,
         project_id=row.project_id,
-        workspace_id=row.workspace_id,
         name=row.name,
         source_path=row.source_path,
         size=row.size,

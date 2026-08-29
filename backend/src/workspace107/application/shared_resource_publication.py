@@ -117,16 +117,15 @@ class SharedResourcePublicationProcessor:
             finished_at=self._clock.now(),
         )
         await self._repos.shared_resources.update_attempt(succeeded)
-        if resource.owner.kind.value == "user_group":
-            await self._activity.record(
-                actor_id=attempt.created_by,
-                workspace_id=resource.owner.id,
-                action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
-                target_type=TargetType.SHARED_RESOURCE_VERSION,
-                target_id=version.id,
-                target_name=f"{resource.name} · {version.label}",
-                detail=version.description,
-            )
+        await self._activity.record(
+            actor_id=attempt.created_by,
+            owner=resource.owner,
+            action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
+            target_type=TargetType.SHARED_RESOURCE_VERSION,
+            target_id=version.id,
+            target_name=f"{resource.name} · {version.label}",
+            detail=version.description,
+        )
         return succeeded
 
     async def _validate(self, files: tuple[SharedResourceFile, ...]) -> tuple[str, str]:

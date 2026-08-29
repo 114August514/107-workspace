@@ -43,7 +43,11 @@ router = APIRouter(tags=["shared-resource"])
 async def list_shared_resources(
     user: CurrentUser, services: ServicesDep
 ) -> list[s.SharedResourceOut]:
-    """Return resources owned by the actor or by an owning UserGroup with active membership."""
+    """Return actor-owned and otherwise discoverable resources.
+
+    Discovery includes active UserGroup ownership and USE Grants issued by the
+    resource's current owner.
+    """
     views = await services.shared_resources.list_discoverable(user.id)
     return [p.shared_resource_out(view) for view in views]
 

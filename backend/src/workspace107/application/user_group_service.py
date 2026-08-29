@@ -8,13 +8,13 @@ from ..domain import ids
 from ..domain.capabilities import UserGroupCapability, user_group_capabilities_of
 from ..domain.enums import (
     ActivityAction,
-    LegacyWorkspaceKind,
     MembershipRole,
     MembershipStatus,
     TargetType,
 )
 from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied, ValidationFailed
-from ..domain.models import LegacyWorkspace, Membership, User, UserGroup
+from ..domain.models import Membership, User, UserGroup
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
 from .access import AccessGuard, UserGroupAccess
@@ -38,6 +38,7 @@ class UserGroupView:
 class MemberView:
     membership: Membership
     user: User
+    capabilities: frozenset[UserGroupCapability]
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,17 +108,6 @@ class UserGroupService:
             created_at=now,
         )
         await self._repos.user_groups.add(group)
-        # Private same-ID anchor: required only while #36-#42 tables still FK to workspaces.id.
-        await self._repos.legacy_workspaces.add(
-            LegacyWorkspace(
-                id=group.id,
-                kind=LegacyWorkspaceKind.COLLABORATIVE,
-                name=group.name,
-                description=group.description,
-                owner_id=user_id,
-                created_at=now,
-            )
-        )
         await self._repos.memberships.add(
             Membership(
                 id=ids.new_id(ids.MEMBERSHIP),
@@ -130,7 +120,7 @@ class UserGroupService:
         )
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=group.id,
+            owner=OwnerReference(OwnerKind.USER_GROUP, group.id),
             action=ActivityAction.USER_GROUP_CREATED,
             target_type=TargetType.USER_GROUP,
             target_id=group.id,
@@ -162,15 +152,9 @@ class UserGroupService:
         if description is not None:
             group.description = description
         await self._repos.user_groups.update(group)
-        anchor = await self._repos.legacy_workspaces.get(group.id)
-        if anchor is None:
-            raise ObjectNotFound("Legacy Workspace anchor", group.id)
-        anchor.name = group.name
-        anchor.description = group.description
-        await self._repos.legacy_workspaces.update(anchor)
         await self._activity.record(
             actor_id=user_id,
-            workspace_id=group.id,
+            owner=OwnerReference(OwnerKind.USER_GROUP, group.id),
             action=ActivityAction.USER_GROUP_UPDATED,
             target_type=TargetType.USER_GROUP,
             target_id=group.id,
@@ -187,12 +171,36 @@ class UserGroupService:
         return result
 
     async def list_members(self, user_id: str, user_group_id: str) -> list[MemberView]:
-        await self._guard.user_group(user_id, user_group_id, needs=UserGroupCapability.MEMBER_VIEW)
+        access = await self._guard.user_group(
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_VIEW
+        )
         result: list[MemberView] = []
         for membership in await self._repos.memberships.list_for_user_group(user_group_id):
             user = await self._repos.users.get(membership.user_id)
-            if user is not None:
-                result.append(MemberView(membership=membership, user=user))
+            if user is None:
+                continue
+            capabilities: set[UserGroupCapability] = set()
+            if (
+                access.can(UserGroupCapability.MEMBER_REMOVE)
+                and membership.role is not MembershipRole.OWNER
+                and (
+                    access.role is MembershipRole.OWNER or membership.role is MembershipRole.MEMBER
+                )
+            ):
+                capabilities.add(UserGroupCapability.MEMBER_REMOVE)
+            if (
+                access.can(UserGroupCapability.MEMBER_ROLE_MANAGE)
+                and membership.is_active
+                and membership.role in {MembershipRole.ADMIN, MembershipRole.MEMBER}
+            ):
+                capabilities.add(UserGroupCapability.MEMBER_ROLE_MANAGE)
+            result.append(
+                MemberView(
+                    membership=membership,
+                    user=user,
+                    capabilities=frozenset(capabilities),
+                )
+            )
         return result
 
     async def invite_member(
@@ -200,12 +208,11 @@ class UserGroupService:
         user_id: str,
         user_group_id: str,
         username: str,
-        role: MembershipRole,
     ) -> Membership:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=UserGroupCapability.MEMBER_MANAGE
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_INVITE
         )
-        _reject_owner_role(role)
+        role = MembershipRole.MEMBER
         invitee = await self._repos.users.get_by_username(username)
         if invitee is None:
             raise ObjectNotFound("User", username)
@@ -266,14 +273,16 @@ class UserGroupService:
 
     async def remove_member(self, user_id: str, user_group_id: str, target_user_id: str) -> None:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=UserGroupCapability.MEMBER_MANAGE
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_REMOVE
         )
-        owner = await self._repos.memberships.get_active_owner(user_group_id)
-        if owner is not None and owner.user_id == target_user_id:
-            raise ConflictError("不能移除 User Group Owner，请先转让所有权")
         membership = await self._repos.memberships.get(user_group_id, target_user_id)
         if membership is None:
             raise ObjectNotFound("Membership", target_user_id)
+        if access.role is MembershipRole.ADMIN and membership.role is not MembershipRole.MEMBER:
+            raise PermissionDenied("Admin 只能移除普通 Member")
+        owner = await self._repos.memberships.get_active_owner(user_group_id)
+        if owner is not None and owner.user_id == target_user_id:
+            raise ConflictError("不能移除 User Group Owner，请先转让所有权")
         if membership.status is MembershipStatus.REMOVED:
             return
         membership.status = MembershipStatus.REMOVED
@@ -299,7 +308,7 @@ class UserGroupService:
         role: MembershipRole,
     ) -> Membership:
         access = await self._lock_and_authorize_mutation(
-            user_id, user_group_id, needs=UserGroupCapability.MEMBER_MANAGE
+            user_id, user_group_id, needs=UserGroupCapability.MEMBER_ROLE_MANAGE
         )
         _reject_owner_role(role)
         owner = await self._repos.memberships.get_active_owner(user_group_id)
@@ -364,11 +373,6 @@ class UserGroupService:
         await self._repos.memberships.update(current)
         target.role = MembershipRole.OWNER
         await self._repos.memberships.update(target)
-        anchor = await self._repos.legacy_workspaces.get(user_group_id)
-        if anchor is None:
-            raise ObjectNotFound("Legacy Workspace anchor", user_group_id)
-        anchor.owner_id = target_user_id
-        await self._repos.legacy_workspaces.update(anchor)
         owner = await self._repos.memberships.get_active_owner(user_group_id)
         if owner is None or owner.user_id != target_user_id:  # pragma: no cover - DB corruption
             raise ConflictError("User Group 所有权转让未形成唯一有效 Owner")
@@ -398,7 +402,7 @@ class UserGroupService:
             return
         await self._activity.record(
             actor_id=actor_id,
-            workspace_id=user_group_id,
+            owner=OwnerReference(OwnerKind.USER_GROUP, user_group_id),
             action=action,
             target_type=TargetType.MEMBER,
             target_id=member.id,

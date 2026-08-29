@@ -53,9 +53,26 @@ export interface paths {
         };
         /**
          * 列出算力方案
-         * @description 登录后只读返回平台全部算力方案；列表不表示当前 Workspace 已获得对应权益。
+         * @description 登录后只读返回平台全部算力方案；列表不表示当前 User 已获得对应权益。
          */
         get: operations["list_compute_plans_api_v1_catalog_compute_plans_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/environment-versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取运行环境版本 */
+        get: operations["get_environment_version_api_v1_catalog_environment_versions__version_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -73,9 +90,26 @@ export interface paths {
         };
         /**
          * 列出运行环境
-         * @description 返回当前 User 作为 Owner 或 owning UserGroup active member 可发现的环境。
+         * @description 返回当前 User 可在个人或有效 User Group Owner 上下文中使用的环境。
          */
         get: operations["list_environments_api_v1_catalog_environments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/environments/{environment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取运行环境 */
+        get: operations["get_environment_api_v1_catalog_environments__environment_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -187,7 +221,7 @@ export interface paths {
         };
         /**
          * 获取个人首页
-         * @description Return identity, visible User Groups, and recent legacy child-domain objects.
+         * @description Return current identity, User Groups, direct execution context, and recent objects.
          */
         get: operations["home_api_v1_me_get"];
         put?: never;
@@ -227,7 +261,7 @@ export interface paths {
         };
         /**
          * 我的通知
-         * @description 分页返回当前用户收到的通知，可筛选未读项，不重新校验关联 Workspace 权限。
+         * @description 分页返回当前用户收到的通知，可筛选未读项。
          */
         get: operations["list_notifications_api_v1_notifications_get"];
         put?: never;
@@ -292,6 +326,27 @@ export interface paths {
          * @description 仅处理当前用户的通知；不存在、已读或不属于当前用户时同样返回成功。
          */
         post: operations["mark_read_api_v1_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 列出当前用户可发现的 Project
+         * @description 列出当前用户可发现的 Project：自己 / 所属 User Group 拥有的，以及 PUBLIC Project。
+         */
+        get: operations["list_discoverable_projects_api_v1_projects_get"];
+        put?: never;
+        /** 为 User 或 User Group 创建 Project */
+        post: operations["create_owned_project_api_v1_projects_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -366,6 +421,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/changes/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查看未保存变更的内容级详情
+         * @description 校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。
+         *
+         *     每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。
+         */
+        get: operations["working_change_detail_api_v1_projects__project_id__changes_detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/changes/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 放弃指定的未保存变更
+         * @description 要求内容写入权限，把指定路径的工作区内容恢复到最近版本对应状态。
+         *
+         *     历史版本不受影响（GR-201）；没有待放弃变化的路径按幂等跳过，
+         *     返回剩余的未保存变更。
+         */
+        post: operations["discard_changes_api_v1_projects__project_id__changes_discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出 Project 当前可用的 Environment */
+        get: operations["list_project_environments_api_v1_projects__project_id__environments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/files": {
         parameters: {
             query?: never;
@@ -394,6 +511,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/files/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上传压缩包并展开到 Project
+         * @description 要求内容写入权限，仅支持 zip；展开前逐条目校验并整体拒绝非法内容。
+         *
+         *     路径穿越、绝对路径、符号链接和加密条目会被拒绝；条目数与解压后
+         *     总大小受服务端预算限制，同路径文件会被覆盖。
+         */
+        post: operations["upload_archive_api_v1_projects__project_id__files_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/files/content": {
         parameters: {
             query?: never;
@@ -410,6 +550,69 @@ export interface paths {
         get: operations["read_file_api_v1_projects__project_id__files_content_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/files/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 复制 Project 文件或目录
+         * @description 要求内容写入权限，复制文件或递归复制目录并返回新产生的文件。
+         */
+        post: operations["copy_path_api_v1_projects__project_id__files_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/files/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载 Project 文件
+         * @description 校验 Owner 范围查看权限后，将文件完整内容作为二进制附件返回。
+         */
+        get: operations["download_file_api_v1_projects__project_id__files_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/files/mkdir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 创建 Project 目录
+         * @description 要求内容写入权限，以 ``.gitkeep`` 占位文件创建空目录。
+         *
+         *     目录本身不是实体，靠其中文件的路径前缀存在；占位文件让空目录
+         *     在文件列表里可见、能保存进版本。
+         */
+        post: operations["create_directory_api_v1_projects__project_id__files_mkdir_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -731,7 +934,7 @@ export interface paths {
         };
         /**
          * 获取 Run 详情
-         * @description 仅对可访问所属 Workspace 的用户返回 Run、不可变快照、事件与产物元数据。
+         * @description Return a Run only when the current User has owner-scope Project authority.
          */
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;
@@ -904,7 +1107,10 @@ export interface paths {
         };
         /**
          * 列出当前用户可发现的共享资源
-         * @description Return resources owned by the actor or by an owning UserGroup with active membership.
+         * @description Return actor-owned and otherwise discoverable resources.
+         *
+         *     Discovery includes active UserGroup ownership and USE Grants issued by the
+         *     resource's current owner.
          */
         get: operations["list_shared_resources_api_v1_shared_resources_get"];
         put?: never;
@@ -1000,6 +1206,23 @@ export interface paths {
         head?: never;
         /** 更新 User Group */
         patch: operations["update_user_group_api_v1_user_groups__user_group_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/user-groups/{user_group_id}/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出 User Group 近期活动 */
+        get: operations["list_user_group_activities_api_v1_user_groups__user_group_id__activities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/user-groups/{user_group_id}/invitation": {
@@ -1304,11 +1527,10 @@ export interface paths {
         put?: never;
         /**
          * 从历史版本派生新 Project
-         * @description 两侧都会校验：源版本可读、目标空间可写。
+         * @description Validate source visibility and explicit target Owner create authority.
          *
-         *     复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
-         *     （GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
-         *     提交前检查会拦下（GR-407）。
+         *     The fork copies content and eligible configuration references, never entitlement,
+         *     credential values, Membership, or Run history. PUBLIC readers only copy immutable files.
          */
         post: operations["fork_version_api_v1_versions__version_id__fork_post"];
         delete?: never;
@@ -1339,74 +1561,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workspaces/{workspace_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 读取旧 workspace_id 上下文
-         * @deprecated
-         */
-        get: operations["get_legacy_workspace_context_api_v1_workspaces__workspace_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * 设置旧默认环境上下文
-         * @deprecated
-         */
-        patch: operations["update_legacy_workspace_context_api_v1_workspaces__workspace_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/activities": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 列出旧 Workspace Activity
-         * @deprecated
-         */
-        get: operations["list_workspace_activities_api_v1_workspaces__workspace_id__activities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/workspaces/{workspace_id}/projects": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 列出旧 workspace_id 下的 Project
-         * @deprecated
-         */
-        get: operations["list_projects_api_v1_workspaces__workspace_id__projects_get"];
-        put?: never;
-        /**
-         * 在旧 workspace_id 下创建 Project
-         * @deprecated
-         */
-        post: operations["create_project_api_v1_workspaces__workspace_id__projects_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1422,7 +1576,7 @@ export interface components {
          *     取值只增不改。已经写进库的活动会一直用旧值，改名等于让历史记录读不出来。
          * @enum {string}
          */
-        ActivityAction: "workspace_created" | "workspace_updated" | "user_group_created" | "user_group_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published";
+        ActivityAction: "user_group_created" | "user_group_updated" | "member_invited" | "member_joined" | "member_left" | "member_removed" | "member_role_changed" | "ownership_transferred" | "project_created" | "project_updated" | "project_forked" | "version_saved" | "version_restored" | "run_submitted" | "run_cancelled" | "run_finished" | "shared_resource_created" | "shared_resource_updated" | "shared_resource_version_published";
         /**
          * ActivityOut
          * @description 活动流里的一条。
@@ -1445,6 +1599,7 @@ export interface components {
             detail: string;
             /** Id */
             id: string;
+            owner: components["schemas"]["OwnerReferenceIn"];
             /** Project Id */
             project_id: string | null;
             /** Target Id */
@@ -1452,8 +1607,6 @@ export interface components {
             /** Target Name */
             target_name: string;
             target_type: components["schemas"]["TargetType"];
-            /** Workspace Id */
-            workspace_id: string;
         };
         /** ArtifactEntryOut */
         ArtifactEntryOut: {
@@ -1515,6 +1668,11 @@ export interface components {
             /** Files */
             files: string[];
         };
+        /** Body_upload_archive_api_v1_projects__project_id__files_archive_post */
+        Body_upload_archive_api_v1_projects__project_id__files_archive_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_files_api_v1_projects__project_id__files_upload_post */
         Body_upload_files_api_v1_projects__project_id__files_upload_post: {
             /** Files */
@@ -1541,7 +1699,7 @@ export interface components {
          *     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
          * @enum {string}
          */
-        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
+        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
         /**
          * ChangeKind
          * @description 文件在两次快照之间的变化类型。
@@ -1606,6 +1764,14 @@ export interface components {
              * @default 30
              */
             time_limit_minutes: number;
+        };
+        /** DiscardChangesIn */
+        DiscardChangesIn: {
+            /**
+             * Paths
+             * @description 要放弃的未保存变更路径；不存在的变更按幂等跳过。
+             */
+            paths: string[];
         };
         /** EntitlementOut */
         EntitlementOut: {
@@ -1681,6 +1847,13 @@ export interface components {
              */
             truncated: boolean;
         };
+        /** FileCopyIn */
+        FileCopyIn: {
+            /** Destination */
+            destination: string;
+            /** Source */
+            source: string;
+        };
         /** FileMoveIn */
         FileMoveIn: {
             /** Destination */
@@ -1711,8 +1884,7 @@ export interface components {
              * @default
              */
             name: string;
-            /** Target Workspace Id */
-            target_workspace_id: string;
+            target_owner: components["schemas"]["OwnerReferenceIn"];
         };
         /**
          * ForkSourceOut
@@ -1727,6 +1899,7 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            source_owner: components["schemas"]["OwnerReferenceIn"];
             /** Source Project Id */
             source_project_id: string;
             /** Source Project Name */
@@ -1735,8 +1908,6 @@ export interface components {
             source_version_id: string;
             /** Source Version Label */
             source_version_label: string;
-            /** Source Workspace Id */
-            source_workspace_id: string;
         };
         /** GrantCreateIn */
         GrantCreateIn: {
@@ -1810,8 +1981,7 @@ export interface components {
         };
         /** HomeOut */
         HomeOut: {
-            /** Personal Resource Context Id */
-            personal_resource_context_id: string | null;
+            personal_execution_context: components["schemas"]["PersonalExecutionContextOut"];
             /** Recent Projects */
             recent_projects: components["schemas"]["ProjectOut"][];
             /** Recent Runs */
@@ -1868,35 +2038,6 @@ export interface components {
             /** Accept */
             accept: boolean;
         };
-        /**
-         * LegacyWorkspaceContextOut
-         * @description Deprecated context for child domains still keyed by workspace_id.
-         */
-        LegacyWorkspaceContextOut: {
-            /** Capabilities */
-            capabilities?: components["schemas"]["Capability"][];
-            /** Default Environment Version Id */
-            default_environment_version_id: string | null;
-            /** Id */
-            id: string;
-            kind: components["schemas"]["LegacyWorkspaceKind"];
-            /** Name */
-            name: string;
-            /** Owner Id */
-            owner_id: string;
-            role: components["schemas"]["MembershipRole"];
-        };
-        /**
-         * LegacyWorkspaceKind
-         * @description Private compatibility discriminator for unmigrated child-domain rows.
-         * @enum {string}
-         */
-        LegacyWorkspaceKind: "personal" | "collaborative";
-        /** LegacyWorkspaceUpdateIn */
-        LegacyWorkspaceUpdateIn: {
-            /** Default Environment Version Id */
-            default_environment_version_id?: string | null;
-        };
         /** LogChunkOut */
         LogChunkOut: {
             /** Content */
@@ -1912,13 +2053,13 @@ export interface components {
         LogStream: "stdout" | "stderr";
         /** MemberInviteIn */
         MemberInviteIn: {
-            /** @default member */
-            role: components["schemas"]["MembershipRole"];
             /** Username */
             username: string;
         };
         /** MemberOut */
         MemberOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["UserGroupCapability"][];
             /** Display Name */
             display_name: string;
             role: components["schemas"]["MembershipRole"];
@@ -1944,6 +2085,11 @@ export interface components {
          * @enum {string}
          */
         MembershipStatus: "invited" | "active" | "left" | "removed";
+        /** MkdirIn */
+        MkdirIn: {
+            /** Path */
+            path: string;
+        };
         /**
          * NotificationOut
          * @description 一条通知。
@@ -1974,8 +2120,6 @@ export interface components {
             /** Title */
             title: string;
             type: components["schemas"]["NotificationType"];
-            /** Workspace Id */
-            workspace_id: string | null;
         };
         /**
          * NotificationType
@@ -1986,7 +2130,7 @@ export interface components {
          *     也可能产生一条活动和多条通知。硬凑成一个枚举会逼着两边互相迁就。
          * @enum {string}
          */
-        NotificationType: "workspace_invited" | "user_group_invited" | "member_removed" | "role_changed" | "ownership_received" | "run_succeeded" | "run_failed" | "run_submit_failed";
+        NotificationType: "user_group_invited" | "member_removed" | "role_changed" | "ownership_received" | "run_succeeded" | "run_failed" | "run_submit_failed";
         /**
          * OwnerKind
          * @enum {string}
@@ -2077,13 +2221,21 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * PersonalExecutionContextOut
+         * @description The current User's direct ownership and compute entitlement context.
+         */
+        PersonalExecutionContextOut: {
+            /** Entitlements */
+            entitlements: components["schemas"]["EntitlementOut"][];
+            owner: components["schemas"]["OwnerSummaryOut"];
+        };
         /** PreflightOut */
         PreflightOut: {
             /** Compute Plan Id */
             compute_plan_id: string | null;
             compute_request: components["schemas"]["ComputeRequestModel"] | null;
-            /** Environment Version Id */
-            environment_version_id: string | null;
+            environment_version: components["schemas"]["EnvironmentVersionOut"] | null;
             /** Ok */
             ok: boolean;
             /** Problems */
@@ -2102,8 +2254,8 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** ProjectCreateIn */
-        ProjectCreateIn: {
+        /** ProjectCreateOwnedIn */
+        ProjectCreateOwnedIn: {
             /**
              * Description
              * @default
@@ -2111,6 +2263,9 @@ export interface components {
             description: string;
             /** Name */
             name: string;
+            owner: components["schemas"]["OwnerReferenceIn"];
+            /** @default owner_scope */
+            visibility: components["schemas"]["ProjectVisibility"];
         };
         /** ProjectFileOut */
         ProjectFileOut: {
@@ -2125,6 +2280,8 @@ export interface components {
         };
         /** ProjectOut */
         ProjectOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["Capability"][];
             /** Created At */
             created_at: string | null;
             /** Created By */
@@ -2139,11 +2296,11 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            owner: components["schemas"]["OwnerSummaryOut"];
             status: components["schemas"]["ProjectStatus"];
             /** Updated At */
             updated_at: string | null;
-            /** Workspace Id */
-            workspace_id: string;
+            visibility: components["schemas"]["ProjectVisibility"];
         };
         /**
          * ProjectStatus
@@ -2159,11 +2316,10 @@ export interface components {
             description?: string | null;
             /** Environment Version Id */
             environment_version_id?: string | null;
-            /** Inherit Workspace Environment */
-            inherit_workspace_environment?: boolean | null;
             /** Name */
             name?: string | null;
             status?: components["schemas"]["ProjectStatus"] | null;
+            visibility?: components["schemas"]["ProjectVisibility"] | null;
         };
         /** ProjectVersionDetailOut */
         ProjectVersionDetailOut: {
@@ -2224,6 +2380,12 @@ export interface components {
             /** Total Size */
             total_size: number;
         };
+        /**
+         * ProjectVisibility
+         * @description Project discovery boundary, independent from operation permissions.
+         * @enum {string}
+         */
+        ProjectVisibility: "owner_scope" | "public";
         /** ReadinessOut */
         ReadinessOut: {
             /** Database */
@@ -2286,8 +2448,11 @@ export interface components {
             environment_variables?: {
                 [key: string]: string;
             };
-            /** Environment Version Id */
-            environment_version_id?: string | null;
+            /**
+             * Environment Version Id
+             * @description 精确引用的 Environment Version；不继承其他对象的默认值。
+             */
+            environment_version_id: string;
             /** Input Bindings */
             input_bindings?: components["schemas"]["InputBindingModel"][];
             /** Name */
@@ -2314,7 +2479,7 @@ export interface components {
                 [key: string]: string;
             };
             /** Environment Version Id */
-            environment_version_id: string | null;
+            environment_version_id: string;
             /** Id */
             id: string;
             /** Input Bindings */
@@ -2377,10 +2542,10 @@ export interface components {
         RunEventType: "created" | "submitted" | "submit_failed" | "started" | "finished" | "cancel_requested" | "cancelled" | "artifact_collected" | "artifact_missing" | "error";
         /** RunOut */
         RunOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["Capability"][];
             /** Created At */
             created_at: string | null;
-            /** Created By */
-            created_by: string;
             /** Exit Code */
             exit_code: number | null;
             /** Failure Reason */
@@ -2389,6 +2554,11 @@ export interface components {
             finished_at: string | null;
             /** Id */
             id: string;
+            /**
+             * Initiated By User Id
+             * @description 发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。
+             */
+            initiated_by_user_id: string;
             /** Name */
             name: string;
             /** Project Id */
@@ -2414,8 +2584,6 @@ export interface components {
             status: components["schemas"]["RunStatus"];
             /** Submitted At */
             submitted_at: string | null;
-            /** Workspace Id */
-            workspace_id: string;
         };
         /**
          * RunSnapshotOut
@@ -2434,8 +2602,6 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Created By */
-            created_by: string;
             /** Environment Image */
             environment_image: string;
             /** Environment Setup Command */
@@ -2448,6 +2614,8 @@ export interface components {
             environment_version_id: string;
             /** Id */
             id: string;
+            /** Initiated By User Id */
+            initiated_by_user_id: string;
             /** Input Bindings */
             input_bindings: components["schemas"]["InputBindingModel"][];
             /** Project Id */
@@ -2482,6 +2650,8 @@ export interface components {
         };
         /** SharedResourceDetailOut */
         SharedResourceDetailOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["Capability"][];
             /**
              * Created At
              * Format: date-time
@@ -2494,11 +2664,34 @@ export interface components {
             /** Name */
             name: string;
             owner: components["schemas"]["OwnerSummaryOut"];
+            /** Use Qualifications */
+            use_qualifications: (components["schemas"]["SharedResourceOwnerQualificationOut"] | components["schemas"]["SharedResourceGrantQualificationOut"])[];
             /** Versions */
             versions: components["schemas"]["SharedResourceVersionOut"][];
         };
+        /**
+         * SharedResourceGrantQualificationOut
+         * @description Actor-level Grant qualification, not authorization for a concrete Run.
+         *
+         *     ``user_grant`` follows the actor into any Project where they may submit.
+         *     ``user_group_grant`` applies only while the actor is an active member, the
+         *     Grantee User Group owns the consuming Project, and the actor may submit there.
+         *     Grants is non-empty and contains every matching Grant for this one Grantee.
+         */
+        SharedResourceGrantQualificationOut: {
+            grantee: components["schemas"]["OwnerSummaryOut"];
+            /** Grants */
+            grants: components["schemas"]["UseGrantSummaryOut"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scope: "user_grant" | "user_group_grant";
+        };
         /** SharedResourceOut */
         SharedResourceOut: {
+            /** Capabilities */
+            capabilities?: components["schemas"]["Capability"][];
             /**
              * Created At
              * Format: date-time
@@ -2511,6 +2704,19 @@ export interface components {
             /** Name */
             name: string;
             owner: components["schemas"]["OwnerSummaryOut"];
+            /** Use Qualifications */
+            use_qualifications: (components["schemas"]["SharedResourceOwnerQualificationOut"] | components["schemas"]["SharedResourceGrantQualificationOut"])[];
+        };
+        /**
+         * SharedResourceOwnerQualificationOut
+         * @description Use in a Project whose Owner is the resource Owner.
+         */
+        SharedResourceOwnerQualificationOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scope: "owner";
         };
         /** SharedResourcePublicationAttemptOut */
         SharedResourcePublicationAttemptOut: {
@@ -2634,18 +2840,33 @@ export interface components {
          *     分成两个枚举只会让前端的跳转逻辑写两遍。
          * @enum {string}
          */
-        TargetType: "workspace" | "user_group" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version";
+        TargetType: "user_group" | "member" | "project" | "project_version" | "run" | "shared_resource" | "shared_resource_version";
         /** UnreadCountOut */
         UnreadCountOut: {
             /** Unread */
             unread: number;
         };
         /**
+         * UseGrantSummaryOut
+         * @description One USE Grant contributing to the enclosing qualification.
+         */
+        UseGrantSummaryOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Target All */
+            target_all: boolean;
+        };
+        /**
          * UserGroupCapability
          * @description Stable public capabilities for User Group and Membership governance.
          * @enum {string}
          */
-        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.manage" | "ownership.transfer";
+        UserGroupCapability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer";
         /** UserGroupCreateIn */
         UserGroupCreateIn: {
             /**
@@ -2717,6 +2938,19 @@ export interface components {
             change: components["schemas"]["ChangeKind"];
             /** Path */
             path: string;
+        };
+        /**
+         * WorkingChangeDetailOut
+         * @description 单个未保存变更的内容级详情。
+         */
+        WorkingChangeDetailOut: {
+            change: components["schemas"]["ChangeKind"];
+            /** @description 当前工作区内容预览；删除时为空。 */
+            current?: components["schemas"]["FileContentOut"] | null;
+            /** Path */
+            path: string;
+            /** @description 基线（最近保存版本）中的内容预览；新增时为空。 */
+            previous?: components["schemas"]["FileContentOut"] | null;
         };
         /** WorkingChangeOut */
         WorkingChangeOut: {
@@ -2967,6 +3201,84 @@ export interface operations {
             };
         };
     };
+    get_environment_version_api_v1_catalog_environment_versions__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersionOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     list_environments_api_v1_catalog_environments_get: {
         parameters: {
             query?: never;
@@ -2985,6 +3297,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvironmentOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    get_environment_api_v1_catalog_environments__environment_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentOut"];
                 };
             };
             /** @description 请求不合法 */
@@ -3897,6 +4287,167 @@ export interface operations {
             };
         };
     };
+    list_discoverable_projects_api_v1_projects_get: {
+        parameters: {
+            query?: {
+                /** @description 页码，从 1 开始 */
+                page?: number;
+                /** @description 每页条数 */
+                page_size?: number;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut_ProjectOut_"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_owned_project_api_v1_projects_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCreateOwnedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     get_project_api_v1_projects__project_id__get: {
         parameters: {
             query?: never;
@@ -4218,6 +4769,246 @@ export interface operations {
             };
         };
     };
+    working_change_detail_api_v1_projects__project_id__changes_detail_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkingChangeDetailOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    discard_changes_api_v1_projects__project_id__changes_discard_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscardChangesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkingChangeOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_project_environments_api_v1_projects__project_id__environments_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     list_files_api_v1_projects__project_id__files_get: {
         parameters: {
             query?: never;
@@ -4456,6 +5247,90 @@ export interface operations {
             };
         };
     };
+    upload_archive_api_v1_projects__project_id__files_archive_post: {
+        parameters: {
+            query?: {
+                prefix?: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_archive_api_v1_projects__project_id__files_archive_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFileOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     read_file_api_v1_projects__project_id__files_content_get: {
         parameters: {
             query: {
@@ -4478,6 +5353,250 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileContentOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    copy_path_api_v1_projects__project_id__files_copy_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileCopyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFileOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    download_file_api_v1_projects__project_id__files_download_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 文件完整内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    create_directory_api_v1_projects__project_id__files_mkdir_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MkdirIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectFileOut"];
                 };
             };
             /** @description 请求不合法 */
@@ -7506,6 +8625,89 @@ export interface operations {
             };
         };
     };
+    list_user_group_activities_api_v1_user_groups__user_group_id__activities_get: {
+        parameters: {
+            query?: {
+                /** @description 页码，从 1 开始 */
+                page?: number;
+                /** @description 每页条数 */
+                page_size?: number;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                user_group_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageOut_ActivityOut_"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     respond_to_invitation_api_v1_user_groups__user_group_id__invitation_post: {
         parameters: {
             query?: never;
@@ -9343,414 +10545,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectFileOut"][];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    get_legacy_workspace_context_api_v1_workspaces__workspace_id__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LegacyWorkspaceContextOut"];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    update_legacy_workspace_context_api_v1_workspaces__workspace_id__patch: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LegacyWorkspaceUpdateIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LegacyWorkspaceContextOut"];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    list_workspace_activities_api_v1_workspaces__workspace_id__activities_get: {
-        parameters: {
-            query?: {
-                /** @description 页码，从 1 开始 */
-                page?: number;
-                /** @description 每页条数 */
-                page_size?: number;
-            };
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageOut_ActivityOut_"];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    list_projects_api_v1_workspaces__workspace_id__projects_get: {
-        parameters: {
-            query?: {
-                /** @description 页码，从 1 开始 */
-                page?: number;
-                /** @description 每页条数 */
-                page_size?: number;
-            };
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PageOut_ProjectOut_"];
-                };
-            };
-            /** @description 请求不合法 */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象可见，但当前角色无权执行该操作 */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 对象不存在，或当前用户没有发现权限 */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 与现有状态冲突，例如重名或对象不可修改 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-            /** @description 底层调度系统返回错误 */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
-            };
-        };
-    };
-    create_project_api_v1_workspaces__workspace_id__projects_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "X-User"?: string | null;
-            };
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProjectCreateIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProjectOut"];
                 };
             };
             /** @description 请求不合法 */

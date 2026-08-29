@@ -18,6 +18,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // jsdom plus isolated Primer/Ant Design modules is memory-heavy on many-core workstations.
+    maxWorkers: 4,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
   },

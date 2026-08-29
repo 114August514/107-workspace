@@ -18,7 +18,7 @@ class IdentityService:
         self._session = session
 
     async def ensure_user(self, username: str, display_name: str = "") -> User:
-        """Create a dev identity if absent; never creates a Personal Workspace."""
+        """Create a dev identity if absent without ownership side effects."""
         existing = await self._repos.users.get_by_username(username)
         if existing is not None:
             return existing

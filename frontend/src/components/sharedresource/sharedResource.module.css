@@ -127,6 +127,10 @@
   width: 12rem;
 }
 
+.colStatus {
+  width: 8rem;
+}
+
 .colCreated {
   width: 8.5rem;
 }

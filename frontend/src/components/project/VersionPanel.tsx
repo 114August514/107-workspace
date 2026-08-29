@@ -1,16 +1,29 @@
-import { Alert, Button, Input, Popconfirm, Space, Table, Tag, Typography, message } from 'antd'
+import {
+  Alert,
+  Button,
+  Drawer,
+  Input,
+  Popconfirm,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
 import type {
   ChangeKind,
+  Project,
   ProjectVersion,
   ProjectVersionPage,
   WorkingChange,
-  LegacyWorkspaceContext,
+  WorkingChangeDetail,
 } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
@@ -28,7 +41,7 @@ const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
 interface Props {
   projectId: string
   projectName: string
-  workspace: LegacyWorkspaceContext | undefined
+  access: Project | undefined
   refreshToken: number
   onVersionSaved: () => void
 }
@@ -41,13 +54,14 @@ interface Props {
 export function VersionPanel({
   projectId,
   projectName,
-  workspace,
+  access,
   refreshToken,
   onVersionSaved,
 }: Props) {
   const navigate = useNavigate()
   const [forking, setForking] = useState<ProjectVersion | null>(null)
-  const canWrite = can(workspace, 'project.content.write')
+  const [inspecting, setInspecting] = useState<WorkingChange | null>(null)
+  const canWrite = can(access, 'project.content.write')
   const [page, setPage] = useState(1)
   const versions = useAsync<ProjectVersionPage>(
     () => api.listVersions(projectId, { page }),
@@ -159,9 +173,16 @@ export function VersionPanel({
             description={
               <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
                 {pending.map((change) => (
-                  <Tag key={change.path} color={CHANGE_LABEL[change.change].color}>
-                    {CHANGE_LABEL[change.change].text} {change.path}
-                  </Tag>
+                  <Button
+                    key={change.path}
+                    type="link"
+                    size="small"
+                    onClick={() => setInspecting(change)}
+                  >
+                    <Tag color={CHANGE_LABEL[change.change].color}>
+                      {CHANGE_LABEL[change.change].text} {change.path}
+                    </Tag>
+                  </Button>
                 ))}
               </Space>
             }
@@ -209,6 +230,182 @@ export function VersionPanel({
         onClose={() => setForking(null)}
         onForked={(project) => navigate(`/projects/${project.id}`)}
       />
+
+      <ChangeDetailDrawer
+        projectId={projectId}
+        change={inspecting}
+        canWrite={canWrite}
+        onClose={() => setInspecting(null)}
+        onDiscarded={() => {
+          changes.reload()
+          onVersionSaved()
+        }}
+      />
     </Space>
+  )
+}
+
+/** 单个未保存变更的内容级详情：基线与工作区两侧并排，可直接放弃。 */
+function ChangeDetailDrawer({
+  projectId,
+  change,
+  canWrite,
+  onClose,
+  onDiscarded,
+}: {
+  projectId: string
+  change: WorkingChange | null
+  canWrite: boolean
+  onClose: () => void
+  onDiscarded: () => void
+}) {
+  const [detail, setDetail] = useState<WorkingChangeDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retryToken, setRetryToken] = useState(0)
+  const [discarding, setDiscarding] = useState(false)
+
+  useEffect(() => {
+    if (!change) return
+    let cancelled = false
+    setLoading(true)
+    setDetail(null)
+    setLoadError(null)
+    api
+      .workingChangeDetail(projectId, change.path)
+      .then((result) => {
+        if (!cancelled) setDetail(result)
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError((error as Error).message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, change, retryToken])
+
+  const discard = async () => {
+    if (!change) return
+    setDiscarding(true)
+    try {
+      await api.discardChanges(projectId, [change.path])
+      message.success(`已放弃 ${change.path} 的未保存变更`)
+      onClose()
+      onDiscarded()
+    } catch (error) {
+      message.error((error as Error).message)
+    } finally {
+      setDiscarding(false)
+    }
+  }
+
+  return (
+    <Drawer
+      open={change !== null}
+      title={change?.path}
+      width={860}
+      onClose={onClose}
+      extra={
+        canWrite &&
+        change && (
+          <Popconfirm
+            title={`放弃 ${change.path} 的未保存变更？`}
+            description="工作区会恢复到最近保存版本的内容。历史版本不受影响，但这次修改无法找回。"
+            okText="放弃变更"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => void discard()}
+          >
+            <Button danger loading={discarding}>
+              放弃此变更
+            </Button>
+          </Popconfirm>
+        )
+      }
+    >
+      {loading ? (
+        <Spin />
+      ) : loadError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="无法加载变更详情"
+          description={
+            <Space direction="vertical" size="small">
+              <Typography.Text>{loadError}</Typography.Text>
+              <Button onClick={() => setRetryToken((current) => current + 1)}>重试</Button>
+            </Space>
+          }
+        />
+      ) : detail ? (
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space wrap size={[8, 8]}>
+            <Tag color={CHANGE_LABEL[detail.change].color}>{CHANGE_LABEL[detail.change].text}</Tag>
+            {detail.previous?.truncated && (
+              <Typography.Text type="secondary">基线内容过长，仅显示前 256 KB</Typography.Text>
+            )}
+            {detail.current?.truncated && (
+              <Typography.Text type="secondary">工作区内容过长，仅显示前 256 KB</Typography.Text>
+            )}
+          </Space>
+          {/* 二进制内容经 UTF-8 替换解码会出现替代符——照实显示，
+              不假装这是精确的文本 diff（后端只存内容摘要）。 */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <DiffSide
+              title="最近保存版本"
+              content={detail.previous?.content ?? null}
+              emptyText="此路径在基线版本中不存在（新增）"
+            />
+            <DiffSide
+              title="当前工作区"
+              content={detail.current?.content ?? null}
+              emptyText="文件已被删除"
+            />
+          </div>
+        </Space>
+      ) : null}
+    </Drawer>
+  )
+}
+
+function DiffSide({
+  title,
+  content,
+  emptyText,
+}: {
+  title: string
+  content: string | null
+  emptyText: string
+}) {
+  return (
+    <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+      <Typography.Text strong>{title}</Typography.Text>
+      {content === null ? (
+        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
+          {emptyText}
+        </Typography.Paragraph>
+      ) : (
+        <pre
+          style={{
+            marginTop: 8,
+            padding: 12,
+            background: 'rgba(0, 0, 0, 0.04)',
+            borderRadius: 6,
+            overflowX: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 12,
+            maxHeight: 480,
+            overflowY: 'auto',
+          }}
+        >
+          {content}
+        </pre>
+      )}
+    </div>
   )
 }

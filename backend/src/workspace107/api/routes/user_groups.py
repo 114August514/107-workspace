@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from ...domain.enums import MembershipRole
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, ServicesDep
+from ..deps import CurrentUser, PageDep, ServicesDep
 
 router = APIRouter(prefix="/user-groups", tags=["user-group"])
 
@@ -36,6 +35,20 @@ async def get_user_group(
     user_group_id: str, user: CurrentUser, services: ServicesDep
 ) -> s.UserGroupOut:
     return p.user_group_out(await services.user_groups.get(user.id, user_group_id))
+
+
+@router.get(
+    "/{user_group_id}/activities",
+    response_model=s.PageOut[s.ActivityOut],
+    summary="列出 User Group 近期活动",
+)
+async def list_user_group_activities(
+    user_group_id: str, user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ActivityOut]:
+    return p.page_out(
+        await services.activities.list_for_user_group(user.id, user_group_id, page),
+        p.activity_out,
+    )
 
 
 @router.patch("/{user_group_id}", response_model=s.UserGroupOut, summary="更新 User Group")
@@ -76,9 +89,7 @@ async def invite_member(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.MemberOut:
-    await services.user_groups.invite_member(
-        user.id, user_group_id, payload.username, MembershipRole(payload.role)
-    )
+    await services.user_groups.invite_member(user.id, user_group_id, payload.username)
     views = await services.user_groups.list_members(user.id, user_group_id)
     return p.member_out(next(view for view in views if view.user.username == payload.username))
 

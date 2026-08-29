@@ -31,13 +31,13 @@ async def _user_group(client: httpx.AsyncClient, headers: dict[str, str]) -> str
 async def _create_resource(
     client: httpx.AsyncClient, name: str = "测试资源", headers: dict[str, str] | None = None
 ) -> dict:
-    workspace_id = await _user_group(client, headers or ALICE)
+    user_group_id = await _user_group(client, headers or ALICE)
     return (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": name,
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=headers or ALICE,
         )
@@ -94,12 +94,12 @@ async def _publish_version(
 
 
 async def test_create_rejects_empty_name(client: httpx.AsyncClient) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     response = await client.post(
         "/api/v1/shared-resources",
         json={
             "name": "   ",
-            "owner": {"kind": "user_group", "id": workspace_id},
+            "owner": {"kind": "user_group", "id": user_group_id},
         },
         headers=ALICE,
     )
@@ -110,12 +110,12 @@ async def test_create_rejects_empty_name(client: httpx.AsyncClient) -> None:
 
 
 async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     response = await client.post(
         "/api/v1/shared-resources",
         json={
             "name": "x" * (MAX_RESOURCE_NAME_LEN + 1),
-            "owner": {"kind": "user_group", "id": workspace_id},
+            "owner": {"kind": "user_group", "id": user_group_id},
         },
         headers=ALICE,
     )
@@ -128,13 +128,13 @@ async def test_create_rejects_oversized_name(client: httpx.AsyncClient) -> None:
 
 
 async def test_create_assigns_owner_group(client: httpx.AsyncClient) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     response = await client.post(
         "/api/v1/shared-resources",
         json={
             "name": "数据集 A",
             "description": "训练用",
-            "owner": {"kind": "user_group", "id": workspace_id},
+            "owner": {"kind": "user_group", "id": user_group_id},
         },
         headers=ALICE,
     )
@@ -144,19 +144,19 @@ async def test_create_assigns_owner_group(client: httpx.AsyncClient) -> None:
     assert body["description"] == "训练用"
     assert body["owner"] == {
         "kind": "user_group",
-        "id": workspace_id,
+        "id": user_group_id,
         "display_name": "alice test group",
     }
 
 
 async def test_create_requires_manage_capability(client: httpx.AsyncClient) -> None:
     """非成员不能为另一个 User Group 创建资源，且按不存在处理。"""
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     response = await client.post(
         "/api/v1/shared-resources",
         json={
             "name": "越权创建",
-            "owner": {"kind": "user_group", "id": workspace_id},
+            "owner": {"kind": "user_group", "id": user_group_id},
         },
         headers=BOB,
     )
@@ -167,13 +167,13 @@ async def test_create_requires_manage_capability(client: httpx.AsyncClient) -> N
 
 
 async def test_update_changes_name_and_description(client: httpx.AsyncClient) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": "原名",
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
@@ -190,13 +190,13 @@ async def test_update_changes_name_and_description(client: httpx.AsyncClient) ->
 
 
 async def test_update_rejects_empty_name(client: httpx.AsyncClient) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": "保留",
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
@@ -348,13 +348,13 @@ async def test_read_version_file_rejects_missing_path(
 async def test_discovery_excludes_resources_owned_by_other_user_group(
     client: httpx.AsyncClient,
 ) -> None:
-    alice_ws = await _user_group(client, ALICE)
-    bob_ws = await _user_group(client, BOB)
+    alice_group_id = await _user_group(client, ALICE)
+    bob_group_id = await _user_group(client, BOB)
     await client.post(
         "/api/v1/shared-resources",
         json={
             "name": "Alice 的",
-            "owner": {"kind": "user_group", "id": alice_ws},
+            "owner": {"kind": "user_group", "id": alice_group_id},
         },
         headers=ALICE,
     )
@@ -362,22 +362,24 @@ async def test_discovery_excludes_resources_owned_by_other_user_group(
         "/api/v1/shared-resources",
         json={
             "name": "Bob 的",
-            "owner": {"kind": "user_group", "id": bob_ws},
+            "owner": {"kind": "user_group", "id": bob_group_id},
         },
         headers=BOB,
     )
 
     alice_resources = (await client.get("/api/v1/shared-resources", headers=ALICE)).json()
-    assert [(r["name"], r["owner"]["id"]) for r in alice_resources] == [("Alice 的", alice_ws)]
+    assert [(r["name"], r["owner"]["id"]) for r in alice_resources] == [
+        ("Alice 的", alice_group_id)
+    ]
 
 
-async def test_get_version_blocks_cross_workspace_access(
+async def test_get_version_blocks_cross_owner_access(
     client: httpx.AsyncClient, context: AppContext
 ) -> None:
     resource = await _create_resource(client, "私有数据")
     version = await _publish_version(client, context, resource["id"], files=[("a.txt", b"x")])
 
-    # Bob 看不到 Alice 的 Personal Workspace 资源
+    # Bob 看不到 Alice 的 User-owned 资源
     not_found = await client.get(f"/api/v1/shared-resource-versions/{version['id']}", headers=BOB)
     assert not_found.status_code == 404
 
@@ -386,20 +388,20 @@ async def test_get_version_blocks_cross_workspace_access(
 
 
 async def test_create_records_activity(client: httpx.AsyncClient) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": "会被记录的",
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
     ).json()
 
     activities = (
-        await client.get(f"/api/v1/workspaces/{workspace_id}/activities", headers=ALICE)
+        await client.get(f"/api/v1/user-groups/{user_group_id}/activities", headers=ALICE)
     ).json()["items"]
     matched = [
         a
@@ -413,13 +415,13 @@ async def test_create_records_activity(client: httpx.AsyncClient) -> None:
 async def test_publish_version_records_activity(
     client: httpx.AsyncClient, context: AppContext
 ) -> None:
-    workspace_id = await _user_group(client, ALICE)
+    user_group_id = await _user_group(client, ALICE)
     resource = (
         await client.post(
             "/api/v1/shared-resources",
             json={
                 "name": "会发布版本",
-                "owner": {"kind": "user_group", "id": workspace_id},
+                "owner": {"kind": "user_group", "id": user_group_id},
             },
             headers=ALICE,
         )
@@ -427,7 +429,7 @@ async def test_publish_version_records_activity(
     version = await _publish_version(client, context, resource["id"], files=[("a.txt", b"x")])
 
     activities = (
-        await client.get(f"/api/v1/workspaces/{workspace_id}/activities", headers=ALICE)
+        await client.get(f"/api/v1/user-groups/{user_group_id}/activities", headers=ALICE)
     ).json()["items"]
     matched = [
         a

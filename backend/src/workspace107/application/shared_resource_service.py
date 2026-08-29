@@ -1,9 +1,10 @@
 """Shared Resource use cases with typed User/UserGroup ownership.
 
-Resources are mutable metadata with immutable content versions (GR-201). Discovery is
-repository-scoped to the exact User owner or active Membership of the owning UserGroup;
-#40 may later add USE Grant discovery. Content storage continues to use the shared
-content-addressed blob store.
+Resources are mutable metadata with immutable content versions (GR-201). Repository
+discovery includes exact User ownership, active Membership of the owning UserGroup,
+and valid USE Grants issued by the resource's current Owner to the actor or an active
+grantee group. Grants add discovery and use qualification, never management authority.
+Content storage continues to use the shared content-addressed blob store.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
 from ..domain.enums import ActivityAction, SharedResourcePublicationStatus, TargetType
 from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
+from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseQualificationScope
 from ..domain.models import (
     SharedResource,
     SharedResourceFile,
@@ -46,15 +48,54 @@ def normalize_shared_resource_path(raw: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class UseQualificationView:
+    """One actor-level way to use a resource, grouped by Grant grantee."""
+
+    scope: UseQualificationScope
+    grantee: OwnerSummary | None
+    grants: tuple[Grant, ...]
+
+    def __post_init__(self) -> None:
+        is_owner = self.scope is UseQualificationScope.OWNER
+        if is_owner and (self.grantee is not None or self.grants):
+            raise ValueError("Owner qualification cannot contain a Grantee or Grants")
+        if is_owner:
+            return
+        if self.grantee is None or not self.grants:
+            raise ValueError("Grant qualification requires a Grantee and at least one Grant")
+        expected_kind = (
+            OwnerKind.USER
+            if self.scope is UseQualificationScope.USER_GRANT
+            else OwnerKind.USER_GROUP
+        )
+        if self.grantee.kind is not expected_kind or any(
+            grant.grantee.kind is not expected_kind or grant.grantee.id != self.grantee.id
+            for grant in self.grants
+        ):
+            raise ValueError("Grant qualification must contain Grants for exactly its Grantee")
+
+
+_OWNER_QUALIFICATIONS = (
+    UseQualificationView(
+        scope=UseQualificationScope.OWNER,
+        grantee=None,
+        grants=(),
+    ),
+)
+
+
+@dataclass(frozen=True, slots=True)
 class SharedResourceView:
     resource: SharedResource
     owner: OwnerSummary
+    use_qualifications: tuple[UseQualificationView, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class SharedResourceAccessView:
     access: SharedResourceAccess
     owner: OwnerSummary
+    use_qualifications: tuple[UseQualificationView, ...]
 
     @property
     def resource(self) -> SharedResource:
@@ -92,12 +133,17 @@ class SharedResourceService:
     async def list_discoverable(self, user_id: str) -> list[SharedResourceView]:
         """Canonical actor-scoped list for ``GET /shared-resources``."""
         resources = await self._repos.shared_resources.list_discoverable_for_user(user_id)
-        return await self._views(resources)
+        return await self._views(user_id, resources)
 
     async def get(self, user_id: str, resource_id: str) -> SharedResourceAccessView:
         access = await self._guard.shared_resource(user_id, resource_id)
         owner = await self._owner(access.resource.owner)
-        return SharedResourceAccessView(access=access, owner=owner)
+        use_qualifications = await self._qualifications(user_id, access.resource)
+        return SharedResourceAccessView(
+            access=access,
+            owner=owner,
+            use_qualifications=use_qualifications,
+        )
 
     async def list_versions(self, user_id: str, resource_id: str) -> list[SharedResourceVersion]:
         return await self._repos.shared_resources.list_versions_discoverable_for_user(
@@ -137,7 +183,11 @@ class SharedResourceService:
         """
         await self._require_owner_authority(user_id, owner)
         resource = await self._create_with_owner(user_id, owner, name, description)
-        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
+        return SharedResourceView(
+            resource=resource,
+            owner=await self._owner(resource.owner),
+            use_qualifications=_OWNER_QUALIFICATIONS,
+        )
 
     async def update(
         self,
@@ -151,7 +201,6 @@ class SharedResourceService:
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_MANAGE
         )
         resource = access.resource
-        activity_workspace_id = self._activity_user_group_id(resource.owner)
         if name is not None:
             name = name.strip()
             if not name:
@@ -166,16 +215,19 @@ class SharedResourceService:
                 )
             resource.description = description
         await self._repos.shared_resources.update(resource)
-        if activity_workspace_id is not None:
-            await self._activity.record(
-                actor_id=user_id,
-                workspace_id=activity_workspace_id,
-                action=ActivityAction.SHARED_RESOURCE_UPDATED,
-                target_type=TargetType.SHARED_RESOURCE,
-                target_id=resource.id,
-                target_name=resource.name,
-            )
-        return SharedResourceView(resource=resource, owner=await self._owner(resource.owner))
+        await self._activity.record(
+            actor_id=user_id,
+            owner=resource.owner,
+            action=ActivityAction.SHARED_RESOURCE_UPDATED,
+            target_type=TargetType.SHARED_RESOURCE,
+            target_id=resource.id,
+            target_name=resource.name,
+        )
+        return SharedResourceView(
+            resource=resource,
+            owner=await self._owner(resource.owner),
+            use_qualifications=_OWNER_QUALIFICATIONS,
+        )
 
     async def create_publication_attempt(
         self,
@@ -194,6 +246,7 @@ class SharedResourceService:
         await self._guard.shared_resource(
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_VERSION_CREATE
         )
+
         if not uploads:
             raise ValidationFailed("版本必须至少包含一个文件")
         if len(description) > MAX_VERSION_DESCRIPTION_LEN:
@@ -279,32 +332,144 @@ class SharedResourceService:
             created_at=self._clock.now(),
         )
         await self._repos.shared_resources.add(resource)
-        activity_workspace_id = self._activity_user_group_id(owner)
-        if activity_workspace_id is not None:
-            await self._activity.record(
-                actor_id=user_id,
-                workspace_id=activity_workspace_id,
-                action=ActivityAction.SHARED_RESOURCE_CREATED,
-                target_type=TargetType.SHARED_RESOURCE,
-                target_id=resource.id,
-                target_name=resource.name,
-            )
+        await self._activity.record(
+            actor_id=user_id,
+            owner=owner,
+            action=ActivityAction.SHARED_RESOURCE_CREATED,
+            target_type=TargetType.SHARED_RESOURCE,
+            target_id=resource.id,
+            target_name=resource.name,
+        )
         return resource
 
-    @staticmethod
-    def _activity_user_group_id(owner: OwnerReference) -> str | None:
-        """Activity is UserGroup-scoped; User-owned assets have no fake Workspace feed."""
-        return owner.id if owner.kind is OwnerKind.USER_GROUP else None
-
-    async def _views(self, resources: list[SharedResource]) -> list[SharedResourceView]:
+    async def _views(
+        self, user_id: str, resources: list[SharedResource]
+    ) -> list[SharedResourceView]:
         owners = await owner_summaries(self._repos, (resource.owner for resource in resources))
+        active_group_ids = await self._active_group_ids(user_id)
+        grants_by_owner = {
+            owner: await self._repos.grants.list_for_grantor(owner)
+            for owner in {resource.owner for resource in resources}
+        }
+        grants_by_resource = [
+            self._eligible_use_grants(
+                user_id,
+                resource,
+                active_group_ids,
+                grants_by_owner[resource.owner],
+            )
+            for resource in resources
+        ]
+        grantee_refs = {grant.grantee for grants in grants_by_resource for grant in grants}
+        grantees = await owner_summaries(self._repos, grantee_refs)
         return [
             SharedResourceView(
                 resource=resource,
                 owner=owners[(resource.owner.kind, resource.owner.id)],
+                use_qualifications=self._qualification_views(
+                    user_id,
+                    resource,
+                    active_group_ids,
+                    grants,
+                    grantees,
+                ),
             )
-            for resource in resources
+            for resource, grants in zip(resources, grants_by_resource, strict=True)
         ]
+
+    async def _qualifications(
+        self, user_id: str, resource: SharedResource
+    ) -> tuple[UseQualificationView, ...]:
+        active_group_ids = await self._active_group_ids(user_id)
+        grants = self._eligible_use_grants(
+            user_id,
+            resource,
+            active_group_ids,
+            await self._repos.grants.list_for_grantor(resource.owner),
+        )
+        grantees = await owner_summaries(self._repos, {grant.grantee for grant in grants})
+        return self._qualification_views(
+            user_id,
+            resource,
+            active_group_ids,
+            grants,
+            grantees,
+        )
+
+    async def _active_group_ids(self, user_id: str) -> frozenset[str]:
+        groups = await self._repos.user_groups.list_for_user(user_id)
+        return frozenset(group.id for group in groups)
+
+    @staticmethod
+    def _eligible_use_grants(
+        user_id: str,
+        resource: SharedResource,
+        active_group_ids: frozenset[str],
+        grants: list[Grant],
+    ) -> tuple[Grant, ...]:
+        """Return current grants that explain this actor's resource discovery."""
+        return tuple(
+            grant
+            for grant in grants
+            if grant.action is GrantAction.USE
+            and (
+                grant.target_kind is GrantTargetKind.ALL
+                or (
+                    grant.target_kind is GrantTargetKind.SHARED_RESOURCE
+                    and grant.target_id == resource.id
+                )
+            )
+            and (
+                (grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id)
+                or (
+                    grant.grantee.kind is OwnerKind.USER_GROUP
+                    and grant.grantee.id in active_group_ids
+                )
+            )
+        )
+
+    @staticmethod
+    def _qualification_views(
+        user_id: str,
+        resource: SharedResource,
+        active_group_ids: frozenset[str],
+        grants: tuple[Grant, ...],
+        grantees: dict[tuple[OwnerKind, str], OwnerSummary],
+    ) -> tuple[UseQualificationView, ...]:
+        qualifications: list[UseQualificationView] = []
+        owner = resource.owner
+        if (owner.kind is OwnerKind.USER and owner.id == user_id) or (
+            owner.kind is OwnerKind.USER_GROUP and owner.id in active_group_ids
+        ):
+            qualifications.extend(_OWNER_QUALIFICATIONS)
+
+        user_grants = tuple(
+            grant
+            for grant in grants
+            if grant.grantee.kind is OwnerKind.USER and grant.grantee.id == user_id
+        )
+        if user_grants:
+            qualifications.append(
+                UseQualificationView(
+                    scope=UseQualificationScope.USER_GRANT,
+                    grantee=grantees[(OwnerKind.USER, user_id)],
+                    grants=user_grants,
+                )
+            )
+
+        grants_by_group: dict[str, list[Grant]] = {}
+        for grant in grants:
+            if grant.grantee.kind is OwnerKind.USER_GROUP:
+                grants_by_group.setdefault(grant.grantee.id, []).append(grant)
+        for group_id, group_grants in grants_by_group.items():
+            qualifications.append(
+                UseQualificationView(
+                    scope=UseQualificationScope.USER_GROUP_GRANT,
+                    grantee=grantees[(OwnerKind.USER_GROUP, group_id)],
+                    grants=tuple(group_grants),
+                )
+            )
+        return tuple(qualifications)
 
     async def _owner(self, owner: OwnerReference) -> OwnerSummary:
         return (await owner_summaries(self._repos, (owner,)))[(owner.kind, owner.id)]

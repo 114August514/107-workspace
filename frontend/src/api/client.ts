@@ -22,10 +22,10 @@ import type {
   ComputePlan,
   Entitlement,
   Environment,
+  EnvironmentVersion,
   FileContent,
   Home,
   Invitation,
-  LegacyWorkspaceContext,
   LogChunk,
   Member,
   MembershipRole,
@@ -35,7 +35,6 @@ import type {
   ForkSource,
   Project,
   ProjectFile,
-  ProjectPage,
   ProjectVersion,
   ProjectVersionPage,
   ProjectVersionDetail,
@@ -53,6 +52,7 @@ import type {
   SharedResourceVersionDetail,
   VersionDiff,
   WorkingChange,
+  WorkingChangeDetail,
   UserGroup,
 } from './types'
 
@@ -178,6 +178,18 @@ export const api = {
   home: async (): Promise<Home> => unwrap(await http.GET('/api/v1/me')),
   environments: async (): Promise<Environment[]> =>
     unwrap(await http.GET('/api/v1/catalog/environments')),
+  environment: async (id: string): Promise<Environment> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environments/{environment_id}', {
+        params: { path: { environment_id: id } },
+      }),
+    ),
+  environmentVersion: async (id: string): Promise<EnvironmentVersion> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environment-versions/{version_id}', {
+        params: { path: { version_id: id } },
+      }),
+    ),
   computePlans: async (): Promise<ComputePlan[]> =>
     unwrap(await http.GET('/api/v1/catalog/compute-plans')),
 
@@ -196,30 +208,15 @@ export const api = {
 
   updateUserGroup: async (
     id: string,
-    payload: { name?: string; description?: string },
+    payload: {
+      name?: string
+      description?: string
+    },
   ): Promise<UserGroup> =>
     unwrap(
       await http.PATCH('/api/v1/user-groups/{user_group_id}', {
         params: { path: { user_group_id: id } },
         body: payload,
-      }),
-    ),
-
-  getLegacyWorkspaceContext: async (id: string): Promise<LegacyWorkspaceContext> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}', {
-        params: { path: { workspace_id: id } },
-      }),
-    ),
-
-  setLegacyDefaultEnvironment: async (
-    id: string,
-    defaultEnvironmentVersionId: string | null,
-  ): Promise<LegacyWorkspaceContext> =>
-    unwrap(
-      await http.PATCH('/api/v1/workspaces/{workspace_id}', {
-        params: { path: { workspace_id: id } },
-        body: { default_environment_version_id: defaultEnvironmentVersionId },
       }),
     ),
 
@@ -230,11 +227,11 @@ export const api = {
       }),
     ),
 
-  inviteMember: async (id: string, username: string, role: MembershipRole): Promise<Member> =>
+  inviteMember: async (id: string, username: string): Promise<Member> =>
     unwrap(
       await http.POST('/api/v1/user-groups/{user_group_id}/members', {
         params: { path: { user_group_id: id } },
-        body: { username, role },
+        body: { username },
       }),
     ),
 
@@ -249,6 +246,14 @@ export const api = {
   removeMember: async (id: string, userId: string): Promise<void> => {
     unwrap(
       await http.DELETE('/api/v1/user-groups/{user_group_id}/members/{target_user_id}', {
+        params: { path: { user_group_id: id, target_user_id: userId } },
+      }),
+    )
+  },
+
+  transferUserGroupOwnership: async (id: string, userId: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/user-groups/{user_group_id}/transfer-ownership/{target_user_id}', {
         params: { path: { user_group_id: id, target_user_id: userId } },
       }),
     )
@@ -270,20 +275,6 @@ export const api = {
     unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
-  listProjects: async (workspaceId: string, query: PageQuery = {}): Promise<ProjectPage> =>
-    unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/projects', {
-        params: { path: { workspace_id: workspaceId }, query },
-      }),
-    ),
-
-  createProject: async (workspaceId: string, name: string, description: string): Promise<Project> =>
-    unwrap(
-      await http.POST('/api/v1/workspaces/{workspace_id}/projects', {
-        params: { path: { workspace_id: workspaceId } },
-        body: { name, description },
-      }),
-    ),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
@@ -296,7 +287,6 @@ export const api = {
       name?: string
       description?: string
       environment_version_id?: string | null
-      inherit_workspace_environment?: boolean
       default_run_configuration_id?: string
     },
   ): Promise<Project> =>
@@ -304,6 +294,13 @@ export const api = {
       await http.PATCH('/api/v1/projects/{project_id}', {
         params: { path: { project_id: id } },
         body: payload,
+      }),
+    ),
+
+  environmentsForProject: async (id: string): Promise<Environment[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/environments', {
+        params: { path: { project_id: id } },
       }),
     ),
 
@@ -330,6 +327,24 @@ export const api = {
       }),
     ),
 
+  /**
+   * multipart 上传。多选时调用方逐个文件调一次而不是一次打包全部：
+   * 一个请求一个文件的成败，失败的用户才分得清是哪个文件出了问题。
+   */
+  uploadFiles: async (id: string, files: File[]): Promise<ProjectFile[]> => {
+    const form = new FormData()
+    for (const file of files) {
+      form.append('files', file)
+    }
+    return unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/upload', {
+        params: { path: { project_id: id } },
+        // 契约把 files 标成 string[]，实际是 File；理由同 publishSharedResourceVersion。
+        body: form as unknown as { files: string[] },
+      }),
+    )
+  },
+
   deletePath: async (id: string, path: string): Promise<void> => {
     unwrap(
       await http.DELETE('/api/v1/projects/{project_id}/files', {
@@ -346,11 +361,86 @@ export const api = {
       }),
     ),
 
+  copyPath: async (id: string, source: string, destination: string): Promise<ProjectFile[]> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/copy', {
+        params: { path: { project_id: id } },
+        body: { source, destination },
+      }),
+    ),
+
+  createDirectory: async (id: string, path: string): Promise<ProjectFile> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/mkdir', {
+        params: { path: { project_id: id } },
+        body: { path },
+      }),
+    ),
+
+  /**
+   * 上传 zip 压缩包并展开到工作区。
+   *
+   * 与 `publishSharedResourceVersion` 同理：契约类型把文件标成 string，
+   * 这里实际是 File，FormData 由浏览器补 Content-Type 和 boundary。
+   */
+  uploadArchive: async (id: string, file: File, prefix = ''): Promise<ProjectFile[]> => {
+    const form = new FormData()
+    form.append('file', file)
+    return unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/archive', {
+        params: {
+          path: { project_id: id },
+          query: prefix ? { prefix } : undefined,
+        },
+        body: form as unknown as { file: string },
+      }),
+    )
+  },
+
+  /**
+   * 下载 Project 文件。
+   *
+   * 走 fetch 拿 blob 再触发浏览器下载，而不是直接给 `<a href>`——
+   * 请求要带身份头，理由同 `downloadArtifactFile`。
+   */
+  downloadFile: async (id: string, path: string): Promise<void> => {
+    const blob = unwrap(
+      await http.GET('/api/v1/projects/{project_id}/files/download', {
+        params: { path: { project_id: id }, query: { path } },
+        parseAs: 'blob',
+      }),
+    )
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = path.split('/').pop() ?? 'file'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
+
   // -- 版本 --------------------------------------------------------------
   workingChanges: async (id: string): Promise<WorkingChange[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/changes', {
         params: { path: { project_id: id } },
+      }),
+    ),
+
+  workingChangeDetail: async (id: string, path: string): Promise<WorkingChangeDetail> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/changes/detail', {
+        params: { path: { project_id: id }, query: { path } },
+      }),
+    ),
+
+  /** 放弃指定未保存变更，返回剩余的未保存变更。 */
+  discardChanges: async (id: string, paths: string[]): Promise<WorkingChange[]> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/changes/discard', {
+        params: { path: { project_id: id } },
+        body: { paths },
       }),
     ),
 
@@ -649,15 +739,17 @@ export const api = {
   // -- Fork --------------------------------------------------------------
   forkVersion: async (
     versionId: string,
-    payload: { target_workspace_id: string; name?: string; description?: string },
+    payload: {
+      target_owner: { kind: 'user' | 'user_group'; id: string }
+      name?: string
+      description?: string
+    },
   ): Promise<Project> =>
     unwrap(
       await http.POST('/api/v1/versions/{version_id}/fork', {
         params: { path: { version_id: versionId } },
-        // 契约里这两项带默认值所以是必填。调用方省略时补空串，
-        // 后端会沿用源 Project 的名称和说明。
         body: {
-          target_workspace_id: payload.target_workspace_id,
+          target_owner: payload.target_owner,
           name: payload.name ?? '',
           description: payload.description ?? '',
         },
@@ -673,10 +765,10 @@ export const api = {
     ) ?? null,
 
   // -- 活动流 ------------------------------------------------------------
-  listWorkspaceActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
+  listUserGroupActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
     unwrap(
-      await http.GET('/api/v1/workspaces/{workspace_id}/activities', {
-        params: { path: { workspace_id: id }, query },
+      await http.GET('/api/v1/user-groups/{user_group_id}/activities', {
+        params: { path: { user_group_id: id }, query },
       }),
     ),
 

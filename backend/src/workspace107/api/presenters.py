@@ -5,16 +5,21 @@ Secret 只输出名称和引用关系，任何路径都不输出值（docs/produ
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
 from ..application.catalog_service import EnvironmentView
 from ..application.entitlement_service import EntitlementView
 from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
-from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
+from ..application.shared_resource_service import (
+    SharedResourceAccessView,
+    SharedResourceView,
+    UseQualificationView,
+)
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
-from ..application.workspace_service import LegacyWorkspaceView
+from ..domain.capabilities import Capability
 from ..domain.compute import ComputePlan, ComputeRequest
+from ..domain.grant import GrantTargetKind
 from ..domain.models import (
     Activity,
     Artifact,
@@ -70,21 +75,6 @@ def user_group_out(view: UserGroupView) -> s.UserGroupOut:
     )
 
 
-def legacy_workspace_context_out(
-    view: LegacyWorkspaceView,
-) -> s.LegacyWorkspaceContextOut:
-    workspace = view.workspace
-    return s.LegacyWorkspaceContextOut(
-        id=workspace.id,
-        kind=workspace.kind,
-        name=workspace.name,
-        owner_id=workspace.owner_id,
-        default_environment_version_id=workspace.default_environment_version_id,
-        role=view.role,
-        capabilities=sorted(view.capabilities),
-    )
-
-
 def member_out(view: MemberView) -> s.MemberOut:
     return s.MemberOut(
         user_id=view.user.id,
@@ -92,6 +82,7 @@ def member_out(view: MemberView) -> s.MemberOut:
         display_name=view.user.display_name,
         role=view.membership.role.value,
         status=view.membership.status.value,
+        capabilities=sorted(view.capabilities),
     )
 
 
@@ -105,18 +96,28 @@ def entitlement_out(view: EntitlementView) -> s.EntitlementOut:
     )
 
 
-def project_out(project: Project) -> s.ProjectOut:
+def project_out(
+    project: Project,
+    *,
+    owner: OwnerSummary,
+    owner_scope: bool = True,
+    capabilities: Iterable[Capability] = (),
+) -> s.ProjectOut:
     return s.ProjectOut(
         id=project.id,
-        workspace_id=project.workspace_id,
+        owner=owner_summary_out(owner),
         name=project.name,
         description=project.description,
         status=project.status.value,
-        environment_version_id=project.environment_version_id,
-        default_run_configuration_id=project.default_run_configuration_id,
+        visibility=project.visibility.value,
+        environment_version_id=project.environment_version_id if owner_scope else None,
+        default_run_configuration_id=(
+            project.default_run_configuration_id if owner_scope else None
+        ),
         created_by=project.created_by,
         created_at=project.created_at,
         updated_at=project.updated_at,
+        capabilities=sorted(capabilities),
     )
 
 
@@ -241,7 +242,7 @@ def run_configuration_out(configuration: RunConfiguration) -> s.RunConfiguration
     )
 
 
-def run_out(run: Run) -> s.RunOut:
+def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
     queued_seconds: float | None = None
     running_seconds: float | None = None
     if run.submitted_at and run.started_at:
@@ -252,7 +253,6 @@ def run_out(run: Run) -> s.RunOut:
     return s.RunOut(
         id=run.id,
         project_id=run.project_id,
-        workspace_id=run.workspace_id,
         snapshot_id=run.snapshot_id,
         project_version_id=run.project_version_id,
         project_version_label=run.project_version_label,
@@ -263,13 +263,14 @@ def run_out(run: Run) -> s.RunOut:
         scheduler_job_id=run.scheduler_job_id,
         exit_code=run.exit_code,
         failure_reason=run.failure_reason,
-        created_by=run.created_by,
+        initiated_by_user_id=run.initiated_by_user_id,
         created_at=run.created_at,
         submitted_at=run.submitted_at,
         started_at=run.started_at,
         finished_at=run.finished_at,
         queued_seconds=queued_seconds,
         running_seconds=running_seconds,
+        capabilities=sorted(capabilities),
     )
 
 
@@ -317,7 +318,7 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
             s.ArtifactRuleModel(path=r.path, name=r.name, optional=r.optional)
             for r in snapshot.artifact_rules
         ],
-        created_by=snapshot.created_by,
+        initiated_by_user_id=snapshot.initiated_by_user_id,
         created_at=snapshot.created_at,
     )
 
@@ -325,7 +326,7 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
 def activity_out(activity: Activity) -> s.ActivityOut:
     return s.ActivityOut(
         id=activity.id,
-        workspace_id=activity.workspace_id,
+        owner=s.OwnerReferenceIn(kind=activity.owner.kind, id=activity.owner.id),
         project_id=activity.project_id,
         actor_id=activity.actor_id,
         actor_name=activity.actor_name,
@@ -344,7 +345,6 @@ def notification_out(notification: Notification) -> s.NotificationOut:
         type=notification.type,
         title=notification.title,
         body=notification.body,
-        workspace_id=notification.workspace_id,
         target_type=notification.target_type,
         target_id=notification.target_id,
         mandatory=notification.mandatory,
@@ -357,7 +357,9 @@ def fork_source_out(relation: ForkRelation) -> s.ForkSourceOut:
     return s.ForkSourceOut(
         source_project_id=relation.source_project_id,
         source_version_id=relation.source_version_id,
-        source_workspace_id=relation.source_workspace_id,
+        source_owner=s.OwnerReferenceIn(
+            kind=relation.source_owner.kind, id=relation.source_owner.id
+        ),
         source_project_name=relation.source_project_name,
         source_version_label=relation.source_version_label,
         created_at=relation.created_at,
@@ -374,26 +376,66 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
     )
 
 
-def shared_resource_out(view: SharedResourceView) -> s.SharedResourceOut:
+def use_qualification_out(
+    view: UseQualificationView,
+) -> s.SharedResourceUseQualificationOut:
+    if view.grantee is None:
+        return s.SharedResourceOwnerQualificationOut()
+    return s.SharedResourceGrantQualificationOut(
+        scope=view.scope,
+        grantee=owner_summary_out(view.grantee),
+        grants=[
+            s.UseGrantSummaryOut(
+                id=grant.id,
+                target_all=grant.target_kind is GrantTargetKind.ALL,
+                created_at=grant.created_at,
+            )
+            for grant in view.grants
+        ],
+    )
+
+
+def shared_resource_out(
+    view: SharedResourceView, *, capabilities: Iterable[Capability] = ()
+) -> s.SharedResourceOut:
     return s.SharedResourceOut(
         id=view.resource.id,
         name=view.resource.name,
         description=view.resource.description,
         owner=owner_summary_out(view.owner),
         created_at=view.resource.created_at,
+        use_qualifications=[
+            use_qualification_out(qualification) for qualification in view.use_qualifications
+        ],
+        capabilities=sorted(capabilities),
     )
 
 
 def shared_resource_access_out(view: SharedResourceAccessView) -> s.SharedResourceOut:
-    return shared_resource_out(SharedResourceView(resource=view.resource, owner=view.owner))
+    return shared_resource_out(
+        SharedResourceView(
+            resource=view.resource,
+            owner=view.owner,
+            use_qualifications=view.use_qualifications,
+        ),
+        capabilities=view.access.capabilities,
+    )
 
 
 def shared_resource_detail_out(
     view: SharedResourceAccessView, versions: list[SharedResourceVersion]
 ) -> s.SharedResourceDetailOut:
+    base = shared_resource_out(
+        SharedResourceView(
+            resource=view.resource,
+            owner=view.owner,
+            use_qualifications=view.use_qualifications,
+        ),
+        capabilities=view.access.capabilities,
+    )
     return s.SharedResourceDetailOut(
-        **shared_resource_access_out(view).model_dump(),
-        versions=[shared_resource_version_out(v) for v in versions],
+        **base.model_dump(),
+        versions=[shared_resource_version_out(version) for version in versions],
     )
 
 

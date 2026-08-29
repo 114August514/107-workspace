@@ -2,8 +2,7 @@
 
 可变对象与不可变版本必须分离（GR-201、GR-202、GR-203）：
 
-    可变：  UserGroup、Membership、LegacyWorkspace（兼容）、Project、ProjectFile、
-            RunConfiguration、Environment
+    可变：  UserGroup、Membership、Project、ProjectFile、RunConfiguration、Environment
     不可变：ProjectVersion、EnvironmentVersion、RunSnapshot、Artifact 内容
 
 Project Version、Environment Version 和 Run Snapshot 在代码及仓储层都不可变；
@@ -21,12 +20,12 @@ from .enums import (
     ActivityAction,
     ArtifactStatus,
     InputSourceType,
-    LegacyWorkspaceKind,
     LogStream,
     MembershipRole,
     MembershipStatus,
     NotificationType,
     ProjectStatus,
+    ProjectVisibility,
     RunEventType,
     RunStatus,
     SharedResourcePublicationStatus,
@@ -37,7 +36,7 @@ from .ownership import OwnerKind, OwnerReference
 from .secrets import EnvValue
 
 # --------------------------------------------------------------------------
-# 身份与空间
+# 身份与协作
 # --------------------------------------------------------------------------
 
 
@@ -68,30 +67,6 @@ class UserGroup:
 
     @property
     def owner_reference(self) -> OwnerReference:
-        return OwnerReference(kind=OwnerKind.USER_GROUP, id=self.id)
-
-
-@dataclass(slots=True)
-class LegacyWorkspace:
-    """Private compatibility anchor for child domains not yet migrated by #36-#42."""
-
-    id: str
-    kind: LegacyWorkspaceKind
-    name: str
-    description: str = ""
-    owner_id: str = ""
-    default_environment_version_id: str | None = None
-    created_at: datetime | None = None
-
-    @property
-    def is_personal(self) -> bool:
-        return self.kind is LegacyWorkspaceKind.PERSONAL
-
-    @property
-    def owner_reference(self) -> OwnerReference:
-        """Map the compatibility anchor to its canonical User/UserGroup owner."""
-        if self.is_personal:
-            return OwnerReference(kind=OwnerKind.USER, id=self.owner_id)
         return OwnerReference(kind=OwnerKind.USER_GROUP, id=self.id)
 
 
@@ -136,15 +111,16 @@ class Secret:
 
 @dataclass(slots=True)
 class Project:
-    """Workspace 下可编辑、可版本化、可运行的计算项目。"""
+    """A versioned project with a canonical User/User Group owner."""
 
     id: str
-    workspace_id: str
     name: str
+    owner: OwnerReference
     description: str = ""
     status: ProjectStatus = ProjectStatus.ACTIVE
+    visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE
     environment_version_id: str | None = None
-    """None 表示继承 Workspace 默认环境。"""
+    """None 表示 Project 未选择默认 Environment Version。"""
     default_run_configuration_id: str | None = None
     created_by: str = ""
     created_at: datetime | None = None
@@ -311,10 +287,10 @@ class RunConfiguration:
     id: str
     project_id: str
     name: str
+    environment_version_id: str
+    """本次运行使用的精确 Environment Version；不继承其他对象的默认值。"""
     working_directory: str = "."
     command: str = ""
-    environment_version_id: str | None = None
-    """None 表示继承 Project 的有效环境。"""
     environment_variables: dict[str, EnvValue] = field(default_factory=dict)
     input_bindings: tuple[InputBinding, ...] = ()
     compute_plan_id: str = ""
@@ -338,10 +314,9 @@ class Run:
 
     id: str
     project_id: str
-    workspace_id: str
     snapshot_id: str
     compute_plan_id: str
-    """本次运行占用的算力方案。当前实现按「Workspace × 方案」计算并发额度。"""
+    """本次运行占用的算力方案。并发额度按「Initiated By User × 方案」计算（GR-307）。"""
     project_version_id: str
     """本次运行基于的 Project 版本。冗余自快照，用于 Run History 展示。"""
     project_version_label: str
@@ -355,7 +330,8 @@ class Run:
     scheduler_job_id: str | None = None
     exit_code: int | None = None
     failure_reason: str = ""
-    created_by: str = ""
+    initiated_by_user_id: str = ""
+    """发起本次 Run 的 User（GR-307）。执行身份、并发额度、通知接收方都以它为准。"""
     created_at: datetime | None = None
     submitted_at: datetime | None = None
     started_at: datetime | None = None
@@ -382,6 +358,7 @@ class IdempotencyRecord:
     """一次幂等提交的登记。
 
     客户端为一次「提交意图」生成一个 key，重试时复用同一个 key。
+    key 的作用域是发起 User：``(initiated_by_user_id, key)`` 唯一。
     平台据此判断这是不是同一次提交——网络抖动、用户双击、前端自动重试，
     都不应该变成两次真实的计算。
 
@@ -389,7 +366,7 @@ class IdempotencyRecord:
     还在处理中（或者已经失败回滚了）。
     """
 
-    workspace_id: str
+    initiated_by_user_id: str
     key: str
     endpoint: str
     run_id: str | None
@@ -416,7 +393,6 @@ class Artifact:
     id: str
     run_id: str
     project_id: str
-    workspace_id: str
     name: str
     source_path: str
     """收集规则中相对于工作目录的来源路径。"""
@@ -435,39 +411,24 @@ class Artifact:
 
 @dataclass(frozen=True, slots=True)
 class Activity:
-    """「这里最近发生了什么」的一条记录。
+    """A current-owner activity fact with immutable display-name snapshots.
 
-    面向对象（Workspace / Project），不面向人——面向人的是 Notification。
-    两者是两条独立的数据流：Activity 回答「这里发生了什么」，Notification
-    回答「这个人需要关注什么」。
-
-    **actor_name 和 target_name 是写入时抄下来的，不是查出来的。**
-    活动是历史事实：「alice 删掉了 Project foo」这句话在 foo 已经不存在之后
-    仍然要读得通，而且要说 foo 当时的名字，不是改名后的名字。
-    join 出来的名字做不到这两点——对象删了就 join 不到，改名了就变成另一句话。
-
-    ``target_id`` 仍然保留，用来生成跳转链接；对象已经不在时链接会 404，
-    这是可接受的：文字本身已经把事情说清楚了。
-
-    写完不改。没有「已读」状态，那是通知的事。
+    ``owner`` is the authorization and aggregation boundary. ``project_id`` narrows
+    Project activity without inventing a second authority model. Actor and target
+    names are copied at write time so renames do not rewrite historical sentences.
     """
 
     id: str
-    workspace_id: str
+    owner: OwnerReference
     actor_id: str
     actor_name: str
-    """执行者在操作发生时的用户名。"""
     action: ActivityAction
     target_type: TargetType
     target_id: str
     target_name: str
-    """对象在操作发生时的名称。"""
     created_at: datetime
     project_id: str | None = None
-    """Project 级活动同时出现在所属 Workspace 的活动流里。"""
     detail: str = ""
-    """补充说明，比如角色从什么改成什么。不放结构化数据——
-    活动是给人读的，需要结构化查询时说明该建的是别的东西。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,8 +445,7 @@ class Notification:
     事后对象改名或删除都不该改写它。
 
     **收件人能读到自己的通知，与他现在还能不能看见相关对象无关。**
-    被移除的成员移除之后已经看不到那个 Workspace，但那条「你被移除了」
-    的通知必须还能读到——否则他根本不知道发生了什么。
+    被移除的成员仍然可以读取通知；target 只使用当前 User Group、Project 或 Run 路由。
     """
 
     id: str
@@ -494,7 +454,6 @@ class Notification:
     title: str
     body: str
     created_at: datetime
-    workspace_id: str | None = None
     target_type: TargetType | None = None
     target_id: str | None = None
     mandatory: bool = False
@@ -529,7 +488,7 @@ class ForkRelation:
     """Fork 出来的新 Project。一个 Project 最多一条来源记录。"""
     source_project_id: str
     source_version_id: str
-    source_workspace_id: str
+    source_owner: OwnerReference
     source_project_name: str
     source_version_label: str
     """来源版本的展示名，形如 ``v3``。"""

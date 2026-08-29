@@ -154,8 +154,22 @@ export function SubmitRunModal({ open, projectId, configuration, onClose, onSubm
             },
             {
               key: 'environment',
-              label: '运行环境版本',
-              children: preflight?.environment_version_id ?? '—',
+              label: 'Environment Version',
+              children: checking ? (
+                '检查中…'
+              ) : preflight?.environment_version ? (
+                <Space wrap size={6}>
+                  <Typography.Text>{preflight.environment_version.version}</Typography.Text>
+                  <Tag color={preflight.environment_version.available ? 'green' : 'orange'}>
+                    {preflight.environment_version.available ? '当前可用' : '当前不可用'}
+                  </Tag>
+                  <Typography.Text code>{preflight.environment_version.id}</Typography.Text>
+                </Space>
+              ) : (
+                <Typography.Text code>
+                  {configuration?.environment_version_id ?? '—'}
+                </Typography.Text>
+              ),
             },
             {
               key: 'compute',

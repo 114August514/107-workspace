@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { VersionDetailPage } from '../../src/pages/VersionDetailPage'
-import type { Project, ProjectVersionDetail, LegacyWorkspaceContext } from '../../src/api/types'
+import type { Project, ProjectVersionDetail } from '../../src/api/types'
 
 /**
  * VersionDetailPage 权限可见性。
@@ -17,7 +17,6 @@ import type { Project, ProjectVersionDetail, LegacyWorkspaceContext } from '../.
 
 const mockGetVersion = vi.hoisted(() => vi.fn())
 const mockGetProject = vi.hoisted(() => vi.fn())
-const mockGetLegacyWorkspaceContext = vi.hoisted(() => vi.fn())
 const mockListUserGroups = vi.hoisted(() => vi.fn())
 const mockListVersions = vi.hoisted(() => vi.fn())
 const mockDiffVersions = vi.hoisted(() => vi.fn())
@@ -26,7 +25,6 @@ vi.mock('../../src/api/client', () => ({
   api: {
     getVersion: mockGetVersion,
     getProject: mockGetProject,
-    getLegacyWorkspaceContext: mockGetLegacyWorkspaceContext,
     listUserGroups: mockListUserGroups,
     listVersions: mockListVersions,
     diffVersions: mockDiffVersions,
@@ -48,7 +46,9 @@ const version: ProjectVersionDetail = {
 
 const project: Project = {
   id: 'prj_test',
-  workspace_id: 'ws_test',
+  capabilities: ['project.view', 'run.view'],
+  owner: { kind: 'user', id: 'usr_student', display_name: 'student' },
+  visibility: 'owner_scope',
   name: 'Test Project',
   description: '',
   status: 'active',
@@ -57,18 +57,6 @@ const project: Project = {
   created_by: 'student',
   environment_version_id: null,
   default_run_configuration_id: null,
-}
-
-function makeWorkspace(caps: string[]): LegacyWorkspaceContext {
-  return {
-    id: 'ws_test',
-    name: 'Test Workspace',
-    kind: 'collaborative',
-    owner_id: 'owner',
-    default_environment_version_id: null,
-    capabilities: caps as LegacyWorkspaceContext['capabilities'],
-    role: 'member',
-  }
 }
 
 function renderPage() {
@@ -102,10 +90,6 @@ describe('VersionDetailPage 权限可见性', () => {
   it('无对应能力的成员看不到「运行此版本」和「恢复到此版本」，但能看到「派生」', async () => {
     mockGetVersion.mockResolvedValue(version)
     mockGetProject.mockResolvedValue(project)
-    // 这里刻意只下发 view 权限，没有 run.submit 和 project.content.write。
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['user_group.view', 'project.view', 'run.view']),
-    )
 
     renderPage()
 
@@ -119,10 +103,10 @@ describe('VersionDetailPage 权限可见性', () => {
 
   it('有 run.submit 权限的用户能看到「运行此版本」', async () => {
     mockGetVersion.mockResolvedValue(version)
-    mockGetProject.mockResolvedValue(project)
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['user_group.view', 'project.view', 'run.view', 'run.submit']),
-    )
+    mockGetProject.mockResolvedValue({
+      ...project,
+      capabilities: ['project.view', 'run.view', 'run.submit'],
+    })
 
     renderPage()
 
@@ -133,10 +117,10 @@ describe('VersionDetailPage 权限可见性', () => {
 
   it('有 project.content.write 权限的用户能看到「恢复到此版本」', async () => {
     mockGetVersion.mockResolvedValue(version)
-    mockGetProject.mockResolvedValue(project)
-    mockGetLegacyWorkspaceContext.mockResolvedValue(
-      makeWorkspace(['user_group.view', 'project.view', 'run.view', 'project.content.write']),
-    )
+    mockGetProject.mockResolvedValue({
+      ...project,
+      capabilities: ['project.view', 'run.view', 'project.content.write'],
+    })
 
     renderPage()
 

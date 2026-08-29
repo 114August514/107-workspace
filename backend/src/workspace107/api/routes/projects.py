@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import mimetypes
+from urllib.parse import quote
+
 from fastapi import APIRouter, File, Query, UploadFile, status
 from fastapi.responses import Response
 
 from ...application.run_configuration_service import RunConfigurationInput
 from ...domain.enums import ProjectStatus
+from ...domain.ownership import OwnerReference
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, PageDep, ServicesDep
@@ -17,6 +21,49 @@ MAX_TEXT_PREVIEW = 256 * 1024
 
 
 @router.get(
+    "/projects", response_model=s.PageOut[s.ProjectOut], summary="列出当前用户可发现的 Project"
+)
+async def list_discoverable_projects(
+    user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ProjectOut]:
+    """列出当前用户可发现的 Project：自己 / 所属 User Group 拥有的，以及 PUBLIC Project。"""
+    result = await services.projects.list_discoverable_for_user(user.id, page)
+    summaries = await services.projects.owner_summaries(result.items)
+    return p.page_out(
+        result,
+        lambda project: p.project_out(
+            project,
+            owner=summaries[(project.owner.kind, project.owner.id)],
+            owner_scope=False,
+        ),
+    )
+
+
+@router.post(
+    "/projects",
+    response_model=s.ProjectOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="为 User 或 User Group 创建 Project",
+)
+async def create_owned_project(
+    payload: s.ProjectCreateOwnedIn, user: CurrentUser, services: ServicesDep
+) -> s.ProjectOut:
+    project = await services.projects.create_owned(
+        user.id,
+        OwnerReference(kind=payload.owner.kind, id=payload.owner.id),
+        payload.name,
+        payload.description,
+        visibility=payload.visibility,
+    )
+    access = await services.projects.get(user.id, project.id)
+    return p.project_out(
+        project,
+        owner=await services.projects.owner_summary(project),
+        capabilities=access.capabilities,
+    )
+
+
+@router.get(
     "/projects/{project_id}",
     response_model=s.ProjectOut,
     summary="获取 Project 详情",
@@ -24,7 +71,12 @@ MAX_TEXT_PREVIEW = 256 * 1024
 async def get_project(project_id: str, user: CurrentUser, services: ServicesDep) -> s.ProjectOut:
     """校验当前用户可查看该 Project 后，返回项目设置与当前状态。"""
     access = await services.projects.get(user.id, project_id)
-    return p.project_out(access.project)
+    return p.project_out(
+        access.project,
+        owner=await services.projects.owner_summary(access.project),
+        owner_scope=access.owner_scope,
+        capabilities=access.capabilities,
+    )
 
 
 @router.patch(
@@ -45,14 +97,20 @@ async def update_project(
         name=payload.name,
         description=payload.description,
         environment_version_id=payload.environment_version_id,
-        inherit_workspace_environment=bool(payload.inherit_workspace_environment),
+        update_environment_version="environment_version_id" in payload.model_fields_set,
         default_run_configuration_id=payload.default_run_configuration_id,
+        visibility=payload.visibility,
     )
     if payload.status is not None:
         project = await services.projects.set_status(
             user.id, project_id, ProjectStatus(payload.status)
         )
-    return p.project_out(project)
+    access = await services.projects.get(user.id, project.id)
+    return p.project_out(
+        project,
+        owner=await services.projects.owner_summary(project),
+        capabilities=access.capabilities,
+    )
 
 
 # -- 文件 -------------------------------------------------------------------
@@ -164,6 +222,107 @@ async def move_path(
     return [p.project_file_out(f) for f in moved]
 
 
+@router.post(
+    "/projects/{project_id}/files/copy",
+    response_model=list[s.ProjectFileOut],
+    summary="复制 Project 文件或目录",
+)
+async def copy_path(
+    project_id: str, payload: s.FileCopyIn, user: CurrentUser, services: ServicesDep
+) -> list[s.ProjectFileOut]:
+    """要求内容写入权限，复制文件或递归复制目录并返回新产生的文件。"""
+    copied = await services.projects.copy_path(
+        user.id, project_id, payload.source, payload.destination
+    )
+    return [p.project_file_out(f) for f in copied]
+
+
+@router.post(
+    "/projects/{project_id}/files/mkdir",
+    response_model=s.ProjectFileOut,
+    summary="创建 Project 目录",
+)
+async def create_directory(
+    project_id: str, payload: s.MkdirIn, user: CurrentUser, services: ServicesDep
+) -> s.ProjectFileOut:
+    """要求内容写入权限，以 ``.gitkeep`` 占位文件创建空目录。
+
+    目录本身不是实体，靠其中文件的路径前缀存在；占位文件让空目录
+    在文件列表里可见、能保存进版本。
+    """
+    record = await services.projects.create_directory(user.id, project_id, payload.path)
+    return p.project_file_out(record)
+
+
+@router.post(
+    "/projects/{project_id}/files/archive",
+    response_model=list[s.ProjectFileOut],
+    summary="上传压缩包并展开到 Project",
+)
+async def upload_archive(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    file: UploadFile = File(...),
+    prefix: str = Query(default=""),
+) -> list[s.ProjectFileOut]:
+    """要求内容写入权限，仅支持 zip；展开前逐条目校验并整体拒绝非法内容。
+
+    路径穿越、绝对路径、符号链接和加密条目会被拒绝；条目数与解压后
+    总大小受服务端预算限制，同路径文件会被覆盖。
+    """
+    written = await services.projects.upload_archive(
+        user.id,
+        project_id,
+        file.filename or "archive.zip",
+        await file.read(),
+        prefix=prefix,
+    )
+    return [p.project_file_out(f) for f in written]
+
+
+@router.get(
+    "/projects/{project_id}/files/download",
+    summary="下载 Project 文件",
+    # 与 runs.py 的 Artifact 下载同理：不声明 responses 的话契约里会写成
+    # JSON，而这里实际返回的是二进制文件。
+    response_class=Response,
+    responses={
+        200: {
+            "description": "文件完整内容",
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+            },
+        }
+    },
+)
+async def download_file(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    path: str = Query(min_length=1),
+) -> Response:
+    """校验 Owner 范围查看权限后，将文件完整内容作为二进制附件返回。"""
+    filename, data = await services.projects.download_file(user.id, project_id, path)
+    media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": _content_disposition(filename)},
+    )
+
+
+def _content_disposition(filename: str) -> str:
+    """按 RFC 6266 / RFC 5987 拼下载头（理由见 runs.py 同名函数）。
+
+    HTTP 头只能是 latin-1：``filename`` 给 ASCII 兜底，``filename*`` 用
+    百分号编码带上真实名字，现代浏览器优先取它。
+    """
+    fallback = filename.encode("ascii", errors="replace").decode("ascii").replace('"', "_")
+    quoted = quote(filename, safe="")
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quoted}"
+
+
 @router.get(
     "/projects/{project_id}/changes",
     response_model=list[s.WorkingChangeOut],
@@ -178,6 +337,55 @@ async def working_changes(
     """
     changes = await services.projects.working_changes(user.id, project_id)
     return [s.WorkingChangeOut(path=c.path, change=c.change) for c in changes]
+
+
+@router.get(
+    "/projects/{project_id}/changes/detail",
+    response_model=s.WorkingChangeDetailOut,
+    summary="查看未保存变更的内容级详情",
+)
+async def working_change_detail(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    path: str = Query(min_length=1),
+) -> s.WorkingChangeDetailOut:
+    """校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。
+
+    每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。
+    """
+    detail = await services.projects.working_change_detail(user.id, project_id, path)
+    return s.WorkingChangeDetailOut(
+        path=detail.path,
+        change=detail.change,
+        previous=_text_preview(detail.path, detail.previous),
+        current=_text_preview(detail.path, detail.current),
+    )
+
+
+def _text_preview(path: str, data: bytes | None) -> s.FileContentOut | None:
+    if data is None:
+        return None
+    truncated = len(data) > MAX_TEXT_PREVIEW
+    text = data[:MAX_TEXT_PREVIEW].decode("utf-8", errors="replace")
+    return s.FileContentOut(path=path, content=text, truncated=truncated)
+
+
+@router.post(
+    "/projects/{project_id}/changes/discard",
+    response_model=list[s.WorkingChangeOut],
+    summary="放弃指定的未保存变更",
+)
+async def discard_changes(
+    project_id: str, payload: s.DiscardChangesIn, user: CurrentUser, services: ServicesDep
+) -> list[s.WorkingChangeOut]:
+    """要求内容写入权限，把指定路径的工作区内容恢复到最近版本对应状态。
+
+    历史版本不受影响（GR-201）；没有待放弃变化的路径按幂等跳过，
+    返回剩余的未保存变更。
+    """
+    remaining = await services.projects.discard_changes(user.id, project_id, list(payload.paths))
+    return [s.WorkingChangeOut(path=c.path, change=c.change) for c in remaining]
 
 
 # -- 版本 -------------------------------------------------------------------
@@ -281,20 +489,25 @@ async def fork_version(
     user: CurrentUser,
     services: ServicesDep,
 ) -> s.ProjectOut:
-    """两侧都会校验：源版本可读、目标空间可写。
+    """Validate source visibility and explicit target Owner create authority.
 
-    复制内容、运行方案和环境选择；**不复制**权益、凭据、成员权限和 Run 历史
-    （GR-503）。Secret 只复制引用表达式，目标空间缺同名 Secret 时
-    提交前检查会拦下（GR-407）。
+    The fork copies content and eligible configuration references, never entitlement,
+    credential values, Membership, or Run history. PUBLIC readers only copy immutable files.
     """
+    target_owner = OwnerReference(kind=payload.target_owner.kind, id=payload.target_owner.id)
     project = await services.projects.fork(
         user.id,
         version_id,
-        payload.target_workspace_id,
+        target_owner,
         name=payload.name,
         description=payload.description,
     )
-    return p.project_out(project)
+    access = await services.projects.get(user.id, project.id)
+    return p.project_out(
+        project,
+        owner=await services.projects.owner_summary(project),
+        capabilities=access.capabilities,
+    )
 
 
 @router.get(
@@ -327,6 +540,20 @@ async def restore_version(
 
 
 # -- 运行方案 ---------------------------------------------------------------
+
+
+@router.get(
+    "/projects/{project_id}/environments",
+    response_model=list[s.EnvironmentOut],
+    summary="列出 Project 当前可用的 Environment",
+)
+async def list_project_environments(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> list[s.EnvironmentOut]:
+    views = await services.catalog.list_for_project(user.id, project_id)
+    return [p.environment_out(view) for view in views]
 
 
 @router.get(
