@@ -19,7 +19,11 @@ from datetime import UTC, datetime
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import grant_test_entitlement, wait_for_run
+from tests.helpers import (
+    grant_test_entitlement,
+    process_shared_resource_publication,
+    wait_for_run,
+)
 from workspace107.application.run_service import RunDraft
 from workspace107.domain import ids
 from workspace107.domain.config_scope import ConfigScope
@@ -402,7 +406,9 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
         headers=ALICE,
     )
     resource_version.raise_for_status()
-    shared_version_id = resource_version.json()["id"]
+    shared_version_id = await process_shared_resource_publication(
+        context, str(resource_version.json()["id"])
+    )
 
     configuration = await _create_configuration(
         client,

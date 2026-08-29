@@ -6,8 +6,8 @@ Canonical ownership is User/UserGroup:
 - ``POST   /shared-resources``                             —— create with explicit owner
 - ``GET    /shared-resources/{id}``                        —— resource detail and versions
 - ``PATCH  /shared-resources/{id}``                        —— resource metadata
-- ``POST   /shared-resources/{id}/versions``               —— upload immutable version
-- ``GET    /shared-resource-versions/{id}``                —— version detail
+- ``POST   /shared-resources/{id}/versions``               —— upload publication candidate
+- ``GET    /shared-resource-publication-attempts/{id}``     —— publication status/result
 - ``GET    /shared-resource-versions/{id}/files/content``  —— read version text file
 - ``GET    /shared-resource-versions/{id}/files/download`` —— read original bytes
 
@@ -117,35 +117,44 @@ async def update_shared_resource(
 
 @router.post(
     "/shared-resources/{resource_id}/versions",
-    response_model=s.SharedResourceVersionOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="上传 Shared Resource 新版本",
+    response_model=s.SharedResourcePublicationAttemptOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="上传 Shared Resource 发布候选",
 )
-async def publish_shared_resource_version(
+async def create_shared_resource_publication_attempt(
     resource_id: str,
     user: CurrentUser,
     services: ServicesDep,
     files: list[UploadFile] = File(...),
     description: str = Form(default=""),
     prefix: str = Query(default=""),
-) -> s.SharedResourceVersionOut:
-    """需要 Shared Resource 版本创建权限；上传文件形成新的不可变版本。
-
-    上传的文件按 ``prefix/<filename>`` 写入资源；同路径文件会被视为重复路径
-    导致版本发布失败。版本发布后内容不可修改。
-    """
+) -> s.SharedResourcePublicationAttemptOut:
+    """Persist uploaded blobs and return before processor validation/publication."""
     uploads: list[SharedResourceUpload] = []
     for upload in files:
         name = upload.filename or "unnamed"
         target = f"{prefix.rstrip('/')}/{name}" if prefix else name
         uploads.append(SharedResourceUpload(path=target, content=await upload.read()))
-    version = await services.shared_resources.publish_version(
+    attempt = await services.shared_resources.create_publication_attempt(
         user.id,
         resource_id,
         description=description,
         uploads=uploads,
     )
-    return p.shared_resource_version_out(version)
+    return p.shared_resource_publication_attempt_out(attempt)
+
+
+@router.get(
+    "/shared-resource-publication-attempts/{attempt_id}",
+    response_model=s.SharedResourcePublicationAttemptOut,
+    summary="获取 Shared Resource 发布校验结果",
+)
+async def get_shared_resource_publication_attempt(
+    attempt_id: str, user: CurrentUser, services: ServicesDep
+) -> s.SharedResourcePublicationAttemptOut:
+    """Return an owner-scoped durable attempt without granting Shared Resource USE."""
+    attempt = await services.shared_resources.get_publication_attempt(user.id, attempt_id)
+    return p.shared_resource_publication_attempt_out(attempt)
 
 
 # -- 版本 ------------------------------------------------------------------
