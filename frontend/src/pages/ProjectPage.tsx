@@ -143,6 +143,7 @@ export function ProjectPage() {
                 >
                   <RunTable
                     runs={runs.data?.items ?? []}
+                    projectName={project.data?.name}
                     pagination={tablePagination(runs.data, setRunPage)}
                   />
                 </AsyncState>

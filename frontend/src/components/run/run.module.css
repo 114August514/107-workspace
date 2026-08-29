@@ -78,8 +78,29 @@
 .titleRow {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--base-size-16);
+}
+
+.titleGroup {
+  display: flex;
+  flex: 1 1 24rem;
+  flex-direction: column;
+  gap: var(--base-size-4);
+  min-width: 0;
+}
+
+.titleHeading {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--base-size-8);
+}
+
+.triggerLine {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
 }
 
 .pageTitle {
@@ -119,6 +140,35 @@
   font-size: var(--text-body-size-small);
 }
 
+.runFacts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.runFact {
+  padding: var(--base-size-12) var(--base-size-16);
+  border-right: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.runFact:last-child {
+  border-right: none;
+}
+
+.runFact dt {
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+}
+
+.runFact dd {
+  margin: var(--base-size-4) 0 0;
+  color: var(--fgColor-default);
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+}
+
 .runNavigation {
   font-size: var(--text-body-size-small);
 }
@@ -149,23 +199,6 @@
 .summarySurface {
   display: flex;
   flex-direction: column;
-}
-
-.summaryLead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--base-size-8);
-  padding-bottom: var(--base-size-16);
-}
-
-.summaryLead strong {
-  font-size: var(--text-title-size-medium);
-  font-weight: var(--base-text-weight-semibold);
-}
-
-.summaryLead span {
-  color: var(--fgColor-muted);
 }
 
 .summarySection {
@@ -379,6 +412,26 @@
   border-collapse: collapse;
 }
 
+.runTable {
+  table-layout: fixed;
+}
+
+.runTable th:first-child {
+  width: 7rem;
+}
+
+.runTable th:nth-child(3) {
+  width: 10rem;
+}
+
+.runTable th:last-child {
+  width: 9rem;
+}
+
+.runTable .statusLabel {
+  justify-self: start;
+}
+
 .runTable th,
 .artifactTable th {
   padding: var(--base-size-8) var(--base-size-12);
@@ -409,6 +462,20 @@
 }
 
 .primaryLink {
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.runContextLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-4);
+  margin-top: var(--base-size-4);
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+}
+
+.executionPrimary {
   font-weight: var(--base-text-weight-semibold);
 }
 
@@ -512,6 +579,10 @@
 
   .headerActions > * {
     flex: 1 1 auto;
+  }
+
+  .runFact {
+    padding: var(--base-size-8);
   }
 
   .snapshotRow {

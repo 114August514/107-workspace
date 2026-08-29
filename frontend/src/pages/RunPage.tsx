@@ -24,6 +24,7 @@ import { RunSnapshotCard } from '../components/run/RunSnapshotCard'
 import { RunSummary } from '../components/run/RunSummary'
 import { RunTimeline } from '../components/run/RunTimeline'
 import styles from '../components/run/run.module.css'
+import { formatDuration, formatRelative, formatTime } from '../utils/format'
 
 const POLL_INTERVAL_MS = 2000
 
@@ -144,6 +145,10 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
   const runTitle =
     run && automaticName && run.name !== automaticName ? run.name : `Run #${shortRunId}`
   const configurationLabel = sourceConfiguration?.name ?? '运行方案'
+  const initiatorLabel =
+    currentUser && run && currentUser.id === run.initiated_by_user_id
+      ? currentUser.display_name || currentUser.username
+      : '其他用户'
 
   return (
     <AsyncState
@@ -199,7 +204,18 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
               Runs
             </Link>
             <div className={styles.titleRow}>
-              <h1 className={styles.pageTitle}>{runTitle}</h1>
+              <div className={styles.titleGroup}>
+                <div className={styles.titleHeading}>
+                  <RunStatusTag status={run.status} />
+                  <h1 className={styles.pageTitle}>{runTitle}</h1>
+                </div>
+                <p className={styles.triggerLine}>
+                  {initiatorLabel}发起于{' '}
+                  <time dateTime={run.created_at ?? undefined} title={formatTime(run.created_at)}>
+                    {formatRelative(run.created_at)}
+                  </time>
+                </p>
+              </div>
               <div className={styles.headerActions}>
                 <Button
                   leadingVisual={SyncIcon}
@@ -231,8 +247,6 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
               </div>
             </div>
             <div className={styles.runMeta}>
-              <RunStatusTag status={run.status} />
-              <span aria-hidden>·</span>
               <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
                 {run.project_version_label}
               </Link>
@@ -240,6 +254,21 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
               <span>{configurationLabel}</span>
             </div>
           </header>
+
+          <dl className={styles.runFacts} aria-label="Run execution facts">
+            <div className={styles.runFact}>
+              <dt>排队时间</dt>
+              <dd>{formatDuration(run.queued_seconds)}</dd>
+            </div>
+            <div className={styles.runFact}>
+              <dt>运行时间</dt>
+              <dd>{formatDuration(run.running_seconds)}</dd>
+            </div>
+            <div className={styles.runFact}>
+              <dt>运行产物</dt>
+              <dd>{detail.data.artifacts.length}</dd>
+            </div>
+          </dl>
 
           {feedback ? (
             <Banner variant={feedback.variant}>
@@ -297,7 +326,6 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
                     computePlan={computePlan}
                     computePlanLoading={plans.loading}
                     computePlanError={plans.error !== undefined}
-                    currentUser={currentUser}
                   />
                 ) : null}
                 {tab === 'execution' ? (

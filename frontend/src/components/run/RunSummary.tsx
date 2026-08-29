@@ -1,8 +1,8 @@
 import { Link, Text } from '@primer/react'
 import { Link as RouterLink } from 'react-router-dom'
 
-import type { ComputePlan, RunConfiguration, RunDetail, User } from '../../api/types'
-import { formatDuration, formatTime } from '../../utils/format'
+import type { ComputePlan, RunConfiguration, RunDetail } from '../../api/types'
+import { describeComputeRequest, formatTime } from '../../utils/format'
 import styles from './run.module.css'
 
 function DefinitionRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -24,7 +24,6 @@ export function RunSummary({
   computePlan,
   computePlanLoading,
   computePlanError,
-  currentUser,
 }: {
   detail: RunDetail
   projectId: string
@@ -34,13 +33,8 @@ export function RunSummary({
   computePlan?: ComputePlan
   computePlanLoading: boolean
   computePlanError: boolean
-  currentUser?: User
 }) {
   const { run, snapshot } = detail
-  const initiator =
-    currentUser?.id === run.initiated_by_user_id
-      ? currentUser.display_name || currentUser.username
-      : '其他用户'
 
   const configurationName = configuration
     ? configuration.name
@@ -62,11 +56,6 @@ export function RunSummary({
 
   return (
     <div className={styles.summarySurface} aria-label="Run Summary">
-      <div className={styles.summaryLead}>
-        <strong>运行 {formatDuration(run.running_seconds)}</strong>
-        <span>排队 {formatDuration(run.queued_seconds)}</span>
-      </div>
-
       <section className={styles.summarySection} aria-labelledby="run-source-title">
         <h2 id="run-source-title">来源</h2>
         <dl className={styles.definitionList}>
@@ -76,20 +65,22 @@ export function RunSummary({
             </Link>
           </DefinitionRow>
           <DefinitionRow label="运行方案">{configurationName}</DefinitionRow>
-          <DefinitionRow label="发起用户">{initiator}</DefinitionRow>
         </dl>
       </section>
 
       <section className={styles.summarySection} aria-labelledby="run-compute-title">
         <h2 id="run-compute-title">算力</h2>
         <dl className={styles.definitionList}>
-          <DefinitionRow label="方案">
+          <DefinitionRow label="算力方案">
             <span>{computePlanName}</span>
             {computePlan ? (
               <Text as="span" size="small" className={styles.secondaryInline}>
                 {computePlan.code}
               </Text>
             ) : null}
+          </DefinitionRow>
+          <DefinitionRow label="资源请求">
+            {describeComputeRequest(snapshot.compute_request)}
           </DefinitionRow>
         </dl>
       </section>
