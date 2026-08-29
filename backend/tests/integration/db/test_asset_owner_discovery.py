@@ -184,18 +184,12 @@ async def _seed_owners(session: AsyncSession) -> None:
                 environment_id="env_owned_by_active_group",
                 version="1",
                 description="",
-                image="visible:image",
-                setup_command="",
-                available=True,
             ),
             t.EnvironmentVersionRow(
                 id="ev_hidden_bob",
                 environment_id="env_owned_by_bob",
                 version="1",
                 description="",
-                image="hidden:image",
-                setup_command="",
-                available=True,
             ),
             t.SharedResourceVersionRow(
                 id="shrv_visible_active_group",

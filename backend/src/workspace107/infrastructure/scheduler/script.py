@@ -6,19 +6,45 @@ Mock 和 Slurm 两个适配器共用同一份脚本正文，区别只在于头�
 
 from __future__ import annotations
 
+import shlex
+
 from ...domain.ports.scheduler import SchedulerSubmission
 
 
 def render_body(submission: SchedulerSubmission) -> str:
-    """渲染脚本正文：准备命令 + 用户命令。"""
-    lines = ["set -euo pipefail", ""]
-    if submission.setup_command.strip():
+    """Render the frozen runtime spec; Environment never contributes arbitrary shell."""
+    spec = submission.environment_execution_spec
+    kind = spec.get("kind")
+    lines = ["set -euo pipefail", "", "# 运行环境（已发布精确版本）"]
+    if kind == "modules":
+        commands = spec.get("commands")
+        if not isinstance(commands, list):
+            raise ValueError("Modules execution spec 缺少 commands")
+        for command in commands:
+            if not isinstance(command, list) or not all(isinstance(arg, str) for arg in command):
+                raise ValueError("Modules execution command 非法")
+            lines.append(" ".join(shlex.quote(arg) for arg in command))
+        lines += ["", "# 运行方案中的执行命令", submission.command.strip(), ""]
+    elif kind == "apptainer_sif":
+        if spec.get("launcher_module") != "apptainer/1.4.5":
+            raise ValueError("Apptainer launcher module 非法")
+        locator = spec.get("locator")
+        if not isinstance(locator, str):
+            raise ValueError("Apptainer execution spec 缺少 locator")
+        exec_command = (
+            f"apptainer exec {shlex.quote(locator)} "
+            f"bash -lc {shlex.quote(submission.command.strip())}"
+        )
         lines += [
-            "# 运行环境准备命令",
-            submission.setup_command.strip(),
+            "module purge",
+            "module load apptainer/1.4.5",
+            "",
+            "# 运行方案中的执行命令",
+            exec_command,
             "",
         ]
-    lines += ["# 运行方案中的执行命令", submission.command.strip(), ""]
+    else:
+        raise ValueError("未知 Environment runtime kind")
     return "\n".join(lines)
 
 

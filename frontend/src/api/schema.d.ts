@@ -64,6 +64,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/environment-publication-attempts/{attempt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取 Environment publication attempt */
+        get: operations["get_environment_publication_attempt_api_v1_catalog_environment_publication_attempts__attempt_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/environment-versions/{version_id}": {
         parameters: {
             query?: never;
@@ -75,6 +92,23 @@ export interface paths {
         get: operations["get_environment_version_api_v1_catalog_environment_versions__version_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/environment-versions/{version_id}/availability/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新校验 Environment Version 当前可用性 */
+        post: operations["refresh_environment_version_availability_api_v1_catalog_environment_versions__version_id__availability_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -112,6 +146,57 @@ export interface paths {
         get: operations["get_environment_api_v1_catalog_environments__environment_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出 Environment publication attempts */
+        get: operations["list_environment_publication_attempts_api_v1_catalog_environments__environment_id__publication_attempts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传并发布受控 Apptainer SIF 候选 */
+        post: operations["publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts/modules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发布 Modules 运行环境候选 */
+        post: operations["publish_modules_environment_api_v1_catalog_environments__environment_id__publication_attempts_modules_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1641,6 +1726,33 @@ export interface components {
          * @enum {string}
          */
         ArtifactStatus: "available" | "cleaned";
+        /** Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post */
+        Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post: {
+            /**
+             * Architecture
+             * @default x86_64
+             */
+            architecture: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Sif */
+            sif: string;
+            /**
+             * Source Digest
+             * @default
+             */
+            source_digest: string;
+            /**
+             * Source Uri
+             * @default
+             */
+            source_uri: string;
+            /** Version */
+            version: string;
+        };
         /** Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post */
         Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post: {
             /**
@@ -1682,7 +1794,7 @@ export interface components {
          *     命名统一为 ``对象.动作``，方便在日志和错误信息里直接读。
          * @enum {string}
          */
-        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "grant.manage";
+        Capability: "user_group.view" | "user_group.update" | "member.view" | "member.invite" | "member.remove" | "member.role.manage" | "ownership.transfer" | "config.view" | "config.manage" | "project.view" | "project.create" | "project.update" | "project.content.write" | "run_configuration.manage" | "run.view" | "run.submit" | "run.cancel" | "shared_resource.view" | "shared_resource.manage" | "shared_resource.version.create" | "environment.version.create" | "grant.manage";
         /**
          * ChangeKind
          * @description 文件在两次快照之间的变化类型。
@@ -1769,6 +1881,11 @@ export interface components {
             /** Max Concurrent Runs */
             max_concurrent_runs: number;
         };
+        /**
+         * EnvironmentAvailability
+         * @enum {string}
+         */
+        EnvironmentAvailability: "available" | "unavailable" | "deprecated";
         /** EnvironmentOut */
         EnvironmentOut: {
             /** Description */
@@ -1781,20 +1898,87 @@ export interface components {
             /** Versions */
             versions: components["schemas"]["EnvironmentVersionOut"][];
         };
-        /** EnvironmentVersionOut */
-        EnvironmentVersionOut: {
-            /** Available */
-            available: boolean;
+        /** EnvironmentPublicationAttemptOut */
+        EnvironmentPublicationAttemptOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
             /** Description */
             description: string;
             /** Environment Id */
             environment_id: string;
+            /** Failure Code */
+            failure_code: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+            /** Finished At */
+            finished_at: string | null;
             /** Id */
             id: string;
-            /** Image */
-            image: string;
-            /** Setup Command */
-            setup_command: string;
+            runtime_kind: components["schemas"]["EnvironmentRuntimeKind"];
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["EnvironmentPublicationStatus"];
+            /** Validation Evidence */
+            validation_evidence: {
+                [key: string]: unknown;
+            };
+            /** Validation Summary */
+            validation_summary: string;
+            /** Version */
+            version: string;
+            /** Version Id */
+            version_id: string | null;
+        };
+        /**
+         * EnvironmentPublicationStatus
+         * @enum {string}
+         */
+        EnvironmentPublicationStatus: "pending" | "processing" | "succeeded" | "failed";
+        /**
+         * EnvironmentRuntimeKind
+         * @enum {string}
+         */
+        EnvironmentRuntimeKind: "modules" | "apptainer_sif";
+        /** EnvironmentVersionOut */
+        EnvironmentVersionOut: {
+            availability: components["schemas"]["EnvironmentAvailability"];
+            /**
+             * Availability Checked At
+             * Format: date-time
+             */
+            availability_checked_at: string;
+            /** Availability Detail */
+            availability_detail: string;
+            /** Availability Reason */
+            availability_reason: string;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Definition Hash */
+            definition_hash: string;
+            /** Description */
+            description: string;
+            /** Environment Id */
+            environment_id: string;
+            /** Execution Spec */
+            execution_spec: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: string;
+            runtime_kind: components["schemas"]["EnvironmentRuntimeKind"];
+            /** Validation Evidence */
+            validation_evidence: {
+                [key: string]: unknown;
+            };
+            /** Validation Summary */
+            validation_summary: string;
             /** Version */
             version: string;
         };
@@ -2072,6 +2256,18 @@ export interface components {
         MkdirIn: {
             /** Path */
             path: string;
+        };
+        /** ModulesEnvironmentPublicationIn */
+        ModulesEnvironmentPublicationIn: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Modules */
+            modules: string[];
+            /** Version */
+            version: string;
         };
         /**
          * NotificationOut
@@ -2585,10 +2781,12 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
-            /** Environment Image */
-            environment_image: string;
-            /** Environment Setup Command */
-            environment_setup_command: string;
+            /** Environment Definition Hash */
+            environment_definition_hash: string;
+            /** Environment Execution Spec */
+            environment_execution_spec: {
+                [key: string]: unknown;
+            };
             /** Environment Variables */
             environment_variables: {
                 [key: string]: string;
@@ -3141,7 +3339,163 @@ export interface operations {
             };
         };
     };
+    get_environment_publication_attempt_api_v1_catalog_environment_publication_attempts__attempt_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                attempt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentPublicationAttemptOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     get_environment_version_api_v1_catalog_environment_versions__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentVersionOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    refresh_environment_version_availability_api_v1_catalog_environment_versions__version_id__availability_refresh_post: {
         parameters: {
             query?: never;
             header?: {
@@ -3315,6 +3669,248 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvironmentOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    list_environment_publication_attempts_api_v1_catalog_environments__environment_id__publication_attempts_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentPublicationAttemptOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentPublicationAttemptOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    publish_modules_environment_api_v1_catalog_environments__environment_id__publication_attempts_modules_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                environment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModulesEnvironmentPublicationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentPublicationAttemptOut"];
                 };
             };
             /** @description 请求不合法 */

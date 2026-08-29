@@ -41,8 +41,8 @@ class RunSnapshot:
     working_directory: str
     command: str
     environment_version_id: str
-    environment_image: str
-    environment_setup_command: str
+    environment_definition_hash: str
+    environment_execution_spec: dict[str, object]
     env_literals: dict[str, str]
     env_secret_refs: dict[str, SecretReference]
     """环境变量名 -> scope-qualified Secret reference; never plaintext."""
@@ -84,8 +84,8 @@ class RunSnapshot:
             "command": self.command,
             "environment": {
                 "version_id": self.environment_version_id,
-                "image": self.environment_image,
-                "setup_command": self.environment_setup_command,
+                "definition_hash": self.environment_definition_hash,
+                "execution_spec": self.environment_execution_spec,
             },
             "env": {
                 "literals": dict(self.env_literals),
@@ -115,8 +115,8 @@ class RunSnapshot:
             working_directory=payload["working_directory"],
             command=payload["command"],
             environment_version_id=environment["version_id"],
-            environment_image=environment["image"],
-            environment_setup_command=environment.get("setup_command", ""),
+            environment_definition_hash=environment["definition_hash"],
+            environment_execution_spec=dict(environment["execution_spec"]),
             env_literals=dict(env["literals"]),
             env_secret_refs={
                 name: SecretReference.from_key(value) for name, value in env["secret_refs"].items()
@@ -155,8 +155,8 @@ def build_snapshot(
     working_directory: str,
     command: str,
     environment_version_id: str,
-    environment_image: str,
-    environment_setup_command: str,
+    environment_definition_hash: str,
+    environment_execution_spec: dict[str, object],
     resolved_env: ResolvedEnv,
     input_bindings: tuple[InputBinding, ...],
     compute_plan_id: str,
@@ -179,8 +179,8 @@ def build_snapshot(
         working_directory=working_directory,
         command=command,
         environment_version_id=environment_version_id,
-        environment_image=environment_image,
-        environment_setup_command=environment_setup_command,
+        environment_definition_hash=environment_definition_hash,
+        environment_execution_spec=dict(environment_execution_spec),
         env_literals=dict(resolved_env.literals),
         env_secret_refs=dict(resolved_env.secret_refs),
         input_bindings=input_bindings,

@@ -117,10 +117,11 @@ WORKSPACE107_SLURM_JWT=<secret>
 ```
 
 接入前还必须确认 slurmrestd API 版本、JWT 生命周期、分区、Account、QoS、资源上限
-和错误响应。seed 中的计算方案与环境值是开发数据，不是 107 平台配置事实。
-
-现有实现也没有独立 Background Worker、Git 版本存储和 Apptainer 准备链路；这些是
-`docs/product/design.md` M1 Walking Skeleton 的缺口，不能由 API 容器或 Mock 路径代替。
+和错误响应。Environment Version 只支持有序平台 Modules 或经真实 Apptainer CLI 校验的
+CAS SIF；SIF 提交前会重新校验摘要并把 CAS locator 解析为计算节点可见的共享存储路径。
+当前 publication processor 仍是单 API 实例的 durable loop，不是独立或多副本 Worker。
+seed 中的计算方案与环境值是开发数据；真实 UID/GID、共享挂载、Slurm 凭据和执行链路
+仍须按 #7 在 107 平台完成端到端验收。
 
 ## 探针和排障
 

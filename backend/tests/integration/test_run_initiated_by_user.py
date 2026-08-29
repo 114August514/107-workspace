@@ -67,8 +67,6 @@ async def _create_environment(
             environment_id=environment_id,
             version="1",
             description="",
-            image="python:3.12-slim",
-            setup_command="",
         )
     )
     await session.commit()
@@ -457,10 +455,10 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
 
     environment = await session.get(EnvironmentVersionRow, environment_version_id)
     assert environment is not None
-    environment.available = False
+    environment.availability = "unavailable"
     await session.flush()
     await assert_execution_rejected("当前不可用")
-    environment.available = True
+    environment.availability = "available"
     await session.flush()
     environment_asset = await session.get(EnvironmentRow, environment.environment_id)
     assert environment_asset is not None

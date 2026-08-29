@@ -18,6 +18,9 @@ from ...domain.config_scope import ConfigScope
 from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
+    EnvironmentAvailability,
+    EnvironmentPublicationStatus,
+    EnvironmentRuntimeKind,
     InputSourceType,
     MembershipRole,
     MembershipStatus,
@@ -35,6 +38,7 @@ from ...domain.models import (
     Artifact,
     ArtifactCollectionRule,
     Environment,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     IdempotencyRecord,
@@ -730,6 +734,109 @@ class EnvironmentRepositoryImpl:
         """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentRow, environment_id)
         return _to_environment(row) if row else None
+
+    async def add_version(self, version: EnvironmentVersion) -> None:
+        self._session.add(
+            t.EnvironmentVersionRow(
+                id=version.id,
+                environment_id=version.environment_id,
+                version=version.version,
+                description=version.description,
+                runtime_kind=version.runtime_kind.value,
+                definition=version.definition,
+                definition_hash=version.definition_hash,
+                execution_spec=version.execution_spec,
+                validation_summary=version.validation_summary,
+                validation_evidence=version.validation_evidence,
+                availability=version.availability.value,
+                availability_reason=version.availability_reason,
+                availability_detail=version.availability_detail,
+                availability_checked_at=version.availability_checked_at,
+            )
+        )
+        await self._session.flush()
+
+    async def add_attempt(self, attempt: EnvironmentPublicationAttempt) -> None:
+        self._session.add(_environment_attempt_row(attempt))
+        await self._session.flush()
+
+    async def update_attempt(self, attempt: EnvironmentPublicationAttempt) -> None:
+        row = await self._session.get(t.EnvironmentPublicationAttemptRow, attempt.id)
+        if row is None:
+            return
+        for name in (
+            "status",
+            "validation_summary",
+            "validation_evidence",
+            "failure_code",
+            "failure_reason",
+            "version_id",
+            "started_at",
+            "finished_at",
+        ):
+            value = getattr(attempt, name)
+            setattr(row, name, value.value if hasattr(value, "value") else value)
+        await self._session.flush()
+
+    async def get_attempt_by_id(self, attempt_id: str) -> EnvironmentPublicationAttempt | None:
+        row = await self._session.get(t.EnvironmentPublicationAttemptRow, attempt_id)
+        return _to_environment_attempt(row) if row else None
+
+    async def list_attempts_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> list[EnvironmentPublicationAttempt]:
+        stmt = (
+            select(t.EnvironmentPublicationAttemptRow)
+            .join(
+                t.EnvironmentRow,
+                t.EnvironmentRow.id == t.EnvironmentPublicationAttemptRow.environment_id,
+            )
+            .where(
+                t.EnvironmentPublicationAttemptRow.environment_id == environment_id,
+                _asset_discovery_predicate(
+                    t.EnvironmentRow.owner_user_id,
+                    t.EnvironmentRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
+            .order_by(t.EnvironmentPublicationAttemptRow.created_at.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment_attempt(row) for row in rows]
+
+    async def update_version_availability(
+        self,
+        version_id: str,
+        availability: EnvironmentAvailability,
+        reason: str,
+        detail: str,
+        checked_at: datetime,
+    ) -> EnvironmentVersion | None:
+        row = await self._session.get(t.EnvironmentVersionRow, version_id)
+        if row is None:
+            return None
+        row.availability = availability.value
+        row.availability_reason = reason
+        row.availability_detail = detail
+        row.availability_checked_at = checked_at
+        await self._session.flush()
+        return _to_environment_version(row)
+
+    async def claim_pending_attempt(self, now: datetime) -> EnvironmentPublicationAttempt | None:
+        stmt = (
+            select(t.EnvironmentPublicationAttemptRow)
+            .where(t.EnvironmentPublicationAttemptRow.status.in_(["pending", "processing"]))
+            .order_by(t.EnvironmentPublicationAttemptRow.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return None
+        row.status = EnvironmentPublicationStatus.PROCESSING.value
+        row.started_at = now
+        await self._session.flush()
+        return _to_environment_attempt(row)
 
 
 class ComputePlanRepositoryImpl:
@@ -1760,9 +1867,62 @@ def _to_environment_version(row: t.EnvironmentVersionRow) -> EnvironmentVersion:
         environment_id=row.environment_id,
         version=row.version,
         description=row.description,
-        image=row.image,
-        setup_command=row.setup_command,
-        available=row.available,
+        runtime_kind=EnvironmentRuntimeKind(row.runtime_kind),
+        definition=dict(row.definition),
+        definition_hash=row.definition_hash,
+        execution_spec=dict(row.execution_spec),
+        validation_summary=row.validation_summary,
+        validation_evidence=dict(row.validation_evidence),
+        availability=EnvironmentAvailability(row.availability),
+        availability_reason=row.availability_reason,
+        availability_detail=row.availability_detail,
+        availability_checked_at=_required(row.availability_checked_at),
+    )
+
+
+def _environment_attempt_row(
+    attempt: EnvironmentPublicationAttempt,
+) -> t.EnvironmentPublicationAttemptRow:
+    return t.EnvironmentPublicationAttemptRow(
+        id=attempt.id,
+        environment_id=attempt.environment_id,
+        status=attempt.status.value,
+        version=attempt.version,
+        description=attempt.description,
+        runtime_kind=attempt.runtime_kind.value,
+        candidate_definition=attempt.candidate_definition,
+        validation_summary=attempt.validation_summary,
+        validation_evidence=attempt.validation_evidence,
+        failure_code=attempt.failure_code,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
+    )
+
+
+def _to_environment_attempt(
+    row: t.EnvironmentPublicationAttemptRow,
+) -> EnvironmentPublicationAttempt:
+    return EnvironmentPublicationAttempt(
+        id=row.id,
+        environment_id=row.environment_id,
+        status=EnvironmentPublicationStatus(row.status),
+        version=row.version,
+        description=row.description,
+        runtime_kind=EnvironmentRuntimeKind(row.runtime_kind),
+        candidate_definition=dict(row.candidate_definition),
+        validation_summary=row.validation_summary,
+        validation_evidence=dict(row.validation_evidence),
+        failure_code=row.failure_code,
+        failure_reason=row.failure_reason,
+        version_id=row.version_id,
+        created_by=row.created_by,
+        created_at=_required(row.created_at),
+        started_at=row.started_at,
+        finished_at=row.finished_at,
     )
 
 

@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     # 后台状态同步间隔（秒）。设为 0 表示不启动后台同步，由调用方显式触发。
     run_sync_interval_seconds: float = 1.0
+    environment_publication_interval_seconds: float = 1.0
 
     @property
     def use_json_logs(self) -> bool:

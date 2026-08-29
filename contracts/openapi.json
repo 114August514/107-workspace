@@ -206,6 +206,45 @@
         "title": "ArtifactStatus",
         "type": "string"
       },
+      "Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post": {
+        "properties": {
+          "architecture": {
+            "default": "x86_64",
+            "title": "Architecture",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "sif": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Sif",
+            "type": "string"
+          },
+          "source_digest": {
+            "default": "",
+            "title": "Source Digest",
+            "type": "string"
+          },
+          "source_uri": {
+            "default": "",
+            "title": "Source Uri",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "sif"
+        ],
+        "title": "Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post",
+        "type": "object"
+      },
       "Body_publish_shared_resource_version_api_v1_shared_resources__resource_id__versions_post": {
         "properties": {
           "description": {
@@ -308,6 +347,7 @@
           "shared_resource.view",
           "shared_resource.manage",
           "shared_resource.version.create",
+          "environment.version.create",
           "grant.manage"
         ],
         "title": "Capability",
@@ -490,6 +530,15 @@
         "title": "EntitlementOut",
         "type": "object"
       },
+      "EnvironmentAvailability": {
+        "enum": [
+          "available",
+          "unavailable",
+          "deprecated"
+        ],
+        "title": "EnvironmentAvailability",
+        "type": "string"
+      },
       "EnvironmentOut": {
         "properties": {
           "description": {
@@ -525,11 +574,16 @@
         "title": "EnvironmentOut",
         "type": "object"
       },
-      "EnvironmentVersionOut": {
+      "EnvironmentPublicationAttemptOut": {
         "properties": {
-          "available": {
-            "title": "Available",
-            "type": "boolean"
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
           },
           "description": {
             "title": "Description",
@@ -539,16 +593,179 @@
             "title": "Environment Id",
             "type": "string"
           },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
           "id": {
             "title": "Id",
             "type": "string"
           },
-          "image": {
-            "title": "Image",
+          "runtime_kind": {
+            "$ref": "#/components/schemas/EnvironmentRuntimeKind"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EnvironmentPublicationStatus"
+          },
+          "validation_evidence": {
+            "additionalProperties": true,
+            "title": "Validation Evidence",
+            "type": "object"
+          },
+          "validation_summary": {
+            "title": "Validation Summary",
             "type": "string"
           },
-          "setup_command": {
-            "title": "Setup Command",
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "id",
+          "environment_id",
+          "status",
+          "version",
+          "description",
+          "runtime_kind",
+          "validation_summary",
+          "validation_evidence",
+          "failure_code",
+          "failure_reason",
+          "version_id",
+          "created_by",
+          "created_at",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "EnvironmentPublicationAttemptOut",
+        "type": "object"
+      },
+      "EnvironmentPublicationStatus": {
+        "enum": [
+          "pending",
+          "processing",
+          "succeeded",
+          "failed"
+        ],
+        "title": "EnvironmentPublicationStatus",
+        "type": "string"
+      },
+      "EnvironmentRuntimeKind": {
+        "enum": [
+          "modules",
+          "apptainer_sif"
+        ],
+        "title": "EnvironmentRuntimeKind",
+        "type": "string"
+      },
+      "EnvironmentVersionOut": {
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/EnvironmentAvailability"
+          },
+          "availability_checked_at": {
+            "format": "date-time",
+            "title": "Availability Checked At",
+            "type": "string"
+          },
+          "availability_detail": {
+            "title": "Availability Detail",
+            "type": "string"
+          },
+          "availability_reason": {
+            "title": "Availability Reason",
+            "type": "string"
+          },
+          "definition": {
+            "additionalProperties": true,
+            "title": "Definition",
+            "type": "object"
+          },
+          "definition_hash": {
+            "title": "Definition Hash",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "environment_id": {
+            "title": "Environment Id",
+            "type": "string"
+          },
+          "execution_spec": {
+            "additionalProperties": true,
+            "title": "Execution Spec",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "runtime_kind": {
+            "$ref": "#/components/schemas/EnvironmentRuntimeKind"
+          },
+          "validation_evidence": {
+            "additionalProperties": true,
+            "title": "Validation Evidence",
+            "type": "object"
+          },
+          "validation_summary": {
+            "title": "Validation Summary",
             "type": "string"
           },
           "version": {
@@ -561,9 +778,16 @@
           "environment_id",
           "version",
           "description",
-          "image",
-          "setup_command",
-          "available"
+          "runtime_kind",
+          "definition",
+          "definition_hash",
+          "execution_spec",
+          "validation_summary",
+          "validation_evidence",
+          "availability",
+          "availability_reason",
+          "availability_detail",
+          "availability_checked_at"
         ],
         "title": "EnvironmentVersionOut",
         "type": "object"
@@ -1129,6 +1353,35 @@
           "path"
         ],
         "title": "MkdirIn",
+        "type": "object"
+      },
+      "ModulesEnvironmentPublicationIn": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Modules",
+            "type": "array"
+          },
+          "version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "modules"
+        ],
+        "title": "ModulesEnvironmentPublicationIn",
         "type": "object"
       },
       "NotificationOut": {
@@ -2534,13 +2787,14 @@
             "title": "Created At",
             "type": "string"
           },
-          "environment_image": {
-            "title": "Environment Image",
+          "environment_definition_hash": {
+            "title": "Environment Definition Hash",
             "type": "string"
           },
-          "environment_setup_command": {
-            "title": "Environment Setup Command",
-            "type": "string"
+          "environment_execution_spec": {
+            "additionalProperties": true,
+            "title": "Environment Execution Spec",
+            "type": "object"
           },
           "environment_variables": {
             "additionalProperties": {
@@ -2610,8 +2864,8 @@
           "working_directory",
           "command",
           "environment_version_id",
-          "environment_image",
-          "environment_setup_command",
+          "environment_definition_hash",
+          "environment_execution_spec",
           "environment_variables",
           "secret_references",
           "input_bindings",
@@ -3700,6 +3954,114 @@
         ]
       }
     },
+    "/api/v1/catalog/environment-publication-attempts/{attempt_id}": {
+      "get": {
+        "operationId": "get_environment_publication_attempt_api_v1_catalog_environment_publication_attempts__attempt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPublicationAttemptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "获取 Environment publication attempt",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/catalog/environment-versions/{version_id}": {
       "get": {
         "operationId": "get_environment_version_api_v1_catalog_environment_versions__version_id__get",
@@ -3803,6 +4165,114 @@
           }
         },
         "summary": "获取运行环境版本",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/environment-versions/{version_id}/availability/refresh": {
+      "post": {
+        "operationId": "refresh_environment_version_availability_api_v1_catalog_environment_versions__version_id__availability_refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentVersionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "重新校验 Environment Version 当前可用性",
         "tags": [
           "catalog"
         ]
@@ -4015,6 +4485,354 @@
           }
         },
         "summary": "获取运行环境",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts": {
+      "get": {
+        "operationId": "list_environment_publication_attempts_api_v1_catalog_environments__environment_id__publication_attempts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EnvironmentPublicationAttemptOut"
+                  },
+                  "title": "Response List Environment Publication Attempts Api V1 Catalog Environments  Environment Id  Publication Attempts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "列出 Environment publication attempts",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif": {
+      "post": {
+        "operationId": "publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_publish_apptainer_environment_api_v1_catalog_environments__environment_id__publication_attempts_apptainer_sif_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPublicationAttemptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "上传并发布受控 Apptainer SIF 候选",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts/modules": {
+      "post": {
+        "operationId": "publish_modules_environment_api_v1_catalog_environments__environment_id__publication_attempts_modules_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModulesEnvironmentPublicationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPublicationAttemptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "发布 Modules 运行环境候选",
         "tags": [
           "catalog"
         ]

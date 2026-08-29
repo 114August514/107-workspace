@@ -203,9 +203,66 @@ class EnvironmentVersionRow(Base):
     environment_id: Mapped[str] = mapped_column(ID, ForeignKey("environments.id"), index=True)
     version: Mapped[str] = mapped_column(String(64))
     description: Mapped[str] = mapped_column(Text, default="")
-    image: Mapped[str] = mapped_column(String(255))
-    setup_command: Mapped[str] = mapped_column(Text, default="")
-    available: Mapped[bool] = mapped_column(Boolean, default=True)
+    runtime_kind: Mapped[str] = mapped_column(String(32), default="modules")
+    definition: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    definition_hash: Mapped[str] = mapped_column(String(64), default="test-definition")
+    execution_spec: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=lambda: {"kind": "modules", "commands": []}
+    )
+    validation_summary: Mapped[str] = mapped_column(Text, default="test fixture")
+    validation_evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    availability: Mapped[str] = mapped_column(String(32), default="available")
+    availability_reason: Mapped[str] = mapped_column(String(128), default="test_fixture")
+    availability_detail: Mapped[str] = mapped_column(Text, default="")
+    availability_checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now().astimezone()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("environment_id", "version", name="uq_environment_version_label"),
+        CheckConstraint(
+            "runtime_kind IN ('modules', 'apptainer_sif')",
+            name="ck_environment_versions_runtime_kind",
+        ),
+        CheckConstraint(
+            "availability IN ('available', 'unavailable', 'deprecated')",
+            name="ck_environment_versions_availability",
+        ),
+    )
+
+
+class EnvironmentPublicationAttemptRow(Base):
+    __tablename__ = "environment_publication_attempts"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    environment_id: Mapped[str] = mapped_column(ID, ForeignKey("environments.id"), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    version: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str] = mapped_column(Text, default="")
+    runtime_kind: Mapped[str] = mapped_column(String(32))
+    candidate_definition: Mapped[dict[str, Any]] = mapped_column(JSON)
+    validation_summary: Mapped[str] = mapped_column(Text)
+    validation_evidence: Mapped[dict[str, Any]] = mapped_column(JSON)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("environment_versions.id"), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(ID, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'succeeded', 'failed')",
+            name="ck_environment_publication_attempts_status",
+        ),
+        CheckConstraint(
+            "runtime_kind IN ('modules', 'apptainer_sif')",
+            name="ck_environment_publication_attempts_runtime_kind",
+        ),
+    )
 
 
 class ComputePlanRow(Base):

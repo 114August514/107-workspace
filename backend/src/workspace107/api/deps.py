@@ -18,6 +18,7 @@ from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
 from ..application.configuration_service import ConfigurationService
 from ..application.entitlement_service import EntitlementService
+from ..application.environment_service import EnvironmentPublicationService
 from ..application.grant_service import GrantService
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
@@ -78,6 +79,7 @@ class Services:
     run_configurations: RunConfigurationService
     runs: RunService
     catalog: CatalogService
+    environment_publications: EnvironmentPublicationService
     health: HealthService
     lifecycle: RunLifecycleService
     activities: ActivityService
@@ -131,6 +133,9 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
         catalog=CatalogService(repos, guard),
+        environment_publications=EnvironmentPublicationService(
+            repos, guard, context.storage, context.clock
+        ),
         health=HealthService(repos),
         lifecycle=RunLifecycleService(
             repos, context.clock, context.storage, context.scheduler, activity, notifier, session

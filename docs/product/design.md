@@ -314,6 +314,20 @@ Project 派生、模板发布与复用
 
 运行环境是由 User 或 User Group 拥有、供 Project 执行代码时复用的独立资产。Run Configuration 与 Run Snapshot 均引用确定的 Environment Version。
 
+Environment Version 只允许两种显式 runtime kind：`modules` 与 `apptainer_sif`。
+`modules` 固定使用 107 cluster profile、Environment Modules、`purge_then_ordered_load_v1`
+并按用户选择顺序加载平台精确 allowlist；不接受任意 setup shell 或用户 modulefile。
+`apptainer_sif` 固定记录 CAS 中精确 SIF 字节的 SHA-256、大小、locator、来源、x86_64
+架构、`apptainer/1.4.5` launcher 与固定 exec policy，并用真实 Apptainer CLI 验证；CLI
+不存在时发布失败，不降级。
+
+发布由持久 Attempt 驱动，状态为 `pending -> processing -> succeeded|failed`。成功原子创建
+一个不可变 Version，失败不创建 Version并保存原因和证据。不可变定义/验证证据与可变
+`available|unavailable|deprecated` 状态分离。Run Snapshot 冻结精确 Version ID、definition
+hash 与 execution spec；执行前按当前 User、Project Owner、USE Grant 和 availability 重检，
+不回退到其他版本。当前处理循环是单 API 实例能力，不是多副本生产 Worker；真实
+Workspace UID/GID、共享挂载、Slurm REST 与凭据集成属于 #7。
+
 ```text
 运行环境
 │
