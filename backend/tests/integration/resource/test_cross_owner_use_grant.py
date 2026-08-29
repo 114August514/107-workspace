@@ -436,13 +436,15 @@ async def test_grant_does_not_grant_management_permission(
     )
     assert response.status_code == 201, response.text
 
-    # Bob tries to PATCH the resource — should fail (404, not visible for management).
+    # Bob tries to PATCH the resource — must fail: a USE Grant adds no management
+    # capability. Since grant-extended discovery makes the resource visible to Bob,
+    # the denial surfaces as 403 rather than 404.
     response = await client.patch(
         f"/api/v1/shared-resources/{resource_b_id}",
         json={"name": "hacked by bob"},
         headers=BOB,
     )
-    assert response.status_code == 404, response.text
+    assert response.status_code == 403, response.text
 
 
 # ---------------------------------------------------------------------------
@@ -1060,3 +1062,97 @@ async def test_explicit_grantor_for_asset_grant_rejected(
         headers=ALICE,
     )
     assert response.status_code == 422, response.text
+
+
+async def test_group_grant_matches_exact_project_owner_while_user_grant_follows_actor(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """Qualification source does not replace authorization in a concrete Project context."""
+    group_a = await _create_group(client, "Context Group A")
+    group_b = await _create_group(client, "Context Grantor Group B")
+    group_c = await _create_group(client, "Context Group C")
+    environment_a = await _set_group_environment(session, client, group_a)
+    environment_c = await _set_group_environment(session, client, group_c)
+    await grant_test_entitlement(session, "alice")
+    project_a = await _create_project_with_version(client, group_a, name="Context A project")
+    project_c = await _create_project_with_version(client, group_c, name="Context C project")
+    resource_id, resource_version_id = await _create_resource_version(client, group_b)
+    alice_id = await _get_user_id(client, ALICE)
+
+    await _insert_grant(
+        session,
+        grantee_kind="user_group",
+        grantee_id=group_a,
+        target_kind="shared_resource",
+        target_id=resource_id,
+        granted_by_id=alice_id,
+        grantor_kind="user_group",
+        grantor_id=group_b,
+    )
+
+    response = await client.post(
+        f"/api/v1/projects/{project_a['id']}/run-configurations",
+        json={
+            "name": "group-a-authorized",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_a,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text
+
+    response = await client.post(
+        f"/api/v1/projects/{project_c['id']}/run-configurations",
+        json={
+            "name": "group-c-not-authorized",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_c,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 404, response.text
+
+    await _insert_grant(
+        session,
+        grantee_kind="user",
+        grantee_id=alice_id,
+        target_kind="shared_resource",
+        target_id=resource_id,
+        granted_by_id=alice_id,
+        grantor_kind="user_group",
+        grantor_id=group_b,
+    )
+    response = await client.post(
+        f"/api/v1/projects/{project_c['id']}/run-configurations",
+        json={
+            "name": "group-c-user-authorized",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_c,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": resource_version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 201, response.text

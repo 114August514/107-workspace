@@ -2689,6 +2689,28 @@
           "owner": {
             "$ref": "#/components/schemas/OwnerSummaryOut"
           },
+          "use_qualifications": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "owner": "#/components/schemas/SharedResourceOwnerQualificationOut",
+                  "user_grant": "#/components/schemas/SharedResourceGrantQualificationOut",
+                  "user_group_grant": "#/components/schemas/SharedResourceGrantQualificationOut"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SharedResourceOwnerQualificationOut"
+                },
+                {
+                  "$ref": "#/components/schemas/SharedResourceGrantQualificationOut"
+                }
+              ]
+            },
+            "title": "Use Qualifications",
+            "type": "array"
+          },
           "versions": {
             "items": {
               "$ref": "#/components/schemas/SharedResourceVersionOut"
@@ -2703,9 +2725,41 @@
           "description",
           "owner",
           "created_at",
+          "use_qualifications",
           "versions"
         ],
         "title": "SharedResourceDetailOut",
+        "type": "object"
+      },
+      "SharedResourceGrantQualificationOut": {
+        "description": "Actor-level Grant qualification, not authorization for a concrete Run.\n\n``user_grant`` follows the actor into any Project where they may submit.\n``user_group_grant`` applies only while the actor is an active member, the\nGrantee User Group owns the consuming Project, and the actor may submit there.\nGrants is non-empty and contains every matching Grant for this one Grantee.",
+        "properties": {
+          "grantee": {
+            "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/UseGrantSummaryOut"
+            },
+            "minItems": 1,
+            "title": "Grants",
+            "type": "array"
+          },
+          "scope": {
+            "enum": [
+              "user_grant",
+              "user_group_grant"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "grantee",
+          "grants"
+        ],
+        "title": "SharedResourceGrantQualificationOut",
         "type": "object"
       },
       "SharedResourceOut": {
@@ -2736,6 +2790,28 @@
           },
           "owner": {
             "$ref": "#/components/schemas/OwnerSummaryOut"
+          },
+          "use_qualifications": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "owner": "#/components/schemas/SharedResourceOwnerQualificationOut",
+                  "user_grant": "#/components/schemas/SharedResourceGrantQualificationOut",
+                  "user_group_grant": "#/components/schemas/SharedResourceGrantQualificationOut"
+                },
+                "propertyName": "scope"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SharedResourceOwnerQualificationOut"
+                },
+                {
+                  "$ref": "#/components/schemas/SharedResourceGrantQualificationOut"
+                }
+              ]
+            },
+            "title": "Use Qualifications",
+            "type": "array"
           }
         },
         "required": [
@@ -2743,9 +2819,23 @@
           "name",
           "description",
           "owner",
-          "created_at"
+          "created_at",
+          "use_qualifications"
         ],
         "title": "SharedResourceOut",
+        "type": "object"
+      },
+      "SharedResourceOwnerQualificationOut": {
+        "description": "Use in a Project whose Owner is the resource Owner.",
+        "properties": {
+          "scope": {
+            "const": "owner",
+            "default": "owner",
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "title": "SharedResourceOwnerQualificationOut",
         "type": "object"
       },
       "SharedResourceUpdateIn": {
@@ -2956,6 +3046,31 @@
           "unread"
         ],
         "title": "UnreadCountOut",
+        "type": "object"
+      },
+      "UseGrantSummaryOut": {
+        "description": "One USE Grant contributing to the enclosing qualification.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "target_all": {
+            "title": "Target All",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "target_all",
+          "created_at"
+        ],
+        "title": "UseGrantSummaryOut",
         "type": "object"
       },
       "UserGroupCapability": {
@@ -10271,7 +10386,7 @@
     },
     "/api/v1/shared-resources": {
       "get": {
-        "description": "Return resources owned by the actor or by an owning UserGroup with active membership.",
+        "description": "Return actor-owned and otherwise discoverable resources.\n\nDiscovery includes active UserGroup ownership and USE Grants issued by the\nresource's current owner.",
         "operationId": "list_shared_resources_api_v1_shared_resources_get",
         "parameters": [
           {

@@ -14,6 +14,10 @@ import { PrimerRelativeTime } from '../components/primer/PrimerMono'
 import { PrimerStack } from '../components/primer/PrimerStack'
 import { EditSharedResourceModal } from '../components/sharedresource/EditSharedResourceModal'
 import { PublishVersionModal } from '../components/sharedresource/PublishVersionModal'
+import {
+  QualificationLabels,
+  QualificationNotice,
+} from '../components/sharedresource/SharedResourceQualification'
 import { SharedResourceVersionBody } from '../components/sharedresource/SharedResourceVersionBody'
 import styles from '../components/sharedresource/sharedResource.module.css'
 
@@ -71,6 +75,7 @@ export function SharedResourcePage() {
               <PackageIcon className={styles.titleIcon} size={24} />
               <h1 className={styles.title}>{resource.data.name}</h1>
               <Label>归属：{resource.data.owner.display_name}</Label>
+              <QualificationLabels qualifications={resource.data.use_qualifications} />
               <div className={styles.actions}>
                 {canManage && (
                   <Button leadingVisual={PencilIcon} onClick={() => setEditing(true)}>
@@ -91,6 +96,7 @@ export function SharedResourcePage() {
             <Text as="p" className={styles.headerDescription}>
               {resource.data.description || '这个共享资源还没有填写说明。'}
             </Text>
+            <QualificationNotice qualifications={resource.data.use_qualifications} />
           </header>
         )}
       </AsyncState>

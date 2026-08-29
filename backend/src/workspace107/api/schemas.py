@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,7 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
+from ..domain.grant import UseQualificationScope
 from ..domain.ownership import OwnerKind
 
 
@@ -302,12 +303,50 @@ class ComputePlanOut(Model):
 # -- Shared Resource --------------------------------------------------------
 
 
+class UseGrantSummaryOut(Model):
+    """One USE Grant contributing to the enclosing qualification."""
+
+    id: str
+    target_all: bool
+    created_at: datetime
+
+
+class SharedResourceOwnerQualificationOut(Model):
+    """Use in a Project whose Owner is the resource Owner."""
+
+    scope: Literal[UseQualificationScope.OWNER] = UseQualificationScope.OWNER
+
+
+class SharedResourceGrantQualificationOut(Model):
+    """Actor-level Grant qualification, not authorization for a concrete Run.
+
+    ``user_grant`` follows the actor into any Project where they may submit.
+    ``user_group_grant`` applies only while the actor is an active member, the
+    Grantee User Group owns the consuming Project, and the actor may submit there.
+    Grants is non-empty and contains every matching Grant for this one Grantee.
+    """
+
+    scope: Literal[
+        UseQualificationScope.USER_GRANT,
+        UseQualificationScope.USER_GROUP_GRANT,
+    ]
+    grantee: OwnerSummaryOut
+    grants: list[UseGrantSummaryOut] = Field(min_length=1)
+
+
+SharedResourceUseQualificationOut = Annotated[
+    SharedResourceOwnerQualificationOut | SharedResourceGrantQualificationOut,
+    Field(discriminator="scope"),
+]
+
+
 class SharedResourceOut(Model):
     id: str
     name: str
     description: str
     owner: OwnerSummaryOut
     created_at: datetime
+    use_qualifications: list[SharedResourceUseQualificationOut]
     capabilities: list[Capability] = Field(default_factory=list)
 
 

@@ -1087,7 +1087,10 @@ export interface paths {
         };
         /**
          * 列出当前用户可发现的共享资源
-         * @description Return resources owned by the actor or by an owning UserGroup with active membership.
+         * @description Return actor-owned and otherwise discoverable resources.
+         *
+         *     Discovery includes active UserGroup ownership and USE Grants issued by the
+         *     resource's current owner.
          */
         get: operations["list_shared_resources_api_v1_shared_resources_get"];
         put?: never;
@@ -2644,8 +2647,29 @@ export interface components {
             /** Name */
             name: string;
             owner: components["schemas"]["OwnerSummaryOut"];
+            /** Use Qualifications */
+            use_qualifications: (components["schemas"]["SharedResourceOwnerQualificationOut"] | components["schemas"]["SharedResourceGrantQualificationOut"])[];
             /** Versions */
             versions: components["schemas"]["SharedResourceVersionOut"][];
+        };
+        /**
+         * SharedResourceGrantQualificationOut
+         * @description Actor-level Grant qualification, not authorization for a concrete Run.
+         *
+         *     ``user_grant`` follows the actor into any Project where they may submit.
+         *     ``user_group_grant`` applies only while the actor is an active member, the
+         *     Grantee User Group owns the consuming Project, and the actor may submit there.
+         *     Grants is non-empty and contains every matching Grant for this one Grantee.
+         */
+        SharedResourceGrantQualificationOut: {
+            grantee: components["schemas"]["OwnerSummaryOut"];
+            /** Grants */
+            grants: components["schemas"]["UseGrantSummaryOut"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scope: "user_grant" | "user_group_grant";
         };
         /** SharedResourceOut */
         SharedResourceOut: {
@@ -2663,6 +2687,19 @@ export interface components {
             /** Name */
             name: string;
             owner: components["schemas"]["OwnerSummaryOut"];
+            /** Use Qualifications */
+            use_qualifications: (components["schemas"]["SharedResourceOwnerQualificationOut"] | components["schemas"]["SharedResourceGrantQualificationOut"])[];
+        };
+        /**
+         * SharedResourceOwnerQualificationOut
+         * @description Use in a Project whose Owner is the resource Owner.
+         */
+        SharedResourceOwnerQualificationOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            scope: "owner";
         };
         /** SharedResourceUpdateIn */
         SharedResourceUpdateIn: {
@@ -2748,6 +2785,21 @@ export interface components {
         UnreadCountOut: {
             /** Unread */
             unread: number;
+        };
+        /**
+         * UseGrantSummaryOut
+         * @description One USE Grant contributing to the enclosing qualification.
+         */
+        UseGrantSummaryOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Target All */
+            target_all: boolean;
         };
         /**
          * UserGroupCapability
