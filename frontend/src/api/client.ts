@@ -22,6 +22,7 @@ import type {
   ComputePlan,
   Entitlement,
   Environment,
+  EnvironmentPublicationAttempt,
   EnvironmentVersion,
   FileContent,
   Home,
@@ -187,6 +188,68 @@ export const api = {
   environmentVersion: async (id: string): Promise<EnvironmentVersion> =>
     unwrap(
       await http.GET('/api/v1/catalog/environment-versions/{version_id}', {
+        params: { path: { version_id: id } },
+      }),
+    ),
+  publishModulesEnvironment: async (
+    id: string,
+    body: { version: string; description: string; modules: string[] },
+  ): Promise<EnvironmentPublicationAttempt> =>
+    unwrap(
+      await http.POST(
+        '/api/v1/catalog/environments/{environment_id}/publication-attempts/modules',
+        { params: { path: { environment_id: id } }, body },
+      ),
+    ),
+  publishSifEnvironment: async (
+    id: string,
+    payload: {
+      version: string
+      sif: File
+      source_uri: string
+      source_digest: string
+      architecture: 'x86_64'
+    },
+  ): Promise<EnvironmentPublicationAttempt> => {
+    const form = new FormData()
+    form.append('version', payload.version)
+    form.append('sif', payload.sif)
+    form.append('source_uri', payload.source_uri)
+    form.append('source_digest', payload.source_digest)
+    form.append('architecture', payload.architecture)
+    form.append('description', '')
+    return unwrap(
+      await http.POST(
+        '/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif',
+        {
+          params: { path: { environment_id: id } },
+          body: form as unknown as {
+            version: string
+            sif: string
+            source_uri: string
+            source_digest: string
+            architecture: string
+            description: string
+          },
+        },
+      ),
+    )
+  },
+  environmentPublicationAttempts: async (id: string): Promise<EnvironmentPublicationAttempt[]> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environments/{environment_id}/publication-attempts', {
+        params: { path: { environment_id: id } },
+      }),
+    ),
+  environmentPublicationAttempt: async (id: string): Promise<EnvironmentPublicationAttempt> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environment-publication-attempts/{attempt_id}', {
+        params: { path: { attempt_id: id } },
+      }),
+    ),
+  refreshEnvironmentAvailability: async (id: string): Promise<EnvironmentVersion> =>
+    unwrap(
+      await http.POST('/api/v1/catalog/environment-versions/{version_id}/availability/refresh', {
         params: { path: { version_id: id } },
       }),
     ),

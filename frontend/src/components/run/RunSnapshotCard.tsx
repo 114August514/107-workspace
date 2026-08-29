@@ -41,8 +41,10 @@ export function RunSnapshotCard({ snapshot }: { snapshot: RunSnapshot }) {
           label: '运行环境',
           children: (
             <Space direction="vertical" size={2}>
-              <Typography.Text code>{snapshot.environment_image}</Typography.Text>
-              <Typography.Text type="secondary">{snapshot.environment_version_id}</Typography.Text>
+              <Typography.Text code>{snapshot.environment_version_id}</Typography.Text>
+              <Typography.Text type="secondary">
+                Definition {snapshot.environment_definition_hash.slice(0, 12)}
+              </Typography.Text>
             </Space>
           ),
         },
