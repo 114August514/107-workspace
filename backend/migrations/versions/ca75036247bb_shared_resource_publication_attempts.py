@@ -6,7 +6,7 @@ shared_resource_version_files and shared_resource_versions because those version
 published without processor validation and must not be represented as validated versions.
 
 Revision ID: ca75036247bb
-Revises: 4d7a2f91c3e5
+Revises: f42a9c7e1d30
 Create Date: 2026-08-24 11:51:51.159322
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "ca75036247bb"
-down_revision: str | None = "4d7a2f91c3e5"
+down_revision: str | None = "f42a9c7e1d30"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
