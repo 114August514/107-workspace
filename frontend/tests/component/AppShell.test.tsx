@@ -70,7 +70,11 @@ const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
   [
     '/user-groups/grp-1',
-    '这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。',
+    '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
+  ],
+  [
+    '/user-groups/grp-1/members',
+    '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
   ],
   [
     '/projects/p-1',

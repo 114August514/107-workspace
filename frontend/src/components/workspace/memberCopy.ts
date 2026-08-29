@@ -28,17 +28,9 @@ export function membershipStatusLabel(status: MembershipStatus): string {
 }
 
 export const userGroupGovernanceCopy = {
-  page: {
-    loading: '正在加载 User Group…',
-    fallbackDescription: '这个 User Group 还没有填写说明。',
-    kind: 'User Group',
-    breadcrumbLabel: '面包屑',
-    identityLabel: 'User Group 身份',
-    home: '首页',
-    membersTitle: '成员',
-    membersDescription: '管理成员及其在这个 User Group 中的权限。',
-  },
   members: {
+    title: '成员',
+    description: '管理成员及其在这个 User Group 中的权限。',
     listLabel: '成员列表',
     loading: '正在加载成员…',
     summary: (count: number) => `${count} 位成员`,

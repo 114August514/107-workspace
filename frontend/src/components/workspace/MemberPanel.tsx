@@ -111,9 +111,9 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
     <section className={styles.panel} aria-labelledby="user-group-members-title">
       <header className={styles.sectionHeader}>
         <h2 id="user-group-members-title" className={styles.sectionTitle}>
-          {copy.page.membersTitle}
+          {copy.members.title}
         </h2>
-        <p className={styles.sectionDescription}>{copy.page.membersDescription}</p>
+        <p className={styles.sectionDescription}>{copy.members.description}</p>
         {canInvite ? (
           <Button
             className={styles.inviteAction}
