@@ -120,15 +120,13 @@ describe('User Group 资源分区', () => {
   })
 
   it('REQ-21-06 Project 分区只显示组拥有的 Project 并链接详情页', async () => {
-    const listProjects = vi
-      .spyOn(api, 'listProjects')
-      .mockResolvedValue({
-        items: [groupProject, otherProject, userProject],
-        page: 1,
-        page_size: 200,
-        total: 3,
-        has_more: false,
-      })
+    const listProjects = vi.spyOn(api, 'listProjects').mockResolvedValue({
+      items: [groupProject, otherProject, userProject],
+      page: 1,
+      page_size: 200,
+      total: 3,
+      has_more: false,
+    })
 
     renderSection('/user-groups/grp_lab/projects')
 
