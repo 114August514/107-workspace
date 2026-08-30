@@ -91,21 +91,26 @@ class RunAccess:
 
 @dataclass(frozen=True, slots=True)
 class SharedResourceAccess:
-    """Current User's role-derived access to a repository-visible resource."""
+    """Current User's role-derived access to a repository-visible resource.
+
+    ``role`` is None for Users who only reach the resource through a USE Grant:
+    Grants authorize use, never management, so no capabilities are derived.
+    """
 
     resource: SharedResource
-    role: MembershipRole
+    role: MembershipRole | None
 
     @property
     def capabilities(self) -> frozenset[Capability]:
-        return capabilities_of(self.role)
+        return capabilities_of(self.role) if self.role is not None else frozenset()
 
     def can(self, capability: Capability) -> bool:
         return capability in self.capabilities
 
     def require(self, capability: Capability) -> None:
         if not self.can(capability):
-            raise PermissionDenied(f"当前角色（{self.role.value}）无权{describe(capability)}")
+            role_name = self.role.value if self.role is not None else "无"
+            raise PermissionDenied(f"当前角色（{role_name}）无权{describe(capability)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,14 +233,15 @@ class AccessGuard:
         if resource is None:
             raise ObjectNotFound("Shared Resource", resource_id)
 
+        role: MembershipRole | None = None
         if resource.owner.kind is OwnerKind.USER:
-            # Repository visibility already proved the exact User owner is the actor.
-            role = MembershipRole.OWNER
+            if resource.owner.id == user_id:
+                role = MembershipRole.OWNER
         else:
             membership = await self._repos.memberships.get(resource.owner.id, user_id)
-            if membership is None or not membership.is_active:  # pragma: no cover - SQL guard
-                raise ObjectNotFound("Shared Resource", resource_id)
-            role = membership.role
+            if membership is not None and membership.is_active:
+                role = membership.role
+        # role stays None for grant-only viewers: USE Grants never add management.
 
         access = SharedResourceAccess(resource=resource, role=role)
         if needs is not None:

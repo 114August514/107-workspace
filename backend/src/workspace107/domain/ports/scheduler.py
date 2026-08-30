@@ -41,8 +41,7 @@ class SchedulerSubmission:
     job_name: str
     work_dir: Path
     command: str
-    setup_command: str
-    environment_image: str
+    environment_execution_spec: dict[str, object]
     stdout_path: Path
     stderr_path: Path
     configuration: ResolvedSchedulerConfiguration

@@ -166,7 +166,7 @@ class RunConfigurationService:
         )
         if version is None:
             raise ObjectNotFound("Environment Version", data.environment_version_id)
-        if not version.available:
+        if version.availability.value != "available":
             raise ValidationFailed("Environment Version 当前不可用")
         environment_version_id = version.id
 

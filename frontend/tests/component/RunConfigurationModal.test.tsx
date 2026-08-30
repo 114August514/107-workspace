@@ -41,9 +41,16 @@ const environment: Environment = {
       environment_id: 'env-1',
       version: '3.12',
       description: '',
-      image: 'python:3.12',
-      setup_command: '',
-      available: true,
+      runtime_kind: 'modules',
+      definition: { modules: ['python/3.12'] },
+      definition_hash: 'd'.repeat(64),
+      execution_spec: { modules: ['python/3.12'] },
+      validation_evidence: { source: 'test' },
+      validation_summary: '已验证测试运行环境',
+      availability: 'available',
+      availability_reason: 'validated',
+      availability_detail: '测试环境当前可用',
+      availability_checked_at: '2026-08-20T10:00:00Z',
     },
   ],
 }
@@ -55,6 +62,19 @@ const resource: SharedResource = {
   owner: { kind: 'user_group', id: 'grp-data', display_name: '数据组' },
   created_at: '2026-08-20T10:00:00Z',
   capabilities: ['shared_resource.view'],
+  use_qualifications: [
+    {
+      scope: 'user_grant',
+      grantee: { kind: 'user', id: 'usr-student', display_name: 'student' },
+      grants: [
+        {
+          id: 'grant-user-resource',
+          target_all: false,
+          created_at: '2026-08-20T09:00:00Z',
+        },
+      ],
+    },
+  ],
 }
 
 const resourceDetail: SharedResourceDetail = {
@@ -68,6 +88,8 @@ const resourceDetail: SharedResourceDetail = {
       description: '',
       file_count: 2,
       total_size: 20,
+      manifest_hash: '2'.repeat(64),
+      validation_summary: '已验证 2 个文件',
       created_by: 'alice',
       created_at: '2026-08-20T11:00:00Z',
     },
@@ -79,6 +101,8 @@ const resourceDetail: SharedResourceDetail = {
       description: '',
       file_count: 1,
       total_size: 10,
+      manifest_hash: '1'.repeat(64),
+      validation_summary: '已验证 1 个文件',
       created_by: 'alice',
       created_at: '2026-08-20T10:00:00Z',
     },
@@ -136,7 +160,7 @@ describe('RunConfigurationModal 运行输入', () => {
     vi.restoreAllMocks()
   })
 
-  it('REQ-44 添加确定资源版本、来源子路径和输入访问路径', async () => {
+  it('REQ-44 canonical discovery 返回 grant-only 资源时可添加 exact Version', async () => {
     renderModal()
 
     const dialog = within(screen.getByRole('dialog'))

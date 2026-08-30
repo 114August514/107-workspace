@@ -41,6 +41,12 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 `WORKSPACE107_SEED_DEMO=true` 才额外创建演示资产与 Project。该流程假设单个 API
 实例；扩展到多副本之前，必须把迁移拆成独立的一次性任务。
 
+同一 API 实例的 lifespan 内还运行 Environment 与 Shared Resource publication loop：HTTP
+请求只持久化 publication attempt，loop 随后校验候选并在成功时发布不可变 Version。
+只有 Shared Resource loop 会重新认领超过恢复阈值的中断 attempt；两条 loop 都不是独立 Worker，
+也不支持多个 API replica 共同处理。当前支持边界仍是上面的单 API 拓扑，不能据此宣称
+生产就绪。
+
 ## 关键配置
 
 完整变量和默认值见 [`.env.example`](../../.env.example)。
@@ -57,6 +63,8 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 | `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；真实部署必须替换 |
 | `WORKSPACE107_SEED_DEMO` | 仅本地/受信任演示；`true` 时载入演示资产与 Project |
 | `WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME` | 平台演示资产组首次 bootstrap Owner；组已存在时忽略 |
+| `WORKSPACE107_SHARED_RESOURCE_PUBLICATION_INTERVAL_SECONDS` | API 内 publication loop 的扫描间隔（秒），默认 `1.0`；设为 `0` 会停用自动处理，已持久化 attempt 不会丢失 |
+| `WORKSPACE107_SHARED_RESOURCE_PUBLICATION_RECOVERY_SECONDS` | 中断的 processing attempt 可在多久后重新认领（秒），默认 `300.0`；应大于当前校验路径的正常耗时 |
 
 镜像不包含凭据，`.env` 也不会进入 Git 或构建上下文。
 
@@ -117,10 +125,14 @@ WORKSPACE107_SLURM_JWT=<secret>
 ```
 
 接入前还必须确认 slurmrestd API 版本、JWT 生命周期、分区、Account、QoS、资源上限
-和错误响应。seed 中的计算方案与环境值是开发数据，不是 107 平台配置事实。
-
-现有实现也没有独立 Background Worker、Git 版本存储和 Apptainer 准备链路；这些是
-`docs/product/design.md` M1 Walking Skeleton 的缺口，不能由 API 容器或 Mock 路径代替。
+和错误响应。Environment Version 只支持有序平台 Modules 或经真实 Apptainer CLI 校验的
+CAS SIF；SIF 发布从 Apptainer `inspect --json` 的标准 build-arch label 读取实际架构，只接受
+`amd64`/`x86_64`，提交前会重新校验摘要并把 CAS locator 解析为计算节点可见的共享存储路径。
+Environment 与 Shared Resource publication processor 当前都是 API 进程内的 durable loop，
+不是独立或多副本 Worker。Issue #46 的本机真实 Apptainer publication closure 证据见
+[`2026-08-29-1615-issue46-environment-publication.md`](../archive/2026-08-29-1615-issue46-environment-publication.md)；
+它不覆盖 live 107。Workspace 身份、共享挂载、独立 Worker、Slurm 凭据和执行接缝的 107
+平台端到端验收仍属于 #7。
 
 ## 探针和排障
 
@@ -149,7 +161,7 @@ docker compose --project-directory . --file deploy/compose.yaml exec api alembic
 - 建立数据库和用户存储的备份、恢复、保留与清理流程。
 - 在前置网关启用 HTTPS、访问控制、限流和日志采集。
 - 验证 API 请求体上限与 nginx `client_max_body_size` 一致。
-- 多副本部署前拆分数据库迁移和后台状态同步职责。
+- 多副本部署前拆分数据库迁移、Run 后台状态同步及 Environment / Shared Resource publication loop 职责。
 
 当前 Compose 没有提供 HTTPS、自动备份、多副本编排、监控告警或生产级 Secret
 管理。这些缺口必须显式完成，不能依赖默认配置补齐。

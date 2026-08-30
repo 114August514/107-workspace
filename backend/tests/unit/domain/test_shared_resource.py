@@ -49,6 +49,8 @@ def test_shared_resource_version_不可变_赋值抛_FrozenInstanceError() -> No
         sequence=1,
         description="v1",
         files=_files("a.txt"),
+        manifest_hash="a" * 64,
+        validation_summary="测试夹具已校验",
         created_by="alice",
         created_at=NOW,
     )
@@ -71,6 +73,8 @@ def test_shared_resource_version_files_是_tuple_不可变容器() -> None:
         sequence=1,
         description="",
         files=files,
+        manifest_hash="a" * 64,
+        validation_summary="测试夹具已校验",
         created_by="alice",
         created_at=NOW,
     )
@@ -89,6 +93,8 @@ def test_label_按_sequence_展示为_vN() -> None:
         sequence=1,
         description="",
         files=(),
+        manifest_hash="a" * 64,
+        validation_summary="测试夹具已校验",
         created_by="alice",
         created_at=NOW,
     )
@@ -98,6 +104,8 @@ def test_label_按_sequence_展示为_vN() -> None:
         sequence=12,
         description="",
         files=(),
+        manifest_hash="a" * 64,
+        validation_summary="测试夹具已校验",
         created_by="alice",
         created_at=NOW,
     )
@@ -115,6 +123,8 @@ def test_file_count_和_total_size_按文件列表汇总() -> None:
             SharedResourceFile(path="a.txt", size=10, content_hash="ha"),
             SharedResourceFile(path="dir/b.txt", size=20, content_hash="hb"),
         ),
+        manifest_hash="a" * 64,
+        validation_summary="测试夹具已校验",
         created_by="alice",
         created_at=NOW,
     )
@@ -129,6 +139,8 @@ def test_空版本文件列表的_file_count_和_total_size_为零() -> None:
         sequence=1,
         description="",
         files=(),
+        manifest_hash="a" * 64,
+        validation_summary="测试夹具已校验",
         created_by="alice",
         created_at=NOW,
     )

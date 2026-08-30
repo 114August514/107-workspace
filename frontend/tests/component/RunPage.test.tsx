@@ -21,7 +21,8 @@ const runDetailFixture = (): RunDetail => ({
     source_run_id: null,
     source_run_configuration_id: null,
     status: 'succeeded',
-    initiated_by_user_id: 'student',
+    initiated_by_user_id: 'usr_internal_student',
+    initiated_by_username: 'student',
     created_at: '2026-08-15T08:00:00Z',
     submitted_at: '2026-08-15T08:01:00Z',
     started_at: '2026-08-15T08:02:00Z',
@@ -37,8 +38,8 @@ const runDetailFixture = (): RunDetail => ({
   snapshot: {
     id: 'snapshot-1',
     command: 'python train.py',
-    environment_image: 'python:3.11',
-    environment_setup_command: '',
+    environment_definition_hash: 'a'.repeat(64),
+    environment_execution_spec: { kind: 'modules', commands: [] },
     environment_variables: {},
     environment_version_id: 'env-1',
     compute_plan_id: 'plan-1',
@@ -135,5 +136,29 @@ describe('RunPage backend unavailable', () => {
       expect(screen.queryByText('无法加载这个 Run。')).not.toBeInTheDocument()
     })
     expect(screen.getByRole('heading', { name: 'test-run' })).toBeInTheDocument()
+    expect(screen.getByText('student')).toBeInTheDocument()
+    expect(screen.queryByText('usr_internal_student')).not.toBeInTheDocument()
+  })
+
+  it('shows an explicit fallback instead of a missing User ID', async () => {
+    const missingUserDetail = runDetailFixture()
+    missingUserDetail.run = {
+      ...missingUserDetail.run,
+      initiated_by_user_id: 'usr_missing',
+      initiated_by_username: null,
+    }
+    vi.spyOn(api, 'getRun').mockResolvedValue(missingUserDetail)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('未知用户')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('usr_missing')).not.toBeInTheDocument()
   })
 })

@@ -200,8 +200,8 @@ export function RunConfigurationModal({
     label: `${environment.name} · Owner ${environment.owner.display_name}`,
     options: environment.versions.map((version) => ({
       value: version.id,
-      label: `${version.version} · ${version.available ? '可用' : '当前不可用'}`,
-      disabled: !version.available,
+      label: `${version.version} · ${version.availability === 'available' ? '可用' : '当前不可用'}`,
+      disabled: version.availability !== 'available',
     })),
   }))
 
@@ -279,7 +279,8 @@ export function RunConfigurationModal({
             message="已保存的 Environment Version 当前无 USE 资格或已删除"
             description="运行方案仍保留原 exact version ID，不会自动切换。请选择一个当前可用版本后再保存。"
           />
-        ) : selectedEnvironmentVersion && !selectedEnvironmentVersion.version.available ? (
+        ) : selectedEnvironmentVersion &&
+          selectedEnvironmentVersion.version.availability !== 'available' ? (
           <Alert
             type="warning"
             showIcon

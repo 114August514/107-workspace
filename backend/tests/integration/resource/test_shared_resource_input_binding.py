@@ -20,9 +20,11 @@ from tests.helpers import (
     create_project_with_version,
     ensure_user_group,
     grant_test_entitlement,
+    process_shared_resource_publication,
     use_default_environment,
     wait_for_run,
 )
+from workspace107.api.deps import AppContext
 
 ALICE = {"X-User": "alice"}
 
@@ -51,7 +53,11 @@ async def _user_group(client: httpx.AsyncClient) -> str:
 
 
 async def _create_resource_with_version(
-    client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
+    client: httpx.AsyncClient,
+    context: AppContext,
+    *,
+    name: str,
+    files: list[tuple[str, bytes]],
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情（含 files）。"""
     user_group_id = await _user_group(client)
@@ -65,7 +71,7 @@ async def _create_resource_with_version(
             headers=ALICE,
         )
     ).json()
-    version = (
+    attempt = (
         await client.post(
             f"/api/v1/shared-resources/{resource['id']}/versions",
             params={"prefix": ""},
@@ -76,8 +82,9 @@ async def _create_resource_with_version(
             headers=ALICE,
         )
     ).json()
+    version_id = await process_shared_resource_publication(context, attempt["id"])
     return (
-        await client.get(f"/api/v1/shared-resource-versions/{version['id']}", headers=ALICE)
+        await client.get(f"/api/v1/shared-resource-versions/{version_id}", headers=ALICE)
     ).json()
 
 
@@ -135,13 +142,13 @@ async def _run_with_input(
 
 
 async def test_shared_resource_version_可以作为_run_输入(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """最关键的闭环：上传文件 → 引用 → Run 真的读到。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
-        client, name="预训练权重", files=[("weights.txt", b"model-params")]
+        client, context, name="预训练权重", files=[("weights.txt", b"model-params")]
     )
     project = await create_project_with_version(
         client, name="消费资源", files={"placeholder.py": "pass"}, headers=ALICE
@@ -175,13 +182,13 @@ async def test_shared_resource_version_可以作为_run_输入(
 
 
 async def test_shared_resource_输入以只读方式提供(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """GR-404：输入只读，Run 不得原地修改。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
-        client, name="只读验证", files=[("weights.txt", b"original")]
+        client, context, name="只读验证", files=[("weights.txt", b"original")]
     )
     project = await create_project_with_version(
         client, name="尝试篡改", files={"placeholder.py": "pass"}, headers=ALICE
@@ -210,13 +217,14 @@ async def test_shared_resource_输入以只读方式提供(
 
 
 async def test_shared_resource_支持多文件和子目录(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """版本里多文件 + 子目录结构，物化到 inputs 后保持原相对路径。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
+        context,
         name="多文件资源",
         files=[
             ("top.txt", "顶层".encode()),
@@ -286,13 +294,65 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
     assert response.json()["code"] == "not_found"
 
 
-async def test_冲突的输入访问路径被挡在运行方案保存前(
+async def test_未完成发布的_attempt_不能冒充资源版本(
     client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """REQ-44: editor/save seam only accepts a published exact Version ID."""
+    user_group_id = await _user_group(client)
+    resource = (
+        await client.post(
+            "/api/v1/shared-resources",
+            json={
+                "name": "待校验资源",
+                "owner": {"kind": "user_group", "id": user_group_id},
+            },
+            headers=ALICE,
+        )
+    ).json()
+    attempt = (
+        await client.post(
+            f"/api/v1/shared-resources/{resource['id']}/versions",
+            data={"description": "pending"},
+            files=[("files", ("data.txt", b"x", "text/plain"))],
+            headers=ALICE,
+        )
+    ).json()
+    _, environment_version_id = await use_default_environment(session, client, headers=ALICE)
+    project = await create_project_with_version(
+        client, name="未发布输入项目", files={"main.py": "pass"}, headers=ALICE
+    )
+
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "错误版本引用",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": attempt["id"],
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+
+    assert attempt["status"] == "pending"
+    assert attempt["version_id"] is None
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+async def test_冲突的输入访问路径被挡在运行方案保存前(
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """REQ-44: 两个输入不能写入同一路径，也不能互相覆盖父子路径。"""
     _, environment_version_id = await use_default_environment(session, client, headers=ALICE)
     version = await _create_resource_with_version(
-        client, name="路径冲突", files=[("data.txt", b"x")]
+        client, context, name="路径冲突", files=[("data.txt", b"x")]
     )
     project = await create_project_with_version(
         client, name="路径冲突项目", files={"main.py": "pass"}, headers=ALICE
@@ -330,12 +390,12 @@ async def test_冲突的输入访问路径被挡在运行方案保存前(
 
 
 async def test_跨_owner_引用_user_group_shared_resource_被挡在运行方案保存前(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Bob cannot persist an asset owned by Alice's exact User Group."""
     await use_default_environment(session, client, headers=ALICE)
     version = await _create_resource_with_version(
-        client, name="Alice 私有", files=[("a.txt", b"x")]
+        client, context, name="Alice 私有", files=[("a.txt", b"x")]
     )
     bob_headers = {"X-User": "bob"}
     bob_group_id, bob_env_version_id = await use_default_environment(

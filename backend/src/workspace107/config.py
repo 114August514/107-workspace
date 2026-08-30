@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     max_request_bytes: int = 128 * 1024 * 1024
     # 单个项目文件上限，由用例层校验（Content-Length 可能缺失或被伪造）
     max_file_bytes: int = 32 * 1024 * 1024
+    # 压缩包展开预算：解压后总大小与条目数，防止 zip 炸弹
+    max_archive_total_bytes: int = 128 * 1024 * 1024
+    max_archive_entries: int = 500
 
     database_url: str = "sqlite+aiosqlite:///./var/workspace107.db"
     storage_root: Path = Path("./var/storage")
@@ -50,6 +53,10 @@ class Settings(BaseSettings):
 
     # 后台状态同步间隔（秒）。设为 0 表示不启动后台同步，由调用方显式触发。
     run_sync_interval_seconds: float = 1.0
+    environment_publication_interval_seconds: float = 1.0
+    # Shared Resource publication uses its own durable processor boundary.
+    shared_resource_publication_interval_seconds: float = 1.0
+    shared_resource_publication_recovery_seconds: float = 300.0
 
     @property
     def use_json_logs(self) -> bool:

@@ -13,11 +13,13 @@ from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
 from ..config_scope import ConfigScope
+from ..enums import EnvironmentAvailability
 from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
     Artifact,
     Environment,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     IdempotencyRecord,
@@ -30,6 +32,7 @@ from ..models import (
     RunConfiguration,
     RunEvent,
     SharedResource,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
     User,
     UserGroup,
@@ -134,6 +137,25 @@ class EnvironmentRepository(Protocol):
     async def get_by_id(self, environment_id: str) -> Environment | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
+
+    async def add_version(self, version: EnvironmentVersion) -> None: ...
+    async def add_attempt(self, attempt: EnvironmentPublicationAttempt) -> None: ...
+    async def update_attempt(self, attempt: EnvironmentPublicationAttempt) -> None: ...
+    async def get_attempt_by_id(self, attempt_id: str) -> EnvironmentPublicationAttempt | None: ...
+    async def list_attempts_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> list[EnvironmentPublicationAttempt]: ...
+    async def update_version_availability(
+        self,
+        version_id: str,
+        availability: EnvironmentAvailability,
+        reason: str,
+        detail: str,
+        checked_at: datetime,
+    ) -> EnvironmentVersion | None: ...
+    async def claim_pending_attempt(
+        self, now: datetime
+    ) -> EnvironmentPublicationAttempt | None: ...
 
 
 class ComputePlanRepository(Protocol):
@@ -246,9 +268,10 @@ class ForkRelationRepository(Protocol):
 class SharedResourceRepository(Protocol):
     """Shared Resource persistence with repository-enforced discovery.
 
-    User-facing reads always require an actor and filter by exact User ownership or
-    active Membership of the owning UserGroup. #40 may extend this predicate with a
-    valid USE Grant; #39 has no all-authenticated catalog path.
+    User-facing reads always require an actor and filter by exact User ownership,
+    active Membership of the owning UserGroup, or a valid USE Grant issued by the
+    resource's current Owner to the actor or one of their active UserGroups. Grant
+    discovery does not add management capability or an all-authenticated catalog path.
     """
 
     async def add(self, resource: SharedResource) -> None: ...
@@ -257,6 +280,17 @@ class SharedResourceRepository(Protocol):
     async def get_discoverable_for_user(
         self, user_id: str, resource_id: str
     ) -> SharedResource | None: ...
+    async def add_attempt(self, attempt: SharedResourcePublicationAttempt) -> None: ...
+    async def update_attempt(self, attempt: SharedResourcePublicationAttempt) -> None: ...
+    async def claim_next_attempt(
+        self, *, now: datetime, recover_before: datetime
+    ) -> SharedResourcePublicationAttempt | None: ...
+    async def get_attempt_discoverable_for_user(
+        self, user_id: str, attempt_id: str
+    ) -> SharedResourcePublicationAttempt | None: ...
+    async def get_attempt_by_id(
+        self, attempt_id: str
+    ) -> SharedResourcePublicationAttempt | None: ...
     async def add_version(self, version: SharedResourceVersion) -> None: ...
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
@@ -272,7 +306,9 @@ class SharedResourceRepository(Protocol):
         """Trusted exact lookup for grant-authorized use."""
         ...
 
-    async def next_version_sequence(self, resource_id: str) -> int: ...
+    async def next_version_sequence_for_publication(self, resource_id: str) -> int:
+        """Lock the resource aggregate and return its next immutable version sequence."""
+        ...
 
 
 class GrantRepository(Protocol):

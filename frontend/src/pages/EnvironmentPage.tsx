@@ -7,6 +7,7 @@ import type { Environment } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
+import { EnvironmentPublicationPanel } from '../components/environment/EnvironmentPublicationPanel'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
 import styles from './Environment.module.css'
 
@@ -47,6 +48,8 @@ export function EnvironmentPage() {
               </Text>
             </header>
 
+            <EnvironmentPublicationPanel environmentId={environment.data.id} />
+
             <PrimerListCard title="已发布版本" padded>
               {environment.data.versions.length === 0 ? (
                 <AsyncState
@@ -71,11 +74,15 @@ export function EnvironmentPage() {
                           <span className={styles.itemMeta}>
                             {version.description || '这个版本还没有填写说明。'}
                           </span>
-                          <span className={styles.monoMeta}>{version.image}</span>
+                          <span className={styles.monoMeta}>
+                            {version.runtime_kind} · {version.definition_hash.slice(0, 12)}
+                          </span>
                         </span>
                         <span className={styles.itemLabels}>
-                          <Label variant={version.available ? 'success' : 'attention'}>
-                            {version.available ? '可用' : '不可用'}
+                          <Label
+                            variant={version.availability === 'available' ? 'success' : 'attention'}
+                          >
+                            {version.availability === 'available' ? '可用' : '不可用'}
                           </Label>
                         </span>
                       </RouterLink>

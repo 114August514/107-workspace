@@ -18,6 +18,7 @@ from ..application.activity import ActivityRecorder, ActivityService
 from ..application.catalog_service import CatalogService
 from ..application.configuration_service import ConfigurationService
 from ..application.entitlement_service import EntitlementService
+from ..application.environment_service import EnvironmentPublicationService
 from ..application.grant_service import GrantService
 from ..application.health_service import HealthService
 from ..application.identity_service import IdentityService
@@ -27,6 +28,7 @@ from ..application.run_configuration_service import RunConfigurationService
 from ..application.run_lifecycle import RunLifecycleService
 from ..application.run_service import RunService
 from ..application.scoped_config_resolver import ScopedConfigResolver
+from ..application.shared_resource_publication import SharedResourcePublicationProcessor
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
 from ..config import Settings
@@ -78,11 +80,13 @@ class Services:
     run_configurations: RunConfigurationService
     runs: RunService
     catalog: CatalogService
+    environment_publications: EnvironmentPublicationService
     health: HealthService
     lifecycle: RunLifecycleService
     activities: ActivityService
     notifications: NotificationService
     shared_resources: SharedResourceService
+    shared_resource_publications: SharedResourcePublicationProcessor
     grants: GrantService
 
 
@@ -115,6 +119,8 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.storage,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
+            max_archive_total_bytes=context.settings.max_archive_total_bytes,
+            max_archive_entries=context.settings.max_archive_entries,
         ),
         run_configurations=RunConfigurationService(repos, guard),
         runs=RunService(
@@ -129,6 +135,9 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             config_resolver=ScopedConfigResolver(repos.variables, vault),
         ),
         catalog=CatalogService(repos, guard),
+        environment_publications=EnvironmentPublicationService(
+            repos, guard, context.storage, context.clock
+        ),
         health=HealthService(repos),
         lifecycle=RunLifecycleService(
             repos, context.clock, context.storage, context.scheduler, activity, notifier, session
@@ -142,6 +151,13 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.storage,
             activity,
             max_file_bytes=context.settings.max_file_bytes,
+        ),
+        shared_resource_publications=SharedResourcePublicationProcessor(
+            repos,
+            context.clock,
+            context.storage,
+            activity,
+            recovery_seconds=context.settings.shared_resource_publication_recovery_seconds,
         ),
         grants=GrantService(repos, guard, context.clock),
     )

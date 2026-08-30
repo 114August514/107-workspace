@@ -1,8 +1,9 @@
 """跨 Owner 使用许可。
 
 Grant 把资产的 *Ownership*（谁创建并管理资产）与 *使用资格*（谁能引用资产）
-分离：Grantor 向 Grantee 发放 USE Grant，使其能在自己的 Project 中引用该
-顶层 Environment 或 Shared Resource。
+分离：直接 User Grant 随该 User 进入其有权提交的任何 Project；UserGroup Grant
+仅在 Grantee UserGroup 是具体 Project.owner 且操作者是有效成员时适用。具体 Run
+仍由 Preflight 根据 Project.owner 授权引用该顶层 Environment 或 Shared Resource。
 
 Target = ALL 表示 Grantee 可以使用 Grantor 当前以及以后拥有的全部可授权资产。
 资产 Ownership 转移后，Grantor 不再拥有该资产，其 Grant 自然不再匹配——
@@ -35,6 +36,20 @@ class GrantTargetKind(StrEnum):
     ALL = "all"
     ENVIRONMENT = "environment"
     SHARED_RESOURCE = "shared_resource"
+
+
+class UseQualificationScope(StrEnum):
+    """How the acting User qualifies to use an asset in a Project owner context.
+
+    This is actor-level qualification, not a Run preflight decision. ``OWNER`` is
+    limited to Projects whose Owner equals the asset Owner. ``USER_GRANT`` follows
+    the acting User into any Project owner context where that User can submit.
+    ``USER_GROUP_GRANT`` is limited to the grantee UserGroup as Project Owner.
+    """
+
+    OWNER = "owner"
+    USER_GRANT = "user_grant"
+    USER_GROUP_GRANT = "user_group_grant"
 
 
 @dataclass(frozen=True, slots=True)

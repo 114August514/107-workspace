@@ -11,13 +11,20 @@ from ..application.catalog_service import EnvironmentView
 from ..application.entitlement_service import EntitlementView
 from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
-from ..application.shared_resource_service import SharedResourceAccessView, SharedResourceView
+from ..application.run_service import RunView
+from ..application.shared_resource_service import (
+    SharedResourceAccessView,
+    SharedResourceView,
+    UseQualificationView,
+)
 from ..application.user_group_service import InvitationView, MemberView, UserGroupView
 from ..domain.capabilities import Capability
 from ..domain.compute import ComputePlan, ComputeRequest
+from ..domain.grant import GrantTargetKind
 from ..domain.models import (
     Activity,
     Artifact,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     InputBinding,
@@ -25,9 +32,9 @@ from ..domain.models import (
     Project,
     ProjectFile,
     ProjectVersion,
-    Run,
     RunConfiguration,
     RunEvent,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
     User,
 )
@@ -174,9 +181,38 @@ def environment_version_out(version: EnvironmentVersion) -> s.EnvironmentVersion
         environment_id=version.environment_id,
         version=version.version,
         description=version.description,
-        image=version.image,
-        setup_command=version.setup_command,
-        available=version.available,
+        runtime_kind=version.runtime_kind,
+        definition=version.definition,
+        definition_hash=version.definition_hash,
+        execution_spec=version.execution_spec,
+        validation_summary=version.validation_summary,
+        validation_evidence=version.validation_evidence,
+        availability=version.availability,
+        availability_reason=version.availability_reason,
+        availability_detail=version.availability_detail,
+        availability_checked_at=version.availability_checked_at,
+    )
+
+
+def environment_publication_attempt_out(
+    attempt: EnvironmentPublicationAttempt,
+) -> s.EnvironmentPublicationAttemptOut:
+    return s.EnvironmentPublicationAttemptOut(
+        id=attempt.id,
+        environment_id=attempt.environment_id,
+        status=attempt.status,
+        version=attempt.version,
+        description=attempt.description,
+        runtime_kind=attempt.runtime_kind,
+        validation_summary=attempt.validation_summary,
+        validation_evidence=attempt.validation_evidence,
+        failure_code=attempt.failure_code,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
     )
 
 
@@ -236,7 +272,8 @@ def run_configuration_out(configuration: RunConfiguration) -> s.RunConfiguration
     )
 
 
-def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
+def run_out(view: RunView, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
+    run = view.run
     queued_seconds: float | None = None
     running_seconds: float | None = None
     if run.submitted_at and run.started_at:
@@ -258,6 +295,7 @@ def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
         exit_code=run.exit_code,
         failure_reason=run.failure_reason,
         initiated_by_user_id=run.initiated_by_user_id,
+        initiated_by_username=view.initiated_by_username,
         created_at=run.created_at,
         submitted_at=run.submitted_at,
         started_at=run.started_at,
@@ -300,8 +338,8 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
         working_directory=snapshot.working_directory,
         command=snapshot.command,
         environment_version_id=snapshot.environment_version_id,
-        environment_image=snapshot.environment_image,
-        environment_setup_command=snapshot.environment_setup_command,
+        environment_definition_hash=snapshot.environment_definition_hash,
+        environment_execution_spec=snapshot.environment_execution_spec,
         environment_variables=dict(snapshot.env_literals),
         secret_references={name: ref.as_key() for name, ref in snapshot.env_secret_refs.items()},
         input_bindings=[input_binding_out(b) for b in snapshot.input_bindings],
@@ -370,6 +408,25 @@ def invitation_out(view: InvitationView) -> s.InvitationOut:
     )
 
 
+def use_qualification_out(
+    view: UseQualificationView,
+) -> s.SharedResourceUseQualificationOut:
+    if view.grantee is None:
+        return s.SharedResourceOwnerQualificationOut()
+    return s.SharedResourceGrantQualificationOut(
+        scope=view.scope,
+        grantee=owner_summary_out(view.grantee),
+        grants=[
+            s.UseGrantSummaryOut(
+                id=grant.id,
+                target_all=grant.target_kind is GrantTargetKind.ALL,
+                created_at=grant.created_at,
+            )
+            for grant in view.grants
+        ],
+    )
+
+
 def shared_resource_out(
     view: SharedResourceView, *, capabilities: Iterable[Capability] = ()
 ) -> s.SharedResourceOut:
@@ -379,7 +436,21 @@ def shared_resource_out(
         description=view.resource.description,
         owner=owner_summary_out(view.owner),
         created_at=view.resource.created_at,
+        use_qualifications=[
+            use_qualification_out(qualification) for qualification in view.use_qualifications
+        ],
         capabilities=sorted(capabilities),
+    )
+
+
+def shared_resource_access_out(view: SharedResourceAccessView) -> s.SharedResourceOut:
+    return shared_resource_out(
+        SharedResourceView(
+            resource=view.resource,
+            owner=view.owner,
+            use_qualifications=view.use_qualifications,
+        ),
+        capabilities=view.access.capabilities,
     )
 
 
@@ -387,12 +458,36 @@ def shared_resource_detail_out(
     view: SharedResourceAccessView, versions: list[SharedResourceVersion]
 ) -> s.SharedResourceDetailOut:
     base = shared_resource_out(
-        SharedResourceView(resource=view.resource, owner=view.owner),
+        SharedResourceView(
+            resource=view.resource,
+            owner=view.owner,
+            use_qualifications=view.use_qualifications,
+        ),
         capabilities=view.access.capabilities,
     )
     return s.SharedResourceDetailOut(
         **base.model_dump(),
         versions=[shared_resource_version_out(version) for version in versions],
+    )
+
+
+def shared_resource_publication_attempt_out(
+    attempt: SharedResourcePublicationAttempt,
+) -> s.SharedResourcePublicationAttemptOut:
+    return s.SharedResourcePublicationAttemptOut(
+        id=attempt.id,
+        shared_resource_id=attempt.shared_resource_id,
+        status=attempt.status,
+        description=attempt.description,
+        file_count=len(attempt.files),
+        total_size=sum(file.size for file in attempt.files),
+        validation_summary=attempt.validation_summary,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
     )
 
 
@@ -405,6 +500,8 @@ def shared_resource_version_out(version: SharedResourceVersion) -> s.SharedResou
         description=version.description,
         file_count=version.file_count,
         total_size=version.total_size,
+        manifest_hash=version.manifest_hash,
+        validation_summary=version.validation_summary,
         created_by=version.created_by,
         created_at=version.created_at,
     )

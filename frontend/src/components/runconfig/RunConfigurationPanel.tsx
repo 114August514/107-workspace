@@ -42,7 +42,7 @@ export function RunConfigurationPanel({
   const [editing, setEditing] = useState<RunConfiguration | null>(null)
   const availableVersionCount = (environments.data ?? []).reduce(
     (count, environment) =>
-      count + environment.versions.filter((version) => version.available).length,
+      count + environment.versions.filter((version) => version.availability === 'available').length,
     0,
   )
 
@@ -102,8 +102,8 @@ export function RunConfigurationPanel({
             <RouterLink to={`/environment-versions/${selected.version.id}`}>
               {selected.environment.name} · {selected.version.version}
             </RouterLink>
-            <Tag color={selected.version.available ? 'green' : 'orange'}>
-              {selected.version.available ? '可用' : '当前不可用'}
+            <Tag color={selected.version.availability === 'available' ? 'green' : 'orange'}>
+              {selected.version.availability === 'available' ? '可用' : '当前不可用'}
             </Tag>
           </Space>
         )

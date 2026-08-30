@@ -257,8 +257,16 @@ export function RunFromVersionModal({
                 children: preflight?.environment_version ? (
                   <Space wrap size={6}>
                     <Typography.Text>{preflight.environment_version.version}</Typography.Text>
-                    <Tag color={preflight.environment_version.available ? 'green' : 'orange'}>
-                      {preflight.environment_version.available ? '当前可用' : '当前不可用'}
+                    <Tag
+                      color={
+                        preflight.environment_version.availability === 'available'
+                          ? 'green'
+                          : 'orange'
+                      }
+                    >
+                      {preflight.environment_version.availability === 'available'
+                        ? '当前可用'
+                        : '当前不可用'}
                     </Tag>
                     <Typography.Text code>{preflight.environment_version.id}</Typography.Text>
                   </Space>

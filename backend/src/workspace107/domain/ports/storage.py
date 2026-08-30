@@ -92,6 +92,10 @@ class StoragePort(Protocol):
 
     async def blob_exists(self, content_hash: str) -> bool: ...
 
+    async def resolve_blob_path(self, content_hash: str) -> Path:
+        """Return a scheduler-visible CAS path after rechecking the exact digest."""
+        ...
+
     # -- Run 工作目录 ---------------------------------------------------
 
     def run_paths(self, run_id: str) -> RunPaths: ...

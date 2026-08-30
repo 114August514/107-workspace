@@ -26,8 +26,8 @@ def make_snapshot() -> RunSnapshot:
         working_directory="src",
         command="python train.py",
         environment_version_id="ev_1",
-        environment_image="python:3.12-slim",
-        environment_setup_command="pip install -r requirements.txt",
+        environment_definition_hash="test-definition",
+        environment_execution_spec={"kind": "modules", "commands": []},
         resolved_env=ResolvedEnv(
             literals={"EPOCHS": "5"},
             secret_refs={"TOKEN": SecretReference(ConfigScope.user("owner"), "HF_TOKEN")},

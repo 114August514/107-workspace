@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +16,9 @@ from ..domain.enums import (
     ActivityAction,
     ArtifactStatus,
     ChangeKind,
+    EnvironmentAvailability,
+    EnvironmentPublicationStatus,
+    EnvironmentRuntimeKind,
     InputSourceType,
     LogStream,
     MembershipRole,
@@ -27,6 +30,7 @@ from ..domain.enums import (
     RunStatus,
     TargetType,
 )
+from ..domain.grant import UseQualificationScope
 from ..domain.ownership import OwnerKind
 
 
@@ -179,6 +183,20 @@ class FileMoveIn(Model):
     destination: str
 
 
+class FileCopyIn(Model):
+    source: str
+    destination: str
+
+
+class MkdirIn(Model):
+    path: str
+
+
+class DiscardChangesIn(Model):
+    paths: list[str] = Field(min_length=1)
+    """要放弃的未保存变更路径；不存在的变更按幂等跳过。"""
+
+
 class FileContentOut(Model):
     path: str
     content: str
@@ -188,6 +206,17 @@ class FileContentOut(Model):
 class WorkingChangeOut(Model):
     path: str
     change: ChangeKind
+
+
+class WorkingChangeDetailOut(Model):
+    """单个未保存变更的内容级详情。"""
+
+    path: str
+    change: ChangeKind
+    previous: FileContentOut | None = None
+    """基线（最近保存版本）中的内容预览；新增时为空。"""
+    current: FileContentOut | None = None
+    """当前工作区内容预览；删除时为空。"""
 
 
 class ProjectVersionFileOut(Model):
@@ -229,9 +258,40 @@ class EnvironmentVersionOut(Model):
     environment_id: str
     version: str
     description: str
-    image: str
-    setup_command: str
-    available: bool
+    runtime_kind: EnvironmentRuntimeKind
+    definition: dict[str, object]
+    definition_hash: str
+    execution_spec: dict[str, object]
+    validation_summary: str
+    validation_evidence: dict[str, object]
+    availability: EnvironmentAvailability
+    availability_reason: str
+    availability_detail: str
+    availability_checked_at: datetime
+
+
+class ModulesEnvironmentPublicationIn(Model):
+    version: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    modules: list[str] = Field(min_length=1)
+
+
+class EnvironmentPublicationAttemptOut(Model):
+    id: str
+    environment_id: str
+    status: EnvironmentPublicationStatus
+    version: str
+    description: str
+    runtime_kind: EnvironmentRuntimeKind
+    validation_summary: str
+    validation_evidence: dict[str, object]
+    failure_code: str | None
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class OwnerReferenceIn(Model):
@@ -277,12 +337,50 @@ class ComputePlanOut(Model):
 # -- Shared Resource --------------------------------------------------------
 
 
+class UseGrantSummaryOut(Model):
+    """One USE Grant contributing to the enclosing qualification."""
+
+    id: str
+    target_all: bool
+    created_at: datetime
+
+
+class SharedResourceOwnerQualificationOut(Model):
+    """Use in a Project whose Owner is the resource Owner."""
+
+    scope: Literal[UseQualificationScope.OWNER] = UseQualificationScope.OWNER
+
+
+class SharedResourceGrantQualificationOut(Model):
+    """Actor-level Grant qualification, not authorization for a concrete Run.
+
+    ``user_grant`` follows the actor into any Project where they may submit.
+    ``user_group_grant`` applies only while the actor is an active member, the
+    Grantee User Group owns the consuming Project, and the actor may submit there.
+    Grants is non-empty and contains every matching Grant for this one Grantee.
+    """
+
+    scope: Literal[
+        UseQualificationScope.USER_GRANT,
+        UseQualificationScope.USER_GROUP_GRANT,
+    ]
+    grantee: OwnerSummaryOut
+    grants: list[UseGrantSummaryOut] = Field(min_length=1)
+
+
+SharedResourceUseQualificationOut = Annotated[
+    SharedResourceOwnerQualificationOut | SharedResourceGrantQualificationOut,
+    Field(discriminator="scope"),
+]
+
+
 class SharedResourceOut(Model):
     id: str
     name: str
     description: str
     owner: OwnerSummaryOut
     created_at: datetime
+    use_qualifications: list[SharedResourceUseQualificationOut]
     capabilities: list[Capability] = Field(default_factory=list)
 
 
@@ -300,6 +398,8 @@ class SharedResourceVersionOut(Model):
     description: str
     file_count: int
     total_size: int
+    manifest_hash: str
+    validation_summary: str
     created_by: str
     created_at: datetime
 
@@ -310,6 +410,22 @@ class SharedResourceVersionDetailOut(SharedResourceVersionOut):
 
 class SharedResourceDetailOut(SharedResourceOut):
     versions: list[SharedResourceVersionOut]
+
+
+class SharedResourcePublicationAttemptOut(Model):
+    id: str
+    shared_resource_id: str
+    status: Literal["pending", "processing", "succeeded", "failed"]
+    description: str
+    file_count: int
+    total_size: int
+    validation_summary: str
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class CanonicalSharedResourceCreateIn(Model):
@@ -453,6 +569,8 @@ class RunOut(Model):
     failure_reason: str
     initiated_by_user_id: str
     """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
+    initiated_by_username: str | None
+    """当前权威 User.username；User 记录无法解析时为 null。"""
     created_at: datetime | None
     submitted_at: datetime | None
     started_at: datetime | None
@@ -509,8 +627,8 @@ class RunSnapshotOut(Model):
     working_directory: str
     command: str
     environment_version_id: str
-    environment_image: str
-    environment_setup_command: str
+    environment_definition_hash: str
+    environment_execution_spec: dict[str, object]
     environment_variables: dict[str, str]
     secret_references: dict[str, str]
     input_bindings: list[InputBindingModel]

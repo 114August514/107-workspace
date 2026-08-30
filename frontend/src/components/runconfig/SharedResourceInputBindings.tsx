@@ -141,8 +141,8 @@ export function SharedResourceInputBindings() {
         <Alert
           type="warning"
           showIcon
-          message="当前没有可使用的资源版本"
-          description="请先发布资源版本，或让资源 Owner 为 Project Owner 建立 USE Grant。"
+          message="当前没有可选择的共享资源版本"
+          description="请确认资源已经发布，并且当前账号在此 Project 上下文中具备使用资格。"
         />
       ) : null}
 

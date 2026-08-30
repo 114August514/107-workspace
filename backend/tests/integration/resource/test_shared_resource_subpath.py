@@ -20,9 +20,11 @@ from tests.helpers import (
     create_project_with_version,
     ensure_user_group,
     grant_test_entitlement,
+    process_shared_resource_publication,
     use_default_environment,
     wait_for_run,
 )
+from workspace107.api.deps import AppContext
 
 ALICE = {"X-User": "alice"}
 
@@ -32,7 +34,11 @@ async def _user_group(client: httpx.AsyncClient) -> str:
 
 
 async def _create_resource_with_version(
-    client: httpx.AsyncClient, *, name: str, files: list[tuple[str, bytes]]
+    client: httpx.AsyncClient,
+    context: AppContext,
+    *,
+    name: str,
+    files: list[tuple[str, bytes]],
 ) -> dict:
     """建资源 + 发布 v1，返回版本详情。"""
     user_group_id = await _user_group(client)
@@ -46,7 +52,7 @@ async def _create_resource_with_version(
             headers=ALICE,
         )
     ).json()
-    version = (
+    attempt = (
         await client.post(
             f"/api/v1/shared-resources/{resource['id']}/versions",
             params={"prefix": ""},
@@ -57,8 +63,9 @@ async def _create_resource_with_version(
             headers=ALICE,
         )
     ).json()
+    version_id = await process_shared_resource_publication(context, attempt["id"])
     return (
-        await client.get(f"/api/v1/shared-resource-versions/{version['id']}", headers=ALICE)
+        await client.get(f"/api/v1/shared-resource-versions/{version_id}", headers=ALICE)
     ).json()
 
 
@@ -135,13 +142,14 @@ async def _stdout_lines(client: httpx.AsyncClient, detail: dict) -> str:
 
 
 async def test_子路径指向目录只物化该目录并剥前缀(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``dataset/train/`` 子目录 → 在 Run 中暴露为 ``/inputs/train`` 下的内容（剥前缀）。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
+        context,
         name="带子目录的数据集",
         files=[
             ("train/a.py", "训练A".encode()),
@@ -169,11 +177,14 @@ async def test_子路径指向目录只物化该目录并剥前缀(
     assert "top.txt" not in stdout, stdout
 
 
-async def test_子路径深层目录同样剥前缀(client: httpx.AsyncClient, session: AsyncSession) -> None:
+async def test_子路径深层目录同样剥前缀(
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
+) -> None:
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
+        context,
         name="深层子路径",
         files=[
             ("a/b/c.py", "深".encode()),
@@ -202,13 +213,14 @@ async def test_子路径深层目录同样剥前缀(client: httpx.AsyncClient, s
 
 
 async def test_子路径按目录边界匹配不误纳同前缀目录(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``subpath="train"`` 只匹配 ``train/`` 下文件，不误纳 ``training/``。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
+        context,
         name="同前缀",
         files=[
             ("train/a.py", "对的".encode()),
@@ -236,13 +248,14 @@ async def test_子路径按目录边界匹配不误纳同前缀目录(
 
 
 async def test_子路径指向单个文件物化到_basename(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """``subpath="train"`` 命名一个文件时，物化到 ``access_path/train``，不剥到空串崩掉。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
+        context,
         name="单文件子路径",
         files=[
             ("train", "我是一个文件".encode()),
@@ -307,11 +320,11 @@ print("exists_other=", (base / "other.txt").exists())
 
 
 async def test_子路径不存在被挡在运行方案保存前(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     version = await _create_resource_with_version(
-        client, name="不存在子路径", files=[("a.txt", b"x")]
+        client, context, name="不存在子路径", files=[("a.txt", b"x")]
     )
     project = await create_project_with_version(
         client, name="错误子路径", files={"main.py": "pass"}, headers=ALICE
@@ -342,12 +355,15 @@ async def test_子路径不存在被挡在运行方案保存前(
 # -- 空子路径物化全部（不回归）--------------------------------------------
 
 
-async def test_空子路径物化整份内容(client: httpx.AsyncClient, session: AsyncSession) -> None:
+async def test_空子路径物化整份内容(
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
+) -> None:
     """不传 source_subpath（默认空）→ 物化整份内容，与既有行为一致。"""
     _, env_version_id = await use_default_environment(session, client, headers=ALICE)
     await grant_test_entitlement(session, "alice")
     version = await _create_resource_with_version(
         client,
+        context,
         name="全量",
         files=[("top.txt", "顶层".encode()), ("nested/deep.txt", "嵌套".encode())],
     )
