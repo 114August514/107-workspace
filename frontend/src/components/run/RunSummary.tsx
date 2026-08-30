@@ -45,15 +45,15 @@ export function RunSummary({
         <h2 id="run-compute-title">算力</h2>
         <div className={styles.summaryValueStack}>
           <strong className={styles.summaryPrimaryValue}>{computePlanName}</strong>
+          <span>{resources.join(' · ')}</span>
+          <Text as="span" size="small" className={styles.muted}>
+            最长运行 {formatMinutes(request.time_limit_minutes)}
+          </Text>
           {computePlan ? (
             <Text as="span" size="small" className={styles.muted}>
               {computePlan.code}
             </Text>
           ) : null}
-          <span>{resources.join(' · ')}</span>
-          <Text as="span" size="small" className={styles.muted}>
-            最长运行 {formatMinutes(request.time_limit_minutes)}
-          </Text>
         </div>
       </section>
 

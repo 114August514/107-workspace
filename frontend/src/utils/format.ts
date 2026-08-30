@@ -21,8 +21,8 @@ export function formatDuration(seconds: number | null | undefined): string {
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const rest = total % 60
-  if (hours > 0) return `${hours} 小时 ${minutes} 分`
-  if (minutes > 0) return `${minutes} 分 ${rest} 秒`
+  if (hours > 0) return minutes > 0 ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
+  if (minutes > 0) return rest > 0 ? `${minutes} 分 ${rest} 秒` : `${minutes} 分钟`
   return `${rest} 秒`
 }
 

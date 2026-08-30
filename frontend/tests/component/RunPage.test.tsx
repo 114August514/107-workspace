@@ -289,7 +289,7 @@ describe('RunPage backend unavailable', () => {
     const runHeader = screen.getByRole('banner', { name: 'Run header' })
     expect(within(runHeader).getByText('student')).toBeVisible()
     expect(within(runHeader).getByText('运行 8 秒')).toBeVisible()
-    expect(within(runHeader).getByText('排队 1 秒')).toBeVisible()
+    expect(within(runHeader).queryByText('排队 1 秒')).toBeNull()
     expect(within(runHeader).getByRole('link', { name: 'v1' })).toBeVisible()
     expect(within(runHeader).getByText('默认训练方案')).toBeVisible()
 
@@ -303,6 +303,14 @@ describe('RunPage backend unavailable', () => {
     expect(within(compute).getByText('cpu-basic')).toBeVisible()
     expect(within(compute).getByText('1 节点 · 1 核 · 1 GB')).toBeVisible()
     expect(within(compute).getByText('最长运行 1 小时')).toBeVisible()
+    const computeText = compute.textContent ?? ''
+    expect(computeText.indexOf('CPU 基础')).toBeLessThan(
+      computeText.indexOf('1 节点 · 1 核 · 1 GB'),
+    )
+    expect(computeText.indexOf('1 节点 · 1 核 · 1 GB')).toBeLessThan(
+      computeText.indexOf('最长运行 1 小时'),
+    )
+    expect(computeText.indexOf('最长运行 1 小时')).toBeLessThan(computeText.indexOf('cpu-basic'))
     expect(within(summary).getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(within(summary).getByText('这个 Run 还没有执行事件。')).toBeVisible()
     expect(within(summary).getByText('完整运行快照')).toBeVisible()
@@ -339,6 +347,7 @@ describe('RunPage backend unavailable', () => {
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
     const eventTime = screen.getByText(/^\d{2}:\d{2}$/)
     expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
+    expect(screen.getByRole('img', { name: '已完成' })).toBeVisible()
     fireEvent.click(screen.getByRole('link', { name: '日志' }))
     expect(screen.queryByRole('heading', { name: '执行过程' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()

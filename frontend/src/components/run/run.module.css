@@ -69,6 +69,14 @@
   color: var(--fgColor-default);
 }
 
+.runSurface {
+  display: flex;
+  width: 100%;
+  max-width: 62rem;
+  flex-direction: column;
+  gap: var(--base-size-16);
+}
+
 .runHeader {
   display: flex;
   flex-direction: column;
@@ -180,7 +188,7 @@
 }
 
 .summaryPanel {
-  max-width: 52rem;
+  max-width: 50rem;
 }
 
 .summarySurface {

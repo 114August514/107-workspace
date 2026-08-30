@@ -11,9 +11,7 @@ const contextGuides = [
   { pattern: '/environments/:environmentId', message: contextGuideCopy.environment },
   { pattern: '/environment-versions/:versionId', message: contextGuideCopy.environment },
   { pattern: '/projects/:projectId', message: contextGuideCopy.project },
-  { pattern: '/projects/:projectId/runs/:runId', message: contextGuideCopy.run },
   { pattern: '/versions/:versionId', message: contextGuideCopy.version },
-  { pattern: '/runs/:runId', message: contextGuideCopy.run },
 ] as const
 
 interface Props {

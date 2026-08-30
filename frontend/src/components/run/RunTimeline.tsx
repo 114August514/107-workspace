@@ -1,4 +1,4 @@
-import { AlertFillIcon, CheckCircleFillIcon, ClockIcon, DotFillIcon } from '@primer/octicons-react'
+import { AlertFillIcon, CheckCircleFillIcon, DotFillIcon, StopIcon } from '@primer/octicons-react'
 import { Text } from '@primer/react'
 
 import type { RunEvent, RunEventType } from '../../api/types'
@@ -18,15 +18,24 @@ const EVENT_LABEL: Record<RunEventType, string> = {
   error: '异常',
 }
 
-function EventIcon({ type }: { type: RunEventType }) {
+function EventVisual({ type }: { type: RunEventType }) {
+  let Icon = CheckCircleFillIcon
+  let label = '已完成'
   if (type === 'submit_failed' || type === 'error' || type === 'artifact_missing') {
-    return <AlertFillIcon size={16} aria-hidden />
+    Icon = AlertFillIcon
+    label = '异常'
+  } else if (type === 'cancel_requested') {
+    Icon = DotFillIcon
+    label = '取消中'
+  } else if (type === 'cancelled') {
+    Icon = StopIcon
+    label = '已取消'
   }
-  if (type === 'finished' || type === 'artifact_collected') {
-    return <CheckCircleFillIcon size={16} aria-hidden />
-  }
-  if (type === 'created') return <ClockIcon size={16} aria-hidden />
-  return <DotFillIcon size={16} aria-hidden />
+  return (
+    <span className={styles.timelineIcon} role="img" aria-label={label}>
+      <Icon size={16} aria-hidden />
+    </span>
+  )
 }
 
 /** 平台执行事件；stdout / stderr 在独立日志表面展示。 */
@@ -39,9 +48,7 @@ export function RunTimeline({ events }: { events: RunEvent[] }) {
     <ol className={styles.timeline} aria-label="Run 执行事件">
       {events.map((event) => (
         <li key={event.id} className={styles.timelineItem}>
-          <span className={styles.timelineIcon}>
-            <EventIcon type={event.type} />
-          </span>
+          <EventVisual type={event.type} />
           <div className={styles.timelineBody}>
             <div className={styles.timelineHeading}>
               <strong>{EVENT_LABEL[event.type]}</strong>
