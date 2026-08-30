@@ -383,8 +383,8 @@ class RunService:
             working_directory=(draft.working_directory_override or configuration.working_directory),
             command=(draft.command_override or configuration.command).strip(),
             environment_version_id=result.environment_version.id,
-            environment_image=result.environment_version.image,
-            environment_setup_command=result.environment_version.setup_command,
+            environment_definition_hash=result.environment_version.definition_hash,
+            environment_execution_spec=result.environment_version.execution_spec,
             resolved_env=_as_resolved_env(
                 result.resolved_env_literals, result.resolved_env_secret_refs
             ),
@@ -472,8 +472,8 @@ class RunService:
             working_directory=source_snapshot.working_directory,
             command=source_snapshot.command,
             environment_version_id=environment_version.id,
-            environment_image=environment_version.image,
-            environment_setup_command=environment_version.setup_command,
+            environment_definition_hash=environment_version.definition_hash,
+            environment_execution_spec=environment_version.execution_spec,
             resolved_env=_as_resolved_env(
                 source_snapshot.env_literals, source_snapshot.env_secret_refs
             ),
@@ -564,8 +564,13 @@ class RunService:
         )
         if environment_version is None:
             problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
-        elif not environment_version.available:
+        elif environment_version.availability.value != "available":
             problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
+        elif (
+            environment_version.definition_hash != snapshot.environment_definition_hash
+            or environment_version.execution_spec != snapshot.environment_execution_spec
+        ):
+            problems.append("运行环境版本定义与 Run Snapshot 不一致，拒绝回退或替换")
 
         for binding in snapshot.input_bindings:
             if binding.source_type is InputSourceType.ARTIFACT:
@@ -624,21 +629,27 @@ class RunService:
             if snapshot.working_directory not in {"", "."}:
                 work_dir = paths.work / snapshot.working_directory
 
+            execution_spec = dict(snapshot.environment_execution_spec)
+            if execution_spec.get("kind") == "apptainer_sif":
+                locator = execution_spec.get("locator")
+                if not isinstance(locator, str):
+                    raise ValidationFailed("Apptainer execution spec 缺少 CAS locator")
+                execution_spec["locator"] = str(await self._storage.resolve_blob_path(locator))
+
             job_id = await self._scheduler.submit(
                 SchedulerSubmission(
                     run_id=run.id,
                     job_name=run.name,
                     work_dir=work_dir,
                     command=snapshot.command,
-                    setup_command=snapshot.environment_setup_command,
-                    environment_image=snapshot.environment_image,
+                    environment_execution_spec=execution_spec,
                     stdout_path=paths.stdout,
                     stderr_path=paths.stderr,
                     configuration=snapshot.scheduler,
                     environment=environment,
                 )
             )
-        except (SchedulerError, OSError, ValidationFailed) as exc:
+        except (SchedulerError, OSError, ObjectNotFound, ValidationFailed) as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
             run.finished_at = self._clock.now()
@@ -721,8 +732,11 @@ class RunService:
         if version is None:
             problems.append("运行方案引用的运行环境版本不存在或无权供当前 Project 使用")
             return None
-        if not version.available:
-            problems.append(f"运行环境版本 {version.version} 当前不可用")
+        if version.availability.value != "available":
+            problems.append(
+                f"运行环境版本 {version.version} 当前{version.availability.value}："
+                f"{version.availability_detail or version.availability_reason}"
+            )
             return None
         return version
 
@@ -932,8 +946,13 @@ class RunService:
         )
         if environment_version is None:
             problems.append("来源运行环境版本已不存在或无权供当前 Project 使用")
-        elif not environment_version.available:
+        elif environment_version.availability.value != "available":
             problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
+        elif (
+            environment_version.definition_hash != snapshot.environment_definition_hash
+            or environment_version.execution_spec != snapshot.environment_execution_spec
+        ):
+            problems.append("运行环境版本定义与 Run Snapshot 不一致，拒绝回退或替换")
 
         plan = await self._repos.compute_plans.get(snapshot.compute_plan_id)
         if plan is None:

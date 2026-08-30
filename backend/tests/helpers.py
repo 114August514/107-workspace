@@ -170,8 +170,6 @@ async def use_default_environment(
             environment_id=environment_id,
             version="3.12",
             description="Python 3.12 标准库环境。",
-            image="python:3.12-slim",
-            setup_command="",
         )
     )
     await session.commit()

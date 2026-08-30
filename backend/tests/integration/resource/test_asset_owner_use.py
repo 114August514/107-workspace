@@ -100,8 +100,6 @@ async def _create_environment_version(
             environment_id=environment_id,
             version="1",
             description="",
-            image="python:3.12-slim",
-            setup_command="",
         )
     )
     await session.commit()

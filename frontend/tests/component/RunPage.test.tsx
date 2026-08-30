@@ -43,8 +43,8 @@ const runDetailFixture = (): RunDetail => ({
   snapshot: {
     id: 'snapshot-1',
     command: 'python train.py',
-    environment_image: 'python:3.11',
-    environment_setup_command: '',
+    environment_definition_hash: 'a'.repeat(64),
+    environment_execution_spec: { kind: 'modules', commands: [] },
     environment_variables: {},
     environment_version_id: 'env-1',
     compute_plan_id: 'plan-1',

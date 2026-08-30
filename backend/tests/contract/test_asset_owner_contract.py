@@ -130,9 +130,6 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
             environment_id="env_issue_45_granted",
             version="cuda-12.4",
             description="CUDA 12.4",
-            image="cuda:12.4",
-            setup_command="",
-            available=True,
         )
     )
     session.add(
@@ -140,10 +137,8 @@ async def test_issue_45_environment_catalog_includes_granted_assets_in_owner_con
             id="envv_issue_45_unavailable_grant",
             environment_id="env_issue_45_granted",
             version="cuda-12.5",
-            description="Unavailable image",
-            image="cuda:12.5",
-            setup_command="",
-            available=False,
+            description="Unavailable runtime",
+            availability="unavailable",
         )
     )
     session.add(

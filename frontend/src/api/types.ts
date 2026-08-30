@@ -62,6 +62,7 @@ export type VersionDiff = Schemas['VersionDiffOut']
 
 export type Environment = Schemas['EnvironmentOut']
 export type EnvironmentVersion = Schemas['EnvironmentVersionOut']
+export type EnvironmentPublicationAttempt = Schemas['EnvironmentPublicationAttemptOut']
 export type ComputePlan = Schemas['ComputePlanOut']
 export type ComputeRequest = Schemas['ComputeRequestModel']
 export type ResolvedScheduler = Schemas['ResolvedSchedulerOut']

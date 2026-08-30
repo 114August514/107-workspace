@@ -54,8 +54,12 @@ export function EnvironmentVersionPage() {
                 <h1 className={styles.title}>
                   {detail.data.environment.name} · {detail.data.version.version}
                 </h1>
-                <Label variant={detail.data.version.available ? 'success' : 'attention'}>
-                  {detail.data.version.available ? '当前可用' : '当前不可用'}
+                <Label
+                  variant={
+                    detail.data.version.availability === 'available' ? 'success' : 'attention'
+                  }
+                >
+                  {detail.data.version.availability === 'available' ? '当前可用' : '当前不可用'}
                 </Label>
               </div>
               <Text as="p" className={styles.description}>
@@ -68,16 +72,30 @@ export function EnvironmentVersionPage() {
               <dd>{detail.data.environment.owner.display_name}</dd>
               <dt>确定版本 ID</dt>
               <dd className={styles.monoMeta}>{detail.data.version.id}</dd>
-              <dt>环境基础</dt>
-              <dd className={styles.monoMeta}>{detail.data.version.image}</dd>
-              <dt>准备命令</dt>
+              <dt>Runtime kind</dt>
+              <dd className={styles.monoMeta}>{detail.data.version.runtime_kind}</dd>
+              <dt>Definition SHA-256</dt>
+              <dd className={styles.monoMeta}>{detail.data.version.definition_hash}</dd>
+              <dt>不可变定义</dt>
               <dd>
-                {detail.data.version.setup_command ? (
-                  <code className={styles.codeBlock}>{detail.data.version.setup_command}</code>
-                ) : (
-                  '无'
-                )}
+                <code className={styles.codeBlock}>
+                  {JSON.stringify(detail.data.version.definition)}
+                </code>
               </dd>
+              <dt>验证摘要</dt>
+              <dd>{detail.data.version.validation_summary}</dd>
+              <dt>验证证据</dt>
+              <dd>
+                <code className={styles.codeBlock}>
+                  {JSON.stringify(detail.data.version.validation_evidence)}
+                </code>
+              </dd>
+              <dt>可用性</dt>
+              <dd>
+                {detail.data.version.availability_detail || detail.data.version.availability_reason}
+              </dd>
+              <dt>检查时间</dt>
+              <dd>{new Date(detail.data.version.availability_checked_at).toLocaleString()}</dd>
             </dl>
           </>
         ) : null}

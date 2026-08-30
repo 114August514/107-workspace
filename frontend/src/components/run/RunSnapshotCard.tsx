@@ -45,14 +45,16 @@ export function RunSnapshotCard({ snapshot }: { snapshot: RunSnapshot }) {
       </MetaRow>
       <MetaRow label="运行环境">
         <div className={styles.valueStack}>
-          <code className={styles.inlineCode}>{snapshot.environment_image}</code>
+          <code className={styles.inlineCode}>{snapshot.environment_version_id}</code>
           <Text size="small" className={styles.muted}>
-            精确版本 {snapshot.environment_version_id}
+            Definition {snapshot.environment_definition_hash.slice(0, 12)}
           </Text>
-          {snapshot.environment_setup_command ? (
-            <code className={styles.inlineCode}>{snapshot.environment_setup_command}</code>
-          ) : null}
         </div>
+      </MetaRow>
+      <MetaRow label="环境执行规格">
+        <pre className={styles.command}>
+          {JSON.stringify(snapshot.environment_execution_spec, null, 2)}
+        </pre>
       </MetaRow>
       <MetaRow label="算力请求">
         <div className={styles.valueStack}>

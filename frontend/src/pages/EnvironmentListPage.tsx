@@ -48,7 +48,7 @@ export function EnvironmentListPage() {
             <ul className={styles.environmentList}>
               {environments.data.map((environment) => {
                 const availableCount = environment.versions.filter(
-                  (version) => version.available,
+                  (version) => version.availability === 'available',
                 ).length
                 return (
                   <li key={environment.id}>
