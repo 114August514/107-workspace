@@ -41,11 +41,11 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 `WORKSPACE107_SEED_DEMO=true` 才额外创建演示资产与 Project。该流程假设单个 API
 实例；扩展到多副本之前，必须把迁移拆成独立的一次性任务。
 
-同一 API 实例的 lifespan 内还运行 Shared Resource publication loop：HTTP 上传只持久化
-publication attempt，loop 随后校验已接受 candidate 的内容寻址 blob，并在成功时发布不可变
-Version；进程重启后可重新认领超过恢复阈值的中断 attempt。它不是独立 Worker，也不支持多个
-API replica 共同处理；当前支持边界仍是上面的单 API 拓扑，不能据此宣称生产就绪或 Issue #46
-全部完成。
+同一 API 实例的 lifespan 内还运行 Environment 与 Shared Resource publication loop：HTTP
+请求只持久化 publication attempt，loop 随后校验候选并在成功时发布不可变 Version。
+只有 Shared Resource loop 会重新认领超过恢复阈值的中断 attempt；两条 loop 都不是独立 Worker，
+也不支持多个 API replica 共同处理。当前支持边界仍是上面的单 API 拓扑，不能据此宣称
+生产就绪。
 
 ## 关键配置
 
@@ -129,8 +129,10 @@ WORKSPACE107_SLURM_JWT=<secret>
 CAS SIF；SIF 发布从 Apptainer `inspect --json` 的标准 build-arch label 读取实际架构，只接受
 `amd64`/`x86_64`，提交前会重新校验摘要并把 CAS locator 解析为计算节点可见的共享存储路径。
 Environment 与 Shared Resource publication processor 当前都是 API 进程内的 durable loop，
-不是独立或多副本 Worker。真实 Apptainer CLI 成功发布证据仍由 #46 负责；#7 只负责下游
-Workspace 身份、共享挂载、独立 Worker、Slurm 凭据和执行接缝的 107 平台端到端验收。
+不是独立或多副本 Worker。Issue #46 的本机真实 Apptainer publication closure 证据见
+[`2026-08-29-1615-issue46-environment-publication.md`](../archive/2026-08-29-1615-issue46-environment-publication.md)；
+它不覆盖 live 107。Workspace 身份、共享挂载、独立 Worker、Slurm 凭据和执行接缝的 107
+平台端到端验收仍属于 #7。
 
 ## 探针和排障
 
@@ -159,7 +161,7 @@ docker compose --project-directory . --file deploy/compose.yaml exec api alembic
 - 建立数据库和用户存储的备份、恢复、保留与清理流程。
 - 在前置网关启用 HTTPS、访问控制、限流和日志采集。
 - 验证 API 请求体上限与 nginx `client_max_body_size` 一致。
-- 多副本部署前拆分数据库迁移、Run 后台状态同步和 Shared Resource publication loop 职责。
+- 多副本部署前拆分数据库迁移、Run 后台状态同步及 Environment / Shared Resource publication loop 职责。
 
 当前 Compose 没有提供 HTTPS、自动备份、多副本编排、监控告警或生产级 Secret
 管理。这些缺口必须显式完成，不能依赖默认配置补齐。
