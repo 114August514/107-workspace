@@ -16,6 +16,9 @@ from ..domain.enums import (
     ActivityAction,
     ArtifactStatus,
     ChangeKind,
+    EnvironmentAvailability,
+    EnvironmentPublicationStatus,
+    EnvironmentRuntimeKind,
     InputSourceType,
     LogStream,
     MembershipRole,
@@ -255,9 +258,40 @@ class EnvironmentVersionOut(Model):
     environment_id: str
     version: str
     description: str
-    image: str
-    setup_command: str
-    available: bool
+    runtime_kind: EnvironmentRuntimeKind
+    definition: dict[str, object]
+    definition_hash: str
+    execution_spec: dict[str, object]
+    validation_summary: str
+    validation_evidence: dict[str, object]
+    availability: EnvironmentAvailability
+    availability_reason: str
+    availability_detail: str
+    availability_checked_at: datetime
+
+
+class ModulesEnvironmentPublicationIn(Model):
+    version: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    modules: list[str] = Field(min_length=1)
+
+
+class EnvironmentPublicationAttemptOut(Model):
+    id: str
+    environment_id: str
+    status: EnvironmentPublicationStatus
+    version: str
+    description: str
+    runtime_kind: EnvironmentRuntimeKind
+    validation_summary: str
+    validation_evidence: dict[str, object]
+    failure_code: str | None
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class OwnerReferenceIn(Model):
@@ -593,8 +627,8 @@ class RunSnapshotOut(Model):
     working_directory: str
     command: str
     environment_version_id: str
-    environment_image: str
-    environment_setup_command: str
+    environment_definition_hash: str
+    environment_execution_spec: dict[str, object]
     environment_variables: dict[str, str]
     secret_references: dict[str, str]
     input_bindings: list[InputBindingModel]

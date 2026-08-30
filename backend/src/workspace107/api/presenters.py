@@ -24,6 +24,7 @@ from ..domain.grant import GrantTargetKind
 from ..domain.models import (
     Activity,
     Artifact,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     InputBinding,
@@ -180,9 +181,38 @@ def environment_version_out(version: EnvironmentVersion) -> s.EnvironmentVersion
         environment_id=version.environment_id,
         version=version.version,
         description=version.description,
-        image=version.image,
-        setup_command=version.setup_command,
-        available=version.available,
+        runtime_kind=version.runtime_kind,
+        definition=version.definition,
+        definition_hash=version.definition_hash,
+        execution_spec=version.execution_spec,
+        validation_summary=version.validation_summary,
+        validation_evidence=version.validation_evidence,
+        availability=version.availability,
+        availability_reason=version.availability_reason,
+        availability_detail=version.availability_detail,
+        availability_checked_at=version.availability_checked_at,
+    )
+
+
+def environment_publication_attempt_out(
+    attempt: EnvironmentPublicationAttempt,
+) -> s.EnvironmentPublicationAttemptOut:
+    return s.EnvironmentPublicationAttemptOut(
+        id=attempt.id,
+        environment_id=attempt.environment_id,
+        status=attempt.status,
+        version=attempt.version,
+        description=attempt.description,
+        runtime_kind=attempt.runtime_kind,
+        validation_summary=attempt.validation_summary,
+        validation_evidence=attempt.validation_evidence,
+        failure_code=attempt.failure_code,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
     )
 
 
@@ -308,8 +338,8 @@ def snapshot_out(snapshot: RunSnapshot) -> s.RunSnapshotOut:
         working_directory=snapshot.working_directory,
         command=snapshot.command,
         environment_version_id=snapshot.environment_version_id,
-        environment_image=snapshot.environment_image,
-        environment_setup_command=snapshot.environment_setup_command,
+        environment_definition_hash=snapshot.environment_definition_hash,
+        environment_execution_spec=snapshot.environment_execution_spec,
         environment_variables=dict(snapshot.env_literals),
         secret_references={name: ref.as_key() for name, ref in snapshot.env_secret_refs.items()},
         input_bindings=[input_binding_out(b) for b in snapshot.input_bindings],

@@ -13,11 +13,13 @@ from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
 from ..config_scope import ConfigScope
+from ..enums import EnvironmentAvailability
 from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
     Artifact,
     Environment,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     IdempotencyRecord,
@@ -135,6 +137,25 @@ class EnvironmentRepository(Protocol):
     async def get_by_id(self, environment_id: str) -> Environment | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
+
+    async def add_version(self, version: EnvironmentVersion) -> None: ...
+    async def add_attempt(self, attempt: EnvironmentPublicationAttempt) -> None: ...
+    async def update_attempt(self, attempt: EnvironmentPublicationAttempt) -> None: ...
+    async def get_attempt_by_id(self, attempt_id: str) -> EnvironmentPublicationAttempt | None: ...
+    async def list_attempts_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> list[EnvironmentPublicationAttempt]: ...
+    async def update_version_availability(
+        self,
+        version_id: str,
+        availability: EnvironmentAvailability,
+        reason: str,
+        detail: str,
+        checked_at: datetime,
+    ) -> EnvironmentVersion | None: ...
+    async def claim_pending_attempt(
+        self, now: datetime
+    ) -> EnvironmentPublicationAttempt | None: ...
 
 
 class ComputePlanRepository(Protocol):

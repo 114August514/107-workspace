@@ -20,9 +20,11 @@ from .api.deps import AppContext, build_services
 from .api.errors import register_error_handlers
 from .api.middleware import BodySizeLimitMiddleware, RequestContextMiddleware
 from .api.routes import api_router
+from .application.environment_publication import EnvironmentPublicationProcessor
 from .config import Settings, get_settings
 from .domain.ports.scheduler import SchedulerPort
 from .infrastructure.clock import SystemClock
+from .infrastructure.db.repositories import SqlRepositories
 from .infrastructure.db.session import create_engine, create_session_factory
 from .infrastructure.scheduler import MockScheduler, SlurmRestScheduler
 from .infrastructure.storage.local import LocalStorage
@@ -79,6 +81,29 @@ async def _sync_loop(app: FastAPI, interval: float) -> None:
             logger.exception("Run 状态同步失败")
 
 
+async def _environment_publication_loop(app: FastAPI, interval: float) -> None:
+    """Single-API durable processor; not a multi-replica production Worker."""
+    context: AppContext = app.state.context
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            session = context.session_factory()
+            try:
+                processor = EnvironmentPublicationProcessor(
+                    SqlRepositories(session), context.storage, context.clock
+                )
+                claimed = await processor.claim()
+                if claimed is not None:
+                    await processor.process(claimed.id)
+                await session.commit()
+            finally:
+                await session.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # pragma: no cover - loop survives one candidate failure
+            logger.exception("Environment publication processing failed")
+
+
 async def _shared_resource_publication_loop(app: FastAPI, interval: float) -> None:
     """Claim and process durable Shared Resource publication attempts."""
     context: AppContext = app.state.context
@@ -123,6 +148,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tasks: list[asyncio.Task[None]] = []
         if resolved.run_sync_interval_seconds > 0:
             tasks.append(asyncio.create_task(_sync_loop(app, resolved.run_sync_interval_seconds)))
+        if resolved.environment_publication_interval_seconds > 0:
+            tasks.append(
+                asyncio.create_task(
+                    _environment_publication_loop(
+                        app, resolved.environment_publication_interval_seconds
+                    )
+                )
+            )
         if resolved.shared_resource_publication_interval_seconds > 0:
             tasks.append(
                 asyncio.create_task(
