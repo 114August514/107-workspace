@@ -27,7 +27,7 @@ import shutil
 from pathlib import Path
 
 from ...domain.enums import InputSourceType, LogStream
-from ...domain.errors import ObjectNotFound
+from ...domain.errors import ObjectNotFound, ValidationFailed
 from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunInput, RunPaths
 
 READONLY_DIR = 0o555
@@ -63,6 +63,15 @@ class LocalStorage:
 
     async def blob_exists(self, content_hash: str) -> bool:
         return await asyncio.to_thread(self._blob_path(content_hash).exists)
+
+    async def resolve_blob_path(self, content_hash: str) -> Path:
+        target = self._blob_path(content_hash)
+        if not await asyncio.to_thread(target.is_file):
+            raise ObjectNotFound("文件内容", content_hash)
+        actual = await asyncio.to_thread(_file_sha256, target)
+        if actual != content_hash:
+            raise ValidationFailed("CAS 文件内容与 Environment SIF 摘要不一致")
+        return target.resolve()
 
     # -- Run 工作目录 ---------------------------------------------------
 
@@ -234,6 +243,14 @@ def _write_atomic(target: Path, data: bytes) -> None:
     temporary = target.with_suffix(".tmp")
     temporary.write_bytes(data)
     temporary.replace(target)
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _read_tail(path: Path, max_bytes: int) -> tuple[str, bool]:

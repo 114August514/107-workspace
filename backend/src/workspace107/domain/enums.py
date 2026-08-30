@@ -8,6 +8,28 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class EnvironmentRuntimeKind(StrEnum):
+    MODULES = "modules"
+    APPTAINER_SIF = "apptainer_sif"
+
+
+class EnvironmentAvailability(StrEnum):
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+    DEPRECATED = "deprecated"
+
+
+class EnvironmentPublicationStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {self.SUCCEEDED, self.FAILED}
+
+
 class MembershipRole(StrEnum):
     """A User's role in one exact User Group."""
 

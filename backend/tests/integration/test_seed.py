@@ -165,14 +165,14 @@ async def test_issue_39_platform_seed_completes_partial_records_and_rejects_drif
     restored_environment.owner_user_group_id = PLATFORM_ASSET_GROUP_ID
     restored_version = await session.get(t.EnvironmentVersionRow, "ev_platform_pytorch_24_2026")
     assert restored_version is not None
-    restored_version.image = "conflicting:image"
+    restored_version.validation_summary = "conflicting validation"
     await session.commit()
     with pytest.raises(RuntimeError):
         await seed_demo(session, context)
     await session.rollback()
     version_drift = await session.get(t.EnvironmentVersionRow, "ev_platform_pytorch_24_2026")
     assert version_drift is not None
-    assert version_drift.image == "conflicting:image"
+    assert version_drift.validation_summary == "conflicting validation"
 
 
 @pytest.mark.asyncio

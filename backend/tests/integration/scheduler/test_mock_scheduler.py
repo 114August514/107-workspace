@@ -26,8 +26,7 @@ def _submission(root: Path) -> SchedulerSubmission:
         job_name="Mock scheduler",
         work_dir=work,
         command="python main.py",
-        setup_command="",
-        environment_image="python:3.12-slim",
+        environment_execution_spec={"kind": "modules", "commands": []},
         stdout_path=logs / "stdout.log",
         stderr_path=logs / "stderr.log",
         configuration=ResolvedSchedulerConfiguration(
