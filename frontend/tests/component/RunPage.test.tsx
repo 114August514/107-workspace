@@ -26,7 +26,8 @@ const runDetailFixture = (): RunDetail => ({
     source_run_id: null,
     source_run_configuration_id: 'config-1',
     status: 'succeeded',
-    initiated_by_user_id: 'student',
+    initiated_by_user_id: 'usr_internal_student',
+    initiated_by_username: 'student',
     created_at: '2026-08-15T08:00:00Z',
     submitted_at: '2026-08-15T08:01:00Z',
     started_at: '2026-08-15T08:02:00Z',
@@ -191,6 +192,9 @@ describe('RunPage backend unavailable', () => {
       expect(screen.queryByText('无法加载这个 Run。')).not.toBeInTheDocument()
     })
     expect(await screen.findByRole('heading', { name: 'test-run' })).toBeInTheDocument()
+    const runHeader = screen.getByRole('banner', { name: 'Run header' })
+    expect(within(runHeader).getByText('student')).toBeInTheDocument()
+    expect(within(runHeader).queryByText('usr_internal_student')).not.toBeInTheDocument()
   })
 
   it('keeps actions fail-closed and restores them from refreshed Run capabilities', async () => {
@@ -221,13 +225,34 @@ describe('RunPage backend unavailable', () => {
     expect(getRun).toHaveBeenCalledTimes(2)
   })
 
+  it('shows an explicit fallback instead of a missing User ID', async () => {
+    const missingUserDetail = runDetailFixture()
+    missingUserDetail.run = {
+      ...missingUserDetail.run,
+      initiated_by_user_id: 'usr_missing',
+      initiated_by_username: null,
+    }
+    vi.spyOn(api, 'getRun').mockResolvedValue(missingUserDetail)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    const runHeader = await screen.findByRole('banner', { name: 'Run header' })
+    expect(within(runHeader).getByText('未知用户')).toBeInTheDocument()
+    expect(within(runHeader).queryByText('usr_missing')).not.toBeInTheDocument()
+  })
+
   it('keeps Project context and prioritizes user semantics in the default summary', async () => {
     vi.spyOn(api, 'getRun').mockResolvedValue(runDetailFixture())
     vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
 
     render(
       <Wrapper>
-        <RunPage currentUser={{ id: 'student', username: 'student', display_name: '同学' }} />
+        <RunPage />
       </Wrapper>,
     )
 
@@ -242,7 +267,7 @@ describe('RunPage backend unavailable', () => {
     )
 
     const runHeader = screen.getByRole('banner', { name: 'Run header' })
-    expect(within(runHeader).getByText('同学')).toBeVisible()
+    expect(within(runHeader).getByText('student')).toBeVisible()
     expect(within(runHeader).getByText('运行 8 秒')).toBeVisible()
     const summary = screen.getByLabelText('Run Summary')
     const outcome = within(summary).getByRole('heading', { name: '执行信息' }).parentElement!

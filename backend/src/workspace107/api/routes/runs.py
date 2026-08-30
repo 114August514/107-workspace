@@ -86,14 +86,14 @@ async def create_run(
     )
     if not submission.created:
         response.status_code = status.HTTP_200_OK
-    return p.run_out(submission.run)
+    return p.run_out(await services.runs.view(submission.run))
 
 
 @router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
 async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
     """仅在当前 User 具有所属 Project owner-scope authority 时，返回 Run 详情与操作 capability。"""
     detail = await services.runs.get_detail(user.id, run_id)
-    project_access = await services.projects.get(user.id, detail.run.project_id)
+    project_access = await services.projects.get(user.id, detail.run.run.project_id)
     return s.RunDetailOut(
         run=p.run_out(detail.run, capabilities=project_access.capabilities),
         snapshot=p.snapshot_out(detail.snapshot),
@@ -124,7 +124,7 @@ async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s
     会直接标记为已取消。
     """
     run = await services.runs.cancel(user.id, run_id)
-    return p.run_out(run)
+    return p.run_out(await services.runs.view(run))
 
 
 @router.post(
@@ -149,7 +149,7 @@ async def rerun(
     submission = await services.runs.rerun(user.id, run_id, idempotency_key=idempotency_key)
     if not submission.created:
         response.status_code = status.HTTP_200_OK
-    return p.run_out(submission.run)
+    return p.run_out(await services.runs.view(submission.run))
 
 
 @router.post("/runs/sync", response_model=s.SyncOut, summary="同步 Run 状态")

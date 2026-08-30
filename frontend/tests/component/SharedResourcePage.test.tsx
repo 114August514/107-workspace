@@ -62,6 +62,8 @@ function makeVersionSummary(id: string, label: string, sequence: number): Shared
     sequence,
     file_count: 1,
     total_size: 100,
+    manifest_hash: 'a'.repeat(64),
+    validation_summary: '已校验 1 个文件，共 100 字节；内容哈希与大小一致',
     created_at: '2026-08-14T10:00:00Z',
     created_by: 'student',
   }

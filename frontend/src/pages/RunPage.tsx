@@ -6,14 +6,7 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 
 import { api, newIdempotencyKey } from '../api/client'
 import { toAsyncError, type AsyncErrorView } from '../api/errors'
-import type {
-  ComputePlan,
-  LogChunk,
-  Project,
-  RunConfiguration,
-  RunDetail,
-  User,
-} from '../api/types'
+import type { ComputePlan, LogChunk, Project, RunConfiguration, RunDetail } from '../api/types'
 import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
@@ -39,7 +32,7 @@ function contextualError(error: Error | undefined, message: string): AsyncErrorV
   return view ? { ...view, message } : undefined
 }
 
-export function RunPage({ currentUser }: { currentUser?: User }) {
+export function RunPage() {
   const { projectId = '', runId = '' } = useParams()
   const navigate = useNavigate()
   const [tab, setTab] = useState<RunTab>('summary')
@@ -143,10 +136,7 @@ export function RunPage({ currentUser }: { currentUser?: User }) {
   const runTitle =
     run && automaticName && run.name !== automaticName ? run.name : `Run #${shortRunId}`
   const configurationLabel = sourceConfiguration?.name ?? '运行方案'
-  const initiatorLabel =
-    currentUser && run && currentUser.id === run.initiated_by_user_id
-      ? currentUser.display_name || currentUser.username
-      : '其他用户'
+  const initiatorLabel = run?.initiated_by_username ?? '未知用户'
   const progressLabel = !run
     ? ''
     : run.status === 'queued'

@@ -11,6 +11,7 @@ from ..application.catalog_service import EnvironmentView
 from ..application.entitlement_service import EntitlementView
 from ..application.grant_service import GrantView
 from ..application.ownership import OwnerSummary
+from ..application.run_service import RunView
 from ..application.shared_resource_service import (
     SharedResourceAccessView,
     SharedResourceView,
@@ -30,9 +31,9 @@ from ..domain.models import (
     Project,
     ProjectFile,
     ProjectVersion,
-    Run,
     RunConfiguration,
     RunEvent,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
     User,
 )
@@ -241,7 +242,8 @@ def run_configuration_out(configuration: RunConfiguration) -> s.RunConfiguration
     )
 
 
-def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
+def run_out(view: RunView, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
+    run = view.run
     queued_seconds: float | None = None
     running_seconds: float | None = None
     if run.submitted_at and run.started_at:
@@ -263,6 +265,7 @@ def run_out(run: Run, *, capabilities: Iterable[Capability] = ()) -> s.RunOut:
         exit_code=run.exit_code,
         failure_reason=run.failure_reason,
         initiated_by_user_id=run.initiated_by_user_id,
+        initiated_by_username=view.initiated_by_username,
         created_at=run.created_at,
         submitted_at=run.submitted_at,
         started_at=run.started_at,
@@ -438,6 +441,26 @@ def shared_resource_detail_out(
     )
 
 
+def shared_resource_publication_attempt_out(
+    attempt: SharedResourcePublicationAttempt,
+) -> s.SharedResourcePublicationAttemptOut:
+    return s.SharedResourcePublicationAttemptOut(
+        id=attempt.id,
+        shared_resource_id=attempt.shared_resource_id,
+        status=attempt.status,
+        description=attempt.description,
+        file_count=len(attempt.files),
+        total_size=sum(file.size for file in attempt.files),
+        validation_summary=attempt.validation_summary,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
+    )
+
+
 def shared_resource_version_out(version: SharedResourceVersion) -> s.SharedResourceVersionOut:
     return s.SharedResourceVersionOut(
         id=version.id,
@@ -447,6 +470,8 @@ def shared_resource_version_out(version: SharedResourceVersion) -> s.SharedResou
         description=version.description,
         file_count=version.file_count,
         total_size=version.total_size,
+        manifest_hash=version.manifest_hash,
+        validation_summary=version.validation_summary,
         created_by=version.created_by,
         created_at=version.created_at,
     )

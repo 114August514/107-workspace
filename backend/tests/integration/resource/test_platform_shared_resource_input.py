@@ -68,6 +68,8 @@ async def _seed_platform_resource_with_version(session: AsyncSession) -> str:
             shared_resource_id="shr_platform",
             sequence=1,
             description="v1",
+            manifest_hash="3" * 64,
+            validation_summary="测试夹具已校验",
             created_by=PLATFORM_USER_ID,
             created_at=now,
         )

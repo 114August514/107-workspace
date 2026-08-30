@@ -82,6 +82,8 @@ export function RunTable({ runs, pagination = false, projectName }: Props) {
                       <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
                         {run.project_version_label}
                       </Link>
+                      <span aria-hidden>·</span>
+                      <span>{run.initiated_by_username ?? '未知用户'}</span>
                     </div>
                   </Cell>
                   <Cell label="执行时间">

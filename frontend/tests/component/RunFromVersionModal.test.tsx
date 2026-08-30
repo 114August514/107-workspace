@@ -78,6 +78,7 @@ function makeRun(): Run {
     project_id: 'prj-1',
     capabilities: ['run.submit'],
     initiated_by_user_id: 'student',
+    initiated_by_username: 'student',
     created_at: '2026-08-12T10:00:00Z',
     started_at: null,
     finished_at: null,

@@ -107,10 +107,7 @@ export function ProductRoutes({ username, home }: { username: string; home: Asyn
         element={<EnvironmentVersionPage key={username} />}
       />
       <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
-      <Route
-        path="/projects/:projectId/runs/:runId"
-        element={<RunPage key={username} currentUser={home.data?.user} />}
-      />
+      <Route path="/projects/:projectId/runs/:runId" element={<RunPage key={username} />} />
       <Route path="/runs/:runId" element={<RunLocatorPage key={username} />} />
       <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
       <Route path="/shared-resources/:resourceId" element={<SharedResourcePage key={username} />} />

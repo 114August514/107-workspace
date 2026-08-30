@@ -6,7 +6,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import grant_test_entitlement, wait_for_run
+from tests.helpers import grant_test_entitlement, process_shared_resource_publication, wait_for_run
+from workspace107.api.deps import AppContext
 from workspace107.domain import ids
 from workspace107.infrastructure.db.tables import (
     EnvironmentRow,
@@ -52,7 +53,9 @@ async def _create_project_with_version(
     return project
 
 
-async def _create_resource_version(client: httpx.AsyncClient, user_group_id: str) -> str:
+async def _create_resource_version(
+    client: httpx.AsyncClient, context: AppContext, user_group_id: str
+) -> str:
     response = await client.post(
         "/api/v1/shared-resources",
         json={
@@ -70,7 +73,7 @@ async def _create_resource_version(client: httpx.AsyncClient, user_group_id: str
         headers=ALICE,
     )
     response.raise_for_status()
-    return str(response.json()["id"])
+    return await process_shared_resource_publication(context, str(response.json()["id"]))
 
 
 async def _create_environment_version(
@@ -112,7 +115,7 @@ async def _set_group_environment(
 
 
 async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     """Discovery through B membership must not authorize use by an A-owned Project."""
     group_a = await _create_group(client, "Group A")
@@ -120,7 +123,7 @@ async def test_issue_39_actor_in_a_and_b_cannot_use_b_resource_for_a_project(
     environment_version_id = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="A project")
-    resource_version_id = await _create_resource_version(client, group_b)
+    resource_version_id = await _create_resource_version(client, context, group_b)
 
     # Alice is an active Owner member of both groups, so B remains discoverable.
     response = await client.get(
@@ -284,13 +287,13 @@ async def test_issue_39_environment_assignment_requires_exact_project_owner(
 
 
 async def test_issue_39_fork_validates_assets_against_target_owner(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     group_a = await _create_group(client, "Fork Group A")
     group_b = await _create_group(client, "Fork Group B")
     environment_a = await _set_group_environment(session, client, group_a)
     project = await _create_project_with_version(client, group_a, name="Fork source")
-    resource_a = await _create_resource_version(client, group_a)
+    resource_a = await _create_resource_version(client, context, group_a)
     response = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={
@@ -353,14 +356,14 @@ async def test_issue_39_fork_validates_assets_against_target_owner(
 
 
 async def test_issue_39_rerun_revalidates_snapshot_asset_owners(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     group_a = await _create_group(client, "Rerun Group A")
     group_b = await _create_group(client, "Rerun Group B")
     environment_a = await _set_group_environment(session, client, group_a)
     await grant_test_entitlement(session, "alice")
     project = await _create_project_with_version(client, group_a, name="Rerun source")
-    resource_a = await _create_resource_version(client, group_a)
+    resource_a = await _create_resource_version(client, context, group_a)
     configuration = await client.post(
         f"/api/v1/projects/{project['id']}/run-configurations",
         json={

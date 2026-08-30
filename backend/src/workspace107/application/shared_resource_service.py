@@ -14,12 +14,13 @@ from dataclasses import dataclass
 
 from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
-from ..domain.enums import ActivityAction, TargetType
+from ..domain.enums import ActivityAction, SharedResourcePublicationStatus, TargetType
 from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
 from ..domain.grant import Grant, GrantAction, GrantTargetKind, UseQualificationScope
 from ..domain.models import (
     SharedResource,
     SharedResourceFile,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
 )
 from ..domain.ownership import OwnerKind, OwnerReference
@@ -35,11 +36,8 @@ MAX_RESOURCE_DESCRIPTION_LEN = 4096
 MAX_VERSION_DESCRIPTION_LEN = 4096
 
 
-def _normalize_path(raw: str) -> str:
-    """把用户传入的相对路径规范化。
-
-    与 ProjectService.normalize_path 同语义：拒绝绝对路径和越出根目录的写法。
-    """
+def normalize_shared_resource_path(raw: str) -> str:
+    """Normalize a candidate-relative path without allowing root escape."""
     candidate = raw.strip().replace("\\", "/").lstrip("/")
     if not candidate:
         raise ValidationFailed("路径不能为空")
@@ -106,7 +104,7 @@ class SharedResourceAccessView:
 
 @dataclass(frozen=True, slots=True)
 class SharedResourceUpload:
-    """一次上传意图。服务层据此把内容写入 blob store 并形成版本。"""
+    """Candidate file received by the publication request."""
 
     path: str
     content: bytes
@@ -156,6 +154,16 @@ class SharedResourceService:
         self, user_id: str, version_id: str
     ) -> tuple[SharedResourceVersion, SharedResourceAccess]:
         return await self._guard.shared_resource_version(user_id, version_id)
+
+    async def get_publication_attempt(
+        self, user_id: str, attempt_id: str
+    ) -> SharedResourcePublicationAttempt:
+        attempt = await self._repos.shared_resources.get_attempt_discoverable_for_user(
+            user_id, attempt_id
+        )
+        if attempt is None:
+            raise ObjectNotFound("Shared Resource Publication Attempt", attempt_id)
+        return attempt
 
     # -- 写入 -----------------------------------------------------------
 
@@ -221,35 +229,33 @@ class SharedResourceService:
             use_qualifications=_OWNER_QUALIFICATIONS,
         )
 
-    async def publish_version(
+    async def create_publication_attempt(
         self,
         user_id: str,
         resource_id: str,
         *,
         description: str,
         uploads: list[SharedResourceUpload],
-    ) -> SharedResourceVersion:
-        """上传文件并形成新的不可变版本。
+    ) -> SharedResourcePublicationAttempt:
+        """Accept a transport-safe candidate for asynchronous integrity validation.
 
-        上传的文件先写入 blob store，再固化成 ``SharedResourceFile`` 列表。
-        全部写完后才创建版本行——避免半成品版本残留在库中。
+        Authorization plus path, duplicate-path, and size checks are ingress requirements:
+        rejected raw requests never become publication attempts. Once accepted, the durable
+        processor validates the persisted CAS blob existence, hash, and size before publishing.
         """
-        access = await self._guard.shared_resource(
+        await self._guard.shared_resource(
             user_id, resource_id, needs=Capability.SHARED_RESOURCE_VERSION_CREATE
         )
-        resource = access.resource
+
         if not uploads:
             raise ValidationFailed("版本必须至少包含一个文件")
         if len(description) > MAX_VERSION_DESCRIPTION_LEN:
             raise ValidationFailed(f"版本说明超过 {MAX_VERSION_DESCRIPTION_LEN} 个字符")
 
-        # 先把所有文件落进 blob store，再写版本行。
-        # 这样如果中间某个文件超限或路径非法，已经写入的 blob 也只是多占空间，
-        # 不会留下一个半成品版本让数据库和活动流去解释。
         files: list[SharedResourceFile] = []
         seen_paths: set[str] = set()
         for upload in uploads:
-            normalized = _normalize_path(upload.path)
+            normalized = normalize_shared_resource_path(upload.path)
             if normalized in seen_paths:
                 raise ValidationFailed(f"版本中存在重复路径 {normalized!r}")
             if len(upload.content) > self._max_file_bytes:
@@ -265,31 +271,25 @@ class SharedResourceService:
             )
             seen_paths.add(normalized)
 
-        version = SharedResourceVersion(
-            id=ids.new_id(ids.SHARED_RESOURCE_VERSION),
+        attempt = SharedResourcePublicationAttempt(
+            id=ids.new_id(ids.SHARED_RESOURCE_PUBLICATION_ATTEMPT),
             shared_resource_id=resource_id,
-            sequence=await self._repos.shared_resources.next_version_sequence(resource_id),
+            status=SharedResourcePublicationStatus.PENDING,
             description=description,
             files=tuple(files),
+            validation_summary="等待校验候选内容",
+            failure_reason=None,
+            version_id=None,
             created_by=user_id,
             created_at=self._clock.now(),
         )
-        await self._repos.shared_resources.add_version(version)
-        await self._activity.record(
-            actor_id=user_id,
-            owner=resource.owner,
-            action=ActivityAction.SHARED_RESOURCE_VERSION_PUBLISHED,
-            target_type=TargetType.SHARED_RESOURCE_VERSION,
-            target_id=version.id,
-            target_name=f"{resource.name} · {version.label}",
-            detail=version.description,
-        )
-        return version
+        await self._repos.shared_resources.add_attempt(attempt)
+        return attempt
 
     async def read_version_file(self, user_id: str, version_id: str, path: str) -> bytes:
         """读取版本中的文件内容（权限校验后从 blob store 取）。"""
         version, _ = await self._guard.shared_resource_version(user_id, version_id)
-        normalized = _normalize_path(path)
+        normalized = normalize_shared_resource_path(path)
         for entry in version.files:
             if entry.path == normalized:
                 return await self._storage.read_blob(entry.content_hash)
