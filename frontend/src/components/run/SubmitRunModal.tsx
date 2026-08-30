@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
 import type { PreflightResult, Run, RunConfiguration } from '../../api/types'
 import { describeComputeRequest } from '../../utils/format'
+import { InputBindingSummary } from '../runconfig/InputBindingSummary'
 
 interface Props {
   open: boolean
@@ -177,6 +178,17 @@ export function SubmitRunModal({ open, projectId, configuration, onClose, onSubm
                 <Typography.Text code>
                   {configuration?.environment_version_id ?? '—'}
                 </Typography.Text>
+              ),
+            },
+            {
+              key: 'inputs',
+              label: '运行输入',
+              children: (
+                <InputBindingSummary
+                  bindings={configuration?.input_bindings ?? []}
+                  checking={checking}
+                  preflightOk={preflight?.ok ?? null}
+                />
               ),
             },
             {
