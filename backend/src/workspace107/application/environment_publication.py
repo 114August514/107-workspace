@@ -7,7 +7,6 @@ import contextlib
 import hashlib
 import json
 import os
-import platform
 import tempfile
 from dataclasses import replace
 
@@ -28,6 +27,7 @@ MODULE_SYSTEM = "environment_modules"
 ACTIVATION_POLICY = "purge_then_ordered_load_v1"
 APPTAINER_MODULE = "apptainer/1.4.5"
 APPTAINER_EXEC_POLICY = "apptainer_exec_v1"
+APPTAINER_BUILD_ARCH_LABEL = "org.label-schema.build-arch"
 ALLOWED_MODULES = frozenset(
     {
         "python3.12/3.12",
@@ -281,10 +281,33 @@ async def _inspect_sif(content: bytes) -> dict[str, object]:
         if process.returncode != 0:
             detail = stderr.decode(errors="replace").strip()
             raise ValidationFailed(f"Apptainer 拒绝该 SIF：{detail or 'inspect failed'}")
+        try:
+            inspect_document = json.loads(stdout)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValidationFailed("Apptainer inspect 未返回有效 JSON") from exc
+        if not isinstance(inspect_document, dict):
+            raise ValidationFailed("Apptainer inspect JSON 缺少 SIF architecture metadata")
+        data = inspect_document.get("data")
+        attributes = data.get("attributes") if isinstance(data, dict) else None
+        labels = attributes.get("labels") if isinstance(attributes, dict) else None
+        inspected_architecture = (
+            labels.get(APPTAINER_BUILD_ARCH_LABEL) if isinstance(labels, dict) else None
+        )
+        if not isinstance(inspected_architecture, str):
+            raise ValidationFailed("Apptainer inspect JSON 缺少 SIF architecture metadata")
+        normalized_architecture = {
+            "amd64": "x86_64",
+            "x86_64": "x86_64",
+        }.get(inspected_architecture)
+        if normalized_architecture != "x86_64":
+            raise ValidationFailed(
+                f"Apptainer inspect 报告不支持的 SIF architecture：{inspected_architecture}"
+            )
         return {
             "validator": "apptainer_inspect_v1",
             "cli": executable,
-            "host_architecture": platform.machine(),
+            "inspect_architecture": inspected_architecture,
+            "architecture": normalized_architecture,
             "inspect_sha256": hashlib.sha256(stdout).hexdigest(),
         }
     finally:

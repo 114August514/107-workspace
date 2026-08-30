@@ -19,8 +19,8 @@
 
 ## 范围与非目标
 
-- 范围：canonical definition/digest；modules allowlist/order/profile/activation；CAS SIF 字节与真实 Apptainer CLI 验证；durable attempt；availability evidence；精确 Run Snapshot/执行 spec；Environment UI publication 与证据状态；OpenAPI/generated types。
-- 非目标：通用 provider/adapter/validator registry、任意组合图、任意 setup shell、用户 modulefiles、live 107、真实 Workspace UID/GID/挂载/Slurm REST/凭据、多 replica Worker。后者仍属于 #7。
+- 范围：canonical definition/digest；modules allowlist/order/profile/activation；CAS SIF 字节与真实 Apptainer CLI 验证（包括实际架构元数据与最终真实成功发布证据）；durable attempt；availability evidence；精确 Run Snapshot/执行 spec；Environment UI publication 与证据状态；OpenAPI/generated types。
+- 非目标：通用 provider/adapter/validator registry、任意组合图、任意 setup shell、用户 modulefiles、live 107、真实 Workspace UID/GID/共享挂载/独立 Worker/Slurm REST/凭据与执行接缝。只有这些下游集成属于 #7。
 
 ## 证据计划
 
@@ -63,12 +63,12 @@ Owned browser/API 进程、临时 DB 与存储目录均已停止或删除。未�
 
 ## Focused verification remediation
 
-- SIF identity remains the immutable CAS hash/locator. `StoragePort.resolve_blob_path` now rehashes the CAS file and returns the scheduler-visible path only immediately before submission; the successful CLI-double publication → Run test proves rendered `apptainer exec` uses that real file path, not the bare hash.
+- SIF identity remains the immutable CAS hash/locator. `StoragePort.resolve_blob_path` rehashes the CAS file and returns the scheduler-visible path only immediately before submission. The external CLI double now returns realistic Apptainer 1.4 JSON with `org.label-schema.build-arch=amd64`; the processor canonicalizes it to `x86_64`, while an ARM result fails without creating a Version. The x86 publication → Run test still proves rendered `apptainer exec` uses the real CAS file path, not the bare hash.
 - Migration reset no longer deletes Activity or Notification rows. A fresh predecessor fixture proves both histories survive upgrade, Environment Versions are reset, and downgrade/upgrade completes.
 - Authorized repository-filtered attempt history/list hydrates the Environment panel after reload; pending/processing attempts are lifecycle-polled and failed reasons remain visible.
 - The existing Primer panel now supports both ordered Modules and multipart Apptainer SIF input with fixed `x86_64`; frontend behavior covers hydrated failure and SIF request state.
 - One explicit availability repository update and concrete refresh processor revalidate Modules allowlist or SIF CAS/CLI, update only availability/reason/detail/checked time, and return a new projection. The SIF-path test deletes the validated blob, refreshes to unavailable without changing definition/evidence, and confirms preflight consumes the refreshed state without fallback.
-- Final `make check`: backend 331 passed / 3 skipped; frontend 24 files / 139 tests; workflow, Ruff, formatting, frontend lint/typecheck/build, OpenAPI/generated-type check all passed.
-- Focused reverify：backend 13 passed；frontend 7 passed；migration、contract sync/check、typecheck/build 与 SIF scheduler-visible CAS path behavior 均通过。
+- Final `make check`: backend 338 passed / 3 skipped; frontend 25 files / 148 tests; workflow, Ruff, formatting, frontend lint/typecheck/build, OpenAPI/generated-type check all passed.
+- Architecture remediation reverify：Environment publication 5 passed；targeted Ruff 与 contract check 通过；ARM inspect 成功返回但发布失败且无 Version，`amd64` 成功路径继续到达真实 CAS scheduler path。
 - Targeted independent re-review：PASS；无剩余 finding。
-- Honest limits：未用真实 Apptainer CLI 做成功发布；未运行专用 PostgreSQL；未取得 Environment route 的可信浏览器视觉证据；未访问 live 107。
+- Honest limits：未用真实 Apptainer CLI 做成功发布；这项证据仍由 #46 负责，不转交 #7。#7 只负责下游 Workspace 身份、共享挂载、独立 Worker 与 Slurm 执行接缝。未运行专用 PostgreSQL；未取得 Environment route 的可信浏览器视觉证据；未访问 live 107。

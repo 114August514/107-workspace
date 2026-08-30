@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from pathlib import Path
 
 import httpx
@@ -27,6 +28,42 @@ from workspace107.infrastructure.scheduler.script import render_body
 
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
+APPTAINER_BUILD_ARCH_LABEL = "org.label-schema.build-arch"
+
+
+def _install_apptainer_inspect_double(monkeypatch, *, architecture: str) -> None:
+    stdout = json.dumps(
+        {
+            "data": {
+                "attributes": {
+                    "labels": {
+                        APPTAINER_BUILD_ARCH_LABEL: architecture,
+                        "org.label-schema.usage.apptainer.version": "1.4.2",
+                    }
+                }
+            },
+            "type": "container",
+        }
+    ).encode()
+
+    class SuccessfulInspect:
+        returncode = 0
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            return stdout, b""
+
+    async def create_subprocess_exec(*args, **kwargs):
+        assert args[:3] == ("/usr/bin/apptainer", "inspect", "--json")
+        assert await asyncio.to_thread(Path(args[3]).is_file)
+        assert kwargs["stdout"] is asyncio.subprocess.PIPE
+        assert kwargs["stderr"] is asyncio.subprocess.PIPE
+        return SuccessfulInspect()
+
+    monkeypatch.setattr(
+        "workspace107.application.environment_publication._find_apptainer",
+        lambda: "/usr/bin/apptainer",
+    )
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", create_subprocess_exec)
 
 
 class CaptureScheduler:
@@ -180,6 +217,35 @@ async def test_sif_hashes_exact_bytes_and_cli_absence_fails_clearly(
     assert versions == []
 
 
+async def test_sif_inspect_rejects_non_x86_architecture_without_version(
+    client: httpx.AsyncClient,
+    session: AsyncSession,
+    context: AppContext,
+    monkeypatch,
+) -> None:
+    environment_id = await _environment(client, session)
+    content = b"arm-sif-inspected-by-apptainer"
+    response = await client.post(
+        f"/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif",
+        data={
+            "version": "arm-sif",
+            "source_uri": "https://example.invalid/arm.sif",
+            "source_digest": hashlib.sha256(content).hexdigest(),
+            "architecture": "x86_64",
+        },
+        files={"sif": ("arm.sif", content, "application/octet-stream")},
+        headers=ALICE,
+    )
+    assert response.status_code == 202, response.text
+    _install_apptainer_inspect_double(monkeypatch, architecture="arm64")
+
+    result, versions = await _process(context)
+
+    assert result.status.value == "failed"
+    assert "SIF architecture" in (result.failure_reason or "")
+    assert versions == []
+
+
 async def test_validated_sif_run_resolves_real_cas_path_before_scheduler_submission(
     client: httpx.AsyncClient,
     session: AsyncSession,
@@ -188,15 +254,7 @@ async def test_validated_sif_run_resolves_real_cas_path_before_scheduler_submiss
 ) -> None:
     environment_id = await _environment(client, session)
     content = b"cli-validated-sif-bytes"
-
-    async def successful_inspect(candidate: bytes) -> dict[str, object]:
-        assert candidate == content
-        return {"validator": "test_apptainer_cli"}
-
-    monkeypatch.setattr(
-        "workspace107.application.environment_publication._inspect_sif",
-        successful_inspect,
-    )
+    _install_apptainer_inspect_double(monkeypatch, architecture="amd64")
     response = await client.post(
         f"/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif",
         data={

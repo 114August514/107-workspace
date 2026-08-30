@@ -126,10 +126,11 @@ WORKSPACE107_SLURM_JWT=<secret>
 
 接入前还必须确认 slurmrestd API 版本、JWT 生命周期、分区、Account、QoS、资源上限
 和错误响应。Environment Version 只支持有序平台 Modules 或经真实 Apptainer CLI 校验的
-CAS SIF；SIF 提交前会重新校验摘要并把 CAS locator 解析为计算节点可见的共享存储路径。
+CAS SIF；SIF 发布从 Apptainer `inspect --json` 的标准 build-arch label 读取实际架构，只接受
+`amd64`/`x86_64`，提交前会重新校验摘要并把 CAS locator 解析为计算节点可见的共享存储路径。
 Environment 与 Shared Resource publication processor 当前都是 API 进程内的 durable loop，
-不是独立或多副本 Worker。seed 中的计算方案与环境值是开发数据，不是 107 平台配置事实；
-真实 UID/GID、共享挂载、Slurm 凭据和执行链路仍须按 #7 在 107 平台完成端到端验收。
+不是独立或多副本 Worker。真实 Apptainer CLI 成功发布证据仍由 #46 负责；#7 只负责下游
+Workspace 身份、共享挂载、独立 Worker、Slurm 凭据和执行接缝的 107 平台端到端验收。
 
 ## 探针和排障
 
