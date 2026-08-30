@@ -158,6 +158,7 @@
 
 .runNavigation {
   font-size: var(--text-body-size-small);
+  padding-inline: 0;
 }
 
 .headerActions {
