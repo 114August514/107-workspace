@@ -218,11 +218,31 @@ describe('RunPage backend unavailable', () => {
 
     await screen.findByRole('heading', { name: 'test-run' })
     expect(screen.queryByRole('button', { name: '重新运行' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '刷新' })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    fireEvent.click(screen.getByRole('button', { name: '更多 Run 操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '刷新' }))
 
     expect(await screen.findByRole('button', { name: '重新运行' })).toBeInTheDocument()
     expect(getRun).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps refresh and cancel directly available for an active Run', async () => {
+    const active = runDetailFixture()
+    active.run.status = 'running'
+    vi.spyOn(api, 'getRun').mockResolvedValue(active)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    await screen.findByRole('heading', { name: 'test-run' })
+    expect(screen.getByRole('button', { name: '刷新' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '取消 Run' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: '更多 Run 操作' })).toBeNull()
   })
 
   it('shows an explicit fallback instead of a missing User ID', async () => {
@@ -269,24 +289,20 @@ describe('RunPage backend unavailable', () => {
     const runHeader = screen.getByRole('banner', { name: 'Run header' })
     expect(within(runHeader).getByText('student')).toBeVisible()
     expect(within(runHeader).getByText('运行 8 秒')).toBeVisible()
+    expect(within(runHeader).getByText('排队 1 秒')).toBeVisible()
+    expect(within(runHeader).getByRole('link', { name: 'v1' })).toBeVisible()
+    expect(within(runHeader).getByText('默认训练方案')).toBeVisible()
+
     const summary = screen.getByLabelText('Run Summary')
-    const outcome = within(summary).getByRole('heading', { name: '执行信息' }).parentElement!
-    expect(within(outcome).getByText('状态')).toBeVisible()
-    expect(within(outcome).getByText('成功')).toBeVisible()
-    expect(within(outcome).getByText('排队时间')).toBeVisible()
-    expect(within(outcome).getByText('1 秒')).toBeVisible()
-    expect(within(outcome).getByText('运行时间')).toBeVisible()
-    expect(within(outcome).getByText('8 秒')).toBeVisible()
-    expect(within(outcome).getByText('运行产物')).toBeVisible()
-    expect(within(outcome).getByText('0')).toBeVisible()
-    expect(within(summary).getByRole('heading', { name: '来源' })).toBeVisible()
+    expect(within(summary).queryByRole('heading', { name: '执行信息' })).toBeNull()
+    expect(within(summary).queryByRole('heading', { name: '来源' })).toBeNull()
+    expect(within(summary).queryByRole('heading', { name: '来源关系' })).toBeNull()
+    expect(within(summary).queryByText('首次运行')).toBeNull()
     const compute = within(summary).getByRole('heading', { name: '算力' }).parentElement!
-    expect(within(summary).getByRole('heading', { name: '来源关系' })).toBeVisible()
-    expect(within(summary).getByText('默认训练方案')).toBeVisible()
     expect(within(compute).getByText('CPU 基础')).toBeVisible()
     expect(within(compute).getByText('cpu-basic')).toBeVisible()
-    expect(within(compute).getByText('1 节点 · 1 核 · 1 GB · 最长 1 小时')).toBeVisible()
-    expect(within(summary).getByText('首次运行')).toBeVisible()
+    expect(within(compute).getByText('1 节点 · 1 核 · 1 GB')).toBeVisible()
+    expect(within(compute).getByText('最长运行 1 小时')).toBeVisible()
     expect(within(summary).getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(within(summary).getByText('这个 Run 还没有执行事件。')).toBeVisible()
     expect(within(summary).getByText('完整运行快照')).toBeVisible()
@@ -298,7 +314,16 @@ describe('RunPage backend unavailable', () => {
   })
 
   it('uses Logs as a primary intent and keeps the timeline in Summary', async () => {
-    vi.spyOn(api, 'getRun').mockResolvedValue(runDetailFixture())
+    const detail = runDetailFixture()
+    detail.events = [
+      {
+        id: 'event-1',
+        type: 'created',
+        message: '已固定 Run Snapshot',
+        created_at: '2026-08-15T08:00:00Z',
+      },
+    ]
+    vi.spyOn(api, 'getRun').mockResolvedValue(detail)
     vi.spyOn(api, 'readLogs').mockResolvedValue([
       { stream: 'stdout', content: 'done', truncated: false },
       { stream: 'stderr', content: '', truncated: false },
@@ -312,11 +337,35 @@ describe('RunPage backend unavailable', () => {
 
     await screen.findByRole('heading', { name: 'test-run' })
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
+    const eventTime = screen.getByText(/^\d{2}:\d{2}$/)
+    expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
     fireEvent.click(screen.getByRole('link', { name: '日志' }))
     expect(screen.queryByRole('heading', { name: '执行过程' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
     expect(screen.getByRole('link', { name: '标准输出' })).toBeVisible()
     expect(screen.getByRole('link', { name: '标准错误' })).toBeVisible()
+  })
+
+  it('offers a direct Logs action when the Run fails', async () => {
+    const failed = runDetailFixture()
+    failed.run.status = 'failed'
+    failed.run.failure_reason = 'Process exited with code 1.'
+    vi.spyOn(api, 'getRun').mockResolvedValue(failed)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([
+      { stream: 'stdout', content: '', truncated: false },
+      { stream: 'stderr', content: 'boom', truncated: false },
+    ])
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('Process exited with code 1.')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '查看日志' }))
+    expect(screen.getByRole('link', { name: '日志' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
   })
 
   it('returns to Summary when rerun navigation changes the Run ID', async () => {
@@ -348,6 +397,11 @@ describe('RunPage backend unavailable', () => {
     )
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(screen.getByLabelText('Run Summary')).toBeVisible()
+    const runHeader = screen.getByRole('banner', { name: 'Run header' })
+    expect(within(runHeader).getByRole('link', { name: 'Run #run-1' })).toHaveAttribute(
+      'href',
+      '/projects/project-1/runs/run-1',
+    )
   })
 
   it('resolves an ID-only Run link into the canonical Project route', async () => {

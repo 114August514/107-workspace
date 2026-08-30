@@ -103,6 +103,14 @@
   font-size: var(--text-body-size-small);
 }
 
+.failureDescription {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-8);
+}
+
 .pageTitle {
   margin: 0;
   color: var(--fgColor-default);
@@ -167,32 +175,43 @@
   white-space: pre-wrap;
 }
 
+.tabPanel {
+  padding-top: var(--base-size-16);
+}
+
+.summaryPanel {
+  max-width: 52rem;
+}
+
 .summarySurface {
   display: flex;
   flex-direction: column;
 }
 
 .summarySection {
-  display: grid;
-  grid-template-columns: 9rem minmax(0, 1fr);
-  gap: var(--base-size-16);
-  padding: var(--base-size-16) 0;
-  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
-}
-
-.summarySection:first-child {
-  padding-top: 0;
-  border-top: none;
+  padding: 0 0 var(--base-size-24);
 }
 
 .summarySection h2 {
-  margin: 0;
+  margin: 0 0 var(--base-size-12);
+  color: var(--fgColor-default);
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.summaryValueStack {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--base-size-4);
+}
+
+.summaryPrimaryValue {
   color: var(--fgColor-default);
   font-size: var(--text-body-size-medium);
   font-weight: var(--base-text-weight-semibold);
 }
 
-.definitionList,
 .diagnosticList {
   margin: 0;
 }
@@ -213,15 +232,6 @@
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.secondaryInline {
-  margin-left: var(--base-size-8);
-  color: var(--fgColor-muted);
-}
-
-.provenanceText {
-  margin: 0;
 }
 
 .snapshotDisclosure,
@@ -525,7 +535,7 @@
 .timelineHeading {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  align-items: baseline;
   gap: var(--base-size-8);
 }
 
@@ -542,11 +552,6 @@
 @media (max-width: 48rem) {
   .projectNavigation {
     gap: var(--base-size-16);
-  }
-
-  .summarySection {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--base-size-8);
   }
 
   .headerActions {
@@ -622,7 +627,7 @@
   }
 
   .tabPanel {
-    padding: var(--base-size-12);
+    padding-top: var(--base-size-12);
   }
 
   .runTable td {

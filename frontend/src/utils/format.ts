@@ -31,6 +31,11 @@ export function formatTime(value: string | null | undefined): string {
   return dayjs(value).format('YYYY-MM-DD HH:mm:ss')
 }
 
+export function formatClockTime(value: string | null | undefined): string {
+  if (!value) return '—'
+  return dayjs(value).format('HH:mm')
+}
+
 export function formatRelative(value: string | null | undefined): string {
   if (!value) return '—'
   const then = dayjs(value)

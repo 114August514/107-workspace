@@ -1,6 +1,20 @@
-import { ArrowLeftIcon, ProjectIcon, StopIcon, SyncIcon } from '@primer/octicons-react'
-import { Banner, Button, ConfirmationDialog, Link, UnderlineNav } from '@primer/react'
-import { Card } from '@primer/react/experimental'
+import {
+  ArrowLeftIcon,
+  KebabHorizontalIcon,
+  ProjectIcon,
+  StopIcon,
+  SyncIcon,
+} from '@primer/octicons-react'
+import {
+  ActionList,
+  ActionMenu,
+  Banner,
+  Button,
+  ConfirmationDialog,
+  IconButton,
+  Link,
+  UnderlineNav,
+} from '@primer/react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 
@@ -135,7 +149,15 @@ export function RunPage() {
     project.data && run ? `${project.data.name} · ${run.project_version_label}` : null
   const runTitle =
     run && automaticName && run.name !== automaticName ? run.name : `Run #${shortRunId}`
-  const configurationLabel = sourceConfiguration?.name ?? '运行方案'
+  const configurationLabel = sourceConfiguration
+    ? sourceConfiguration.name
+    : configurations.loading
+      ? '正在读取运行方案…'
+      : configurations.error
+        ? '运行方案信息暂不可用'
+        : run?.source_run_configuration_id
+          ? '已删除的运行方案'
+          : '未记录运行方案'
   const initiatorLabel = run?.initiated_by_username ?? '未知用户'
   const progressLabel = !run
     ? ''
@@ -144,6 +166,10 @@ export function RunPage() {
       : run.running_seconds === null || run.running_seconds === undefined
         ? '未开始运行'
         : `${isTerminal(run.status) ? '运行' : '已运行'} ${formatDuration(run.running_seconds)}`
+  const queueLabel =
+    run?.status !== 'queued' && run?.queued_seconds !== null && run?.queued_seconds !== undefined
+      ? `排队 ${formatDuration(run.queued_seconds)}`
+      : null
 
   return (
     <AsyncState
@@ -212,36 +238,65 @@ export function RunPage() {
                   </time>
                   <span aria-hidden>·</span>
                   <span>{progressLabel}</span>
+                  {queueLabel ? (
+                    <>
+                      <span aria-hidden>·</span>
+                      <span>{queueLabel}</span>
+                    </>
+                  ) : null}
                 </p>
               </div>
               <div className={styles.headerActions}>
-                <Button
-                  leadingVisual={SyncIcon}
-                  loading={refreshing}
-                  onClick={() => void refresh()}
-                >
-                  刷新
-                </Button>
-                {active && can(detail.data.run, 'run.cancel') ? (
-                  <Button
-                    variant="danger"
-                    leadingVisual={StopIcon}
-                    disabled={cancelling}
-                    onClick={() => setCancelOpen(true)}
-                  >
-                    取消 Run
-                  </Button>
-                ) : null}
-                {!active && can(detail.data.run, 'run.submit') ? (
-                  <Button
-                    variant="default"
-                    leadingVisual={SyncIcon}
-                    loading={rerunning}
-                    onClick={() => void rerun()}
-                  >
-                    重新运行
-                  </Button>
-                ) : null}
+                {active ? (
+                  <>
+                    <Button
+                      leadingVisual={SyncIcon}
+                      loading={refreshing}
+                      onClick={() => void refresh()}
+                    >
+                      刷新
+                    </Button>
+                    {can(detail.data.run, 'run.cancel') ? (
+                      <Button
+                        variant="danger"
+                        leadingVisual={StopIcon}
+                        disabled={cancelling}
+                        onClick={() => setCancelOpen(true)}
+                      >
+                        取消 Run
+                      </Button>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {can(detail.data.run, 'run.submit') ? (
+                      <Button
+                        variant="default"
+                        leadingVisual={SyncIcon}
+                        loading={rerunning}
+                        onClick={() => void rerun()}
+                      >
+                        重新运行
+                      </Button>
+                    ) : null}
+                    <ActionMenu>
+                      <ActionMenu.Anchor>
+                        <IconButton
+                          icon={KebabHorizontalIcon}
+                          aria-label="更多 Run 操作"
+                          variant="invisible"
+                        />
+                      </ActionMenu.Anchor>
+                      <ActionMenu.Overlay align="end" width="auto">
+                        <ActionList>
+                          <ActionList.Item disabled={refreshing} onSelect={() => void refresh()}>
+                            刷新
+                          </ActionList.Item>
+                        </ActionList>
+                      </ActionMenu.Overlay>
+                    </ActionMenu>
+                  </>
+                )}
               </div>
             </div>
             <div className={styles.runMeta}>
@@ -250,6 +305,20 @@ export function RunPage() {
               </Link>
               <span aria-hidden>·</span>
               <span>{configurationLabel}</span>
+              {run.source_run_id ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>
+                    重新运行自{' '}
+                    <Link
+                      as={RouterLink}
+                      to={`/projects/${run.project_id}/runs/${run.source_run_id}`}
+                    >
+                      Run #{run.source_run_id.replace(/^run_/, '').slice(0, 8)}
+                    </Link>
+                  </span>
+                </>
+              ) : null}
             </div>
           </header>
 
@@ -265,7 +334,14 @@ export function RunPage() {
           {run.failure_reason ? (
             <Banner variant="critical">
               <Banner.Title>Run 执行失败</Banner.Title>
-              <Banner.Description>{run.failure_reason}</Banner.Description>
+              <Banner.Description>
+                <div className={styles.failureDescription}>
+                  <span>{run.failure_reason}</span>
+                  <Button size="small" onClick={() => setTab('logs')}>
+                    查看日志
+                  </Button>
+                </div>
+              </Banner.Description>
             </Banner>
           ) : null}
 
@@ -291,38 +367,35 @@ export function RunPage() {
                 运行产物
               </UnderlineNav.Item>
             </UnderlineNav>
-            <Card className={styles.tabCard}>
-              <div className={styles.tabPanel} role="tabpanel">
-                {tab === 'summary' ? (
-                  <RunSummary
-                    detail={detail.data}
-                    projectId={run.project_id}
-                    configuration={sourceConfiguration}
-                    configurationLoading={configurations.loading}
-                    configurationError={configurations.error !== undefined}
-                    computePlan={computePlan}
-                    computePlanLoading={plans.loading}
-                    computePlanError={plans.error !== undefined}
-                  />
-                ) : null}
-                {tab === 'logs' ? (
-                  <section className={styles.executionSection} aria-labelledby="run-logs-title">
-                    <h2 id="run-logs-title" className={styles.sectionTitle}>
-                      日志
-                    </h2>
-                    <AsyncState
-                      loading={logs.loading}
-                      loadingText="正在读取 Run 日志…"
-                      error={contextualError(logs.error, '无法加载 Run 日志。')}
-                      onRetry={logs.reload}
-                    >
-                      <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
-                    </AsyncState>
-                  </section>
-                ) : null}
-                {tab === 'artifacts' ? <ArtifactPanel artifacts={detail.data.artifacts} /> : null}
-              </div>
-            </Card>
+            <div
+              className={`${styles.tabPanel} ${tab === 'summary' ? styles.summaryPanel : ''}`}
+              role="tabpanel"
+            >
+              {tab === 'summary' ? (
+                <RunSummary
+                  detail={detail.data}
+                  computePlan={computePlan}
+                  computePlanLoading={plans.loading}
+                  computePlanError={plans.error !== undefined}
+                />
+              ) : null}
+              {tab === 'logs' ? (
+                <section className={styles.executionSection} aria-labelledby="run-logs-title">
+                  <h2 id="run-logs-title" className={styles.sectionTitle}>
+                    日志
+                  </h2>
+                  <AsyncState
+                    loading={logs.loading}
+                    loadingText="正在读取 Run 日志…"
+                    error={contextualError(logs.error, '无法加载 Run 日志。')}
+                    onRetry={logs.reload}
+                  >
+                    <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
+                  </AsyncState>
+                </section>
+              ) : null}
+              {tab === 'artifacts' ? <ArtifactPanel artifacts={detail.data.artifacts} /> : null}
+            </div>
           </section>
 
           {cancelOpen ? (

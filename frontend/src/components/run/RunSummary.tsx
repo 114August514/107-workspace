@@ -1,9 +1,7 @@
-import { Link, Text } from '@primer/react'
-import { Link as RouterLink } from 'react-router-dom'
+import { Text } from '@primer/react'
 
-import type { ComputePlan, RunConfiguration, RunDetail } from '../../api/types'
-import { describeComputeRequest, formatDuration, formatTime } from '../../utils/format'
-import { RunStatusTag } from '../common/RunStatusTag'
+import type { ComputePlan, RunDetail } from '../../api/types'
+import { formatMemory, formatMinutes, formatTime } from '../../utils/format'
 import { RunSnapshotCard } from './RunSnapshotCard'
 import { RunTimeline } from './RunTimeline'
 import styles from './run.module.css'
@@ -20,35 +18,16 @@ function DefinitionRow({ label, children }: { label: string; children: React.Rea
 /** User-facing Run outcome first; exact execution identifiers remain in diagnostics. */
 export function RunSummary({
   detail,
-  projectId,
-  configuration,
-  configurationLoading,
-  configurationError,
   computePlan,
   computePlanLoading,
   computePlanError,
 }: {
   detail: RunDetail
-  projectId: string
-  configuration?: RunConfiguration
-  configurationLoading: boolean
-  configurationError: boolean
   computePlan?: ComputePlan
   computePlanLoading: boolean
   computePlanError: boolean
 }) {
   const { run, snapshot } = detail
-
-  const configurationName = configuration
-    ? configuration.name
-    : configurationLoading
-      ? '正在读取运行方案…'
-      : configurationError
-        ? '运行方案信息暂不可用'
-        : run.source_run_configuration_id
-          ? '已删除的运行方案'
-          : '未记录运行方案'
-
   const computePlanName = computePlan
     ? computePlan.name
     : computePlanLoading
@@ -56,61 +35,26 @@ export function RunSummary({
       : computePlanError
         ? '算力方案信息暂不可用'
         : '已删除的算力方案'
+  const request = snapshot.compute_request
+  const resources = [`${request.nodes} 节点`, `${request.cpus} 核`, formatMemory(request.memory_mb)]
+  if (request.gpus > 0) resources.push(`${request.gpus} 张 GPU`)
 
   return (
     <div className={styles.summarySurface} aria-label="Run Summary">
-      <section className={styles.summarySection} aria-labelledby="run-outcome-title">
-        <h2 id="run-outcome-title">执行信息</h2>
-        <dl className={styles.definitionList}>
-          <DefinitionRow label="状态">
-            <RunStatusTag status={run.status} />
-          </DefinitionRow>
-          <DefinitionRow label="运行时间">{formatDuration(run.running_seconds)}</DefinitionRow>
-          <DefinitionRow label="排队时间">{formatDuration(run.queued_seconds)}</DefinitionRow>
-          <DefinitionRow label="运行产物">{detail.artifacts.length}</DefinitionRow>
-        </dl>
-      </section>
-      <section className={styles.summarySection} aria-labelledby="run-source-title">
-        <h2 id="run-source-title">来源</h2>
-        <dl className={styles.definitionList}>
-          <DefinitionRow label="Project 版本">
-            <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
-              {run.project_version_label}
-            </Link>
-          </DefinitionRow>
-          <DefinitionRow label="运行方案">{configurationName}</DefinitionRow>
-        </dl>
-      </section>
-
       <section className={styles.summarySection} aria-labelledby="run-compute-title">
         <h2 id="run-compute-title">算力</h2>
-        <dl className={styles.definitionList}>
-          <DefinitionRow label="算力方案">
-            <span>{computePlanName}</span>
-            {computePlan ? (
-              <Text as="span" size="small" className={styles.secondaryInline}>
-                {computePlan.code}
-              </Text>
-            ) : null}
-          </DefinitionRow>
-          <DefinitionRow label="资源请求">
-            {describeComputeRequest(snapshot.compute_request)}
-          </DefinitionRow>
-        </dl>
-      </section>
-
-      <section className={styles.summarySection} aria-labelledby="run-provenance-title">
-        <h2 id="run-provenance-title">来源关系</h2>
-        {run.source_run_id ? (
-          <p className={styles.provenanceText}>
-            重新运行自{' '}
-            <Link as={RouterLink} to={`/projects/${projectId}/runs/${run.source_run_id}`}>
-              Run #{run.source_run_id.replace(/^run_/, '').slice(0, 8)}
-            </Link>
-          </p>
-        ) : (
-          <p className={styles.provenanceText}>首次运行</p>
-        )}
+        <div className={styles.summaryValueStack}>
+          <strong className={styles.summaryPrimaryValue}>{computePlanName}</strong>
+          {computePlan ? (
+            <Text as="span" size="small" className={styles.muted}>
+              {computePlan.code}
+            </Text>
+          ) : null}
+          <span>{resources.join(' · ')}</span>
+          <Text as="span" size="small" className={styles.muted}>
+            最长运行 {formatMinutes(request.time_limit_minutes)}
+          </Text>
+        </div>
       </section>
 
       <section className={styles.summaryExecution} aria-labelledby="run-events-title">
