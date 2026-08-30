@@ -1,3 +1,4 @@
+import { ChevronRightIcon } from '@primer/octicons-react'
 import { Text } from '@primer/react'
 
 import type { ComputePlan, RunDetail } from '../../api/types'
@@ -61,18 +62,24 @@ export function RunSummary({
         <h2 id="run-events-title" className={styles.sectionTitle}>
           执行过程
         </h2>
-        <RunTimeline events={detail.events} />
+        <RunTimeline detail={detail} />
       </section>
 
       <details className={styles.snapshotDisclosure}>
-        <summary>完整运行快照</summary>
+        <summary>
+          <ChevronRightIcon className={styles.disclosureChevron} size={16} aria-hidden />
+          <span>完整运行快照</span>
+        </summary>
         <div className={styles.snapshotDisclosureBody}>
           <RunSnapshotCard snapshot={snapshot} />
         </div>
       </details>
 
       <details className={styles.diagnosticDisclosure}>
-        <summary>诊断信息</summary>
+        <summary>
+          <ChevronRightIcon className={styles.disclosureChevron} size={16} aria-hidden />
+          <span>诊断信息</span>
+        </summary>
         <dl className={styles.diagnosticList}>
           <DefinitionRow label="发起用户 ID">
             <code className={styles.inlineCode}>{run.initiated_by_user_id}</code>

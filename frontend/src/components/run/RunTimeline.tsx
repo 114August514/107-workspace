@@ -1,7 +1,7 @@
 import { AlertFillIcon, CheckCircleFillIcon, DotFillIcon, StopIcon } from '@primer/octicons-react'
 import { Text } from '@primer/react'
 
-import type { RunEvent, RunEventType } from '../../api/types'
+import type { RunDetail, RunEvent, RunEventType } from '../../api/types'
 import { formatClockTime, formatTime } from '../../utils/format'
 import styles from './run.module.css'
 
@@ -38,8 +38,44 @@ function EventVisual({ type }: { type: RunEventType }) {
   )
 }
 
+function eventDescription(event: RunEvent, detail: RunDetail): string {
+  const { run, snapshot } = detail
+  switch (event.type) {
+    case 'created':
+      return '已固定本次运行快照'
+    case 'submitted': {
+      const target = [snapshot.scheduler.cluster, snapshot.scheduler.partition]
+        .filter(Boolean)
+        .join('/')
+      return target ? `已提交到 ${target}` : '已提交到调度系统'
+    }
+    case 'submit_failed':
+      return '未能提交到调度系统'
+    case 'started':
+      return '调度任务已开始运行'
+    case 'finished':
+      if (run.status === 'succeeded') return '运行成功'
+      if (run.status === 'cancelled') return '运行已取消'
+      if (run.status === 'failed' || run.status === 'submit_failed') return '运行失败'
+      return '运行已结束'
+    case 'cancel_requested':
+      return '正在等待调度系统确认'
+    case 'cancelled':
+      return '运行已取消'
+    case 'artifact_collected':
+      return '运行产物已可用'
+    case 'artifact_missing': {
+      const path = /^收集路径 (.+) 不存在$/.exec(event.message)?.[1]
+      return path ? `未找到运行产物：${path}` : '未找到预期的运行产物'
+    }
+    case 'error':
+      return '调度系统暂时无法确认任务状态'
+  }
+}
+
 /** 平台执行事件；stdout / stderr 在独立日志表面展示。 */
-export function RunTimeline({ events }: { events: RunEvent[] }) {
+export function RunTimeline({ detail }: { detail: RunDetail }) {
+  const { events } = detail
   if (events.length === 0) {
     return <Text className={styles.muted}>这个 Run 还没有执行事件。</Text>
   }
@@ -57,7 +93,7 @@ export function RunTimeline({ events }: { events: RunEvent[] }) {
               </time>
             </div>
             <Text as="p" className={styles.timelineMessage}>
-              {event.message}
+              {eventDescription(event, detail)}
             </Text>
           </div>
         </li>

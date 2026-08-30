@@ -355,6 +355,50 @@ describe('RunPage backend unavailable', () => {
     expect(screen.getByRole('link', { name: '标准错误' })).toBeVisible()
   })
 
+  it('keeps execution identifiers out of the user-facing Timeline', async () => {
+    const detail = runDetailFixture()
+    detail.run.source_run_id = 'run_89086a75'
+    detail.run.scheduler_job_id = 'mock-37485c97fc49'
+    detail.snapshot.scheduler.cluster = '107'
+    detail.snapshot.scheduler.partition = 'debug'
+    detail.events = [
+      {
+        id: 'event-created',
+        type: 'created',
+        message: '基于 Run run_89086a75 重新运行',
+        created_at: '2026-08-15T08:00:00Z',
+      },
+      {
+        id: 'event-submitted',
+        type: 'submitted',
+        message: '已提交到 107/debug，调度任务 mock-37485c97fc49',
+        created_at: '2026-08-15T08:01:00Z',
+      },
+      {
+        id: 'event-finished',
+        type: 'finished',
+        message: '任务结束，状态 succeeded，退出码 0',
+        created_at: '2026-08-15T08:10:00Z',
+      },
+    ]
+    vi.spyOn(api, 'getRun').mockResolvedValue(detail)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    const runHeader = await screen.findByRole('banner', { name: 'Run header' })
+    expect(within(runHeader).getByRole('link', { name: 'Run #89086a75' })).toBeVisible()
+    const timeline = screen.getByRole('list', { name: 'Run 执行事件' })
+    expect(within(timeline).getByText('已固定本次运行快照')).toBeVisible()
+    expect(within(timeline).getByText('已提交到 107/debug')).toBeVisible()
+    expect(within(timeline).getByText('运行成功')).toBeVisible()
+    expect(within(timeline).queryByText(/基于 Run|mock-|succeeded|退出码/)).toBeNull()
+  })
+
   it('offers a direct Logs action when the Run fails', async () => {
     const failed = runDetailFixture()
     failed.run.status = 'failed'

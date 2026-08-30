@@ -72,7 +72,7 @@
 .runSurface {
   display: flex;
   width: 100%;
-  max-width: 62rem;
+  max-width: 60rem;
   flex-direction: column;
   gap: var(--base-size-16);
 }
@@ -250,17 +250,45 @@
 
 .snapshotDisclosure > summary,
 .diagnosticDisclosure > summary {
-  padding: var(--base-size-12) 0;
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: 0 var(--base-size-8);
+  border-radius: var(--borderRadius-medium);
   color: var(--fgColor-muted);
   cursor: pointer;
   font-size: var(--text-body-size-small);
   font-weight: var(--base-text-weight-semibold);
+  list-style: none;
+}
+
+.snapshotDisclosure > summary::-webkit-details-marker,
+.diagnosticDisclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.snapshotDisclosure > summary:hover,
+.diagnosticDisclosure > summary:hover {
+  background: var(--bgColor-muted);
+  color: var(--fgColor-default);
 }
 
 .snapshotDisclosure > summary:focus-visible,
 .diagnosticDisclosure > summary:focus-visible {
   outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
-  outline-offset: 2px;
+  outline-offset: -2px;
+}
+
+.disclosureChevron {
+  flex: none;
+}
+
+.snapshotDisclosure[open] > summary .disclosureChevron,
+.diagnosticDisclosure[open] > summary .disclosureChevron {
+  transform: rotate(90deg);
 }
 
 .snapshotDisclosureBody {
