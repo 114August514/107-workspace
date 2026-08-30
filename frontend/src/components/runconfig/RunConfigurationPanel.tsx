@@ -110,6 +110,26 @@ export function RunConfigurationPanel({
       },
     },
     {
+      title: '运行输入',
+      key: 'inputs',
+      width: 180,
+      render: (_, configuration) =>
+        configuration.input_bindings.length === 0 ? (
+          '—'
+        ) : (
+          <Space direction="vertical" size={0}>
+            {configuration.input_bindings.map((binding) => (
+              <Typography.Text
+                key={`${binding.source_type}:${binding.source_id}:${binding.access_path}`}
+                code
+              >
+                {binding.access_path}
+              </Typography.Text>
+            ))}
+          </Space>
+        ),
+    },
+    {
       title: '环境变量',
       key: 'env',
       width: 120,
