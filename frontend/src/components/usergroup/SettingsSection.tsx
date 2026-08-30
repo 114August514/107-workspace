@@ -1,8 +1,9 @@
 import { Banner, Button, FormControl, Textarea, TextInput } from '@primer/react'
 import { useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Navigate, useOutletContext } from 'react-router-dom'
 
 import { api } from '../../api/client'
+import { can } from '../../api/types'
 import type { UserGroupOutletContext } from '../../pages/UserGroupPage'
 import styles from './assets.module.css'
 
@@ -18,6 +19,10 @@ export function SettingsSection() {
   const [nameError, setNameError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+
+  if (!can(userGroup, 'user_group.update')) {
+    return <Navigate to=".." replace />
+  }
 
   const submit = async () => {
     const trimmed = name.trim()

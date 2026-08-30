@@ -1,6 +1,6 @@
 import { HomeIcon, OrganizationIcon } from '@primer/octicons-react'
 import { Label, Link, Text, UnderlineNav } from '@primer/react'
-import { Link as RouterLink, Outlet, useParams } from 'react-router-dom'
+import { Link as RouterLink, Outlet, useLocation, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
@@ -78,29 +78,36 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
 }
 
 function UserGroupSectionNav({ userGroup }: { userGroup: UserGroup }) {
-  const showSettings = can(userGroup, 'user_group.update')
+  const { userGroupId = '' } = useParams()
+  const { pathname } = useLocation()
+  const basePath = `/user-groups/${userGroupId}`
+  const activeSection = pathname.startsWith(`${basePath}/`)
+    ? pathname.slice(basePath.length + 1).split('/')[0] || 'overview'
+    : 'overview'
+
+  const sections = [
+    { key: 'overview', label: copy.nav.overview, to: '.' },
+    { key: 'projects', label: copy.nav.projects, to: 'projects' },
+    { key: 'shared-resources', label: copy.nav.sharedResources, to: 'shared-resources' },
+    { key: 'environments', label: copy.nav.environments, to: 'environments' },
+    { key: 'members', label: copy.nav.members, to: 'members' },
+    ...(can(userGroup, 'user_group.update')
+      ? [{ key: 'settings', label: copy.nav.settings, to: 'settings' }]
+      : []),
+  ]
+
   return (
     <UnderlineNav aria-label={copy.page.navLabel} variant="flush">
-      <UnderlineNav.Item as={RouterLink} to=".">
-        {copy.nav.overview}
-      </UnderlineNav.Item>
-      <UnderlineNav.Item as={RouterLink} to="projects">
-        {copy.nav.projects}
-      </UnderlineNav.Item>
-      <UnderlineNav.Item as={RouterLink} to="shared-resources">
-        {copy.nav.sharedResources}
-      </UnderlineNav.Item>
-      <UnderlineNav.Item as={RouterLink} to="environments">
-        {copy.nav.environments}
-      </UnderlineNav.Item>
-      <UnderlineNav.Item as={RouterLink} to="members">
-        {copy.nav.members}
-      </UnderlineNav.Item>
-      {showSettings ? (
-        <UnderlineNav.Item as={RouterLink} to="settings">
-          {copy.nav.settings}
+      {sections.map((section) => (
+        <UnderlineNav.Item
+          key={section.key}
+          as={RouterLink}
+          to={section.to}
+          aria-current={activeSection === section.key ? 'page' : undefined}
+        >
+          {section.label}
         </UnderlineNav.Item>
-      ) : null}
+      ))}
     </UnderlineNav>
   )
 }

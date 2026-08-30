@@ -161,6 +161,26 @@ describe('User Group 资源分区', () => {
     expect(screen.getByRole('link', { name: /Group Project/ })).toBeInTheDocument()
   })
 
+  it('REQ-21-11 Project 分区跟随超过 5 页的分页不截断组 Project', async () => {
+    const pages = Array.from({ length: 6 }, (_, index) => ({
+      items: [
+        { ...groupProject, id: `prj_group_${index + 1}`, name: `Group Project ${index + 1}` },
+      ],
+      page: index + 1,
+      page_size: 200,
+      total: 6,
+      has_more: index < 5,
+    }))
+    const listProjects = vi.spyOn(api, 'listProjects')
+    pages.forEach((page) => listProjects.mockResolvedValueOnce(page))
+
+    renderSection('/user-groups/grp_lab/projects')
+
+    expect(await screen.findByRole('link', { name: /Group Project 6/ })).toBeInTheDocument()
+    expect(listProjects).toHaveBeenCalledTimes(6)
+    expect(screen.queryByText(/列表过长/)).not.toBeInTheDocument()
+  })
+
   it('REQ-21-08 Project 分区错误时展示稳定错误并提供重试', async () => {
     const listProjects = vi
       .spyOn(api, 'listProjects')

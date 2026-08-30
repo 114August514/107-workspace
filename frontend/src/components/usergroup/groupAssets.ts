@@ -8,7 +8,9 @@ import { api } from '../../api/client'
 import type { Environment, OwnerSummary, Project, SharedResource } from '../../api/types'
 
 const PROJECT_PAGE_SIZE = 200
-const PROJECT_PAGE_LIMIT = 5
+// 防御性安全阀：跟随 has_more 直到列表耗尽；只有后端分页异常
+// （一万条仍报 has_more）才会命中并标记 truncated，避免无限请求。
+const PROJECT_PAGE_LIMIT = 50
 
 export interface GroupAssetsResult<T> {
   items: T[]

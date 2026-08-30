@@ -105,6 +105,26 @@ describe('UserGroupPage 分区导航信息架构', () => {
     ).toBeVisible()
   })
 
+  it('REQ-21-21 当前分区在导航中带 aria-current 选中态', async () => {
+    renderUserGroupRoute('/user-groups/grp_lab/members')
+
+    await screen.findByRole('heading', { name: 'Research Lab' })
+    const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
+    const membersLink = within(nav).getByRole('link', { name: '成员' })
+    expect(membersLink).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: '概览' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: 'Project' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('REQ-21-22 基础 URL 下概览分区带 aria-current 选中态', async () => {
+    renderUserGroupRoute('/user-groups/grp_lab')
+
+    await screen.findByRole('heading', { name: 'Research Lab' })
+    const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
+    expect(within(nav).getByRole('link', { name: '概览' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: '成员' })).not.toHaveAttribute('aria-current')
+  })
+
   it('REQ-21-03 Member 角色不显示设置分区', async () => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(memberGroup)
     renderUserGroupRoute('/user-groups/grp_lab')
