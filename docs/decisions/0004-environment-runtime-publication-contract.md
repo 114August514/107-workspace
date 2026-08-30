@@ -5,7 +5,7 @@
 
 ## 背景
 
-107 平台当前运行 Ubuntu 24.04.3，节点共享 `/public` 与 `/home`，使用 Environment Modules，普通用户无 sudo。`docs/references/platform/` 中的平台 PDF 是本决定的平台事实来源。真实 Apptainer CLI 成功发布证据仍由 #46 负责；#7 只负责下游 Workspace 身份、共享挂载、独立 Worker 与 Slurm 执行接缝。
+107 平台当前运行 Ubuntu 24.04.3，节点共享 `/public` 与 `/home`，使用 Environment Modules，普通用户无 sudo。`docs/references/platform/` 中的平台 PDF 是本决定的平台事实来源；live 107 的 Workspace 身份、共享挂载、独立 Worker 与 Slurm 执行接缝仍由 #7 验收。
 
 旧模型把任意 `image` 和 `setup_command` 当作 Environment Version。它既不能证明运行基础确实存在，也允许把任意 shell 注入调度脚本，无法提供可重放的精确运行语义。
 
@@ -29,8 +29,16 @@ Environment publication 使用持久 `EnvironmentPublicationAttempt`，状态仅
 ## 后果
 
 - 好：发布结果可审计、可重放；调度脚本不再执行 Environment 任意 shell；Run 精确语义没有隐式回退。
-- 坏：新增 runtime kind 必须形成新的产品决定；本地缺少 Apptainer 时 SIF publication 只能得到真实失败证据。
+- 坏：新增 runtime kind 必须形成新的产品决定；SIF publication 依赖部署环境提供受支持的 Apptainer CLI，CLI 不可用时只能明确失败。
 - **反悔成本**：高 —— 涉及持久 schema、OpenAPI、Run Snapshot 和调度执行协议。
+
+## 后续验证范围
+
+Issue #46 已在本机 Arch Linux x86_64 上通过真实 Apptainer、HTTP API 与 lifespan background
+processor 完成 SIF publication、CAS identity 和 availability refresh 验证；完整证据见
+[`2026-08-29-1615-issue46-environment-publication.md`](../archive/2026-08-29-1615-issue46-environment-publication.md)。
+该证据不证明 live 107 的 `apptainer/1.4.5` module、共享挂载或 Slurm 执行，相关端到端边界
+仍属于 #7。
 
 ## 重新评估的条件
 
