@@ -73,6 +73,7 @@
   display: flex;
   width: 100%;
   max-width: 60rem;
+  margin-inline: auto;
   flex-direction: column;
   gap: var(--base-size-16);
 }
