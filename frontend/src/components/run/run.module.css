@@ -195,7 +195,7 @@
 
 .summaryOverviewGrid {
   display: grid;
-  grid-template-columns: minmax(18rem, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(18rem, 5fr) minmax(0, 7fr);
   align-items: start;
   gap: var(--base-size-32);
 }
@@ -527,16 +527,16 @@
 .timelineItem {
   position: relative;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
-  gap: var(--base-size-8);
-  padding-bottom: var(--base-size-20);
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: var(--base-size-12);
+  padding-bottom: var(--base-size-24);
 }
 
 .timelineItem:not(:last-child)::before {
   position: absolute;
-  top: 1.25rem;
+  top: 1.5rem;
   bottom: 0;
-  left: 0.93rem;
+  left: calc(1.25rem - var(--borderWidth-thin));
   width: var(--borderWidth-thick);
   background: var(--borderColor-muted);
   content: '';
@@ -545,8 +545,8 @@
 .timelineIcon {
   z-index: 1;
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   place-items: center;
   border: var(--borderWidth-thin) solid var(--borderColor-default);
   border-radius: 50%;
@@ -558,17 +558,21 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--base-size-8);
+  gap: var(--base-size-12);
+}
+
+.timelineHeading strong {
+  font-size: var(--text-title-size-small);
 }
 
 .timelineHeading time,
 .timelineMessage {
   color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
+  font-size: var(--text-body-size-medium);
 }
 
 .timelineMessage {
-  margin: var(--base-size-4) 0 0;
+  margin: var(--base-size-8) 0 0;
 }
 
 @media (max-width: 56rem) {

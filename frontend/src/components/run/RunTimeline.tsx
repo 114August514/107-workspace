@@ -33,7 +33,7 @@ function EventVisual({ type }: { type: RunEventType }) {
   }
   return (
     <span className={styles.timelineIcon} role="img" aria-label={label}>
-      <Icon size={16} aria-hidden />
+      <Icon size={20} aria-hidden />
     </span>
   )
 }
