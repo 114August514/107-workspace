@@ -381,6 +381,7 @@ export function RunPage() {
               <div className={styles.tabPanel} role="tabpanel">
                 {tab === 'summary' ? (
                   <RunSummary
+                    key={run.id}
                     detail={detail.data}
                     computePlan={computePlan}
                     computePlanLoading={plans.loading}

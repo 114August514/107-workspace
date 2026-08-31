@@ -330,14 +330,26 @@ describe('RunPage backend unavailable', () => {
       .getByRole('heading', { name: '运行快照' })
       .closest('section')!
     expect(within(snapshotSummary).getByText('本次 Run 的不可变执行配置')).toBeVisible()
+    const basicTab = within(snapshotSummary).getByRole('button', { name: '基本信息' })
+    const environmentTab = within(snapshotSummary).getByRole('button', { name: '环境与算力' })
+    const executionTab = within(snapshotSummary).getByRole('button', { name: '执行配置' })
+    expect(basicTab).toHaveAttribute('aria-pressed', 'true')
     expect(within(snapshotSummary).getByRole('link', { name: 'v1' })).toBeVisible()
     expect(within(snapshotSummary).getByText('默认训练方案')).toBeVisible()
+    expect(within(snapshotSummary).queryByRole('link', { name: 'Python · 3.12' })).toBeNull()
+
+    fireEvent.click(environmentTab)
+    expect(environmentTab).toHaveAttribute('aria-pressed', 'true')
     expect(within(snapshotSummary).getByRole('link', { name: 'Python · 3.12' })).toBeVisible()
     expect(within(snapshotSummary).getByText('CPU 基础')).toBeVisible()
     expect(within(snapshotSummary).getByText('1 节点 · 1 核 · 1 GB')).toBeVisible()
     expect(within(snapshotSummary).getByText('最长运行 1 小时')).toBeVisible()
     expect(within(snapshotSummary).getByText('cpu-basic')).toBeVisible()
+
+    fireEvent.click(executionTab)
+    expect(executionTab).toHaveAttribute('aria-pressed', 'true')
     expect(within(snapshotSummary).getByText('python train.py')).toBeVisible()
+    expect(within(snapshotSummary).queryByRole('link', { name: 'Python · 3.12' })).toBeNull()
     expect(within(summary).queryByText('完整运行快照')).toBeNull()
 
     const diagnosticSummary = screen.getByText('诊断信息').closest('summary')!
@@ -360,9 +372,12 @@ describe('RunPage backend unavailable', () => {
       </Wrapper>,
     )
 
-    expect(await screen.findByText('运行环境信息暂不可用')).toBeVisible()
+    const snapshotSummary = (await screen.findByRole('heading', { name: '运行快照' })).closest(
+      'section',
+    )!
+    fireEvent.click(within(snapshotSummary).getByRole('button', { name: '环境与算力' }))
+    expect(await within(snapshotSummary).findByText('运行环境信息暂不可用')).toBeVisible()
     expect(screen.getByRole('heading', { name: '运行快照' })).toBeVisible()
-    expect(screen.getByText('python train.py')).toBeVisible()
     expect(screen.getByText('env-1')).not.toBeVisible()
   })
 
@@ -390,7 +405,7 @@ describe('RunPage backend unavailable', () => {
 
     await screen.findByRole('heading', { name: 'test-run' })
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
-    const eventTime = screen.getByText(/^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/)
+    const eventTime = screen.getByText(/^\d{2}:\d{2}:\d{2}$/)
     expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
     expect(screen.getByRole('img', { name: '已完成' })).toBeVisible()
     fireEvent.click(screen.getByRole('link', { name: '日志' }))

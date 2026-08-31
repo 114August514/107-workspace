@@ -196,13 +196,21 @@
 .summaryOverviewGrid {
   display: grid;
   grid-template-columns: minmax(18rem, 5fr) minmax(0, 7fr);
-  align-items: start;
-  gap: var(--base-size-32);
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
 }
 
 .summaryExecution,
 .snapshotSummary {
   min-width: 0;
+  padding: var(--base-size-24);
+}
+
+.snapshotSummary {
+  border-left: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .snapshotHeading {
@@ -217,6 +225,14 @@
   margin: 0;
   color: var(--fgColor-muted);
   font-size: var(--text-body-size-small);
+}
+
+.snapshotSegments {
+  margin-bottom: var(--base-size-16);
+}
+
+.snapshotSectionPanel {
+  min-width: 0;
 }
 
 .diagnosticList {
@@ -242,7 +258,9 @@
 }
 
 .diagnosticDisclosure {
-  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+  overflow: hidden;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
 }
 
 .diagnosticDisclosure > summary {
@@ -284,7 +302,7 @@
 }
 
 .diagnosticList {
-  padding-bottom: var(--base-size-8);
+  padding: 0 var(--base-size-16) var(--base-size-8);
 }
 
 .executionSection {
@@ -559,8 +577,8 @@
 }
 
 .timelineHeading {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--base-size-12);
 }
@@ -582,7 +600,11 @@
 @media (max-width: 56rem) {
   .summaryOverviewGrid {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--base-size-24);
+  }
+
+  .snapshotSummary {
+    border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+    border-left: 0;
   }
 }
 
@@ -604,6 +626,11 @@
     grid-template-columns: minmax(0, 1fr);
     gap: var(--base-size-4);
     padding: var(--base-size-12) 0;
+  }
+
+  .summaryExecution,
+  .snapshotSummary {
+    padding: var(--base-size-16);
   }
 
   .runTable thead {

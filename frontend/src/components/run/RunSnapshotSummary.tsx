@@ -22,6 +22,7 @@ function SnapshotFact({ label, children }: { label: string; children: React.Reac
 
 /** User-readable immutable execution facts; raw identities stay in Diagnostics. */
 export function RunSnapshotSummary({
+  section,
   detail,
   computePlan,
   computePlanLoading,
@@ -33,6 +34,7 @@ export function RunSnapshotSummary({
   environmentLoading,
   environmentError,
 }: {
+  section: 'basic' | 'environment' | 'execution'
   detail: RunDetail
   computePlan?: ComputePlan
   computePlanLoading: boolean
@@ -66,82 +68,89 @@ export function RunSnapshotSummary({
 
   return (
     <dl className={styles.snapshotFacts}>
-      <SnapshotFact label="Project 版本">
-        <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
-          {run.project_version_label}
-        </Link>
-      </SnapshotFact>
-
-      <SnapshotFact label="运行方案">
-        <span>{configurationName}</span>
-      </SnapshotFact>
-
-      <SnapshotFact label="运行环境">
-        {environmentView ? (
-          <Link as={RouterLink} to={`/environment-versions/${environmentView.version.id}`}>
-            {environmentView.environment.name} · {environmentView.version.version}
-          </Link>
-        ) : environmentLoading ? (
-          '正在读取运行环境…'
-        ) : environmentError ? (
-          '运行环境信息暂不可用'
-        ) : (
-          '已删除的运行环境'
-        )}
-      </SnapshotFact>
-
-      <SnapshotFact label="算力">
-        <div className={styles.snapshotValueStack}>
-          <strong>{computePlanName}</strong>
-          <span>{resources.join(' · ')}</span>
-          <Text as="span" size="small" className={styles.muted}>
-            最长运行 {formatMinutes(request.time_limit_minutes)}
-          </Text>
-          {computePlan ? (
-            <Text as="span" size="small" className={styles.muted}>
-              {computePlan.code}
-            </Text>
-          ) : null}
-        </div>
-      </SnapshotFact>
-
-      <SnapshotFact label="命令">
-        <pre className={styles.command}>{snapshot.command}</pre>
-      </SnapshotFact>
-
-      <SnapshotFact label="工作目录">
-        <code className={styles.inlineCode}>{snapshot.working_directory || '.'}</code>
-      </SnapshotFact>
-
-      {snapshot.input_bindings.length > 0 ? (
-        <SnapshotFact label="运行输入">
-          <ul className={styles.compactList}>
-            {snapshot.input_bindings.map((binding) => (
-              <li key={`${binding.source_type}:${binding.source_id}:${binding.access_path}`}>
-                <code className={styles.inlineCode}>
-                  {binding.source_type}:{binding.source_id}
-                  {binding.source_subpath ? `/${binding.source_subpath}` : ''} →{' '}
-                  {binding.access_path}
-                </code>
-              </li>
-            ))}
-          </ul>
-        </SnapshotFact>
+      {section === 'basic' ? (
+        <>
+          <SnapshotFact label="Project 版本">
+            <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
+              {run.project_version_label}
+            </Link>
+          </SnapshotFact>
+          <SnapshotFact label="运行方案">
+            <span>{configurationName}</span>
+          </SnapshotFact>
+        </>
       ) : null}
 
-      {snapshot.artifact_rules.length > 0 ? (
-        <SnapshotFact label="运行产物规则">
-          <div className={styles.labelGroup}>
-            {snapshot.artifact_rules.map((rule) => (
-              <Label
-                key={`${rule.name}:${rule.path}`}
-                variant={rule.optional ? 'secondary' : 'accent'}
-              >
-                {rule.path} · {rule.optional ? '可选' : '必需'}
-              </Label>
-            ))}
-          </div>
-        </SnapshotFact>
+      {section === 'environment' ? (
+        <>
+          <SnapshotFact label="运行环境">
+            {environmentView ? (
+              <Link as={RouterLink} to={`/environment-versions/${environmentView.version.id}`}>
+                {environmentView.environment.name} · {environmentView.version.version}
+              </Link>
+            ) : environmentLoading ? (
+              '正在读取运行环境…'
+            ) : environmentError ? (
+              '运行环境信息暂不可用'
+            ) : (
+              '已删除的运行环境'
+            )}
+          </SnapshotFact>
+          <SnapshotFact label="算力">
+            <div className={styles.snapshotValueStack}>
+              <strong>{computePlanName}</strong>
+              <span>{resources.join(' · ')}</span>
+              <Text as="span" size="small" className={styles.muted}>
+                最长运行 {formatMinutes(request.time_limit_minutes)}
+              </Text>
+              {computePlan ? (
+                <Text as="span" size="small" className={styles.muted}>
+                  {computePlan.code}
+                </Text>
+              ) : null}
+            </div>
+          </SnapshotFact>
+        </>
+      ) : null}
+
+      {section === 'execution' ? (
+        <>
+          <SnapshotFact label="命令">
+            <pre className={styles.command}>{snapshot.command}</pre>
+          </SnapshotFact>
+          <SnapshotFact label="工作目录">
+            <code className={styles.inlineCode}>{snapshot.working_directory || '.'}</code>
+          </SnapshotFact>
+          {snapshot.input_bindings.length > 0 ? (
+            <SnapshotFact label="运行输入">
+              <ul className={styles.compactList}>
+                {snapshot.input_bindings.map((binding) => (
+                  <li key={`${binding.source_type}:${binding.source_id}:${binding.access_path}`}>
+                    <code className={styles.inlineCode}>
+                      {binding.source_type}:{binding.source_id}
+                      {binding.source_subpath ? `/${binding.source_subpath}` : ''} →{' '}
+                      {binding.access_path}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+            </SnapshotFact>
+          ) : null}
+          {snapshot.artifact_rules.length > 0 ? (
+            <SnapshotFact label="运行产物规则">
+              <div className={styles.labelGroup}>
+                {snapshot.artifact_rules.map((rule) => (
+                  <Label
+                    key={`${rule.name}:${rule.path}`}
+                    variant={rule.optional ? 'secondary' : 'accent'}
+                  >
+                    {rule.path} · {rule.optional ? '可选' : '必需'}
+                  </Label>
+                ))}
+              </div>
+            </SnapshotFact>
+          ) : null}
+        </>
       ) : null}
     </dl>
   )

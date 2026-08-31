@@ -16,8 +16,8 @@ describe('formatDuration', () => {
 })
 
 describe('formatTimelineTime', () => {
-  it('shows a compact date and second-precision time', () => {
-    expect(formatTimelineTime('2026-08-15T08:09:10')).toBe('26/08/15 08:09:10')
+  it('shows a second-precision clock time', () => {
+    expect(formatTimelineTime('2026-08-15T08:09:10')).toBe('08:09:10')
     expect(formatTimelineTime(null)).toBe('—')
   })
 })

@@ -1,5 +1,6 @@
 import { ChevronRightIcon } from '@primer/octicons-react'
-import { Label } from '@primer/react'
+import { Label, SegmentedControl } from '@primer/react'
+import { useState } from 'react'
 
 import type {
   ComputePlan,
@@ -12,6 +13,14 @@ import { formatTime } from '../../utils/format'
 import { RunSnapshotSummary } from './RunSnapshotSummary'
 import { RunTimeline } from './RunTimeline'
 import styles from './run.module.css'
+
+const SNAPSHOT_SECTIONS = [
+  { id: 'basic', label: '基本信息' },
+  { id: 'environment', label: '环境与算力' },
+  { id: 'execution', label: '执行配置' },
+] as const
+
+type SnapshotSection = (typeof SNAPSHOT_SECTIONS)[number]['id']
 
 function DefinitionRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -50,6 +59,12 @@ export function RunSummary({
   const variables = Object.entries(snapshot.environment_variables)
   const secrets = Object.entries(snapshot.secret_references)
   const scheduler = snapshot.scheduler
+  const [snapshotSection, setSnapshotSection] = useState<SnapshotSection>('basic')
+
+  const selectSnapshotSection = (index: number) => {
+    const section = SNAPSHOT_SECTIONS[index]
+    if (section) setSnapshotSection(section.id)
+  }
 
   return (
     <div className={styles.summarySurface} aria-label="Run Summary">
@@ -68,18 +83,42 @@ export function RunSummary({
             </h2>
             <p>本次 Run 的不可变执行配置</p>
           </header>
-          <RunSnapshotSummary
-            detail={detail}
-            computePlan={computePlan}
-            computePlanLoading={computePlanLoading}
-            computePlanError={computePlanError}
-            sourceConfiguration={sourceConfiguration}
-            configurationLoading={configurationLoading}
-            configurationError={configurationError}
-            environmentView={environmentView}
-            environmentLoading={environmentLoading}
-            environmentError={environmentError}
-          />
+          <SegmentedControl
+            aria-label="运行快照分类"
+            fullWidth
+            className={styles.snapshotSegments}
+            onChange={selectSnapshotSection}
+          >
+            {SNAPSHOT_SECTIONS.map((section) => (
+              <SegmentedControl.Button
+                key={section.id}
+                selected={snapshotSection === section.id}
+                aria-controls="run-snapshot-section"
+              >
+                {section.label}
+              </SegmentedControl.Button>
+            ))}
+          </SegmentedControl>
+          <div
+            id="run-snapshot-section"
+            className={styles.snapshotSectionPanel}
+            role="region"
+            aria-label={`${SNAPSHOT_SECTIONS.find((section) => section.id === snapshotSection)?.label}运行快照`}
+          >
+            <RunSnapshotSummary
+              section={snapshotSection}
+              detail={detail}
+              computePlan={computePlan}
+              computePlanLoading={computePlanLoading}
+              computePlanError={computePlanError}
+              sourceConfiguration={sourceConfiguration}
+              configurationLoading={configurationLoading}
+              configurationError={configurationError}
+              environmentView={environmentView}
+              environmentLoading={environmentLoading}
+              environmentError={environmentError}
+            />
+          </div>
         </section>
       </div>
 

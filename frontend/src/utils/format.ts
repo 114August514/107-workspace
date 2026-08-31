@@ -33,7 +33,7 @@ export function formatTime(value: string | null | undefined): string {
 
 export function formatTimelineTime(value: string | null | undefined): string {
   if (!value) return '—'
-  return dayjs(value).format('YY/MM/DD HH:mm:ss')
+  return dayjs(value).format('HH:mm:ss')
 }
 
 export function formatRelative(value: string | null | undefined): string {
