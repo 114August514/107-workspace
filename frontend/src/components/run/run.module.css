@@ -72,8 +72,6 @@
 .runSurface {
   display: flex;
   width: 100%;
-  max-width: 60rem;
-  margin-inline: auto;
   flex-direction: column;
   gap: var(--base-size-16);
 }
@@ -197,7 +195,7 @@
 
 .summaryOverviewGrid {
   display: grid;
-  grid-template-columns: 18.75rem minmax(0, 1fr);
+  grid-template-columns: minmax(18rem, 1fr) minmax(0, 2fr);
   align-items: start;
   gap: var(--base-size-32);
 }
