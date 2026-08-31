@@ -393,3 +393,35 @@ describe('AppShell 身份切换的乱序防护', () => {
     expect(screen.getByRole('button', { name: '通知，7 条未读' })).toBeTruthy()
   })
 })
+
+describe('AppShell Header 的 User Group 分区导航', () => {
+  const group: Home['user_groups'][number] = {
+    ...homeData.user_groups[0]!,
+    capabilities: ['user_group.view', 'user_group.update'],
+  }
+
+  it('User Group 路由下分区导航渲染在 Header 第二行', async () => {
+    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    renderShell('student', readyHome(), '/user-groups/grp-1/settings')
+
+    const nav = await screen.findByRole('navigation', { name: 'User Group 分区导航' })
+    expect(screen.getByRole('banner')).toContainElement(nav)
+    expect(within(nav).getByRole('link', { name: '设置' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: '概览' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: '设置' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('离开 User Group 路由后 Header 恢复单行，不再渲染分区导航', async () => {
+    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    renderShell('student', readyHome(), '/user-groups/grp-1')
+
+    await screen.findByRole('navigation', { name: 'User Group 分区导航' })
+    fireEvent.click(screen.getByRole('link', { name: '107 Workspace' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('navigation', { name: 'User Group 分区导航' })).toBeNull()
+    })
+  })
+})

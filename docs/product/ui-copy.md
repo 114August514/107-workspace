@@ -155,10 +155,13 @@ User Group 和 Project 默认分别显示前 5 个，保持后端返回顺序；
 
 ### 3.7 User Group 页面分区导航
 
-User Group 页面使用 GitHub-org 式 header（组名 + `User Group`/角色 Label + 说明）加
-UnderlineNav 分区导航，分区由路由驱动：`概览`（`/user-groups/:id`）、`Project`、
-`共享资源`、`运行环境`、`成员`、`设置`。设置分区入口由 `user_group.update` capability
-决定（Owner / Admin 可见），其余分区对有效成员无条件可见；未知分区重定向回基础路由。
+分区导航渲染在全局 App Header 的第二行（第一行是工作区品牌与全局动作），两行同属
+一个 Header 容器，之间不设 border / divider，层级只靠间距与 active 下划线表达；离开
+`/user-groups/:id/**` 范围后 Header 恢复单行。页面内容区保留 GitHub-org 式组身份
+header（组名 + `User Group`/角色 Label + 说明）。分区由路由驱动：`概览`
+（`/user-groups/:id`）、`Project`、`共享资源`、`运行环境`、`成员`、`设置`。设置分区入口由
+`user_group.update` capability 决定（Owner / Admin 可见），其余分区对有效成员无条件可见；
+未知分区重定向回基础路由。
 
 各分区标题与说明使用以下稳定文案：
 

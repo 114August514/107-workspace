@@ -7,6 +7,7 @@ import { api } from '../../src/api/client'
 import type { UserGroup } from '../../src/api/types'
 import { OverviewSection } from '../../src/components/usergroup/OverviewSection'
 import { SettingsSection } from '../../src/components/usergroup/SettingsSection'
+import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
 
 const group: UserGroup = {
@@ -23,11 +24,13 @@ function renderSettings(groupFixture: UserGroup = group) {
   vi.spyOn(api, 'getUserGroup').mockResolvedValue(groupFixture)
   return render(
     <MemoryRouter initialEntries={['/user-groups/grp_lab/settings']}>
-      <Routes>
-        <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
-          <Route path="settings" element={<SettingsSection />} />
-        </Route>
-      </Routes>
+      <UserGroupProvider>
+        <Routes>
+          <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
+            <Route path="settings" element={<SettingsSection />} />
+          </Route>
+        </Routes>
+      </UserGroupProvider>
     </MemoryRouter>,
   )
 }
@@ -117,12 +120,14 @@ describe('User Group 设置分区', () => {
     })
     render(
       <MemoryRouter initialEntries={['/user-groups/grp_lab/settings']}>
-        <Routes>
-          <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
-            <Route index element={<OverviewSection />} />
-            <Route path="settings" element={<SettingsSection />} />
-          </Route>
-        </Routes>
+        <UserGroupProvider>
+          <Routes>
+            <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
+              <Route index element={<OverviewSection />} />
+              <Route path="settings" element={<SettingsSection />} />
+            </Route>
+          </Routes>
+        </UserGroupProvider>
       </MemoryRouter>,
     )
 

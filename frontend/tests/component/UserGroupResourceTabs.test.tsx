@@ -8,6 +8,7 @@ import type { Environment, Project, SharedResource, UserGroup } from '../../src/
 import { EnvironmentsSection } from '../../src/components/usergroup/EnvironmentsSection'
 import { ProjectsSection } from '../../src/components/usergroup/ProjectsSection'
 import { SharedResourcesSection } from '../../src/components/usergroup/SharedResourcesSection'
+import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
 
 const group: UserGroup = {
@@ -98,13 +99,15 @@ const groupEnvironment: Environment = {
 function renderSection(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
-          <Route path="projects" element={<ProjectsSection />} />
-          <Route path="shared-resources" element={<SharedResourcesSection />} />
-          <Route path="environments" element={<EnvironmentsSection />} />
-        </Route>
-      </Routes>
+      <UserGroupProvider>
+        <Routes>
+          <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
+            <Route path="projects" element={<ProjectsSection />} />
+            <Route path="shared-resources" element={<SharedResourcesSection />} />
+            <Route path="environments" element={<EnvironmentsSection />} />
+          </Route>
+        </Routes>
+      </UserGroupProvider>
     </MemoryRouter>,
   )
 }

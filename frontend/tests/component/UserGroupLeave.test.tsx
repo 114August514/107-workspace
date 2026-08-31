@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../src/api/client'
 import type { Member, UserGroup } from '../../src/api/types'
 import { MembersSection } from '../../src/components/usergroup/MembersSection'
+import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
 
 const ownerGroup: UserGroup = {
@@ -46,14 +47,16 @@ function renderMembers(groupFixture: UserGroup, onMembershipChanged = vi.fn()) {
   vi.spyOn(api, 'listMembers').mockResolvedValue(members)
   return render(
     <MemoryRouter initialEntries={['/user-groups/grp_lab/members']}>
-      <Routes>
-        <Route
-          path="/user-groups/:userGroupId"
-          element={<UserGroupPage onMembershipChanged={onMembershipChanged} />}
-        >
-          <Route path="members" element={<MembersSection />} />
-        </Route>
-      </Routes>
+      <UserGroupProvider>
+        <Routes>
+          <Route
+            path="/user-groups/:userGroupId"
+            element={<UserGroupPage onMembershipChanged={onMembershipChanged} />}
+          >
+            <Route path="members" element={<MembersSection />} />
+          </Route>
+        </Routes>
+      </UserGroupProvider>
     </MemoryRouter>,
   )
 }

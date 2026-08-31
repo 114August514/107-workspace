@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../src/api/client'
 import type { ActivityPage, Member, UserGroup } from '../../src/api/types'
 import { OverviewSection } from '../../src/components/usergroup/OverviewSection'
+import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
 
 const group: UserGroup = {
@@ -73,11 +74,13 @@ const activities: ActivityPage = {
 function renderOverview() {
   return render(
     <MemoryRouter initialEntries={['/user-groups/grp_lab']}>
-      <Routes>
-        <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
-          <Route index element={<OverviewSection />} />
-        </Route>
-      </Routes>
+      <UserGroupProvider>
+        <Routes>
+          <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
+            <Route index element={<OverviewSection />} />
+          </Route>
+        </Routes>
+      </UserGroupProvider>
     </MemoryRouter>,
   )
 }

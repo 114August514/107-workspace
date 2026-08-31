@@ -1,13 +1,11 @@
 import { HomeIcon, OrganizationIcon } from '@primer/octicons-react'
-import { Label, Link, Text, UnderlineNav } from '@primer/react'
-import { Link as RouterLink, Outlet, useLocation, useParams } from 'react-router-dom'
+import { Label, Link, Text } from '@primer/react'
+import { Link as RouterLink, Outlet } from 'react-router-dom'
 
-import { api } from '../api/client'
-import { toAsyncError } from '../api/errors'
 import type { UserGroup } from '../api/types'
-import { can } from '../api/types'
-import { useAsync } from '../api/useAsync'
+import { toAsyncError } from '../api/errors'
 import { AsyncState } from '../components/common/AsyncState'
+import { useCurrentUserGroup } from '../components/usergroup/userGroupContext'
 import {
   userGroupPageCopy as copy,
   userGroupRoleLabel,
@@ -21,18 +19,17 @@ export interface UserGroupOutletContext {
 }
 
 export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: () => void }) {
-  const { userGroupId = '' } = useParams()
-  const userGroup = useAsync<UserGroup>(() => api.getUserGroup(userGroupId), [userGroupId])
+  const group = useCurrentUserGroup()
 
   return (
     <div className={styles.page}>
       <AsyncState
-        loading={userGroup.loading && !userGroup.data}
+        loading={group.loading && !group.userGroup}
         loadingText={copy.page.loading}
-        error={toAsyncError(userGroup.error)}
-        onRetry={userGroup.reload}
+        error={toAsyncError(group.error)}
+        onRetry={group.reload}
       >
-        {userGroup.data ? (
+        {group.userGroup ? (
           <>
             <nav className={styles.breadcrumb} aria-label={copy.page.breadcrumbLabel}>
               <HomeIcon aria-hidden="true" />
@@ -40,31 +37,29 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
                 {copy.page.home}
               </Link>
               <span aria-hidden="true">/</span>
-              <span>{userGroup.data.name}</span>
+              <span>{group.userGroup.name}</span>
             </nav>
 
             <header className={styles.header}>
               <div className={styles.titleRow}>
                 <OrganizationIcon className={styles.titleIcon} size={24} aria-hidden="true" />
-                <h1 className={styles.title}>{userGroup.data.name}</h1>
+                <h1 className={styles.title}>{group.userGroup.name}</h1>
                 <Label variant="accent">{copy.page.kind}</Label>
-                <Label variant={userGroup.data.role === 'owner' ? 'attention' : 'default'}>
-                  {userGroupRoleLabel(userGroup.data.role)}
+                <Label variant={group.userGroup.role === 'owner' ? 'attention' : 'default'}>
+                  {userGroupRoleLabel(group.userGroup.role)}
                 </Label>
               </div>
               <Text as="p" className={styles.description}>
-                {userGroup.data.description || copy.page.fallbackDescription}
+                {group.userGroup.description || copy.page.fallbackDescription}
               </Text>
             </header>
-
-            <UserGroupSectionNav userGroup={userGroup.data} />
 
             <div className={styles.sectionContent}>
               <Outlet
                 context={
                   {
-                    userGroup: userGroup.data,
-                    reload: userGroup.reload,
+                    userGroup: group.userGroup,
+                    reload: group.reload,
                     onMembershipChanged,
                   } satisfies UserGroupOutletContext
                 }
@@ -74,40 +69,5 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
         ) : null}
       </AsyncState>
     </div>
-  )
-}
-
-function UserGroupSectionNav({ userGroup }: { userGroup: UserGroup }) {
-  const { userGroupId = '' } = useParams()
-  const { pathname } = useLocation()
-  const basePath = `/user-groups/${userGroupId}`
-  const activeSection = pathname.startsWith(`${basePath}/`)
-    ? pathname.slice(basePath.length + 1).split('/')[0] || 'overview'
-    : 'overview'
-
-  const sections = [
-    { key: 'overview', label: copy.nav.overview, to: '.' },
-    { key: 'projects', label: copy.nav.projects, to: 'projects' },
-    { key: 'shared-resources', label: copy.nav.sharedResources, to: 'shared-resources' },
-    { key: 'environments', label: copy.nav.environments, to: 'environments' },
-    { key: 'members', label: copy.nav.members, to: 'members' },
-    ...(can(userGroup, 'user_group.update')
-      ? [{ key: 'settings', label: copy.nav.settings, to: 'settings' }]
-      : []),
-  ]
-
-  return (
-    <UnderlineNav aria-label={copy.page.navLabel} variant="flush">
-      {sections.map((section) => (
-        <UnderlineNav.Item
-          key={section.key}
-          as={RouterLink}
-          to={section.to}
-          aria-current={activeSection === section.key ? 'page' : undefined}
-        >
-          {section.label}
-        </UnderlineNav.Item>
-      ))}
-    </UnderlineNav>
   )
 }

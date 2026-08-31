@@ -8,6 +8,10 @@ import { api } from '../../src/api/client'
 import type { Home, Member, UserGroup } from '../../src/api/types'
 import { MembersSection } from '../../src/components/usergroup/MembersSection'
 import { OverviewSection } from '../../src/components/usergroup/OverviewSection'
+import {
+  UserGroupHeaderNav,
+  UserGroupProvider,
+} from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
 
 const ownerGroup: UserGroup = {
@@ -55,12 +59,16 @@ const member: Member = {
 function renderUserGroupRoute(initialEntry: string) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
-          <Route index element={<OverviewSection />} />
-          <Route path="members" element={<MembersSection />} />
-        </Route>
-      </Routes>
+      <UserGroupProvider>
+        {/* 镜像 AppShell 结构:分区导航由 Provider 驱动渲染在页面之外 */}
+        <UserGroupHeaderNav />
+        <Routes>
+          <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
+            <Route index element={<OverviewSection />} />
+            <Route path="members" element={<MembersSection />} />
+          </Route>
+        </Routes>
+      </UserGroupProvider>
     </MemoryRouter>,
   )
 }
