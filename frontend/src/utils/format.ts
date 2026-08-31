@@ -31,9 +31,9 @@ export function formatTime(value: string | null | undefined): string {
   return dayjs(value).format('YYYY-MM-DD HH:mm:ss')
 }
 
-export function formatClockTime(value: string | null | undefined): string {
+export function formatTimelineTime(value: string | null | undefined): string {
   if (!value) return '—'
-  return dayjs(value).format('HH:mm')
+  return dayjs(value).format('YY/MM/DD HH:mm:ss')
 }
 
 export function formatRelative(value: string | null | undefined): string {

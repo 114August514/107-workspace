@@ -2,7 +2,7 @@ import { AlertFillIcon, CheckCircleFillIcon, DotFillIcon, StopIcon } from '@prim
 import { Text } from '@primer/react'
 
 import type { RunDetail, RunEvent, RunEventType } from '../../api/types'
-import { formatClockTime, formatTime } from '../../utils/format'
+import { formatTime, formatTimelineTime } from '../../utils/format'
 import styles from './run.module.css'
 
 const EVENT_LABEL: Record<RunEventType, string> = {
@@ -89,7 +89,7 @@ export function RunTimeline({ detail }: { detail: RunDetail }) {
             <div className={styles.timelineHeading}>
               <strong>{EVENT_LABEL[event.type]}</strong>
               <time dateTime={event.created_at} title={formatTime(event.created_at)}>
-                {formatClockTime(event.created_at)}
+                {formatTimelineTime(event.created_at)}
               </time>
             </div>
             <Text as="p" className={styles.timelineMessage}>

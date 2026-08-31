@@ -390,7 +390,7 @@ describe('RunPage backend unavailable', () => {
 
     await screen.findByRole('heading', { name: 'test-run' })
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
-    const eventTime = screen.getByText(/^\d{2}:\d{2}$/)
+    const eventTime = screen.getByText(/^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/)
     expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
     expect(screen.getByRole('img', { name: '已完成' })).toBeVisible()
     fireEvent.click(screen.getByRole('link', { name: '日志' }))
