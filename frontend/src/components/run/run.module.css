@@ -316,18 +316,22 @@
 }
 
 .snapshotFacts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--base-size-20);
   margin: 0;
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .snapshotFact {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--base-size-16);
   min-width: 0;
+  padding: var(--base-size-8) 0;
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .snapshotFact dt {
-  margin: 0 0 var(--base-size-4);
+  margin: 0;
   color: var(--fgColor-muted);
   font-size: var(--text-body-size-small);
   font-weight: var(--base-text-weight-semibold);
@@ -529,7 +533,7 @@
   display: grid;
   grid-template-columns: 2.5rem minmax(0, 1fr);
   gap: var(--base-size-12);
-  padding-bottom: var(--base-size-24);
+  padding-bottom: var(--base-size-32);
 }
 
 .timelineItem:not(:last-child)::before {
@@ -594,6 +598,12 @@
 
   .headerActions > * {
     flex: 1 1 auto;
+  }
+
+  .snapshotFact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--base-size-4);
+    padding: var(--base-size-12) 0;
   }
 
   .runTable thead {
