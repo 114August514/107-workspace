@@ -13,7 +13,6 @@ import {
   ConfirmationDialog,
   IconButton,
   Link,
-  UnderlineNav,
 } from '@primer/react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
@@ -41,8 +40,6 @@ import styles from '../components/run/run.module.css'
 import { formatDuration, formatRelative, formatTime } from '../utils/format'
 
 const POLL_INTERVAL_MS = 2000
-type RunTab = 'summary' | 'logs' | 'artifacts'
-
 interface Feedback {
   variant: 'success' | 'critical'
   title: string
@@ -62,17 +59,12 @@ function contextualError(error: Error | undefined, message: string): AsyncErrorV
 export function RunPage() {
   const { projectId = '', runId = '' } = useParams()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<RunTab>('summary')
   const [rerunKey, setRerunKey] = useState(newIdempotencyKey)
   const [rerunning, setRerunning] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  useEffect(() => {
-    setTab('summary')
-  }, [runId])
-
   const detail = useAsync<RunDetail>(() => api.getRun(runId), [runId])
   const logs = useAsync<LogChunk[]>(() => api.readLogs(runId), [runId])
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
@@ -347,77 +339,58 @@ export function RunPage() {
                 <Banner.Description>
                   <div className={styles.failureDescription}>
                     <span>{run.failure_reason}</span>
-                    <Button size="small" onClick={() => setTab('logs')}>
-                      查看日志
-                    </Button>
+                    <Link href="#run-logs">查看日志</Link>
                   </div>
                 </Banner.Description>
               </Banner>
             ) : null}
 
-            <section aria-label="Run detail">
-              <UnderlineNav aria-label="Run detail navigation" className={styles.runNavigation}>
-                <UnderlineNav.Item
-                  aria-current={tab === 'summary' ? 'page' : undefined}
-                  onSelect={() => setTab('summary')}
-                >
-                  概览
-                </UnderlineNav.Item>
-                <UnderlineNav.Item
-                  aria-current={tab === 'logs' ? 'page' : undefined}
-                  onSelect={() => setTab('logs')}
-                >
+            <section className={styles.runDetailFlow} aria-label="Run detail">
+              <RunSummary
+                key={run.id}
+                detail={detail.data}
+                computePlan={computePlan}
+                computePlanLoading={plans.loading}
+                computePlanError={plans.error !== undefined}
+                sourceConfiguration={sourceConfiguration}
+                configurationLoading={configurations.loading}
+                configurationError={configurations.error !== undefined}
+                environmentView={environment.data}
+                environmentLoading={environment.loading}
+                environmentError={environment.error !== undefined}
+              />
+
+              <section
+                id="run-logs"
+                className={styles.runDetailSection}
+                aria-labelledby="run-logs-title"
+              >
+                <h2 id="run-logs-title" className={styles.sectionTitle}>
                   日志
-                </UnderlineNav.Item>
-                <UnderlineNav.Item
-                  aria-current={tab === 'artifacts' ? 'page' : undefined}
-                  counter={detail.data.artifacts.length}
-                  onSelect={() => setTab('artifacts')}
+                </h2>
+                <AsyncState
+                  loading={logs.loading}
+                  loadingText="正在读取 Run 日志…"
+                  error={contextualError(logs.error, '无法加载 Run 日志。')}
+                  onRetry={logs.reload}
                 >
+                  <RunLogPanel
+                    key={run.id}
+                    runId={run.id}
+                    chunks={logs.data ?? []}
+                    failed={run.status === 'failed'}
+                  />
+                </AsyncState>
+              </section>
+
+              <section className={styles.runDetailSection} aria-labelledby="run-artifacts-title">
+                <h2 id="run-artifacts-title" className={styles.sectionTitle}>
                   运行产物
-                </UnderlineNav.Item>
-              </UnderlineNav>
-              <div className={styles.tabPanel} role="tabpanel">
-                {tab === 'summary' ? (
-                  <>
-                    <RunSummary
-                      key={run.id}
-                      detail={detail.data}
-                      computePlan={computePlan}
-                      computePlanLoading={plans.loading}
-                      computePlanError={plans.error !== undefined}
-                      sourceConfiguration={sourceConfiguration}
-                      configurationLoading={configurations.loading}
-                      configurationError={configurations.error !== undefined}
-                      environmentView={environment.data}
-                      environmentLoading={environment.loading}
-                      environmentError={environment.error !== undefined}
-                    />
-                    <RunDiagnostics detail={detail.data} />
-                  </>
-                ) : null}
-                {tab === 'logs' ? (
-                  <section className={styles.executionSection} aria-labelledby="run-logs-title">
-                    <h2 id="run-logs-title" className={styles.sectionTitle}>
-                      日志
-                    </h2>
-                    <AsyncState
-                      loading={logs.loading}
-                      loadingText="正在读取 Run 日志…"
-                      error={contextualError(logs.error, '无法加载 Run 日志。')}
-                      onRetry={logs.reload}
-                    >
-                      <RunLogPanel
-                        key={run.id}
-                        runId={run.id}
-                        chunks={logs.data ?? []}
-                        failed={run.status === 'failed'}
-                      />
-                    </AsyncState>
-                  </section>
-                ) : null}
-                {tab === 'artifacts' ? <ArtifactPanel artifacts={detail.data.artifacts} /> : null}
-              </div>
+                </h2>
+                <ArtifactPanel artifacts={detail.data.artifacts} />
+              </section>
+
+              <RunDiagnostics detail={detail.data} />
             </section>
           </div>
 

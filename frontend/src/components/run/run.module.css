@@ -183,8 +183,18 @@
   white-space: pre-wrap;
 }
 
-.tabPanel {
-  padding-top: var(--base-size-16);
+.runDetailFlow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-16);
+}
+
+.runDetailSection {
+  min-width: 0;
+  padding: var(--base-size-16);
+  scroll-margin-top: var(--base-size-16);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
 }
 
 .summarySurface {
@@ -722,10 +732,6 @@
   .definitionRow {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--base-size-2);
-  }
-
-  .tabPanel {
-    padding-top: var(--base-size-12);
   }
 
   .runTable td {

@@ -408,8 +408,6 @@ describe('RunPage backend unavailable', () => {
     const eventTime = screen.getByText(/^\d{2}:\d{2}:\d{2}$/)
     expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
     expect(screen.getByRole('img', { name: '已完成' })).toBeVisible()
-    fireEvent.click(screen.getByRole('link', { name: '日志' }))
-    expect(screen.queryByRole('heading', { name: '执行过程' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
     expect(screen.getByRole('link', { name: '标准输出' })).toBeVisible()
     expect(screen.getByRole('link', { name: '标准错误' })).toBeVisible()
@@ -476,8 +474,8 @@ describe('RunPage backend unavailable', () => {
     )
 
     expect(await screen.findByText('Process exited with code 1.')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: '查看日志' }))
-    expect(screen.getByRole('link', { name: '日志' })).toHaveAttribute('aria-current', 'page')
+    const logsLink = screen.getByRole('link', { name: '查看日志' })
+    expect(logsLink).toHaveAttribute('href', '#run-logs')
     expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
   })
 
@@ -501,12 +499,11 @@ describe('RunPage backend unavailable', () => {
     )
 
     await screen.findByRole('heading', { name: 'test-run' })
-    fireEvent.click(screen.getByRole('link', { name: '日志' }))
-    expect(await screen.findByRole('heading', { name: '日志' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '重新运行' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('link', { name: '概览' })).toHaveAttribute('aria-current', 'page'),
+      expect(screen.getByRole('banner', { name: 'Run header' })).toHaveTextContent('重新运行自'),
     )
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(screen.getByLabelText('Run Summary')).toBeVisible()
