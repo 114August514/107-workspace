@@ -20,7 +20,15 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
 
 import { api, newIdempotencyKey } from '../api/client'
 import { toAsyncError, type AsyncErrorView } from '../api/errors'
-import type { ComputePlan, LogChunk, Project, RunConfiguration, RunDetail } from '../api/types'
+import type {
+  ComputePlan,
+  Environment,
+  EnvironmentVersion,
+  LogChunk,
+  Project,
+  RunConfiguration,
+  RunDetail,
+} from '../api/types'
 import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
@@ -39,6 +47,11 @@ interface Feedback {
   variant: 'success' | 'critical'
   title: string
   description?: string
+}
+
+interface EnvironmentView {
+  environment: Environment
+  version: EnvironmentVersion
 }
 
 function contextualError(error: Error | undefined, message: string): AsyncErrorView | undefined {
@@ -74,9 +87,16 @@ export function RunPage() {
     [run?.project_id],
   )
   const sourceConfiguration = configurations.data?.find(
-    (configuration) => configuration.id === run?.source_run_configuration_id,
+    (configuration) => configuration.id === detail.data?.snapshot.source_run_configuration_id,
   )
   const computePlan = plans.data?.find((plan) => plan.id === detail.data?.snapshot.compute_plan_id)
+  const environmentVersionId = detail.data?.snapshot.environment_version_id
+  const environment = useAsync<EnvironmentView | undefined>(async () => {
+    if (!environmentVersionId) return undefined
+    const version = await api.environmentVersion(environmentVersionId)
+    const resolvedEnvironment = await api.environment(version.environment_id)
+    return { environment: resolvedEnvironment, version }
+  }, [environmentVersionId])
   const active = run !== undefined && !isTerminal(run.status)
 
   useEffect(() => {
@@ -358,16 +378,19 @@ export function RunPage() {
                   运行产物
                 </UnderlineNav.Item>
               </UnderlineNav>
-              <div
-                className={`${styles.tabPanel} ${tab === 'summary' ? styles.summaryPanel : ''}`}
-                role="tabpanel"
-              >
+              <div className={styles.tabPanel} role="tabpanel">
                 {tab === 'summary' ? (
                   <RunSummary
                     detail={detail.data}
                     computePlan={computePlan}
                     computePlanLoading={plans.loading}
                     computePlanError={plans.error !== undefined}
+                    sourceConfiguration={sourceConfiguration}
+                    configurationLoading={configurations.loading}
+                    configurationError={configurations.error !== undefined}
+                    environmentView={environment.data}
+                    environmentLoading={environment.loading}
+                    environmentError={environment.error !== undefined}
                   />
                 ) : null}
                 {tab === 'logs' ? (

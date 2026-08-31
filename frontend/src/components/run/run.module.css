@@ -188,37 +188,36 @@
   padding-top: var(--base-size-16);
 }
 
-.summaryPanel {
-  max-width: 50rem;
-}
-
 .summarySurface {
   display: flex;
   flex-direction: column;
+  gap: var(--base-size-24);
 }
 
-.summarySection {
-  padding: 0 0 var(--base-size-24);
+.summaryOverviewGrid {
+  display: grid;
+  grid-template-columns: 18.75rem minmax(0, 1fr);
+  align-items: start;
+  gap: var(--base-size-32);
 }
 
-.summarySection h2 {
-  margin: 0 0 var(--base-size-12);
-  color: var(--fgColor-default);
-  font-size: var(--text-title-size-medium);
-  font-weight: var(--base-text-weight-semibold);
+.summaryExecution,
+.snapshotSummary {
+  min-width: 0;
 }
 
-.summaryValueStack {
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: var(--base-size-4);
+.snapshotHeading {
+  margin-bottom: var(--base-size-16);
 }
 
-.summaryPrimaryValue {
-  color: var(--fgColor-default);
-  font-size: var(--text-body-size-medium);
-  font-weight: var(--base-text-weight-semibold);
+.snapshotHeading .sectionTitle {
+  margin-bottom: var(--base-size-4);
+}
+
+.snapshotHeading p {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
 }
 
 .diagnosticList {
@@ -243,12 +242,10 @@
   overflow-wrap: anywhere;
 }
 
-.snapshotDisclosure,
 .diagnosticDisclosure {
   border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
-.snapshotDisclosure > summary,
 .diagnosticDisclosure > summary {
   display: flex;
   box-sizing: border-box;
@@ -265,18 +262,15 @@
   list-style: none;
 }
 
-.snapshotDisclosure > summary::-webkit-details-marker,
 .diagnosticDisclosure > summary::-webkit-details-marker {
   display: none;
 }
 
-.snapshotDisclosure > summary:hover,
 .diagnosticDisclosure > summary:hover {
   background: var(--bgColor-muted);
   color: var(--fgColor-default);
 }
 
-.snapshotDisclosure > summary:focus-visible,
 .diagnosticDisclosure > summary:focus-visible {
   outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
   outline-offset: -2px;
@@ -286,18 +280,8 @@
   flex: none;
 }
 
-.snapshotDisclosure[open] > summary .disclosureChevron,
 .diagnosticDisclosure[open] > summary .disclosureChevron {
   transform: rotate(90deg);
-}
-
-.snapshotDisclosureBody {
-  padding-bottom: var(--base-size-16);
-}
-
-.summaryExecution {
-  padding: var(--base-size-16) 0;
-  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .diagnosticList {
@@ -332,33 +316,35 @@
   gap: var(--base-size-4);
 }
 
-.snapshotGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+.snapshotFacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-20);
   margin: 0;
-  border: var(--borderWidth-thin) solid var(--borderColor-default);
-  border-radius: var(--borderRadius-medium);
-  overflow: hidden;
 }
 
-.snapshotRow {
-  display: grid;
-  grid-template-columns: 12rem minmax(0, 1fr);
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
+.snapshotFact {
+  min-width: 0;
 }
 
-.snapshotRow:last-child {
-  border-bottom: none;
+.snapshotFact dt {
+  margin: 0 0 var(--base-size-4);
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
 }
 
-.snapshotRow dt,
-.snapshotRow dd {
-  padding: var(--base-size-12) var(--base-size-16);
-}
-
-.snapshotRow dt {
+.snapshotFact dd {
+  min-width: 0;
   margin: 0;
-  background: var(--bgColor-muted);
+  overflow-wrap: anywhere;
+}
+
+.snapshotValueStack {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--base-size-4);
 }
 
 .labelGroup,
@@ -586,6 +572,13 @@
   margin: var(--base-size-4) 0 0;
 }
 
+@media (max-width: 56rem) {
+  .summaryOverviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--base-size-24);
+  }
+}
+
 @media (max-width: 48rem) {
   .projectNavigation {
     gap: var(--base-size-16);
@@ -598,14 +591,6 @@
 
   .headerActions > * {
     flex: 1 1 auto;
-  }
-
-  .snapshotRow {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .snapshotRow dt {
-    border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
   }
 
   .runTable thead {

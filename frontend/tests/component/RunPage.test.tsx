@@ -6,6 +6,8 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { api, ApiError } from '../../src/api/client'
 import type {
   ComputePlan,
+  Environment,
+  EnvironmentVersion,
   LogChunk,
   Project,
   RunConfiguration,
@@ -124,6 +126,31 @@ const computePlanFixture: ComputePlan = {
   default_time_limit_minutes: 30,
 }
 
+const environmentVersionFixture: EnvironmentVersion = {
+  id: 'env-1',
+  environment_id: 'environment-1',
+  version: '3.12',
+  description: '',
+  runtime_kind: 'modules',
+  definition: {},
+  definition_hash: 'a'.repeat(64),
+  execution_spec: { kind: 'modules', commands: [] },
+  availability: 'available',
+  availability_checked_at: '2026-08-15T08:00:00Z',
+  availability_detail: '',
+  availability_reason: '',
+  validation_evidence: {},
+  validation_summary: '',
+}
+
+const environmentFixture: Environment = {
+  id: 'environment-1',
+  name: 'Python',
+  description: '',
+  owner: { kind: 'user_group', id: 'workspace-1', display_name: 'Demo Group' },
+  versions: [environmentVersionFixture],
+}
+
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location">{location.pathname}</output>
@@ -144,6 +171,8 @@ describe('RunPage backend unavailable', () => {
     vi.spyOn(api, 'getProject').mockResolvedValue(projectFixture)
     vi.spyOn(api, 'listRunConfigurations').mockResolvedValue([configurationFixture])
     vi.spyOn(api, 'computePlans').mockResolvedValue([computePlanFixture])
+    vi.spyOn(api, 'environmentVersion').mockResolvedValue(environmentVersionFixture)
+    vi.spyOn(api, 'environment').mockResolvedValue(environmentFixture)
   })
 
   afterEach(() => {
@@ -294,31 +323,47 @@ describe('RunPage backend unavailable', () => {
     expect(within(runHeader).getByText('默认训练方案')).toBeVisible()
 
     const summary = screen.getByLabelText('Run Summary')
-    expect(within(summary).queryByRole('heading', { name: '执行信息' })).toBeNull()
-    expect(within(summary).queryByRole('heading', { name: '来源' })).toBeNull()
-    expect(within(summary).queryByRole('heading', { name: '来源关系' })).toBeNull()
-    expect(within(summary).queryByText('首次运行')).toBeNull()
-    const compute = within(summary).getByRole('heading', { name: '算力' }).parentElement!
-    expect(within(compute).getByText('CPU 基础')).toBeVisible()
-    expect(within(compute).getByText('cpu-basic')).toBeVisible()
-    expect(within(compute).getByText('1 节点 · 1 核 · 1 GB')).toBeVisible()
-    expect(within(compute).getByText('最长运行 1 小时')).toBeVisible()
-    const computeText = compute.textContent ?? ''
-    expect(computeText.indexOf('CPU 基础')).toBeLessThan(
-      computeText.indexOf('1 节点 · 1 核 · 1 GB'),
-    )
-    expect(computeText.indexOf('1 节点 · 1 核 · 1 GB')).toBeLessThan(
-      computeText.indexOf('最长运行 1 小时'),
-    )
-    expect(computeText.indexOf('最长运行 1 小时')).toBeLessThan(computeText.indexOf('cpu-basic'))
     expect(within(summary).getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(within(summary).getByText('这个 Run 还没有执行事件。')).toBeVisible()
-    expect(within(summary).getByText('完整运行快照')).toBeVisible()
-    expect(within(summary).getByText('执行命令')).not.toBeVisible()
-    expect(screen.getByText('诊断信息')).toBeVisible()
+
+    const snapshotSummary = within(summary)
+      .getByRole('heading', { name: '运行快照' })
+      .closest('section')!
+    expect(within(snapshotSummary).getByText('本次 Run 的不可变执行配置')).toBeVisible()
+    expect(within(snapshotSummary).getByRole('link', { name: 'v1' })).toBeVisible()
+    expect(within(snapshotSummary).getByText('默认训练方案')).toBeVisible()
+    expect(within(snapshotSummary).getByRole('link', { name: 'Python · 3.12' })).toBeVisible()
+    expect(within(snapshotSummary).getByText('CPU 基础')).toBeVisible()
+    expect(within(snapshotSummary).getByText('1 节点 · 1 核 · 1 GB')).toBeVisible()
+    expect(within(snapshotSummary).getByText('最长运行 1 小时')).toBeVisible()
+    expect(within(snapshotSummary).getByText('cpu-basic')).toBeVisible()
+    expect(within(snapshotSummary).getByText('python train.py')).toBeVisible()
+    expect(within(summary).queryByText('完整运行快照')).toBeNull()
+
+    const diagnosticSummary = screen.getByText('诊断信息').closest('summary')!
     expect(screen.getByText('调度任务')).not.toBeVisible()
+    fireEvent.click(diagnosticSummary)
+    expect(screen.getByText('环境执行规格')).toBeVisible()
+    expect(screen.getByText('env-1')).toBeVisible()
     expect(screen.queryByRole('link', { name: '执行' })).toBeNull()
     expect(screen.queryByRole('link', { name: '运行快照' })).toBeNull()
+  })
+
+  it('keeps the Snapshot readable when its environment label is unavailable', async () => {
+    vi.spyOn(api, 'getRun').mockResolvedValue(runDetailFixture())
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+    vi.spyOn(api, 'environmentVersion').mockRejectedValue(new Error('unavailable'))
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('运行环境信息暂不可用')).toBeVisible()
+    expect(screen.getByRole('heading', { name: '运行快照' })).toBeVisible()
+    expect(screen.getByText('python train.py')).toBeVisible()
+    expect(screen.getByText('env-1')).not.toBeVisible()
   })
 
   it('uses Logs as a primary intent and keeps the timeline in Summary', async () => {
