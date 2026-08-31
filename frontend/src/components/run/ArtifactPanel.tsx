@@ -1,5 +1,5 @@
-import { DownloadIcon, PackageIcon } from '@primer/octicons-react'
-import { Banner, Button, Label, Text } from '@primer/react'
+import { DownloadIcon, FileDirectoryIcon, FileIcon, PackageIcon } from '@primer/octicons-react'
+import { Banner, IconButton, Label, Text } from '@primer/react'
 import { Blankslate } from '@primer/react/experimental'
 import { useState } from 'react'
 
@@ -54,7 +54,7 @@ function ArtifactFiles({ artifact }: { artifact: Artifact }) {
         <table className={styles.artifactTable} aria-label={`${artifact.name} 文件`}>
           <thead>
             <tr>
-              <th scope="col">文件</th>
+              <th scope="col">名称</th>
               <th scope="col">大小</th>
               <th scope="col">操作</th>
             </tr>
@@ -63,19 +63,21 @@ function ArtifactFiles({ artifact }: { artifact: Artifact }) {
             {(entries.data ?? []).map((entry) => (
               <tr key={entry.path}>
                 <td>
-                  <code className={styles.inlineCode}>{entry.path}</code>
+                  <span className={styles.artifactFileName}>
+                    <FileIcon size={16} aria-hidden />
+                    <code className={styles.inlineCode}>{entry.path}</code>
+                  </span>
                 </td>
                 <td>{formatBytes(entry.size)}</td>
                 <td>
-                  <Button
+                  <IconButton
+                    icon={DownloadIcon}
                     size="small"
-                    leadingVisual={DownloadIcon}
+                    aria-label={`下载 ${entry.path}`}
                     loading={downloading === entry.path}
                     disabled={downloading !== null}
                     onClick={() => void download(entry.path)}
-                  >
-                    下载文件
-                  </Button>
+                  />
                 </td>
               </tr>
             ))}
@@ -105,6 +107,7 @@ export function ArtifactPanel({ artifacts }: { artifacts: Artifact[] }) {
           key={artifact.id}
           title={
             <span className={styles.artifactTitle}>
+              <FileDirectoryIcon size={16} aria-hidden />
               {artifact.name}
               {artifact.status !== 'available' ? (
                 <Label variant="attention">内容已清理</Label>
@@ -119,7 +122,9 @@ export function ArtifactPanel({ artifacts }: { artifacts: Artifact[] }) {
           }
         >
           <div className={styles.artifactMeta}>
-            <code className={styles.inlineCode}>{artifact.source_path}</code>
+            <span>
+              收集自 <code className={styles.inlineCode}>{artifact.source_path}</code>
+            </span>
             {artifact.description ? <Text size="small">{artifact.description}</Text> : null}
           </div>
           {artifact.status === 'available' ? (

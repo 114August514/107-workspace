@@ -33,6 +33,7 @@ import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { RunStatusTag } from '../components/common/RunStatusTag'
+import { RunDiagnostics } from '../components/run/RunDiagnostics'
 import { ArtifactPanel } from '../components/run/ArtifactPanel'
 import { RunLogPanel } from '../components/run/RunLogPanel'
 import { RunSummary } from '../components/run/RunSummary'
@@ -40,7 +41,6 @@ import styles from '../components/run/run.module.css'
 import { formatDuration, formatRelative, formatTime } from '../utils/format'
 
 const POLL_INTERVAL_MS = 2000
-
 type RunTab = 'summary' | 'logs' | 'artifacts'
 
 interface Feedback {
@@ -69,7 +69,6 @@ export function RunPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-
   useEffect(() => {
     setTab('summary')
   }, [runId])
@@ -380,19 +379,22 @@ export function RunPage() {
               </UnderlineNav>
               <div className={styles.tabPanel} role="tabpanel">
                 {tab === 'summary' ? (
-                  <RunSummary
-                    key={run.id}
-                    detail={detail.data}
-                    computePlan={computePlan}
-                    computePlanLoading={plans.loading}
-                    computePlanError={plans.error !== undefined}
-                    sourceConfiguration={sourceConfiguration}
-                    configurationLoading={configurations.loading}
-                    configurationError={configurations.error !== undefined}
-                    environmentView={environment.data}
-                    environmentLoading={environment.loading}
-                    environmentError={environment.error !== undefined}
-                  />
+                  <>
+                    <RunSummary
+                      key={run.id}
+                      detail={detail.data}
+                      computePlan={computePlan}
+                      computePlanLoading={plans.loading}
+                      computePlanError={plans.error !== undefined}
+                      sourceConfiguration={sourceConfiguration}
+                      configurationLoading={configurations.loading}
+                      configurationError={configurations.error !== undefined}
+                      environmentView={environment.data}
+                      environmentLoading={environment.loading}
+                      environmentError={environment.error !== undefined}
+                    />
+                    <RunDiagnostics detail={detail.data} />
+                  </>
                 ) : null}
                 {tab === 'logs' ? (
                   <section className={styles.executionSection} aria-labelledby="run-logs-title">
@@ -405,7 +407,12 @@ export function RunPage() {
                       error={contextualError(logs.error, '无法加载 Run 日志。')}
                       onRetry={logs.reload}
                     >
-                      <RunLogPanel chunks={logs.data ?? []} failed={run.status === 'failed'} />
+                      <RunLogPanel
+                        key={run.id}
+                        runId={run.id}
+                        chunks={logs.data ?? []}
+                        failed={run.status === 'failed'}
+                      />
                     </AsyncState>
                   </section>
                 ) : null}

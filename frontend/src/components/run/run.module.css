@@ -328,6 +328,21 @@
   gap: var(--base-size-16);
 }
 
+.logToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-12);
+}
+
+.logActions,
+.artifactFileName {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
 .valueStack {
   align-items: flex-start;
   gap: var(--base-size-4);
@@ -389,7 +404,7 @@
 .logConsole {
   box-sizing: border-box;
   width: 100%;
-  max-height: 30rem;
+  max-height: 24rem;
   padding: var(--base-size-16);
   margin: 0;
   overflow: auto;
@@ -402,6 +417,11 @@
   line-height: var(--base-text-lineHeight-normal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.logConsoleNoWrap {
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 .logConsole:focus-visible {
@@ -428,6 +448,14 @@
   border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
+.artifactFileName {
+  min-width: 0;
+}
+
+.artifactFileName code {
+  overflow-wrap: anywhere;
+}
+
 .inlineBanner {
   padding: var(--base-size-12) var(--base-size-16) 0;
 }
@@ -441,6 +469,14 @@
 .artifactTable {
   width: 100%;
   border-collapse: collapse;
+}
+
+.artifactTable th:nth-child(2) {
+  width: 8rem;
+}
+
+.artifactTable th:last-child {
+  width: 4rem;
 }
 
 .runTable {

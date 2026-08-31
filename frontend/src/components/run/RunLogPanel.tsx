@@ -1,4 +1,5 @@
-import { Banner, Text, UnderlineNav } from '@primer/react'
+import { DownloadIcon } from '@primer/octicons-react'
+import { Banner, Button, Text, UnderlineNav } from '@primer/react'
 import { useState } from 'react'
 
 import type { LogChunk, LogStream } from '../../api/types'
@@ -13,15 +14,30 @@ function defaultStream(chunks: LogChunk[], failed: boolean): LogStream | undefin
 }
 
 interface Props {
+  runId: string
   chunks: LogChunk[]
   /** Run 失败时优先打开 stderr，直接把诊断入口放在用户眼前。 */
   failed?: boolean
 }
 
 /** 标准输出与标准错误；后端返回前已完成已知 Secret 明文抹除。 */
-export function RunLogPanel({ chunks, failed = false }: Props) {
+export function RunLogPanel({ runId, chunks, failed = false }: Props) {
   const [stream, setStream] = useState<LogStream | undefined>(() => defaultStream(chunks, failed))
+  const [wrap, setWrap] = useState(true)
   const active = chunks.find((chunk) => chunk.stream === stream) ?? chunks[0]
+
+  const download = () => {
+    if (!active) return
+    const blob = new Blob([active.content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${runId}-${active.stream}.log`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
 
   if (!active) {
     return <Text className={styles.muted}>这个 Run 还没有日志输出。</Text>
@@ -29,17 +45,27 @@ export function RunLogPanel({ chunks, failed = false }: Props) {
 
   return (
     <div className={styles.logPanel}>
-      <UnderlineNav aria-label="Run 日志输出">
-        {chunks.map((chunk) => (
-          <UnderlineNav.Item
-            key={chunk.stream}
-            aria-current={active.stream === chunk.stream ? 'page' : undefined}
-            onSelect={() => setStream(chunk.stream)}
-          >
-            {chunk.stream === 'stdout' ? '标准输出' : '标准错误'}
-          </UnderlineNav.Item>
-        ))}
-      </UnderlineNav>
+      <div className={styles.logToolbar}>
+        <UnderlineNav aria-label="Run 日志输出">
+          {chunks.map((chunk) => (
+            <UnderlineNav.Item
+              key={chunk.stream}
+              aria-current={active.stream === chunk.stream ? 'page' : undefined}
+              onSelect={() => setStream(chunk.stream)}
+            >
+              {chunk.stream === 'stdout' ? '标准输出' : '标准错误'}
+            </UnderlineNav.Item>
+          ))}
+        </UnderlineNav>
+        <div className={styles.logActions}>
+          <Button size="small" aria-pressed={wrap} onClick={() => setWrap((current) => !current)}>
+            自动换行
+          </Button>
+          <Button size="small" leadingVisual={DownloadIcon} onClick={download}>
+            下载日志
+          </Button>
+        </div>
+      </div>
       {active.truncated ? (
         <Banner variant="warning">
           <Banner.Title>日志内容不完整</Banner.Title>
@@ -47,7 +73,12 @@ export function RunLogPanel({ chunks, failed = false }: Props) {
         </Banner>
       ) : null}
       {active.content.trim() ? (
-        <pre className={styles.logConsole} tabIndex={0} aria-label={`${active.stream} 日志`}>
+        <pre
+          id="run-log-console"
+          className={`${styles.logConsole} ${wrap ? '' : styles.logConsoleNoWrap}`}
+          tabIndex={0}
+          aria-label={`${active.stream} 日志`}
+        >
           {active.content}
         </pre>
       ) : (
