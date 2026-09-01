@@ -49,7 +49,7 @@ from ..domain.models import (
     RunEvent,
     RunLogChunk,
 )
-from ..domain.ownership import OwnerReference
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
@@ -662,6 +662,11 @@ class RunService:
                 run_name=run.name,
                 reason=str(exc),
             )
+            if isinstance(exc, (ObjectNotFound, ValidationFailed)) and any(
+                binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
+                for binding in snapshot.input_bindings
+            ):
+                await self._notify_shared_resource_consumers(run, snapshot, str(exc))
             return
 
         run.scheduler_job_id = job_id
@@ -703,6 +708,32 @@ class RunService:
                 created_at=self._clock.now(),
             )
         )
+
+    async def _notify_shared_resource_consumers(
+        self, run: Run, snapshot: RunSnapshot, detail: str
+    ) -> None:
+        project = await self._repos.projects.get(run.project_id)
+        if project is None:
+            return
+        if project.owner.kind is OwnerKind.USER:
+            recipients = [project.owner.id]
+        else:
+            recipients = [
+                member.user_id
+                for member in await self._repos.memberships.list_for_user_group(project.owner.id)
+                if member.is_active
+            ]
+        for binding in snapshot.input_bindings:
+            if binding.source_type is not InputSourceType.SHARED_RESOURCE_VERSION:
+                continue
+            for recipient_id in recipients:
+                await self._notifier.shared_resource_unavailable(
+                    recipient_id=recipient_id,
+                    project_id=project.id,
+                    project_name=project.name,
+                    asset_label=binding.source_id,
+                    detail=detail,
+                )
 
     async def _resolve_project_version(
         self, project_id: str, version_id: str | None

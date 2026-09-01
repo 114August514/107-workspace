@@ -6,24 +6,36 @@ import hashlib
 
 from ..domain import ids
 from ..domain.capabilities import Capability
-from ..domain.enums import EnvironmentPublicationStatus, EnvironmentRuntimeKind
+from ..domain.enums import (
+    EnvironmentAvailability,
+    EnvironmentPublicationStatus,
+    EnvironmentRuntimeKind,
+)
 from ..domain.errors import ObjectNotFound, ValidationFailed
 from ..domain.models import EnvironmentPublicationAttempt, EnvironmentVersion
+from ..domain.ownership import OwnerKind
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard
 from .environment_publication import EnvironmentPublicationProcessor
+from .notifier import Notifier
 
 
 class EnvironmentPublicationService:
     def __init__(
-        self, repos: Repositories, guard: AccessGuard, storage: StoragePort, clock: Clock
+        self,
+        repos: Repositories,
+        guard: AccessGuard,
+        storage: StoragePort,
+        clock: Clock,
+        notifier: Notifier | None = None,
     ) -> None:
         self._repos = repos
         self._guard = guard
         self._storage = storage
         self._clock = clock
+        self._notifier = notifier
 
     async def create_modules(
         self,
@@ -107,9 +119,36 @@ class EnvironmentPublicationService:
             version.environment_id,
             needs=Capability.ENVIRONMENT_VERSION_CREATE,
         )
-        return await EnvironmentPublicationProcessor(
+        refreshed = await EnvironmentPublicationProcessor(
             self._repos, self._storage, self._clock
         ).refresh_availability(version.id)
+        if refreshed.availability is EnvironmentAvailability.UNAVAILABLE and self._notifier:
+            await self._notify_consumers(refreshed)
+        return refreshed
+
+    async def _notify_consumers(self, version: EnvironmentVersion) -> None:
+        environment = await self._repos.environments.get_by_id(version.environment_id)
+        if environment is None:
+            return
+        for project in await self._repos.projects.list_using_environment_version(version.id):
+            if project.owner.kind is OwnerKind.USER:
+                recipients = [project.owner.id]
+            else:
+                recipients = [
+                    member.user_id
+                    for member in await self._repos.memberships.list_for_user_group(
+                        project.owner.id
+                    )
+                    if member.is_active
+                ]
+            for recipient_id in recipients:
+                await self._notifier.environment_unavailable(
+                    recipient_id=recipient_id,
+                    project_id=project.id,
+                    project_name=project.name,
+                    asset_label=f"{environment.name} {version.version}",
+                    detail=version.availability_detail or version.availability_reason,
+                )
 
     async def _create(
         self,

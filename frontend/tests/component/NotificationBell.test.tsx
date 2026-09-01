@@ -241,3 +241,20 @@ describe('NotificationBell 通知浮层', () => {
     expect(await screen.findByText('批量标记失败。')).toBeVisible()
   })
 })
+
+describe('NotificationBell read state toggle', () => {
+  it('lets a previously read notification become unread', async () => {
+    const notification = makeNotification({ read_at: '2026-08-15T09:00:00Z' })
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([notification]))
+    const markUnread = vi.spyOn(api, 'markNotificationUnread').mockResolvedValue(undefined)
+
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知' }))
+    const button = await screen.findByRole('button', {
+      name: '将「Run「首次运行」已成功」标为未读',
+    })
+    fireEvent.click(button)
+    await waitFor(() => expect(markUnread).toHaveBeenCalledWith('n-1'))
+  })
+})

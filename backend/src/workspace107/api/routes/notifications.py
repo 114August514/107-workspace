@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
 
+from ...application.notifier import MANDATORY_NOTIFICATION_TYPES
+from ...domain.enums import NotificationType
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, PageDep, ServicesDep
@@ -31,6 +33,51 @@ async def list_notifications(
 async def unread_count(user: CurrentUser, services: ServicesDep) -> s.UnreadCountOut:
     """仅统计当前用户收到且尚未读取的通知。"""
     return s.UnreadCountOut(unread=await services.notifications.count_unread(user.id))
+
+
+@router.get("/preferences", response_model=list[s.NotificationPreferenceOut], summary="通知偏好")
+async def list_notification_preferences(
+    user: CurrentUser, services: ServicesDep
+) -> list[s.NotificationPreferenceOut]:
+    preferences = await services.notifications.list_preferences(user.id)
+    return [
+        s.NotificationPreferenceOut(
+            type=type,
+            enabled=enabled,
+            mandatory=type in MANDATORY_NOTIFICATION_TYPES,
+        )
+        for type, enabled in preferences.items()
+    ]
+
+
+@router.put(
+    "/preferences/{notification_type}",
+    response_model=s.NotificationPreferenceOut,
+    summary="更新通知偏好",
+)
+async def update_notification_preference(
+    notification_type: NotificationType,
+    payload: s.NotificationPreferenceUpdateIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.NotificationPreferenceOut:
+    enabled = await services.notifications.set_preference(
+        user.id, notification_type, payload.enabled
+    )
+    return s.NotificationPreferenceOut(
+        type=notification_type,
+        enabled=enabled,
+        mandatory=notification_type in MANDATORY_NOTIFICATION_TYPES,
+    )
+
+
+@router.post(
+    "/{notification_id}/unread",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="将通知标记为未读",
+)
+async def mark_unread(notification_id: str, user: CurrentUser, services: ServicesDep) -> None:
+    await services.notifications.mark_unread(user.id, notification_id)
 
 
 @router.post(

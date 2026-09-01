@@ -9,43 +9,43 @@ from __future__ import annotations
 import logging
 
 from ..domain.enums import NotificationType, TargetType
+from ..domain.errors import ValidationFailed
 from ..domain.ids import NOTIFICATION, new_id
 from ..domain.models import Notification
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.notification import NotificationPublisher
-from ..domain.ports.repositories import Repositories
+from ..domain.ports.repositories import NotificationRepository, Repositories
 from .activity import SupportsNestedTransaction
 
 logger = logging.getLogger(__name__)
 
+MANDATORY_NOTIFICATION_TYPES = frozenset(
+    {
+        NotificationType.MEMBER_REMOVED,
+        NotificationType.ROLE_CHANGED,
+        NotificationType.OWNERSHIP_RECEIVED,
+        NotificationType.ENVIRONMENT_UNAVAILABLE,
+        NotificationType.SHARED_RESOURCE_UNAVAILABLE,
+        NotificationType.PLATFORM_INCIDENT,
+    }
+)
+
 
 class Notifier:
-    """产生通知。
-
-    和 :class:`~workspace107.application.activity.ActivityRecorder` 同一套规矩，
-    原因也一样：
-
-    **发不出去不能让用例失败。** 成员已经邀请成功了，不该因为通知写不进去
-    而看到报错。所以吞掉异常——但光 try/except 是不够的，写入必须包在
-    SAVEPOINT 里，否则 ORM flush 失败会把整个 session 标记成需要回滚，
-    请求结束时 commit 抛 PendingRollbackError，主用例的数据一起丢。
-    因此通知写入必须放在独立 SAVEPOINT 中。
-
-    **不给自己发通知。** 自己做的事自己知道，通知里全是自己的操作会让
-    未读数变成噪音，真正需要关注的反而被淹掉。所以每个产生点都要判断
-    收件人是不是操作者本人——这条由 :meth:`_publish` 统一兜底。
-    """
+    """Create recipient-scoped in-app notifications."""
 
     def __init__(
         self,
         publisher: NotificationPublisher,
         clock: Clock,
         session: SupportsNestedTransaction,
+        preferences: NotificationRepository | None = None,
     ) -> None:
         self._publisher = publisher
         self._clock = clock
         self._session = session
+        self._preferences = preferences
 
     async def _publish(
         self,
@@ -60,9 +60,14 @@ class Notifier:
         mandatory: bool = False,
     ) -> None:
         if actor_id is not None and recipient_id == actor_id:
-            # 自己做的事不用通知自己
             return
-
+        mandatory = mandatory or type in MANDATORY_NOTIFICATION_TYPES
+        if (
+            not mandatory
+            and self._preferences is not None
+            and not await self._preferences.is_enabled(recipient_id, type)
+        ):
+            return
         notification = Notification(
             id=new_id(NOTIFICATION),
             recipient_id=recipient_id,
@@ -84,16 +89,8 @@ class Notifier:
                 exc_info=True,
             )
 
-    # -- 成员相关 --------------------------------------------------------
-
     async def user_group_invited(
-        self,
-        *,
-        actor_id: str,
-        invitee_id: str,
-        user_group_id: str,
-        user_group_name: str,
-        role: str,
+        self, *, actor_id: str, invitee_id: str, user_group_id: str, user_group_name: str, role: str
     ) -> None:
         await self._publish(
             recipient_id=invitee_id,
@@ -116,13 +113,7 @@ class Notifier:
         )
 
     async def role_changed(
-        self,
-        *,
-        actor_id: str,
-        member_id: str,
-        user_group_id: str,
-        user_group_name: str,
-        role: str,
+        self, *, actor_id: str, member_id: str, user_group_id: str, user_group_name: str, role: str
     ) -> None:
         await self._publish(
             recipient_id=member_id,
@@ -149,22 +140,9 @@ class Notifier:
             mandatory=True,
         )
 
-    # -- Run 相关 --------------------------------------------------------
-
     async def run_finished(
-        self,
-        *,
-        recipient_id: str,
-        run_id: str,
-        run_name: str,
-        succeeded: bool,
-        reason: str = "",
+        self, *, recipient_id: str, run_id: str, run_name: str, succeeded: bool, reason: str = ""
     ) -> None:
-        """Run 结束。
-
-        ``actor_id`` 传 None：结束不是谁「做」的，是调度系统的结果。
-        所以即使收件人就是提交者本人也要发——**他正是需要知道的那个人**。
-        """
         await self._publish(
             recipient_id=recipient_id,
             actor_id=None,
@@ -188,16 +166,81 @@ class Notifier:
             target_id=run_id,
         )
 
+    async def asset_unavailable(
+        self,
+        *,
+        recipient_id: str,
+        project_id: str,
+        project_name: str,
+        type: NotificationType,
+        asset_label: str,
+        detail: str,
+    ) -> None:
+        if type not in {
+            NotificationType.ENVIRONMENT_UNAVAILABLE,
+            NotificationType.SHARED_RESOURCE_UNAVAILABLE,
+        }:
+            raise ValidationFailed("不可用资产通知必须使用资产不可用类别")
+        await self._publish(
+            recipient_id=recipient_id,
+            actor_id=None,
+            type=type,
+            title=f"Project「{project_name}」依赖不可用：{asset_label}",
+            body=detail,
+            target_type=TargetType.PROJECT,
+            target_id=project_id,
+            mandatory=True,
+        )
+
+    async def environment_unavailable(
+        self,
+        *,
+        recipient_id: str,
+        project_id: str,
+        project_name: str,
+        asset_label: str,
+        detail: str,
+    ) -> None:
+        await self.asset_unavailable(
+            recipient_id=recipient_id,
+            project_id=project_id,
+            project_name=project_name,
+            type=NotificationType.ENVIRONMENT_UNAVAILABLE,
+            asset_label=asset_label,
+            detail=detail,
+        )
+
+    async def shared_resource_unavailable(
+        self,
+        *,
+        recipient_id: str,
+        project_id: str,
+        project_name: str,
+        asset_label: str,
+        detail: str,
+    ) -> None:
+        await self.asset_unavailable(
+            recipient_id=recipient_id,
+            project_id=project_id,
+            project_name=project_name,
+            type=NotificationType.SHARED_RESOURCE_UNAVAILABLE,
+            asset_label=asset_label,
+            detail=detail,
+        )
+
+    async def platform_incident(self, *, recipient_id: str, title: str, body: str) -> None:
+        await self._publish(
+            recipient_id=recipient_id,
+            actor_id=None,
+            type=NotificationType.PLATFORM_INCIDENT,
+            title=title,
+            body=body,
+            mandatory=True,
+        )
+
 
 class NotificationService:
-    """读通知、标记已读。
-
-    Notifications are recipient-authorized even when the recipient no longer has access
-    to the current target. Every repository read or mutation retains recipient scoping.
-
-    收件人条件由仓储的每个方法带上，包括标记已读：少一个条件就是
-    「能标记别人的通知」这种越权。
-    """
+    """Read and mutate recipient-scoped notifications and preferences."""
 
     def __init__(self, repos: Repositories, clock: Clock) -> None:
         self._repos = repos
@@ -216,5 +259,21 @@ class NotificationService:
             user_id, notification_id, self._clock.now()
         )
 
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool:
+        return await self._repos.notifications.mark_unread(user_id, notification_id)
+
     async def mark_all_read(self, user_id: str) -> int:
         return await self._repos.notifications.mark_all_read(user_id, self._clock.now())
+
+    async def list_preferences(self, user_id: str) -> dict[NotificationType, bool]:
+        stored = {
+            preference.type: preference.enabled
+            for preference in await self._repos.notifications.list_preferences(user_id)
+        }
+        return {type: stored.get(type, True) for type in NotificationType}
+
+    async def set_preference(self, user_id: str, type: NotificationType, enabled: bool) -> bool:
+        if type in MANDATORY_NOTIFICATION_TYPES and not enabled:
+            raise ValidationFailed("重要系统通知不能关闭")
+        preference = await self._repos.notifications.set_preference(user_id, type, enabled)
+        return preference.enabled

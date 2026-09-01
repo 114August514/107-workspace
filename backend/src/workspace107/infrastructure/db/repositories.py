@@ -46,6 +46,7 @@ from ...domain.models import (
     InputBinding,
     Membership,
     Notification,
+    NotificationPreference,
     Project,
     ProjectFile,
     ProjectVersion,
@@ -471,6 +472,46 @@ class ProjectRepositoryImpl:
             stmt = stmt.where(t.ProjectRow.name.icontains(normalized_query, autoescape=True))
         stmt = stmt.order_by(t.ProjectRow.updated_at.desc())
         return await _paginate(self._session, stmt, page, _to_project)
+
+    async def list_using_environment_version(self, version_id: str) -> list[Project]:
+        config_projects = select(t.RunConfigurationRow.project_id).where(
+            t.RunConfigurationRow.environment_version_id == version_id
+        )
+        stmt = select(t.ProjectRow).where(
+            (t.ProjectRow.environment_version_id == version_id)
+            | t.ProjectRow.id.in_(config_projects)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_project(row) for row in rows]
+
+    async def list_using_shared_resource_version(self, version_id: str) -> list[Project]:
+        rows = (
+            await self._session.execute(
+                select(t.RunConfigurationRow.project_id, t.RunConfigurationRow.input_bindings)
+            )
+        ).all()
+        project_ids = {
+            project_id
+            for project_id, bindings in rows
+            if any(
+                isinstance(binding, dict)
+                and binding.get("source_type") == InputSourceType.SHARED_RESOURCE_VERSION.value
+                and binding.get("source_id") == version_id
+                for binding in (bindings or [])
+            )
+        }
+        if not project_ids:
+            return []
+        project_rows = (
+            (
+                await self._session.execute(
+                    select(t.ProjectRow).where(t.ProjectRow.id.in_(project_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [_to_project(row) for row in project_rows]
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool:
         owner_column = (
@@ -1382,6 +1423,53 @@ class NotificationRepositoryImpl:
             .values(read_at=at)
         )
         return int(result.rowcount or 0) > 0
+
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool:
+        result = await self._session.execute(
+            update(t.NotificationRow)
+            .where(
+                t.NotificationRow.id == notification_id,
+                t.NotificationRow.recipient_id == user_id,
+                t.NotificationRow.read_at.is_not(None),
+            )
+            .values(read_at=None)
+        )
+        return int(result.rowcount or 0) > 0
+
+    async def is_enabled(self, user_id: str, type: NotificationType) -> bool:
+        row = await self._session.get(t.NotificationPreferenceRow, (user_id, type.value))
+        return row is None or row.enabled
+
+    async def list_preferences(self, user_id: str) -> list[NotificationPreference]:
+        stmt = select(t.NotificationPreferenceRow).where(
+            t.NotificationPreferenceRow.user_id == user_id
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [
+            NotificationPreference(
+                user_id=row.user_id,
+                type=NotificationType(row.notification_type),
+                enabled=row.enabled,
+            )
+            for row in rows
+        ]
+
+    async def set_preference(
+        self, user_id: str, type: NotificationType, enabled: bool
+    ) -> NotificationPreference:
+        row = await self._session.get(t.NotificationPreferenceRow, (user_id, type.value))
+        if row is None:
+            self._session.add(
+                t.NotificationPreferenceRow(
+                    user_id=user_id,
+                    notification_type=type.value,
+                    enabled=enabled,
+                )
+            )
+        else:
+            row.enabled = enabled
+        await _flush(self._session)
+        return NotificationPreference(user_id=user_id, type=type, enabled=enabled)
 
     async def mark_all_read(self, user_id: str, at: datetime) -> int:
         result = await self._session.execute(
