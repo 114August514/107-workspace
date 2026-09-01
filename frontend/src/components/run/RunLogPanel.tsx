@@ -22,15 +22,22 @@ interface Props {
 /** 标准输出与标准错误；后端返回前已完成已知 Secret 明文抹除。 */
 export function RunLogPanel({ chunks, failed = false }: Props) {
   const [stream, setStream] = useState<LogStream | undefined>(() => defaultStream(chunks, failed))
-  const previousFailed = useRef(failed)
+  const failureStreamSelected = useRef(false)
   const active = chunks.find((chunk) => chunk.stream === stream) ?? chunks[0]
 
   useEffect(() => {
-    const becameFailed = !previousFailed.current && failed
-    previousFailed.current = failed
-    if (becameFailed && chunks.some((chunk) => chunk.stream === 'stderr' && chunk.content.trim())) {
-      setStream('stderr')
+    if (!failed) {
+      failureStreamSelected.current = false
+      return
     }
+    if (
+      failureStreamSelected.current ||
+      !chunks.some((chunk) => chunk.stream === 'stderr' && chunk.content.trim())
+    ) {
+      return
+    }
+    failureStreamSelected.current = true
+    setStream('stderr')
   }, [chunks, failed])
 
   if (!active) {
