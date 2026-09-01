@@ -491,7 +491,8 @@ class ProjectRepositoryImpl:
         pinned_projects = {
             project_id
             for project_id, payload in pinned_rows
-            if payload.get("environment_version_id") == version_id
+            if isinstance(payload.get("environment"), dict)
+            and payload["environment"].get("version_id") == version_id
         }
         stmt = select(t.ProjectRow).where(
             (t.ProjectRow.environment_version_id == version_id)
