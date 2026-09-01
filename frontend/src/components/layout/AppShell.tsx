@@ -64,9 +64,11 @@ export function AppShell({ username, onUsernameChange, home, project, children }
     ? 'runs'
     : requestedTab === 'runs' || requestedTab === 'configurations'
       ? 'runs'
-      : requestedTab === 'activities'
-        ? 'settings'
-        : 'files'
+      : requestedTab === 'activity' || requestedTab === 'activities'
+        ? 'activity'
+        : requestedTab === 'settings'
+          ? 'settings'
+          : 'files'
 
   useEffect(() => {
     setNavigationOpen(false)
@@ -170,7 +172,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
             >
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=files`}
+                to={`/projects/${projectId}?tab=files&view=working`}
                 leadingVisual={<FileDirectoryIcon />}
                 aria-current={projectArea === 'files' ? 'page' : undefined}
               >
@@ -178,7 +180,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               </UnderlineNav.Item>
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=runs`}
+                to={`/projects/${projectId}?tab=runs&view=history`}
                 leadingVisual={<PlayIcon />}
                 aria-current={projectArea === 'runs' ? 'page' : undefined}
               >
@@ -186,7 +188,14 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               </UnderlineNav.Item>
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=activities`}
+                to={`/projects/${projectId}?tab=activity`}
+                aria-current={projectArea === 'activity' ? 'page' : undefined}
+              >
+                {appShellCopy.activity}
+              </UnderlineNav.Item>
+              <UnderlineNav.Item
+                as={RouterLink}
+                to={`/projects/${projectId}?tab=settings`}
                 leadingVisual={<GearIcon />}
                 aria-current={projectArea === 'settings' ? 'page' : undefined}
               >

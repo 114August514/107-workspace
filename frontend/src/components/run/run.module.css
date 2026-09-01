@@ -13,62 +13,6 @@
   white-space: nowrap;
 }
 
-.projectShell {
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
-}
-
-.projectIdentity {
-  display: flex;
-  align-items: center;
-  gap: var(--base-size-6);
-  min-width: 0;
-  padding: 0 0 var(--base-size-8);
-  color: var(--fgColor-muted);
-}
-
-.projectSeparator {
-  color: var(--fgColor-muted);
-}
-
-.projectName {
-  overflow: hidden;
-  color: var(--fgColor-default);
-  font-size: var(--text-title-size-medium);
-  font-weight: var(--base-text-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.projectNavigation {
-  display: flex;
-  gap: var(--base-size-24);
-  overflow-x: auto;
-}
-
-.projectNavigation a {
-  flex: 0 0 auto;
-  padding: var(--base-size-8) var(--base-size-4) var(--base-size-10);
-  border-bottom: var(--borderWidth-thick) solid transparent;
-  color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
-  font-weight: var(--base-text-weight-semibold);
-  text-decoration: none;
-}
-
-.projectNavigation a:hover {
-  color: var(--fgColor-default);
-}
-
-.projectNavigation a:focus-visible {
-  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
-  outline-offset: -2px;
-}
-
-.projectNavigation a[aria-current='page'] {
-  border-bottom-color: var(--borderColor-accent-emphasis);
-  color: var(--fgColor-default);
-}
-
 .runSurface {
   display: flex;
   width: 100%;
@@ -795,10 +739,6 @@
   }
 }
 @media (max-width: 48rem) {
-  .projectNavigation {
-    gap: var(--base-size-16);
-  }
-
   .headerActions {
     width: 100%;
     margin-left: 0;

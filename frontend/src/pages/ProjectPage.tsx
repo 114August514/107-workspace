@@ -1,7 +1,7 @@
 import { BranchesOutlined } from '@ant-design/icons'
-import { Card, Tabs, Tag } from 'antd'
+import { Card, Empty, Tag } from 'antd'
 import { useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
@@ -20,30 +20,102 @@ import { RunTable } from '../components/run/RunTable'
 import { SubmitRunModal } from '../components/run/SubmitRunModal'
 import { RunConfigurationPanel } from '../components/runconfig/RunConfigurationPanel'
 import { tablePagination } from '../utils/pagination'
+import styles from './ProjectPage.module.css'
 
-const PAGE_TITLES: Record<string, string> = {
-  files: 'Working State',
-  versions: 'Version history',
+type ProjectSection = 'files' | 'runs' | 'activity' | 'settings'
+type FilesView = 'working' | 'changes' | 'versions'
+type RunsView = 'history' | 'configurations'
+
+const PAGE_TITLES = {
+  working: 'Working State',
+  changes: 'Changes',
+  versions: 'Versions',
+  history: 'Run history',
   configurations: 'Run configurations',
-  runs: 'Run history',
-  activities: 'Project activity',
+  activity: 'Activity',
+  settings: 'Settings',
+} as const
+
+function resolveProjectLocation(search: URLSearchParams): {
+  section: ProjectSection
+  view: FilesView | RunsView | 'activity' | 'settings'
+} {
+  const tab = search.get('tab')
+  const view = search.get('view')
+  if (tab === 'activity' || tab === 'activities') return { section: 'activity', view: 'activity' }
+  if (tab === 'settings') return { section: 'settings', view: 'settings' }
+  if (tab === 'runs' || tab === 'configurations') {
+    return {
+      section: 'runs',
+      view: tab === 'configurations' || view === 'configurations' ? 'configurations' : 'history',
+    }
+  }
+  return {
+    section: 'files',
+    view:
+      tab === 'versions' || view === 'versions'
+        ? 'versions'
+        : view === 'changes'
+          ? 'changes'
+          : 'working',
+  }
+}
+
+function projectViewHref(projectId: string, section: ProjectSection, view?: FilesView | RunsView) {
+  if (section === 'activity' || section === 'settings')
+    return `/projects/${projectId}?tab=${section}`
+  return `/projects/${projectId}?tab=${section}&view=${view}`
+}
+
+function ProjectSubNavigation({
+  projectId,
+  section,
+  view,
+}: {
+  projectId: string
+  section: ProjectSection
+  view: FilesView | RunsView | 'activity' | 'settings'
+}) {
+  const items =
+    section === 'files'
+      ? ([
+          ['working', 'Working State'],
+          ['changes', 'Changes'],
+          ['versions', 'Versions'],
+        ] as const)
+      : section === 'runs'
+        ? ([
+            ['history', 'History'],
+            ['configurations', 'Configurations'],
+          ] as const)
+        : null
+  if (!items) return null
+  return (
+    <nav className={styles.subNavigation} aria-label={`${section} sections`}>
+      {items.map(([itemView, label]) => (
+        <Link
+          key={itemView}
+          to={projectViewHref(projectId, section, itemView)}
+          className={styles.subNavigationLink}
+          aria-current={view === itemView ? 'page' : undefined}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
+  )
 }
 
 /**
- * Project 页面：文件、版本、运行方案和 Run 历史。
+ * Project 页面：以 Files / Runs / Activity / Settings 组织既有 Project 能力。
  *
- * 页面顺序对应核心闭环：准备代码 -> 保存版本 -> 配置运行方案 -> 提交 Run。
+ * 本页面只收敛导航归属，不新增 Version、Run Configuration、Activity 或 Settings 业务。
  */
 export function ProjectPage({ project }: { project: AsyncResource<Project | undefined> }) {
   const { projectId = '' } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const requestedTab = searchParams.get('tab')
-  const activeTab =
-    requestedTab &&
-    ['files', 'versions', 'configurations', 'runs', 'activities'].includes(requestedTab)
-      ? requestedTab
-      : 'files'
+  const { section, view } = resolveProjectLocation(new URLSearchParams(location.search))
   const [token, setToken] = useState(0)
   const bump = () => {
     setToken((value) => value + 1)
@@ -64,104 +136,90 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
     [projectId, token],
   )
 
+  const content =
+    view === 'working' ? (
+      <Card>
+        <FileBrowser projectId={projectId} access={project.data} onChanged={bump} />
+      </Card>
+    ) : view === 'changes' ? (
+      <Card>
+        <VersionPanel
+          section="changes"
+          projectId={projectId}
+          projectName={project.data?.name ?? ''}
+          access={project.data}
+          refreshToken={token}
+          onVersionSaved={bump}
+        />
+      </Card>
+    ) : view === 'versions' ? (
+      <Card>
+        <VersionPanel
+          section="versions"
+          projectId={projectId}
+          projectName={project.data?.name ?? ''}
+          access={project.data}
+          refreshToken={token}
+          onVersionSaved={bump}
+        />
+      </Card>
+    ) : view === 'history' ? (
+      <PrimerListCard>
+        <AsyncState
+          loading={runs.loading}
+          loadingText="正在加载 Run 历史…"
+          error={runError ? { ...runError, message: '无法加载 Run 历史。' } : undefined}
+          onRetry={runs.reload}
+          empty={runs.data?.total === 0}
+          emptyText="这个 Project 还没有 Run。"
+          emptyDescription="提交 Run 后，可以在这里查看状态、日志、运行产物和运行快照。"
+        >
+          <RunTable
+            runs={runs.data?.items ?? []}
+            projectName={project.data?.name}
+            pagination={tablePagination(runs.data, setRunPage)}
+          />
+        </AsyncState>
+      </PrimerListCard>
+    ) : view === 'configurations' ? (
+      <Card>
+        <RunConfigurationPanel
+          projectId={projectId}
+          access={project.data}
+          defaultConfigurationId={project.data?.default_run_configuration_id ?? null}
+          onSubmitRun={setSubmitting}
+          onChanged={bump}
+        />
+      </Card>
+    ) : view === 'activity' ? (
+      <ListCard padded>
+        <ActivityFeed
+          page={activities.data}
+          loading={activities.loading}
+          error={activities.error}
+          emptyText="这个 Project 还没有活动记录"
+        />
+      </ListCard>
+    ) : (
+      <Card>
+        <Empty description="Project 自身管理配置入口；编辑能力不在本 Issue 范围内。" />
+      </Card>
+    )
+
   return (
     <Stack gap="large">
       <AsyncSection loading={project.loading} error={project.error}>
         {project.data && (
           <PageHeader
-            title={PAGE_TITLES[activeTab]}
+            title={PAGE_TITLES[view]}
             description={project.data.description || '这个 Project 还没有填写说明'}
             tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
           />
         )}
       </AsyncSection>
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={(nextTab) => {
-          const next = new URLSearchParams(searchParams)
-          next.set('tab', nextTab)
-          setSearchParams(next, { replace: true })
-        }}
-        items={[
-          {
-            key: 'files',
-            label: '① 项目文件',
-            children: (
-              <Card>
-                <FileBrowser projectId={projectId} access={project.data} onChanged={bump} />
-              </Card>
-            ),
-          },
-          {
-            key: 'versions',
-            label: '② 版本',
-            children: (
-              <Card>
-                <VersionPanel
-                  projectId={projectId}
-                  projectName={project.data?.name ?? ''}
-                  access={project.data}
-                  refreshToken={token}
-                  onVersionSaved={bump}
-                />
-              </Card>
-            ),
-          },
-          {
-            key: 'configurations',
-            label: '③ 运行方案',
-            children: (
-              <Card>
-                <RunConfigurationPanel
-                  projectId={projectId}
-                  access={project.data}
-                  defaultConfigurationId={project.data?.default_run_configuration_id ?? null}
-                  onSubmitRun={setSubmitting}
-                  onChanged={bump}
-                />
-              </Card>
-            ),
-          },
-          {
-            key: 'runs',
-            label: '④ Run 历史',
-            children: (
-              <PrimerListCard>
-                <AsyncState
-                  loading={runs.loading}
-                  loadingText="正在加载 Run 历史…"
-                  error={runError ? { ...runError, message: '无法加载 Run 历史。' } : undefined}
-                  onRetry={runs.reload}
-                  empty={runs.data?.total === 0}
-                  emptyText="这个 Project 还没有 Run。"
-                  emptyDescription="提交 Run 后，可以在这里查看状态、日志、运行产物和运行快照。"
-                >
-                  <RunTable
-                    runs={runs.data?.items ?? []}
-                    projectName={project.data?.name}
-                    pagination={tablePagination(runs.data, setRunPage)}
-                  />
-                </AsyncState>
-              </PrimerListCard>
-            ),
-          },
-          {
-            key: 'activities',
-            label: '⑤ 近期活动',
-            children: (
-              <ListCard padded>
-                <ActivityFeed
-                  page={activities.data}
-                  loading={activities.loading}
-                  error={activities.error}
-                  emptyText="这个 Project 还没有活动记录"
-                />
-              </ListCard>
-            ),
-          },
-        ]}
-      />
+      <ProjectSubNavigation projectId={projectId} section={section} view={view} />
+      {content}
 
       <SubmitRunModal
         open={submitting !== null}

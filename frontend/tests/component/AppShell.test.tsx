@@ -170,7 +170,7 @@ describe('AppShell 壳层', () => {
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
-  it('用独立 Home Mark、Project context 和三级本地导航表达壳层层级', () => {
+  it('用 Project context 和四级本地导航表达壳层层级', () => {
     renderShell('student', readyHome(), '/projects/p-1/runs/r-1')
 
     const header = screen.getByRole('banner')
@@ -191,18 +191,20 @@ describe('AppShell 壳层', () => {
     const navigation = screen.getByRole('navigation', { name: 'Project navigation' })
     expect(within(navigation).getByRole('link', { name: 'Files' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=files',
+      '/projects/p-1?tab=files&view=working',
     )
     expect(within(navigation).getByRole('link', { name: 'Runs' })).toHaveAttribute(
       'aria-current',
       'page',
     )
+    expect(within(navigation).getByRole('link', { name: 'Activity' })).toHaveAttribute(
+      'href',
+      '/projects/p-1?tab=activity',
+    )
     expect(within(navigation).getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=activities',
+      '/projects/p-1?tab=settings',
     )
-    expect(within(navigation).queryByRole('link', { name: '版本' })).toBeNull()
-    expect(within(navigation).queryByRole('link', { name: '运行方案' })).toBeNull()
   })
 
   it('在当前 Owner namespace 内搜索并切换 Project', async () => {

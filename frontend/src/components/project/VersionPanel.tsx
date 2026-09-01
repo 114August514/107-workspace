@@ -37,8 +37,10 @@ const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
   modified: { text: '修改', color: 'blue' },
   removed: { text: '删除', color: 'red' },
 }
+type VersionPanelSection = 'all' | 'changes' | 'versions'
 
 interface Props {
+  section?: VersionPanelSection
   projectId: string
   projectName: string
   access: Project | undefined
@@ -52,12 +54,15 @@ interface Props {
  * Project Version 是不可变快照，恢复历史版本改的是工作区，不会动那个版本。
  */
 export function VersionPanel({
+  section = 'all',
   projectId,
   projectName,
   access,
   refreshToken,
   onVersionSaved,
 }: Props) {
+  const showChanges = section !== 'versions'
+  const showVersions = section !== 'changes'
   const navigate = useNavigate()
   const [forking, setForking] = useState<ProjectVersion | null>(null)
   const [inspecting, setInspecting] = useState<WorkingChange | null>(null)
@@ -162,85 +167,99 @@ export function VersionPanel({
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <AsyncSection loading={changes.loading} error={changes.error}>
-        {pending.length === 0 ? (
-          <Alert type="success" showIcon message="工作区没有未保存的变更" />
-        ) : (
-          <Alert
-            type="warning"
-            showIcon
-            message={`有 ${pending.length} 处未保存的变更`}
-            description={
-              <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
-                {pending.map((change) => (
-                  <Button
-                    key={change.path}
-                    type="link"
-                    size="small"
-                    onClick={() => setInspecting(change)}
-                  >
-                    <Tag color={CHANGE_LABEL[change.change].color}>
-                      {CHANGE_LABEL[change.change].text} {change.path}
-                    </Tag>
-                  </Button>
-                ))}
-              </Space>
-            }
-          />
-        )}
-      </AsyncSection>
+      {showChanges && (
+        <>
+          <AsyncSection loading={changes.loading} error={changes.error}>
+            {pending.length === 0 ? (
+              <Alert type="success" showIcon message="工作区没有未保存的变更" />
+            ) : (
+              <Alert
+                type="warning"
+                showIcon
+                message={`有 ${pending.length} 处未保存的变更`}
+                description={
+                  <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
+                    {pending.map((change) => (
+                      <Button
+                        key={change.path}
+                        type="link"
+                        size="small"
+                        onClick={() => setInspecting(change)}
+                      >
+                        <Tag color={CHANGE_LABEL[change.change].color}>
+                          {CHANGE_LABEL[change.change].text} {change.path}
+                        </Tag>
+                      </Button>
+                    ))}
+                  </Space>
+                }
+              />
+            )}
+          </AsyncSection>
 
-      {canWrite && (
-        <Space.Compact style={{ width: '100%' }}>
-          <Input
-            placeholder="这次改了什么"
-            value={message_}
-            onChange={(event) => setMessage(event.target.value)}
-            onPressEnter={save}
-          />
-          <Button type="primary" onClick={save} loading={saving} disabled={pending.length === 0}>
-            保存 Project Version
-          </Button>
-        </Space.Compact>
+          {canWrite && (
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                placeholder="这次改了什么"
+                value={message_}
+                onChange={(event) => setMessage(event.target.value)}
+                onPressEnter={save}
+              />
+              <Button
+                type="primary"
+                onClick={save}
+                loading={saving}
+                disabled={pending.length === 0}
+              >
+                保存 Project Version
+              </Button>
+            </Space.Compact>
+          )}
+
+          <Typography.Text type="secondary">
+            Run 只能从确定的 Project Version 发起。保存版本之后，这份内容就固定下来了。
+          </Typography.Text>
+        </>
       )}
 
-      <Typography.Text type="secondary">
-        Run 只能从确定的 Project Version 发起。保存版本之后，这份内容就固定下来了。
-      </Typography.Text>
+      {showVersions && (
+        <AsyncSection
+          loading={versions.loading}
+          error={versions.error}
+          empty={versions.data?.total === 0}
+          emptyText="还没有保存过版本"
+        >
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={versions.data?.items ?? []}
+            columns={columns}
+            pagination={tablePagination(versions.data, setPage)}
+          />
+        </AsyncSection>
+      )}
 
-      <AsyncSection
-        loading={versions.loading}
-        error={versions.error}
-        empty={versions.data?.total === 0}
-        emptyText="还没有保存过版本"
-      >
-        <Table
-          rowKey="id"
-          size="small"
-          dataSource={versions.data?.items ?? []}
-          columns={columns}
-          pagination={tablePagination(versions.data, setPage)}
+      {showVersions && (
+        <ForkModal
+          open={forking !== null}
+          version={forking}
+          sourceProjectName={projectName}
+          onClose={() => setForking(null)}
+          onForked={(project) => navigate(`/projects/${project.id}`)}
         />
-      </AsyncSection>
-
-      <ForkModal
-        open={forking !== null}
-        version={forking}
-        sourceProjectName={projectName}
-        onClose={() => setForking(null)}
-        onForked={(project) => navigate(`/projects/${project.id}`)}
-      />
-
-      <ChangeDetailDrawer
-        projectId={projectId}
-        change={inspecting}
-        canWrite={canWrite}
-        onClose={() => setInspecting(null)}
-        onDiscarded={() => {
-          changes.reload()
-          onVersionSaved()
-        }}
-      />
+      )}
+      {showChanges && (
+        <ChangeDetailDrawer
+          projectId={projectId}
+          change={inspecting}
+          canWrite={canWrite}
+          onClose={() => setInspecting(null)}
+          onDiscarded={() => {
+            changes.reload()
+            onVersionSaved()
+          }}
+        />
+      )}
     </Space>
   )
 }
