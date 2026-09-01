@@ -10,7 +10,8 @@ from fastapi.responses import Response
 
 from ...application.run_configuration_service import RunConfigurationInput
 from ...domain.enums import ProjectStatus
-from ...domain.ownership import OwnerReference
+from ...domain.errors import ValidationFailed
+from ...domain.ownership import OwnerKind, OwnerReference
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, PageDep, ServicesDep
@@ -24,10 +25,27 @@ MAX_TEXT_PREVIEW = 256 * 1024
     "/projects", response_model=s.PageOut[s.ProjectOut], summary="列出当前用户可发现的 Project"
 )
 async def list_discoverable_projects(
-    user: CurrentUser, services: ServicesDep, page: PageDep
+    user: CurrentUser,
+    services: ServicesDep,
+    page: PageDep,
+    owner_kind: OwnerKind | None = Query(None, description="按 Owner 种类过滤"),
+    owner_id: str | None = Query(None, description="按 Owner ID 过滤"),
+    query: str | None = Query(None, description="按 Project 名称搜索", max_length=255),
 ) -> s.PageOut[s.ProjectOut]:
     """列出当前用户可发现的 Project：自己 / 所属 User Group 拥有的，以及 PUBLIC Project。"""
-    result = await services.projects.list_discoverable_for_user(user.id, page)
+    if (owner_kind is None) != (owner_id is None):
+        raise ValidationFailed("owner_kind 与 owner_id 必须同时提供")
+    owner = (
+        OwnerReference(kind=owner_kind, id=owner_id)
+        if owner_kind is not None and owner_id is not None
+        else None
+    )
+    result = await services.projects.list_discoverable_for_user(
+        user.id,
+        page,
+        owner=owner,
+        query=query,
+    )
     summaries = await services.projects.owner_summaries(result.items)
     return p.page_out(
         result,

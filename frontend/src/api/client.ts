@@ -34,7 +34,9 @@ import type {
   PreflightResult,
   PageQuery,
   ForkSource,
+  OwnerReference,
   Project,
+  ProjectPage,
   ProjectFile,
   ProjectVersion,
   ProjectVersionPage,
@@ -338,6 +340,21 @@ export const api = {
     unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
+  listOwnerProjects: async (
+    owner: OwnerReference,
+    options: PageQuery & { query?: string } = {},
+  ): Promise<ProjectPage> =>
+    unwrap(
+      await http.GET('/api/v1/projects', {
+        params: {
+          query: {
+            ...options,
+            owner_kind: owner.kind,
+            owner_id: owner.id,
+          },
+        },
+      }),
+    ),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
