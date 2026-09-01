@@ -126,6 +126,10 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
 
     expect(await screen.findByText('首次基线运行')).toBeInTheDocument()
     expect(await screen.findByText('cpu-basic')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '首次基线运行' })).toHaveAttribute(
+      'href',
+      '/projects/p-1/runs/r-1',
+    )
   })
 
   it('HomePage 正文不自行渲染导航或重复的 User Group、Project 卡片', async () => {
