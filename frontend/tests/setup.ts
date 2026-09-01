@@ -33,3 +33,28 @@ if (typeof window !== 'undefined' && !window.ResizeObserver) {
     value: ResizeObserverStub,
   })
 }
+
+// Primer SelectPanel 会滚动 active option；jsdom 没有 HTMLElement.scrollTo。
+if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollTo) {
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+    writable: true,
+    configurable: true,
+    value: () => {},
+  })
+}
+
+// Primer SelectPanel 的测试模式直接调用 live-region element；jsdom 只创建普通 HTMLElement。
+if (typeof HTMLElement !== 'undefined' && !('announce' in HTMLElement.prototype)) {
+  Object.defineProperties(HTMLElement.prototype, {
+    announce: {
+      writable: true,
+      configurable: true,
+      value: () => {},
+    },
+    clear: {
+      writable: true,
+      configurable: true,
+      value: () => {},
+    },
+  })
+}

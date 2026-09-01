@@ -1,8 +1,17 @@
 export const appShellCopy = {
-  brand: '107 Workspace',
+  homeMark: '107',
+  homeMarkLabel: '107 Workspace 首页',
+  homeContext: '107 Workspace',
   openNavigation: '打开导航',
   createUserGroup: '创建 User Group',
   sidebarLabel: '首页工作入口',
+  projectContextLabel: '当前 Project',
+  projectNavigationLabel: 'Project navigation',
+  projectLoading: '正在加载 Project context…',
+  projectError: 'Project context 加载失败，重试',
+  files: 'Files',
+  runs: 'Runs',
+  settings: 'Settings',
 } as const
 
 export const globalNavigationCopy = {

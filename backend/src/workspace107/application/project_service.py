@@ -160,8 +160,20 @@ class ProjectService:
     async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Project]:
         return await self._repos.projects.list_for_user(user_id, limit=limit)
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
-        return await self._repos.projects.list_discoverable_for_user(user_id, page)
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
+        return await self._repos.projects.list_discoverable_for_user(
+            user_id,
+            page,
+            owner=owner,
+            query=query,
+        )
 
     async def get(self, user_id: str, project_id: str) -> ProjectAccess:
         return await self._guard.project(user_id, project_id)

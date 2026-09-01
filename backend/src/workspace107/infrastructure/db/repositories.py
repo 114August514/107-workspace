@@ -440,7 +440,14 @@ class ProjectRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
         # Owner scope + PUBLIC projects the User can discover.
         group_ids = select(t.MembershipRow.user_group_id).where(
             t.MembershipRow.user_id == user_id,
@@ -449,11 +456,20 @@ class ProjectRepositoryImpl:
         owner_scope = (
             t.ProjectRow.owner_user_id == user_id
         ) | t.ProjectRow.owner_user_group_id.in_(group_ids)
-        stmt = (
-            select(t.ProjectRow)
-            .where((t.ProjectRow.visibility == ProjectVisibility.PUBLIC.value) | owner_scope)
-            .order_by(t.ProjectRow.updated_at.desc())
+        stmt = select(t.ProjectRow).where(
+            (t.ProjectRow.visibility == ProjectVisibility.PUBLIC.value) | owner_scope
         )
+        if owner is not None:
+            owner_column = (
+                t.ProjectRow.owner_user_id
+                if owner.kind is OwnerKind.USER
+                else t.ProjectRow.owner_user_group_id
+            )
+            stmt = stmt.where(owner_column == owner.id)
+        normalized_query = query.strip() if query else ""
+        if normalized_query:
+            stmt = stmt.where(t.ProjectRow.name.icontains(normalized_query, autoescape=True))
+        stmt = stmt.order_by(t.ProjectRow.updated_at.desc())
         return await _paginate(self._session, stmt, page, _to_project)
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool:

@@ -6204,6 +6204,61 @@
         "operationId": "list_discoverable_projects_api_v1_projects_get",
         "parameters": [
           {
+            "description": "按 Owner 种类过滤",
+            "in": "query",
+            "name": "owner_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/OwnerKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按 Owner 种类过滤",
+              "title": "Owner Kind"
+            }
+          },
+          {
+            "description": "按 Owner ID 过滤",
+            "in": "query",
+            "name": "owner_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按 Owner ID 过滤",
+              "title": "Owner Id"
+            }
+          },
+          {
+            "description": "按 Project 名称搜索",
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按 Project 名称搜索",
+              "title": "Query"
+            }
+          },
+          {
             "description": "页码，从 1 开始",
             "in": "query",
             "name": "page",
