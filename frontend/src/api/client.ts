@@ -664,6 +664,14 @@ export const api = {
       }),
     ),
 
+  readArtifactFile: async (id: string, path: string): Promise<Blob> =>
+    unwrap(
+      await http.GET('/api/v1/artifacts/{artifact_id}/download', {
+        params: { path: { artifact_id: id }, query: { path } },
+        parseAs: 'blob',
+      }),
+    ),
+
   /**
    * 下载 Artifact 文件。
    *

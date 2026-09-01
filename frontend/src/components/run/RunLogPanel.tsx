@@ -1,8 +1,8 @@
-import { DownloadIcon } from '@primer/octicons-react'
-import { Banner, Button, Text, UnderlineNav } from '@primer/react'
-import { useState } from 'react'
+import { Banner, SegmentedControl, Text } from '@primer/react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { LogChunk, LogStream } from '../../api/types'
+import { CodeViewer } from '../common/CodeViewer'
 import styles from './run.module.css'
 
 function defaultStream(chunks: LogChunk[], failed: boolean): LogStream | undefined {
@@ -14,30 +14,24 @@ function defaultStream(chunks: LogChunk[], failed: boolean): LogStream | undefin
 }
 
 interface Props {
-  runId: string
   chunks: LogChunk[]
   /** Run 失败时优先打开 stderr，直接把诊断入口放在用户眼前。 */
   failed?: boolean
 }
 
 /** 标准输出与标准错误；后端返回前已完成已知 Secret 明文抹除。 */
-export function RunLogPanel({ runId, chunks, failed = false }: Props) {
+export function RunLogPanel({ chunks, failed = false }: Props) {
   const [stream, setStream] = useState<LogStream | undefined>(() => defaultStream(chunks, failed))
-  const [wrap, setWrap] = useState(true)
+  const previousFailed = useRef(failed)
   const active = chunks.find((chunk) => chunk.stream === stream) ?? chunks[0]
 
-  const download = () => {
-    if (!active) return
-    const blob = new Blob([active.content], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${runId}-${active.stream}.log`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-  }
+  useEffect(() => {
+    const becameFailed = !previousFailed.current && failed
+    previousFailed.current = failed
+    if (becameFailed && chunks.some((chunk) => chunk.stream === 'stderr' && chunk.content.trim())) {
+      setStream('stderr')
+    }
+  }, [chunks, failed])
 
   if (!active) {
     return <Text className={styles.muted}>这个 Run 还没有日志输出。</Text>
@@ -46,25 +40,21 @@ export function RunLogPanel({ runId, chunks, failed = false }: Props) {
   return (
     <div className={styles.logPanel}>
       <div className={styles.logToolbar}>
-        <UnderlineNav aria-label="Run 日志输出">
+        <SegmentedControl
+          aria-label="Run 日志输出"
+          size="small"
+          onChange={(index) => setStream(chunks[index]?.stream)}
+        >
           {chunks.map((chunk) => (
-            <UnderlineNav.Item
+            <SegmentedControl.Button
               key={chunk.stream}
-              aria-current={active.stream === chunk.stream ? 'page' : undefined}
-              onSelect={() => setStream(chunk.stream)}
+              selected={active.stream === chunk.stream}
+              aria-controls="run-log-console"
             >
               {chunk.stream === 'stdout' ? '标准输出' : '标准错误'}
-            </UnderlineNav.Item>
+            </SegmentedControl.Button>
           ))}
-        </UnderlineNav>
-        <div className={styles.logActions}>
-          <Button size="small" aria-pressed={wrap} onClick={() => setWrap((current) => !current)}>
-            自动换行
-          </Button>
-          <Button size="small" leadingVisual={DownloadIcon} onClick={download}>
-            下载日志
-          </Button>
-        </div>
+        </SegmentedControl>
       </div>
       {active.truncated ? (
         <Banner variant="warning">
@@ -73,20 +63,14 @@ export function RunLogPanel({ runId, chunks, failed = false }: Props) {
         </Banner>
       ) : null}
       {active.content.trim() ? (
-        <pre
+        <CodeViewer
           id="run-log-console"
-          className={`${styles.logConsole} ${wrap ? '' : styles.logConsoleNoWrap}`}
-          tabIndex={0}
-          aria-label={`${active.stream} 日志`}
-        >
-          {active.content}
-        </pre>
+          content={active.content}
+          ariaLabel={`${active.stream} 日志`}
+        />
       ) : (
         <div className={styles.emptyInline}>这一路输出目前是空的。</div>
       )}
-      <Text as="p" size="small" className={styles.logNote}>
-        日志中的 Secret 明文会由服务端替换成 ***。
-      </Text>
     </div>
   )
 }

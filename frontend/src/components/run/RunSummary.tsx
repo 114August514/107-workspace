@@ -23,6 +23,7 @@ type SnapshotSection = (typeof SNAPSHOT_SECTIONS)[number]['id']
 /** User outcome and immutable execution facts first; exact identities remain folded. */
 export function RunSummary({
   detail,
+  projectName,
   computePlan,
   computePlanLoading,
   computePlanError,
@@ -34,6 +35,7 @@ export function RunSummary({
   environmentError,
 }: {
   detail: RunDetail
+  projectName?: string
   computePlan?: ComputePlan
   computePlanLoading: boolean
   computePlanError: boolean
@@ -93,6 +95,7 @@ export function RunSummary({
             <RunSnapshotSummary
               section={snapshotSection}
               detail={detail}
+              projectName={projectName}
               computePlan={computePlan}
               computePlanLoading={computePlanLoading}
               computePlanError={computePlanError}

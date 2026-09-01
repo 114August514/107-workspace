@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  ChevronRightIcon,
   KebabHorizontalIcon,
   ProjectIcon,
   StopIcon,
@@ -15,7 +16,7 @@ import {
   Link,
 } from '@primer/react'
 import { useCallback, useEffect, useState } from 'react'
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { api, newIdempotencyKey } from '../api/client'
 import { toAsyncError, type AsyncErrorView } from '../api/errors'
@@ -37,7 +38,6 @@ import { ArtifactPanel } from '../components/run/ArtifactPanel'
 import { RunLogPanel } from '../components/run/RunLogPanel'
 import { RunSummary } from '../components/run/RunSummary'
 import styles from '../components/run/run.module.css'
-import { formatDuration, formatRelative, formatTime } from '../utils/format'
 
 const POLL_INTERVAL_MS = 2000
 interface Feedback {
@@ -59,12 +59,15 @@ function contextualError(error: Error | undefined, message: string): AsyncErrorV
 export function RunPage() {
   const { projectId = '', runId = '' } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [rerunKey, setRerunKey] = useState(newIdempotencyKey)
   const [rerunning, setRerunning] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [artifactsOpen, setArtifactsOpen] = useState(false)
   const detail = useAsync<RunDetail>(() => api.getRun(runId), [runId])
   const logs = useAsync<LogChunk[]>(() => api.readLogs(runId), [runId])
   const plans = useAsync<ComputePlan[]>(() => api.computePlans(), [])
@@ -94,6 +97,11 @@ export function RunPage() {
     if (!run || projectId === run.project_id) return
     navigate(`/projects/${run.project_id}/runs/${run.id}`, { replace: true })
   }, [navigate, projectId, run])
+
+  useEffect(() => {
+    setLogsOpen(location.hash === '#run-logs')
+    setArtifactsOpen(location.hash === '#run-artifacts')
+  }, [location.hash, runId])
 
   const syncAndReload = useCallback(
     async (silent = true) => {
@@ -156,27 +164,7 @@ export function RunPage() {
   }
 
   const shortRunId = run?.id.replace(/^run_/, '').slice(0, 8) ?? ''
-  const automaticName =
-    project.data && run ? `${project.data.name} · ${run.project_version_label}` : null
-  const runTitle =
-    run && automaticName && run.name !== automaticName ? run.name : `Run #${shortRunId}`
-  const configurationLabel = sourceConfiguration
-    ? sourceConfiguration.name
-    : configurations.loading
-      ? '正在读取运行方案…'
-      : configurations.error
-        ? '运行方案信息暂不可用'
-        : run?.source_run_configuration_id
-          ? '已删除的运行方案'
-          : '未记录运行方案'
-  const initiatorLabel = run?.initiated_by_username ?? '未知用户'
-  const progressLabel = !run
-    ? ''
-    : run.status === 'queued'
-      ? `已排队 ${formatDuration(run.queued_seconds)}`
-      : run.running_seconds === null || run.running_seconds === undefined
-        ? '未开始运行'
-        : `${isTerminal(run.status) ? '运行' : '已运行'} ${formatDuration(run.running_seconds)}`
+  const runTitle = run?.name || '未命名 Run'
 
   return (
     <AsyncState
@@ -235,18 +223,10 @@ export function RunPage() {
               <div className={styles.titleRow}>
                 <div className={styles.titleGroup}>
                   <div className={styles.titleHeading}>
-                    <RunStatusTag status={run.status} />
+                    <RunStatusTag status={run.status} compact />
                     <h1 className={styles.pageTitle}>{runTitle}</h1>
+                    <span className={styles.runIdentifier} title={run.id}>{`#${shortRunId}`}</span>
                   </div>
-                  <p className={styles.triggerLine}>
-                    <span>{initiatorLabel}</span>
-                    <span aria-hidden>·</span>
-                    <time dateTime={run.created_at ?? undefined} title={formatTime(run.created_at)}>
-                      {formatRelative(run.created_at)}
-                    </time>
-                    <span aria-hidden>·</span>
-                    <span>{progressLabel}</span>
-                  </p>
                 </div>
                 <div className={styles.headerActions}>
                   {active ? (
@@ -301,27 +281,6 @@ export function RunPage() {
                   )}
                 </div>
               </div>
-              <div className={styles.runMeta}>
-                <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
-                  {run.project_version_label}
-                </Link>
-                <span aria-hidden>·</span>
-                <span>{configurationLabel}</span>
-                {run.source_run_id ? (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>
-                      重新运行自{' '}
-                      <Link
-                        as={RouterLink}
-                        to={`/projects/${run.project_id}/runs/${run.source_run_id}`}
-                      >
-                        Run #{run.source_run_id.replace(/^run_/, '').slice(0, 8)}
-                      </Link>
-                    </span>
-                  </>
-                ) : null}
-              </div>
             </header>
 
             {feedback ? (
@@ -339,7 +298,9 @@ export function RunPage() {
                 <Banner.Description>
                   <div className={styles.failureDescription}>
                     <span>{run.failure_reason}</span>
-                    <Link href="#run-logs">查看日志</Link>
+                    <Link href="#run-logs" onClick={() => setLogsOpen(true)}>
+                      查看日志
+                    </Link>
                   </div>
                 </Banner.Description>
               </Banner>
@@ -349,6 +310,7 @@ export function RunPage() {
               <RunSummary
                 key={run.id}
                 detail={detail.data}
+                projectName={project.data?.name}
                 computePlan={computePlan}
                 computePlanLoading={plans.loading}
                 computePlanError={plans.error !== undefined}
@@ -360,35 +322,52 @@ export function RunPage() {
                 environmentError={environment.error !== undefined}
               />
 
-              <section
+              <details
                 id="run-logs"
-                className={styles.runDetailSection}
-                aria-labelledby="run-logs-title"
+                className={`${styles.diagnosticDisclosure} ${styles.logDisclosure}`}
+                open={logsOpen}
+                onToggle={(event) => setLogsOpen(event.currentTarget.open)}
               >
-                <h2 id="run-logs-title" className={styles.sectionTitle}>
-                  日志
-                </h2>
-                <AsyncState
-                  loading={logs.loading}
-                  loadingText="正在读取 Run 日志…"
-                  error={contextualError(logs.error, '无法加载 Run 日志。')}
-                  onRetry={logs.reload}
-                >
-                  <RunLogPanel
-                    key={run.id}
-                    runId={run.id}
-                    chunks={logs.data ?? []}
-                    failed={run.status === 'failed'}
-                  />
-                </AsyncState>
-              </section>
+                <summary>
+                  <ChevronRightIcon className={styles.disclosureChevron} size={16} aria-hidden />
+                  <span>日志</span>
+                </summary>
+                <div className={styles.disclosureBody}>
+                  <AsyncState
+                    loading={logs.loading}
+                    loadingText="正在读取 Run 日志…"
+                    error={contextualError(logs.error, '无法加载 Run 日志。')}
+                    onRetry={logs.reload}
+                  >
+                    <RunLogPanel
+                      key={run.id}
+                      chunks={logs.data ?? []}
+                      failed={run.status === 'failed'}
+                    />
+                  </AsyncState>
+                </div>
+              </details>
 
-              <section className={styles.runDetailSection} aria-labelledby="run-artifacts-title">
-                <h2 id="run-artifacts-title" className={styles.sectionTitle}>
-                  运行产物
-                </h2>
-                <ArtifactPanel artifacts={detail.data.artifacts} />
-              </section>
+              <details
+                id="run-artifacts"
+                className={`${styles.diagnosticDisclosure} ${styles.artifactDisclosure}`}
+                open={artifactsOpen}
+                onToggle={(event) => setArtifactsOpen(event.currentTarget.open)}
+              >
+                <summary>
+                  <ChevronRightIcon className={styles.disclosureChevron} size={16} aria-hidden />
+                  <span>运行产物</span>
+                </summary>
+                <div className={styles.disclosureBody}>
+                  {artifactsOpen ? (
+                    <ArtifactPanel
+                      artifacts={detail.data.artifacts}
+                      projectId={run.project_id}
+                      runId={run.id}
+                    />
+                  ) : null}
+                </div>
+              </details>
 
               <RunDiagnostics detail={detail.data} />
             </section>

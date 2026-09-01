@@ -8,7 +8,7 @@ import type {
   RunConfiguration,
   RunDetail,
 } from '../../api/types'
-import { formatMemory, formatMinutes } from '../../utils/format'
+import { formatDuration, formatMemory, formatMinutes, formatTime } from '../../utils/format'
 import styles from './run.module.css'
 
 function SnapshotFact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -24,6 +24,7 @@ function SnapshotFact({ label, children }: { label: string; children: React.Reac
 export function RunSnapshotSummary({
   section,
   detail,
+  projectName,
   computePlan,
   computePlanLoading,
   computePlanError,
@@ -36,6 +37,7 @@ export function RunSnapshotSummary({
 }: {
   section: 'basic' | 'environment' | 'execution'
   detail: RunDetail
+  projectName?: string
   computePlan?: ComputePlan
   computePlanLoading: boolean
   computePlanError: boolean
@@ -70,14 +72,36 @@ export function RunSnapshotSummary({
     <dl className={styles.snapshotFacts}>
       {section === 'basic' ? (
         <>
+          <SnapshotFact label="发起用户">
+            <span>{run.initiated_by_username ?? '未知用户'}</span>
+          </SnapshotFact>
+          <SnapshotFact label="创建时间">
+            <time dateTime={run.created_at ?? undefined}>{formatTime(run.created_at)}</time>
+          </SnapshotFact>
+          <SnapshotFact label="运行时长">
+            <span>{formatDuration(run.running_seconds)}</span>
+          </SnapshotFact>
+          {run.queued_seconds !== null && run.queued_seconds !== undefined ? (
+            <SnapshotFact label="排队时长">
+              <span>{formatDuration(run.queued_seconds)}</span>
+            </SnapshotFact>
+          ) : null}
           <SnapshotFact label="Project 版本">
             <Link as={RouterLink} to={`/versions/${run.project_version_id}`}>
+              {projectName ? `${projectName} · ` : ''}
               {run.project_version_label}
             </Link>
           </SnapshotFact>
           <SnapshotFact label="运行方案">
             <span>{configurationName}</span>
           </SnapshotFact>
+          {run.source_run_id ? (
+            <SnapshotFact label="来源 Run">
+              <Link as={RouterLink} to={`/projects/${run.project_id}/runs/${run.source_run_id}`}>
+                Run #{run.source_run_id.replace(/^run_/, '').slice(0, 8)}
+              </Link>
+            </SnapshotFact>
+          ) : null}
         </>
       ) : null}
 

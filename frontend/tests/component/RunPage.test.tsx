@@ -13,7 +13,9 @@ import type {
   RunConfiguration,
   RunDetail,
 } from '../../src/api/types'
+import { ArtifactFilePreviewPage } from '../../src/pages/ArtifactFilePreviewPage'
 import { RunLocatorPage } from '../../src/pages/RunLocatorPage'
+import { RunLogPanel } from '../../src/components/run/RunLogPanel'
 import { RunPage } from '../../src/pages/RunPage'
 
 const runDetailFixture = (): RunDetail => ({
@@ -165,6 +167,19 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
+function ArtifactPreviewWrapper({ path }: { path: string }) {
+  return (
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route
+          path="/projects/:projectId/runs/:runId/artifacts/:artifactId/file"
+          element={<ArtifactFilePreviewPage />}
+        />
+      </Routes>
+    </MemoryRouter>
+  )
+}
+
 describe('RunPage backend unavailable', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -222,8 +237,10 @@ describe('RunPage backend unavailable', () => {
     })
     expect(await screen.findByRole('heading', { name: 'test-run' })).toBeInTheDocument()
     const runHeader = screen.getByRole('banner', { name: 'Run header' })
-    expect(within(runHeader).getByText('student')).toBeInTheDocument()
+    expect(within(runHeader).queryByText('student')).not.toBeInTheDocument()
     expect(within(runHeader).queryByText('usr_internal_student')).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText('Run Summary')).getByText('student')).toBeVisible()
+    expect(within(runHeader).getByText('#run-1')).toBeVisible()
   })
 
   it('keeps actions fail-closed and restores them from refreshed Run capabilities', async () => {
@@ -291,8 +308,9 @@ describe('RunPage backend unavailable', () => {
     )
 
     const runHeader = await screen.findByRole('banner', { name: 'Run header' })
-    expect(within(runHeader).getByText('未知用户')).toBeInTheDocument()
+    expect(within(runHeader).queryByText('未知用户')).not.toBeInTheDocument()
     expect(within(runHeader).queryByText('usr_missing')).not.toBeInTheDocument()
+    expect(within(screen.getByLabelText('Run Summary')).getByText('未知用户')).toBeVisible()
   })
 
   it('keeps Project context and prioritizes user semantics in the default summary', async () => {
@@ -316,11 +334,12 @@ describe('RunPage backend unavailable', () => {
     )
 
     const runHeader = screen.getByRole('banner', { name: 'Run header' })
-    expect(within(runHeader).getByText('student')).toBeVisible()
-    expect(within(runHeader).getByText('运行 8 秒')).toBeVisible()
-    expect(within(runHeader).queryByText('排队 1 秒')).toBeNull()
-    expect(within(runHeader).getByRole('link', { name: 'v1' })).toBeVisible()
-    expect(within(runHeader).getByText('默认训练方案')).toBeVisible()
+    expect(within(runHeader).queryByText('student')).not.toBeInTheDocument()
+    expect(within(runHeader).queryByText('8 秒')).not.toBeInTheDocument()
+    expect(within(runHeader).queryByText('默认训练方案')).not.toBeInTheDocument()
+    expect(within(runHeader).getByText('#run-1')).toBeVisible()
+    expect(within(runHeader).getByLabelText('成功')).toBeVisible()
+    expect(runHeader.querySelector('[data-component="Label"]')).toBeNull()
 
     const summary = screen.getByLabelText('Run Summary')
     expect(within(summary).getByRole('heading', { name: '执行过程' })).toBeVisible()
@@ -334,8 +353,10 @@ describe('RunPage backend unavailable', () => {
     const environmentTab = within(snapshotSummary).getByRole('button', { name: '环境与算力' })
     const executionTab = within(snapshotSummary).getByRole('button', { name: '执行配置' })
     expect(basicTab).toHaveAttribute('aria-pressed', 'true')
-    expect(within(snapshotSummary).getByRole('link', { name: 'v1' })).toBeVisible()
+    expect(within(snapshotSummary).getByRole('link', { name: 'Demo Project · v1' })).toBeVisible()
     expect(within(snapshotSummary).getByText('默认训练方案')).toBeVisible()
+    expect(within(snapshotSummary).getByText('student')).toBeVisible()
+    expect(within(snapshotSummary).getByText('8 秒')).toBeVisible()
     expect(within(snapshotSummary).queryByRole('link', { name: 'Python · 3.12' })).toBeNull()
 
     fireEvent.click(environmentTab)
@@ -408,9 +429,76 @@ describe('RunPage backend unavailable', () => {
     const eventTime = screen.getByText(/^\d{2}:\d{2}:\d{2}$/)
     expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
     expect(screen.getByRole('img', { name: '已完成' })).toBeVisible()
-    expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
-    expect(screen.getByRole('link', { name: '标准输出' })).toBeVisible()
-    expect(screen.getByRole('link', { name: '标准错误' })).toBeVisible()
+    const logsSummary = screen.getByText('日志')
+    const logsDisclosure = logsSummary.closest('details')
+    expect(logsDisclosure).not.toHaveAttribute('open')
+    fireEvent.click(logsSummary)
+    expect(logsDisclosure).toHaveAttribute('open')
+    expect(screen.getByRole('button', { name: '标准输出' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '标准错误' })).toBeVisible()
+    expect(screen.getByLabelText('stdout 日志')).toHaveTextContent('done')
+    expect(screen.queryByRole('button', { name: '自动换行' })).toBeNull()
+  })
+
+  it('shows relative artifact trees inside independently collapsible groups', async () => {
+    const detail = runDetailFixture()
+    detail.artifacts = [
+      {
+        id: 'artifact-1',
+        run_id: detail.run.id,
+        name: '训练指标',
+        description: '',
+        source_path: 'outputs',
+        status: 'available',
+        file_count: 3,
+        size: 4096,
+        created_at: '2026-08-15T08:10:00Z',
+      },
+    ]
+    vi.spyOn(api, 'getRun').mockResolvedValue(detail)
+    vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
+    vi.spyOn(api, 'listArtifactFiles').mockResolvedValue([
+      { path: 'metrics.json', size: 515 },
+      { path: 'plots/loss.png', size: 1024 },
+      { path: 'plots/nested/chart.png', size: 2557 },
+    ])
+
+    render(
+      <Wrapper>
+        <RunPage />
+      </Wrapper>,
+    )
+
+    await screen.findByRole('heading', { name: 'test-run' })
+    const artifactSummary = screen.getByText('运行产物')
+    const artifactDisclosure = artifactSummary.closest('details')
+    expect(artifactDisclosure).not.toHaveAttribute('open')
+    expect(screen.queryByText('训练指标')).toBeNull()
+    fireEvent.click(artifactSummary)
+    expect(artifactDisclosure).toHaveAttribute('open')
+    const groupSummary = await screen.findByText('训练指标')
+    const group = groupSummary.closest('details')
+    expect(group).toHaveAttribute('open')
+    expect(within(group!).getByText('outputs')).toBeVisible()
+    expect(screen.queryByText('outputs/')).toBeNull()
+    expect(await screen.findByRole('list', { name: '训练指标 文件' })).toBeVisible()
+    expect(screen.getByRole('link', { name: 'metrics.json' })).toHaveAttribute(
+      'href',
+      '/projects/project-1/runs/run-1/artifacts/artifact-1/file?path=metrics.json',
+    )
+    expect(screen.getByRole('button', { name: '下载 metrics.json' })).toBeVisible()
+
+    const directory = screen.getByText('plots/').closest('details')
+    expect(directory).not.toHaveAttribute('open')
+    expect(screen.getByText('loss.png')).not.toBeVisible()
+    fireEvent.click(screen.getByText('plots/'))
+    expect(directory).toHaveAttribute('open')
+    expect(screen.getByText('loss.png')).toBeVisible()
+    expect(screen.getByText('nested/').closest('details')).not.toHaveAttribute('open')
+    expect(screen.getByText('chart.png')).not.toBeVisible()
+
+    fireEvent.click(groupSummary)
+    expect(group).not.toHaveAttribute('open')
   })
 
   it('keeps execution identifiers out of the user-facing Timeline', async () => {
@@ -449,10 +537,13 @@ describe('RunPage backend unavailable', () => {
     )
 
     const runHeader = await screen.findByRole('banner', { name: 'Run header' })
-    expect(within(runHeader).getByRole('link', { name: 'Run #89086a75' })).toBeVisible()
+    expect(within(runHeader).getByText('#run-1')).toBeVisible()
+    expect(within(runHeader).queryByRole('link', { name: 'Run #89086a75' })).not.toBeInTheDocument()
     const timeline = screen.getByRole('list', { name: 'Run 执行事件' })
     expect(within(timeline).getByText('已固定本次运行快照')).toBeVisible()
     expect(within(timeline).getByText('已提交到 107/debug')).toBeVisible()
+    const snapshotSummary = screen.getByLabelText('基本信息运行快照')
+    expect(within(snapshotSummary).getByRole('link', { name: 'Run #89086a75' })).toBeVisible()
     expect(within(timeline).getByText('运行成功')).toBeVisible()
     expect(within(timeline).queryByText(/基于 Run|mock-|succeeded|退出码/)).toBeNull()
   })
@@ -476,10 +567,30 @@ describe('RunPage backend unavailable', () => {
     expect(await screen.findByText('Process exited with code 1.')).toBeVisible()
     const logsLink = screen.getByRole('link', { name: '查看日志' })
     expect(logsLink).toHaveAttribute('href', '#run-logs')
-    expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
+    fireEvent.click(logsLink)
+    expect(screen.getByText('日志').closest('details')).toHaveAttribute('open')
+    expect(screen.getByLabelText('stderr 日志')).toHaveTextContent('boom')
+  })
+  it('switches to stderr when a running Run becomes failed', async () => {
+    const chunks: LogChunk[] = [
+      { stream: 'stdout', content: 'progress', truncated: false },
+      { stream: 'stderr', content: 'failure details', truncated: false },
+    ]
+    const view = render(<RunLogPanel chunks={chunks} failed={false} />)
+
+    expect(screen.getByRole('button', { name: '标准输出' })).toHaveAttribute('aria-pressed', 'true')
+    view.rerender(<RunLogPanel chunks={chunks} failed />)
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '标准错误' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    )
+    expect(screen.getByLabelText('stderr 日志')).toHaveTextContent('failure details')
   })
 
-  it('returns to Summary when rerun navigation changes the Run ID', async () => {
+  it('collapses logs when rerun navigation changes the Run ID', async () => {
     vi.spyOn(api, 'getRun').mockImplementation(async (id) => {
       const detail = runDetailFixture()
       detail.run.id = id
@@ -499,19 +610,84 @@ describe('RunPage backend unavailable', () => {
     )
 
     await screen.findByRole('heading', { name: 'test-run' })
-    expect(screen.getByRole('heading', { name: '日志' })).toBeVisible()
+    fireEvent.click(screen.getByText('日志'))
+    expect(screen.getByText('日志').closest('details')).toHaveAttribute('open')
     fireEvent.click(screen.getByRole('button', { name: '重新运行' }))
-
     await waitFor(() =>
-      expect(screen.getByRole('banner', { name: 'Run header' })).toHaveTextContent('重新运行自'),
+      expect(screen.getByRole('banner', { name: 'Run header' })).toHaveTextContent('#run-2'),
     )
+    expect(within(screen.getByLabelText('基本信息运行快照')).getByText('来源 Run')).toBeVisible()
+    expect(screen.getByText('日志').closest('details')).not.toHaveAttribute('open')
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(screen.getByLabelText('Run Summary')).toBeVisible()
-    const runHeader = screen.getByRole('banner', { name: 'Run header' })
-    expect(within(runHeader).getByRole('link', { name: 'Run #run-1' })).toHaveAttribute(
+    const snapshotSummary = screen.getByLabelText('基本信息运行快照')
+    expect(within(snapshotSummary).getByRole('link', { name: 'Run #run-1' })).toHaveAttribute(
       'href',
       '/projects/project-1/runs/run-1',
     )
+  })
+
+  it('previews text Artifact files on a dedicated route', async () => {
+    const detail = runDetailFixture()
+    detail.artifacts = [
+      {
+        id: 'artifact-1',
+        run_id: detail.run.id,
+        name: '训练指标',
+        description: '',
+        source_path: 'outputs',
+        status: 'available',
+        file_count: 1,
+        size: 515,
+        created_at: '2026-08-15T08:10:00Z',
+      },
+    ]
+    vi.spyOn(api, 'getRun').mockResolvedValue(detail)
+    vi.spyOn(api, 'listArtifactFiles').mockResolvedValue([{ path: 'metrics.json', size: 515 }])
+    const content = new TextEncoder().encode('{"loss": 0.2489, "accuracy": 0.917}')
+    vi.spyOn(api, 'readArtifactFile').mockResolvedValue({
+      arrayBuffer: async () => content.buffer,
+    } as Blob)
+
+    render(
+      <ArtifactPreviewWrapper path="/projects/project-1/runs/run-1/artifacts/artifact-1/file?path=metrics.json" />,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'metrics.json' })).toBeVisible()
+    expect(screen.getByRole('link', { name: '返回运行产物' })).toHaveAttribute(
+      'href',
+      '/projects/project-1/runs/run-1#run-artifacts',
+    )
+    expect(await screen.findByLabelText('metrics.json 内容')).toHaveTextContent('"loss"')
+    expect(api.readArtifactFile).toHaveBeenCalledWith('artifact-1', 'metrics.json')
+  })
+
+  it('keeps known binary Artifact files downloadable without reading them into the preview', async () => {
+    const detail = runDetailFixture()
+    detail.artifacts = [
+      {
+        id: 'artifact-2',
+        run_id: detail.run.id,
+        name: '模型检查点',
+        description: '',
+        source_path: 'checkpoints',
+        status: 'available',
+        file_count: 1,
+        size: 4096,
+        created_at: '2026-08-15T08:10:00Z',
+      },
+    ]
+    vi.spyOn(api, 'getRun').mockResolvedValue(detail)
+    vi.spyOn(api, 'listArtifactFiles').mockResolvedValue([{ path: 'final.pt', size: 4096 }])
+    const readArtifactFile = vi.spyOn(api, 'readArtifactFile')
+
+    render(
+      <ArtifactPreviewWrapper path="/projects/project-1/runs/run-1/artifacts/artifact-2/file?path=final.pt" />,
+    )
+
+    expect(await screen.findByRole('heading', { name: '无法在浏览器中预览这个文件' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '下载' })).toBeVisible()
+    expect(readArtifactFile).not.toHaveBeenCalled()
   })
 
   it('resolves an ID-only Run link into the canonical Project route', async () => {
