@@ -294,6 +294,98 @@ async def test_引用不存在的_version_会挡在运行方案保存前(
     assert response.json()["code"] == "not_found"
 
 
+async def test_未完成发布的_attempt_不能冒充资源版本(
+    client: httpx.AsyncClient, session: AsyncSession
+) -> None:
+    """REQ-44: editor/save seam only accepts a published exact Version ID."""
+    user_group_id = await _user_group(client)
+    resource = (
+        await client.post(
+            "/api/v1/shared-resources",
+            json={
+                "name": "待校验资源",
+                "owner": {"kind": "user_group", "id": user_group_id},
+            },
+            headers=ALICE,
+        )
+    ).json()
+    attempt = (
+        await client.post(
+            f"/api/v1/shared-resources/{resource['id']}/versions",
+            data={"description": "pending"},
+            files=[("files", ("data.txt", b"x", "text/plain"))],
+            headers=ALICE,
+        )
+    ).json()
+    _, environment_version_id = await use_default_environment(session, client, headers=ALICE)
+    project = await create_project_with_version(
+        client, name="未发布输入项目", files={"main.py": "pass"}, headers=ALICE
+    )
+
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "错误版本引用",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": attempt["id"],
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers=ALICE,
+    )
+
+    assert attempt["status"] == "pending"
+    assert attempt["version_id"] is None
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+async def test_冲突的输入访问路径被挡在运行方案保存前(
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
+) -> None:
+    """REQ-44: 两个输入不能写入同一路径，也不能互相覆盖父子路径。"""
+    _, environment_version_id = await use_default_environment(session, client, headers=ALICE)
+    version = await _create_resource_with_version(
+        client, context, name="路径冲突", files=[("data.txt", b"x")]
+    )
+    project = await create_project_with_version(
+        client, name="路径冲突项目", files={"main.py": "pass"}, headers=ALICE
+    )
+
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "冲突输入",
+            "command": "python main.py",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version["id"],
+                    "access_path": "/inputs/data/",
+                },
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version["id"],
+                    "access_path": "/inputs/data/train",
+                },
+            ],
+        },
+        headers=ALICE,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "conflict"
+    assert "输入访问路径" in response.json()["message"]
+
+
 # -- 跨 Owner 引用 -------------------------------------------------------
 
 

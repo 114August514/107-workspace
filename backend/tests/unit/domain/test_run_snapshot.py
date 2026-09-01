@@ -92,6 +92,25 @@ def test_input_access_path_rejects_parent_components() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [
+        (" /inputs/train/ ", "/inputs/train"),
+        ("/inputs//train", "/inputs/train"),
+        ("/inputs/./train", "/inputs/train"),
+        ("\\inputs\\train", "/inputs/train"),
+    ],
+)
+def test_input_access_path_is_canonicalized(raw: str, normalized: str) -> None:
+    binding = InputBinding(
+        source_type=InputSourceType.ARTIFACT,
+        source_id="art_1",
+        access_path=raw,
+    )
+
+    assert binding.access_path == normalized
+
+
 def test_artifact_collection_path_must_be_relative() -> None:
     from workspace107.domain.errors import ValidationFailed
 

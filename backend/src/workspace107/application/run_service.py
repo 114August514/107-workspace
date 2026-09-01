@@ -48,7 +48,6 @@ from ..domain.models import (
     RunConfiguration,
     RunEvent,
     RunLogChunk,
-    SharedResourceVersion,
 )
 from ..domain.ownership import OwnerReference
 from ..domain.pagination import Page, PageRequest
@@ -890,7 +889,7 @@ class RunService:
         )
         if version is None:
             return f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
-        if subpath and not _subpath_exists_in_version(subpath, version):
+        if subpath and not version.contains_subpath(subpath):
             return f"输入 {access_path} 引用的子路径 {subpath!r} 不存在"
         return None
 
@@ -998,14 +997,3 @@ def _as_resolved_env(
     literals: dict[str, str], secret_refs: dict[str, SecretReference]
 ) -> ResolvedEnv:
     return ResolvedEnv(literals=dict(literals), secret_refs=dict(secret_refs))
-
-
-def _subpath_exists_in_version(subpath: str, version: SharedResourceVersion) -> bool:
-    """子路径是否落在版本文件树里。
-
-    匹配规则与 ``LocalStorage._prepare_sync`` 一致：子路径要么正好命名一个文件
-    （``f.path == subpath``），要么是一个目录前缀（``f.path.startswith(subpath + "/")``）。
-    用目录边界前缀而不是裸 ``startswith``，避免 ``subpath="train"`` 误匹配
-    ``training/``。两端都是规范化后的值（无尾斜杠、无 ``.``/``..``）。
-    """
-    return any(f.path == subpath or f.path.startswith(subpath + "/") for f in version.files)
