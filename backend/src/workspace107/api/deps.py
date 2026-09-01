@@ -40,6 +40,7 @@ from ..domain.ports.repositories import Repositories
 from ..domain.ports.scheduler import SchedulerPort
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import StoragePort
+from ..domain.slurm_projection import SlurmProjection
 from ..infrastructure.db.notifications import DatabaseNotificationPublisher
 from ..infrastructure.db.repositories import SqlRepositories
 from ..infrastructure.db.secret_vault import DatabaseSecretVault
@@ -57,6 +58,7 @@ class AppContext:
     session_factory: async_sessionmaker[AsyncSession]
     storage: StoragePort
     scheduler: SchedulerPort
+    slurm_projection: SlurmProjection
     clock: Clock
 
 
@@ -129,6 +131,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.clock,
             context.storage,
             context.scheduler,
+            context.slurm_projection,
             vault,
             activity,
             notifier,

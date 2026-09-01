@@ -52,6 +52,15 @@ async def preflight(
         ),
         compute_plan_id=result.compute_plan.id if result.compute_plan else None,
         compute_request=p.compute_request_out(result.compute_request),
+        slurm_projection=(
+            s.SlurmProjectionOut(
+                availability=result.slurm_projection.availability,
+                reason=result.slurm_projection.reason,
+                detail=result.slurm_projection.detail,
+            )
+            if result.slurm_projection is not None
+            else None
+        ),
         resolved_environment_variables=result.resolved_env_literals,
         secret_references={
             name: ref.as_key() for name, ref in result.resolved_env_secret_refs.items()
