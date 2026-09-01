@@ -2,12 +2,7 @@ import { ArrowLeftIcon, DownloadIcon, FileIcon } from '@primer/octicons-react'
 import { Banner, Button, Link, Text } from '@primer/react'
 import { Blankslate } from '@primer/react/experimental'
 import { useEffect, useState } from 'react'
-import {
-  Link as RouterLink,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError, type AsyncErrorView } from '../api/errors'
@@ -280,7 +275,9 @@ export function ArtifactFilePreviewPage() {
             {downloadError ? (
               <Banner variant="critical">
                 <Banner.Title>无法下载这个文件。</Banner.Title>
-                <Banner.Description>{toAsyncError(downloadError)?.problems?.[0]}</Banner.Description>
+                <Banner.Description>
+                  {toAsyncError(downloadError)?.problems?.[0]}
+                </Banner.Description>
               </Banner>
             ) : null}
             <section className={styles.artifactPreviewBody} aria-label="文件预览">

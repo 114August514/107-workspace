@@ -238,9 +238,7 @@ function ArtifactGroup({
         <div className={styles.artifactGroupHeading}>
           <span className={styles.artifactGroupTitle}>
             <strong>{artifact.name}</strong>
-            {artifact.status !== 'available' ? (
-              <Label variant="attention">内容已清理</Label>
-            ) : null}
+            {artifact.status !== 'available' ? <Label variant="attention">内容已清理</Label> : null}
           </span>
           <span className={styles.artifactGroupMeta}>
             <span>
@@ -289,12 +287,7 @@ export function ArtifactPanel({
   return (
     <div className={styles.artifactGroups}>
       {artifacts.map((artifact) => (
-        <ArtifactGroup
-          key={artifact.id}
-          artifact={artifact}
-          projectId={projectId}
-          runId={runId}
-        />
+        <ArtifactGroup key={artifact.id} artifact={artifact} projectId={projectId} runId={runId} />
       ))}
     </div>
   )
