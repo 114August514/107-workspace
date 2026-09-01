@@ -662,10 +662,15 @@ class RunService:
                 run_name=run.name,
                 reason=str(exc),
             )
-            if isinstance(exc, (ObjectNotFound, ValidationFailed)) and any(
-                binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
-                for binding in snapshot.input_bindings
-            ):
+            if isinstance(exc, SchedulerError):
+                await self._notifier.platform_incident(
+                    recipient_id=run.initiated_by_user_id,
+                    title="平台调度服务异常",
+                    body="本次 Run 未能提交到调度系统，请稍后重试。",
+                )
+            if isinstance(
+                exc, (ObjectNotFound, ValidationFailed)
+            ) and "Shared Resource Version" in str(exc):
                 await self._notify_shared_resource_consumers(run, snapshot, str(exc))
             return
 

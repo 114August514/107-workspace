@@ -119,10 +119,15 @@ class EnvironmentPublicationService:
             version.environment_id,
             needs=Capability.ENVIRONMENT_VERSION_CREATE,
         )
+        was_unavailable = version.availability is EnvironmentAvailability.UNAVAILABLE
         refreshed = await EnvironmentPublicationProcessor(
             self._repos, self._storage, self._clock
         ).refresh_availability(version.id)
-        if refreshed.availability is EnvironmentAvailability.UNAVAILABLE and self._notifier:
+        if (
+            not was_unavailable
+            and refreshed.availability is EnvironmentAvailability.UNAVAILABLE
+            and self._notifier
+        ):
             await self._notify_consumers(refreshed)
         return refreshed
 

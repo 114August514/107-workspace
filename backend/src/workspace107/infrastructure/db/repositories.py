@@ -178,6 +178,10 @@ class UserRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_user(row) if row else None
 
+    async def list_ids(self) -> list[str]:
+        rows = (await self._session.execute(select(t.UserRow.id))).scalars().all()
+        return list(rows)
+
     async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]:
         if not user_ids:
             return {}
@@ -477,9 +481,22 @@ class ProjectRepositoryImpl:
         config_projects = select(t.RunConfigurationRow.project_id).where(
             t.RunConfigurationRow.environment_version_id == version_id
         )
+        pinned_rows = (
+            await self._session.execute(
+                select(t.RunRow.project_id, t.RunSnapshotRow.payload).join(
+                    t.RunSnapshotRow, t.RunSnapshotRow.id == t.RunRow.snapshot_id
+                )
+            )
+        ).all()
+        pinned_projects = {
+            project_id
+            for project_id, payload in pinned_rows
+            if payload.get("environment_version_id") == version_id
+        }
         stmt = select(t.ProjectRow).where(
             (t.ProjectRow.environment_version_id == version_id)
             | t.ProjectRow.id.in_(config_projects)
+            | t.ProjectRow.id.in_(pinned_projects)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
