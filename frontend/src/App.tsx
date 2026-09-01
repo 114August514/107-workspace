@@ -134,12 +134,7 @@ export function ProductRoutes({
         path="/projects/:projectId"
         element={<ProjectPage key={username} project={project} />}
       />
-      <Route
-        path="/projects/:projectId/runs/:runId"
-        element={
-          <RunPage key={username} />
-        }
-      />
+      <Route path="/projects/:projectId/runs/:runId" element={<RunPage key={username} />} />
       <Route
         path="/projects/:projectId/runs/:runId/artifacts/:artifactId/file"
         element={<ArtifactFilePreviewPage key={username} />}
