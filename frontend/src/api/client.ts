@@ -34,6 +34,7 @@ import type {
   PreflightResult,
   PageQuery,
   ForkSource,
+  OwnerReference,
   Project,
   ProjectPage,
   ProjectFile,
@@ -348,6 +349,21 @@ export const api = {
     unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
+  listOwnerProjects: async (
+    owner: OwnerReference,
+    options: PageQuery & { query?: string } = {},
+  ): Promise<ProjectPage> =>
+    unwrap(
+      await http.GET('/api/v1/projects', {
+        params: {
+          query: {
+            ...options,
+            owner_kind: owner.kind,
+            owner_id: owner.id,
+          },
+        },
+      }),
+    ),
 
   /** 当前 User 可见的 Project：自有、有效 User Group 拥有的与 PUBLIC。分页。 */
   listProjects: async (query: PageQuery = {}): Promise<ProjectPage> =>

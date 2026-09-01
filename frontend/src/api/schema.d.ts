@@ -4891,6 +4891,12 @@ export interface operations {
     list_discoverable_projects_api_v1_projects_get: {
         parameters: {
             query?: {
+                /** @description 按 Owner 种类过滤 */
+                owner_kind?: components["schemas"]["OwnerKind"] | null;
+                /** @description 按 Owner ID 过滤 */
+                owner_id?: string | null;
+                /** @description 按 Project 名称搜索 */
+                query?: string | null;
                 /** @description 页码，从 1 开始 */
                 page?: number;
                 /** @description 每页条数 */

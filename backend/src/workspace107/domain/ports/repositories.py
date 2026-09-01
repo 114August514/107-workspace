@@ -84,8 +84,15 @@ class ProjectRepository(Protocol):
         """按最近更新时间列出用户可见的 Project，用于个人首页。"""
         ...
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
-        """列出用户可发现的 Project：Owner scope + PUBLIC。"""
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
+        """列出用户可发现的 Project，可按 Owner 与名称过滤。"""
         ...
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool: ...

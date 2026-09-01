@@ -7,7 +7,7 @@ import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 
 import { api, setCurrentUser } from '../../src/api/client'
-import type { Home } from '../../src/api/types'
+import type { Home, Project } from '../../src/api/types'
 import type { AsyncState } from '../../src/api/useAsync'
 import { App } from '../../src/App'
 import { AppShell } from '../../src/components/layout/AppShell'
@@ -62,7 +62,31 @@ const manyHomeItems: Home = {
   })),
 }
 
+const projectData: Project = {
+  id: 'p-1',
+  name: 'LJ 流体模拟',
+  description: '',
+  owner: { kind: 'user_group', id: 'grp-1', display_name: '计算物理课题组' },
+  visibility: 'owner_scope',
+  status: 'active',
+  created_by: 'u-1',
+  created_at: '2026-08-15T10:00:00Z',
+  updated_at: '2026-08-16T10:00:00Z',
+  default_run_configuration_id: null,
+  environment_version_id: null,
+}
+
+const secondProject: Project = {
+  ...projectData,
+  id: 'p-2',
+  name: '第二个 Project',
+}
+
 function readyHome(data = homeData): AsyncState<Home> {
+  return { data, loading: false, error: undefined, reload: vi.fn() }
+}
+
+function readyProject(data: Project | undefined = projectData): AsyncState<Project | undefined> {
   return { data, loading: false, error: undefined, reload: vi.fn() }
 }
 
@@ -88,11 +112,16 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname}</output>
 }
 
-function renderShell(username: string, home = readyHome(), initialEntry = '/') {
+function renderShell(
+  username: string,
+  home = readyHome(),
+  initialEntry = '/',
+  project = readyProject(),
+) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <PrimerRoot>
-        <AppShell username={username} onUsernameChange={() => {}} home={home}>
+        <AppShell username={username} onUsernameChange={() => {}} home={home} project={project}>
           <p>页面内容</p>
           <LocationProbe />
         </AppShell>
@@ -133,6 +162,123 @@ describe('AppShell 壳层', () => {
     },
   )
 
+  it('首页在 Home Mark 后显示产品名 context', () => {
+    renderShell('student')
+
+    const header = screen.getByRole('banner')
+    expect(within(header).getByText('107 Workspace')).toBeVisible()
+    expect(within(header).getByRole('link', { name: '107 Workspace 首页' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+    expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
+  })
+
+  it('用独立 Home Mark、Project context 和三级本地导航表达壳层层级', () => {
+    renderShell('student', readyHome(), '/projects/p-1/runs/r-1')
+
+    const header = screen.getByRole('banner')
+    expect(within(header).getByRole('link', { name: '107 Workspace 首页' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+    const context = within(header).getByRole('group', { name: '当前 Project' })
+    expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
+      'href',
+      '/user-groups/grp-1',
+    )
+    expect(within(context).getByRole('link', { name: 'LJ 流体模拟' })).toHaveAttribute(
+      'href',
+      '/projects/p-1',
+    )
+
+    const navigation = screen.getByRole('navigation', { name: 'Project navigation' })
+    expect(within(navigation).getByRole('link', { name: 'Files' })).toHaveAttribute(
+      'href',
+      '/projects/p-1?tab=files',
+    )
+    expect(within(navigation).getByRole('link', { name: 'Runs' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(navigation).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/projects/p-1?tab=activities',
+    )
+    expect(within(navigation).queryByRole('link', { name: '版本' })).toBeNull()
+    expect(within(navigation).queryByRole('link', { name: '运行方案' })).toBeNull()
+  })
+
+  it('在当前 Owner namespace 内搜索并切换 Project', async () => {
+    const listOwnerProjects = vi.spyOn(api, 'listOwnerProjects').mockResolvedValue({
+      items: [projectData, secondProject],
+      page: 1,
+      page_size: 50,
+      total: 2,
+      has_more: false,
+    })
+    renderShell('student', readyHome(), '/projects/p-1')
+
+    fireEvent.click(screen.getByRole('button', { name: '切换 Project' }))
+    const search = await screen.findByPlaceholderText('搜索 Project')
+    const panel = search.closest<HTMLElement>('[role="dialog"]')
+    expect(panel).not.toBeNull()
+    expect(within(panel!).getByRole('heading', { name: '切换 Project' })).toBeVisible()
+    expect(within(panel!).queryByText('计算物理课题组')).toBeNull()
+    await waitFor(() =>
+      expect(listOwnerProjects).toHaveBeenCalledWith(projectData.owner, {
+        page_size: 50,
+        query: undefined,
+      }),
+    )
+    fireEvent.change(search, { target: { value: '第二个' } })
+    await waitFor(() =>
+      expect(listOwnerProjects).toHaveBeenLastCalledWith(projectData.owner, {
+        page_size: 50,
+        query: '第二个',
+      }),
+    )
+    fireEvent.click(await screen.findByText('第二个 Project'))
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p-2')
+    expect(screen.queryByPlaceholderText('搜索 Project')).toBeNull()
+  })
+
+  it('Project SelectPanel 加载失败后可重试', async () => {
+    const listOwnerProjects = vi
+      .spyOn(api, 'listOwnerProjects')
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        items: [projectData, secondProject],
+        page: 1,
+        page_size: 50,
+        total: 2,
+        has_more: false,
+      })
+    renderShell('student', readyHome(), '/projects/p-1')
+
+    fireEvent.click(screen.getByRole('button', { name: '切换 Project' }))
+    expect(await screen.findByText('无法加载 Project。')).toBeVisible()
+    fireEvent.click(screen.getByText('重试'))
+
+    await waitFor(() => expect(listOwnerProjects).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('第二个 Project')).toBeVisible()
+  })
+
+  it('Project context 加载失败时保留壳层导航并提供重试', () => {
+    const reload = vi.fn()
+    renderShell('student', readyHome(), '/projects/p-1', {
+      data: undefined,
+      loading: false,
+      error: new Error('offline'),
+      reload,
+    })
+
+    expect(screen.getByRole('navigation', { name: 'Project navigation' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Project context 加载失败，重试' }))
+    expect(reload).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('页面内容')).toBeVisible()
+  })
   it('非首页 Body 仅直接包含 main，Primer Content 在 main 内负责正文居中', () => {
     renderShell('student', readyHome(), '/projects/p-1')
     const body = screen.getByRole('banner').nextElementSibling
@@ -383,7 +529,12 @@ describe('AppShell 身份切换的乱序防护', () => {
     rerender(
       <MemoryRouter>
         <PrimerRoot>
-          <AppShell username="teacher" onUsernameChange={() => {}} home={readyHome()}>
+          <AppShell
+            username="teacher"
+            onUsernameChange={() => {}}
+            home={readyHome()}
+            project={readyProject()}
+          >
             <p>页面内容</p>
           </AppShell>
         </PrimerRoot>

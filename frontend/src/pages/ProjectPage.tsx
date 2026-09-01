@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
 import type { ActivityPage, ForkSource, Project, RunConfiguration, RunPage } from '../api/types'
-import { useAsync } from '../api/useAsync'
+import { useAsync, type AsyncState as AsyncResource } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
 import { AsyncState } from '../components/common/AsyncState'
@@ -21,12 +21,20 @@ import { SubmitRunModal } from '../components/run/SubmitRunModal'
 import { RunConfigurationPanel } from '../components/runconfig/RunConfigurationPanel'
 import { tablePagination } from '../utils/pagination'
 
+const PAGE_TITLES: Record<string, string> = {
+  files: 'Working State',
+  versions: 'Version history',
+  configurations: 'Run configurations',
+  runs: 'Run history',
+  activities: 'Project activity',
+}
+
 /**
  * Project 页面：文件、版本、运行方案和 Run 历史。
  *
  * 页面顺序对应核心闭环：准备代码 -> 保存版本 -> 配置运行方案 -> 提交 Run。
  */
-export function ProjectPage() {
+export function ProjectPage({ project }: { project: AsyncResource<Project | undefined> }) {
   const { projectId = '' } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -37,9 +45,11 @@ export function ProjectPage() {
       ? requestedTab
       : 'files'
   const [token, setToken] = useState(0)
-  const bump = () => setToken((value) => value + 1)
+  const bump = () => {
+    setToken((value) => value + 1)
+    void project.reload({ silent: true })
+  }
 
-  const project = useAsync<Project>(() => api.getProject(projectId), [projectId, token])
   const [runPage, setRunPage] = useState(1)
   const runs = useAsync<RunPage>(
     () => api.listRuns(projectId, { page: runPage }),
@@ -59,21 +69,7 @@ export function ProjectPage() {
       <AsyncSection loading={project.loading} error={project.error}>
         {project.data && (
           <PageHeader
-            breadcrumb={[
-              { title: <Link to="/">首页</Link> },
-              {
-                title:
-                  project.data.owner.kind === 'user_group' ? (
-                    <Link to={`/user-groups/${project.data.owner.id}`}>
-                      {project.data.owner.display_name}
-                    </Link>
-                  ) : (
-                    project.data.owner.display_name
-                  ),
-              },
-              { title: project.data.name },
-            ]}
-            title={project.data.name}
+            title={PAGE_TITLES[activeTab]}
             description={project.data.description || '这个 Project 还没有填写说明'}
             tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
           />
