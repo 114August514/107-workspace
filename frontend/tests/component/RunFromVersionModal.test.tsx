@@ -72,6 +72,7 @@ function makePreflight(ok: boolean): PreflightResult {
       availability_checked_at: '2026-08-29T00:00:00Z',
     },
     project_version_id: 'ver-1',
+    slurm_projection: null,
     resolved_environment_variables: {},
     secret_references: {},
   }

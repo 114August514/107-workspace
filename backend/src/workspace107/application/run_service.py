@@ -344,6 +344,7 @@ class RunService:
             compute_plan=plan,
             compute_request=request,
             slurm_projection=slurm_projection,
+            resolved_env_literals=resolved.literals,
             resolved_env_secret_refs=resolved.secret_refs,
         )
 

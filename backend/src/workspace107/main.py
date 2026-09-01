@@ -54,7 +54,7 @@ def build_context(settings: Settings) -> AppContext:
         storage=LocalStorage(settings.storage_root),
         scheduler=build_scheduler(settings),
         slurm_projection=SlurmProjection(SlurmFacts()),
-        clock=SystemClock()
+        clock=SystemClock(),
     )
 
 

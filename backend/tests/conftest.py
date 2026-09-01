@@ -69,10 +69,10 @@ async def context(settings: Settings) -> AsyncIterator[AppContext]:
         await session.commit()
         ctx.slurm_projection = SlurmProjection(
             SlurmFacts(
-            associations=tuple(
-                SlurmAssociationFact("107", "undergraduate", partition, "*")
-                for partition in ("debug", "cpu", "gpu")
-            ),
+                associations=tuple(
+                    SlurmAssociationFact("107", "undergraduate", partition, "*")
+                    for partition in ("debug", "cpu", "gpu")
+                ),
                 partitions=tuple(
                     SlurmPartitionFact("107", partition, ("normal",))
                     for partition in ("debug", "cpu", "gpu")
