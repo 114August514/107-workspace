@@ -1019,7 +1019,7 @@ export interface paths {
         };
         /**
          * 获取 Run 详情
-         * @description Return a Run only when the current User has owner-scope Project authority.
+         * @description 仅在当前 User 具有所属 Project owner-scope authority 时，返回 Run 详情与操作 capability。
          */
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;

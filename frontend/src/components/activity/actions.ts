@@ -47,7 +47,9 @@ export function targetPath(activity: Activity): string | null {
     case 'project':
       return `/projects/${activity.target_id}`
     case 'run':
-      return `/runs/${activity.target_id}`
+      return activity.project_id
+        ? `/projects/${activity.project_id}/runs/${activity.target_id}`
+        : `/runs/${activity.target_id}`
     case 'project_version':
       return `/versions/${activity.target_id}`
     case 'shared_resource':

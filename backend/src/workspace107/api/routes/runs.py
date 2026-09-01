@@ -91,7 +91,7 @@ async def create_run(
 
 @router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
 async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
-    """Return a Run only when the current User has owner-scope Project authority."""
+    """仅在当前 User 具有所属 Project owner-scope authority 时，返回 Run 详情与操作 capability。"""
     detail = await services.runs.get_detail(user.id, run_id)
     project_access = await services.projects.get(user.id, detail.run.run.project_id)
     return s.RunDetailOut(

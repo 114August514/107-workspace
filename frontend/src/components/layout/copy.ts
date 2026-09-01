@@ -31,7 +31,6 @@ export const contextGuideCopy = {
   environment: '运行环境是独立的版本化资产；Run Configuration 保存后固定引用一个确定版本。',
   project: '当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。',
   version: '这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。',
-  run: '这里展示当前 Run 的状态、日志和产物；后续修改不会回写其运行快照。',
 } as const
 
 export const workNavigationCopy = {

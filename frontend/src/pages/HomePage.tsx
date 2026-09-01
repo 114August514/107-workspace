@@ -60,7 +60,11 @@ export function HomePage({ username, home }: Props) {
                     {runs.map((run) => (
                       <li key={run.id} className={styles.item}>
                         <div className={styles.itemMain}>
-                          <Link as={RouterLink} to={`/runs/${run.id}`} className={styles.itemTitle}>
+                          <Link
+                            as={RouterLink}
+                            to={`/projects/${run.project_id}/runs/${run.id}`}
+                            className={styles.itemTitle}
+                          >
                             {run.name}
                           </Link>
                           <span className={styles.itemDesc}>{runStatusLabel(run.status)}</span>

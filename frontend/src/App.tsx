@@ -7,12 +7,14 @@ import { api, getCurrentUser, setCurrentUser } from './api/client'
 import type { Home } from './api/types'
 import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
 import { AppShell } from './components/layout/AppShell'
+import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
+import { RunLocatorPage } from './pages/RunLocatorPage'
 import { SharedResourcePage } from './pages/SharedResourcePage'
 import { SharedResourceVersionPage } from './pages/SharedResourceVersionPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
@@ -106,7 +108,12 @@ export function ProductRoutes({ username, home }: { username: string; home: Asyn
         element={<EnvironmentVersionPage key={username} />}
       />
       <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
-      <Route path="/runs/:runId" element={<RunPage key={username} />} />
+      <Route path="/projects/:projectId/runs/:runId" element={<RunPage key={username} />} />
+      <Route
+        path="/projects/:projectId/runs/:runId/artifacts/:artifactId/file"
+        element={<ArtifactFilePreviewPage key={username} />}
+      />
+      <Route path="/runs/:runId" element={<RunLocatorPage key={username} />} />
       <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
       <Route path="/shared-resources/:resourceId" element={<SharedResourcePage key={username} />} />
       <Route

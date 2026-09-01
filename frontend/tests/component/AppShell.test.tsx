@@ -77,7 +77,6 @@ const contextGuideCases = [
     '当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。',
   ],
   ['/versions/v-1', '这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。'],
-  ['/runs/r-1', '这里展示当前 Run 的状态、日志和产物；后续修改不会回写其运行快照。'],
 ] as const
 
 function LocationProbe() {
@@ -120,6 +119,15 @@ describe('AppShell 壳层', () => {
 
     expect(screen.queryByRole('complementary', { name: '页面引导' })).toBeNull()
   })
+
+  it.each(['/runs/r-1', '/projects/p-1/runs/r-1'])(
+    'Run route %s relies on page navigation instead of explanatory footer copy',
+    (pathname) => {
+      renderShell('student', readyHome(), pathname)
+
+      expect(screen.queryByRole('complementary', { name: '页面引导' })).toBeNull()
+    },
+  )
 
   it('非首页 Body 仅直接包含 main，Primer Content 在 main 内负责正文居中', () => {
     renderShell('student', readyHome(), '/projects/p-1')
