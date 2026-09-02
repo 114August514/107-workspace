@@ -107,27 +107,6 @@
   text-decoration: underline;
 }
 
-.readme {
-  padding: var(--base-size-16);
-  border: var(--borderWidth-thin) solid var(--borderColor-muted);
-  border-radius: var(--borderRadius-medium);
-  background: var(--bgColor-default);
-}
-
-.markdownPreview {
-  color: var(--fgColor-default);
-  line-height: var(--text-body-lineHeight-medium);
-}
-
-.markdownPreview pre {
-  overflow-x: auto;
-  padding: var(--base-size-12);
-  border-radius: var(--borderRadius-medium);
-  background: var(--bgColor-muted);
-  font-family: var(--fontStack-monospace);
-  font-size: var(--text-body-size-small);
-}
-
 @media not all and (min-width: 48rem) {
   .fileToolbar {
     align-items: stretch;

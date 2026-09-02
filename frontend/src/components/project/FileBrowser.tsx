@@ -12,7 +12,7 @@ import {
   IconButton,
   Link as PrimerLink,
 } from '@primer/react'
-import { Alert, Button, Drawer, Form, Input, Space, Tag, Typography, message } from 'antd'
+import { Alert, Button, Drawer, Form, Input, Space, Tag, message } from 'antd'
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
@@ -21,6 +21,7 @@ import type { FileContent, Project, ProjectFile, ProjectVersionDetail } from '..
 import { useAsync } from '../../api/useAsync'
 import { formatBytes, formatRelative } from '../../utils/format'
 import { AsyncSection } from '../common/AsyncSection'
+import { ReadmePanel } from './ReadmePanel'
 import styles from './FileBrowser.module.css'
 
 interface Props {
@@ -97,56 +98,6 @@ function projectFileTree(files: ProjectFile[], currentPath: string): FileTreeNod
     if (left.isDirectory !== right.isDirectory) return left.isDirectory ? -1 : 1
     return left.path.localeCompare(right.path)
   })
-}
-function MarkdownPreview({ content }: { content: string }) {
-  const blocks = content
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-  return (
-    <div className={styles.markdownPreview}>
-      {blocks.map((block, index) => {
-        const lines = block.split('\n')
-        const heading = lines[0]?.match(/^#{1,6}\s+(.+)$/)
-        if (heading) {
-          return (
-            <Typography.Title
-              key={index}
-              level={Math.min(heading[0].indexOf(' '), 5) as 1 | 2 | 3 | 4 | 5}
-            >
-              {heading[1]}
-            </Typography.Title>
-          )
-        }
-        if (lines.every((line) => /^[-*]\s+/.test(line))) {
-          return (
-            <ul key={index}>
-              {lines.map((line) => (
-                <li key={line}>{line.replace(/^[-*]\s+/, '')}</li>
-              ))}
-            </ul>
-          )
-        }
-        if (lines.every((line) => /^\d+\.\s+/.test(line))) {
-          return (
-            <ol key={index}>
-              {lines.map((line) => (
-                <li key={line}>{line.replace(/^\d+\.\s+/, '')}</li>
-              ))}
-            </ol>
-          )
-        }
-        if (lines[0]?.startsWith('```')) {
-          return (
-            <pre key={index}>
-              <code>{lines.slice(1, -1).join('\n')}</code>
-            </pre>
-          )
-        }
-        return <Typography.Paragraph key={index}>{lines.join(' ')}</Typography.Paragraph>
-      })}
-    </div>
-  )
 }
 
 /** Project Working Tree：可编辑的当前文件状态。 */
@@ -490,18 +441,17 @@ export function FileBrowser({
         </table>
       </AsyncSection>
       {readmeEntry && (
-        <section className={styles.readme} aria-labelledby="readme-title">
-          <AsyncSection loading={readme.loading} error={readme.error}>
-            {readme.data && (
-              <>
-                <Typography.Title id="readme-title" level={4}>
-                  README.md
-                </Typography.Title>
-                <MarkdownPreview content={readme.data.content} />
-              </>
-            )}
-          </AsyncSection>
-        </section>
+        <AsyncSection loading={readme.loading} error={readme.error}>
+          {readme.data && (
+            <ReadmePanel
+              content={readme.data.content}
+              fileHref={`${basePath}/file/${readmePath
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/')}`}
+            />
+          )}
+        </AsyncSection>
       )}
 
       <PathPromptDrawer
