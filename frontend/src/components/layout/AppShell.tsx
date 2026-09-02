@@ -213,7 +213,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
         ) : null}
         <main className={styles.main}>
           <PageLayout containerWidth="full" padding="none" rowGap="none" columnGap="none">
-            <PageLayout.Content as="div" width="full" padding="normal">
+            <PageLayout.Content as="div" width="xlarge" padding="normal">
               {children}
             </PageLayout.Content>
           </PageLayout>
