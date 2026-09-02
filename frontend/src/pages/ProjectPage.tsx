@@ -425,6 +425,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
   const filesContent =
     section === 'files' ? (
       <div className={styles.filesLayout}>
+        <div className={styles.filesSidebarSlot} aria-hidden="true" />
         <div className={styles.filesMain}>
           {view !== 'version' && view !== 'file' && <FilesContextControls projectId={projectId} />}
           {content}

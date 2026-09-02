@@ -1,8 +1,12 @@
 .filesLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+  grid-template-columns: var(--app-shell-sidebar-width) minmax(0, 1fr) minmax(16rem, 20rem);
   gap: var(--base-size-24);
   align-items: start;
+}
+
+.filesSidebarSlot {
+  min-height: 1px;
 }
 
 .filesMain {
@@ -88,5 +92,9 @@
 @media not all and (min-width: 48rem) {
   .filesLayout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filesSidebarSlot {
+    display: none;
   }
 }
