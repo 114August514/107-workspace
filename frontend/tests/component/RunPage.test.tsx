@@ -589,6 +589,17 @@ describe('RunPage backend unavailable', () => {
     )
     expect(screen.getByLabelText('stderr 日志')).toHaveTextContent('failure details')
   })
+  it('offers complete log downloads separately from the truncated preview', async () => {
+    const downloadLogs = vi.spyOn(api, 'downloadLogs').mockResolvedValue()
+    const chunks: LogChunk[] = [
+      { stream: 'stdout', content: 'preview', truncated: true },
+      { stream: 'stderr', content: '', truncated: false },
+    ]
+    render(<RunLogPanel runId="run-1" chunks={chunks} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '下载完整日志' }))
+    await waitFor(() => expect(downloadLogs).toHaveBeenCalledWith('run-1', 'combined'))
+  })
 
   it('collapses logs when rerun navigation changes the Run ID', async () => {
     vi.spyOn(api, 'getRun').mockImplementation(async (id) => {

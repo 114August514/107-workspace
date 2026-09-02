@@ -96,6 +96,56 @@
         "title": "ActivityOut",
         "type": "object"
       },
+      "AdjustedRerunIn": {
+        "description": "从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。",
+        "properties": {
+          "command": {
+            "minLength": 1,
+            "title": "Command",
+            "type": "string"
+          },
+          "compute_request": {
+            "$ref": "#/components/schemas/ComputeRequestModel"
+          },
+          "environment_version_id": {
+            "minLength": 1,
+            "title": "Environment Version Id",
+            "type": "string"
+          },
+          "input_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/InputBindingModel"
+            },
+            "title": "Input Bindings",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "project_version_id": {
+            "minLength": 1,
+            "title": "Project Version Id",
+            "type": "string"
+          },
+          "working_directory": {
+            "default": ".",
+            "title": "Working Directory",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "project_version_id",
+          "environment_version_id",
+          "command",
+          "compute_request"
+        ],
+        "title": "AdjustedRerunIn",
+        "type": "object"
+      },
       "ArtifactEntryOut": {
         "properties": {
           "path": {
@@ -2467,7 +2517,7 @@
         "type": "object"
       },
       "RunDraftIn": {
-        "description": "一次提交意图。\n\n除 run_configuration_id 外都可以不传——不传就用运行方案里的值。\n这些字段用 ``| None`` 而不是空字符串默认值，是为了让契约如实表达\n「可以不传」，生成的前端类型才不会要求调用方硬塞一个空串。",
+        "description": "一次提交意图。",
         "properties": {
           "command_override": {
             "anyOf": [
@@ -2490,6 +2540,31 @@
               }
             ]
           },
+          "environment_version_id_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment Version Id Override"
+          },
+          "input_bindings_override": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InputBindingModel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Bindings Override"
+          },
           "name": {
             "anyOf": [
               {
@@ -2510,6 +2585,7 @@
                 "type": "null"
               }
             ],
+            "description": "None 表示使用 Project 的最新版本。",
             "title": "Project Version Id"
           },
           "run_configuration_id": {
@@ -3762,7 +3838,7 @@
   "paths": {
     "/api/v1/artifacts/{artifact_id}/download": {
       "get": {
-        "description": "仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。",
+        "description": "下载单文件，或省略 path 下载保持原结构的完整 ZIP 归档。",
         "operationId": "download_artifact_file_api_v1_artifacts__artifact_id__download_get",
         "parameters": [
           {
@@ -3777,11 +3853,18 @@
           {
             "in": "query",
             "name": "path",
-            "required": true,
+            "required": false,
             "schema": {
-              "minLength": 1,
-              "title": "Path",
-              "type": "string"
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
             }
           },
           {
@@ -3811,7 +3894,7 @@
                 }
               }
             },
-            "description": "产物文件内容"
+            "description": "产物文件或 ZIP 归档"
           },
           "400": {
             "content": {
@@ -3874,7 +3957,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "下载 Artifact 文件",
+        "summary": "下载 Artifact 文件或完整归档",
         "tags": [
           "run"
         ]
@@ -10917,9 +11000,130 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/logs/download": {
+      "get": {
+        "description": "下载完整 stdout、stderr 或合并日志，不受页面尾部预览上限影响。",
+        "operationId": "download_logs_api_v1_runs__run_id__logs_download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "combined",
+              "pattern": "^(stdout|stderr|combined)$",
+              "title": "Stream",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "完整 Run 日志"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "下载 Run 日志",
+        "tags": [
+          "run"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/rerun": {
       "post": {
-        "description": "需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。\n\n重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带\n``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。",
+        "description": "基于历史 Snapshot 精确重跑，来源 Run 不变。",
         "operationId": "rerun_api_v1_runs__run_id__rerun_post",
         "parameters": [
           {
@@ -10973,7 +11177,7 @@
                 }
               }
             },
-            "description": "幂等重放，返回上一次重跑的 Run"
+            "description": "幂等重放"
           },
           "201": {
             "content": {
@@ -11047,6 +11251,151 @@
           }
         },
         "summary": "重新运行 Run",
+        "tags": [
+          "run"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/rerun/adjusted": {
+      "post": {
+        "description": "以历史 Snapshot 为初始值，调整后创建新的 Run；来源 Run 不变。",
+        "operationId": "adjusted_rerun_api_v1_runs__run_id__rerun_adjusted_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustedRerunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "幂等重放"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "调整后重新运行 Run",
         "tags": [
           "run"
         ]
