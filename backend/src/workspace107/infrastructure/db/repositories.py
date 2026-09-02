@@ -178,10 +178,6 @@ class UserRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_user(row) if row else None
 
-    async def list_ids(self) -> list[str]:
-        rows = (await self._session.execute(select(t.UserRow.id))).scalars().all()
-        return list(rows)
-
     async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]:
         if not user_ids:
             return {}
@@ -481,55 +477,21 @@ class ProjectRepositoryImpl:
         config_projects = select(t.RunConfigurationRow.project_id).where(
             t.RunConfigurationRow.environment_version_id == version_id
         )
-        pinned_rows = (
-            await self._session.execute(
-                select(t.RunRow.project_id, t.RunSnapshotRow.payload).join(
-                    t.RunSnapshotRow, t.RunSnapshotRow.id == t.RunRow.snapshot_id
-                )
+        snapshot_projects = (
+            select(t.RunRow.project_id)
+            .join(
+                t.RunSnapshotEnvironmentReferenceRow,
+                t.RunSnapshotEnvironmentReferenceRow.snapshot_id == t.RunRow.snapshot_id,
             )
-        ).all()
-        pinned_projects = {
-            project_id
-            for project_id, payload in pinned_rows
-            if isinstance(payload.get("environment"), dict)
-            and payload["environment"].get("version_id") == version_id
-        }
+            .where(t.RunSnapshotEnvironmentReferenceRow.environment_version_id == version_id)
+        )
         stmt = select(t.ProjectRow).where(
             (t.ProjectRow.environment_version_id == version_id)
             | t.ProjectRow.id.in_(config_projects)
-            | t.ProjectRow.id.in_(pinned_projects)
+            | t.ProjectRow.id.in_(snapshot_projects)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
-
-    async def list_using_shared_resource_version(self, version_id: str) -> list[Project]:
-        rows = (
-            await self._session.execute(
-                select(t.RunConfigurationRow.project_id, t.RunConfigurationRow.input_bindings)
-            )
-        ).all()
-        project_ids = {
-            project_id
-            for project_id, bindings in rows
-            if any(
-                isinstance(binding, dict)
-                and binding.get("source_type") == InputSourceType.SHARED_RESOURCE_VERSION.value
-                and binding.get("source_id") == version_id
-                for binding in (bindings or [])
-            )
-        }
-        if not project_ids:
-            return []
-        project_rows = (
-            (
-                await self._session.execute(
-                    select(t.ProjectRow).where(t.ProjectRow.id.in_(project_ids))
-                )
-            )
-            .scalars()
-            .all()
-        )
-        return [_to_project(row) for row in project_rows]
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool:
         owner_column = (
@@ -1053,6 +1015,13 @@ class RunSnapshotRepositoryImpl:
 
     async def add(self, snapshot: RunSnapshot) -> None:
         self._session.add(t.RunSnapshotRow(id=snapshot.id, payload=snapshot.to_payload()))
+        await _flush(self._session)
+        self._session.add(
+            t.RunSnapshotEnvironmentReferenceRow(
+                snapshot_id=snapshot.id,
+                environment_version_id=snapshot.environment_version_id,
+            )
+        )
         await _flush(self._session)
 
     async def get(self, snapshot_id: str) -> RunSnapshot | None:

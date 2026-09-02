@@ -607,6 +607,7 @@ class RunService:
     ) -> None:
         # 执行身份以持久化的 Run 记录为准（GR-307），不从调用参数传递——
         # 快照校验、Secret 解析和通知收件人都读同一个字段。
+        scheduler_submit_attempted = False
         try:
             _, values = await self.validate_execution_context(run, snapshot)
             if values:
@@ -635,6 +636,7 @@ class RunService:
                     raise ValidationFailed("Apptainer execution spec 缺少 CAS locator")
                 execution_spec["locator"] = str(await self._storage.resolve_blob_path(locator))
 
+            scheduler_submit_attempted = True
             job_id = await self._scheduler.submit(
                 SchedulerSubmission(
                     run_id=run.id,
@@ -662,15 +664,23 @@ class RunService:
                 run_name=run.name,
                 reason=str(exc),
             )
-            if isinstance(exc, SchedulerError):
+            if isinstance(exc, SchedulerError) and scheduler_submit_attempted:
                 await self._notifier.platform_incident(
                     recipient_id=run.initiated_by_user_id,
                     title="平台调度服务异常",
                     body="本次 Run 未能提交到调度系统，请稍后重试。",
                 )
-            if isinstance(
-                exc, (ObjectNotFound, ValidationFailed)
-            ) and "Shared Resource Version" in str(exc):
+            shared_resource_failure = (
+                isinstance(exc, (ObjectNotFound, ValidationFailed))
+                and "Shared Resource Version" in str(exc)
+            ) or (
+                isinstance(exc, OSError)
+                and any(
+                    binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
+                    for binding in snapshot.input_bindings
+                )
+            )
+            if shared_resource_failure:
                 await self._notify_shared_resource_consumers(run, snapshot, str(exc))
             return
 
@@ -717,6 +727,11 @@ class RunService:
     async def _notify_shared_resource_consumers(
         self, run: Run, snapshot: RunSnapshot, detail: str
     ) -> None:
+        """通知使用了当前不可用精确版本的 Project。
+
+        Shared Resource Version 没有独立的 availability 状态；Core 触发契约是：
+        Run 提交或物化阶段发现精确版本/内容不可用时，通知该 Project 的当前成员。
+        """
         project = await self._repos.projects.get(run.project_id)
         if project is None:
             return
@@ -728,15 +743,18 @@ class RunService:
                 for member in await self._repos.memberships.list_for_user_group(project.owner.id)
                 if member.is_active
             ]
-        for binding in snapshot.input_bindings:
-            if binding.source_type is not InputSourceType.SHARED_RESOURCE_VERSION:
-                continue
+        version_ids = {
+            binding.source_id
+            for binding in snapshot.input_bindings
+            if binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
+        }
+        for version_id in version_ids:
             for recipient_id in recipients:
                 await self._notifier.shared_resource_unavailable(
                     recipient_id=recipient_id,
                     project_id=project.id,
                     project_name=project.name,
-                    asset_label=binding.source_id,
+                    asset_label=version_id,
                     detail=detail,
                 )
 
@@ -950,9 +968,7 @@ class RunService:
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 version = await self._repos.shared_resources.get_version_by_id(binding.source_id)
                 if version is None:  # pragma: no cover - 提交前检查已校验过
-                    raise SchedulerError(
-                        f"输入 {binding.access_path} 引用的 Shared Resource Version 不存在"
-                    )
+                    raise ObjectNotFound("Shared Resource Version", binding.source_id)
                 inputs.append(
                     RunInput(
                         source_type=binding.source_type,

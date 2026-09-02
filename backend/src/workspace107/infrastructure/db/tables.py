@@ -112,7 +112,7 @@ class ProjectRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32))
     visibility: Mapped[str] = mapped_column(String(32), default="owner_scope")
-    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True, index=True)
     default_run_configuration_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -310,7 +310,7 @@ class RunConfigurationRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     working_directory: Mapped[str] = mapped_column(String(1024), default=".")
     command: Mapped[str] = mapped_column(Text)
-    environment_version_id: Mapped[str] = mapped_column(ID)
+    environment_version_id: Mapped[str] = mapped_column(ID, index=True)
     environment_variables: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     input_bindings: Mapped[list[Any]] = mapped_column(JSON, default=list)
     compute_plan_id: Mapped[str] = mapped_column(ID)
@@ -325,6 +325,24 @@ class RunSnapshotRow(Base):
 
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class RunSnapshotEnvironmentReferenceRow(Base):
+    """Run Snapshot 使用的精确 Environment Version，供可用性通知反查消费者。"""
+
+    __tablename__ = "run_snapshot_environment_references"
+
+    snapshot_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("run_snapshots.id", ondelete="CASCADE"), primary_key=True
+    )
+    environment_version_id: Mapped[str] = mapped_column(ID)
+
+    __table_args__ = (
+        Index(
+            "ix_run_snapshot_environment_ref_version",
+            "environment_version_id",
+        ),
+    )
 
 
 class RunRow(Base):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -13,7 +14,10 @@ from tests.helpers import (
     use_default_environment,
     wait_for_run,
 )
+from workspace107.application.run_service import RunDraft
+from workspace107.domain import ids
 from workspace107.domain.errors import SchedulerError
+from workspace107.infrastructure.db.tables import SharedResourceRow, SharedResourceVersionRow
 from workspace107.infrastructure.scheduler import MockScheduler
 
 
@@ -266,3 +270,84 @@ async def test_scheduler_submit_failure_persists_run_and_notification(
     incident = next(item for item in items if item["type"] == "platform_incident")
     assert incident["mandatory"] is True
     assert incident["target_type"] is None
+
+
+@pytest.mark.asyncio
+async def test_missing_shared_resource_during_submission_notifies_asset_only(
+    client, session, services, monkeypatch
+) -> None:
+    alice = await client.get("/api/v1/me", headers={"X-User": "alice"})
+    alice.raise_for_status()
+    alice_id = alice.json()["user"]["id"]
+    group_id, env_version_id = await use_default_environment(
+        session, client, headers={"X-User": "alice"}
+    )
+    project = await create_project_with_version(
+        client, name="missing-resource", headers={"X-User": "alice"}
+    )
+    await grant_test_entitlement(session, "alice")
+
+    resource_id = ids.new_id(ids.SHARED_RESOURCE)
+    version_id = ids.new_id(ids.SHARED_RESOURCE_VERSION)
+    now = datetime.now(UTC)
+    session.add(
+        SharedResourceRow(
+            id=resource_id,
+            name="missing resource",
+            description="",
+            owner_user_group_id=group_id,
+            created_at=now,
+        )
+    )
+    await session.flush()
+    session.add(
+        SharedResourceVersionRow(
+            id=version_id,
+            shared_resource_id=resource_id,
+            sequence=1,
+            description="v1",
+            manifest_hash="manifest",
+            validation_summary="valid",
+            created_by=alice_id,
+            created_at=now,
+        )
+    )
+    await session.commit()
+
+    configuration = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "missing resource",
+            "command": "echo ok",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": version_id,
+                    "access_path": "/inputs/data",
+                }
+            ],
+        },
+        headers={"X-User": "alice"},
+    )
+    assert configuration.status_code == 201, configuration.text
+
+    async def missing_version(_version_id: str):
+        return None
+
+    monkeypatch.setattr(services.runs._repos.shared_resources, "get_version_by_id", missing_version)
+    submission = await services.runs.create(
+        alice_id,
+        project["id"],
+        RunDraft(run_configuration_id=configuration.json()["id"]),
+    )
+    await session.commit()
+
+    assert submission.run.status.value == "submit_failed"
+    items = (await client.get("/api/v1/notifications", headers={"X-User": "alice"})).json()["items"]
+    assert {item["type"] for item in items} == {
+        "run_submit_failed",
+        "shared_resource_unavailable",
+    }
+    assert all(item["type"] != "platform_incident" for item in items)
