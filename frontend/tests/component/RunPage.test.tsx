@@ -632,6 +632,27 @@ describe('RunPage backend unavailable', () => {
     expect(onSubmitted).toHaveBeenCalledWith(detail.run)
   })
 
+  it('shows adjusted endpoint validation errors without a second mutable-config preflight', async () => {
+    vi.spyOn(api, 'adjustedRerun').mockRejectedValue(
+      new ApiError(422, 'preflight_rejected', '无法创建 Run', ['Secret 已失效'], 'req-48'),
+    )
+    const preflight = vi.spyOn(api, 'preflight')
+    const onSubmitted = vi.fn()
+    render(
+      <AdjustedRerunModal
+        open
+        detail={runDetailFixture()}
+        onClose={() => {}}
+        onSubmitted={onSubmitted}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '创建新 Run' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Secret 已失效')
+    expect(preflight).not.toHaveBeenCalled()
+    expect(onSubmitted).not.toHaveBeenCalled()
+  })
+
   it('collapses logs when rerun navigation changes the Run ID', async () => {
     vi.spyOn(api, 'getRun').mockImplementation(async (id) => {
       const detail = runDetailFixture()
