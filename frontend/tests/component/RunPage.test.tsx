@@ -15,9 +15,9 @@ import type {
 } from '../../src/api/types'
 import { ArtifactFilePreviewPage } from '../../src/pages/ArtifactFilePreviewPage'
 import { RunLocatorPage } from '../../src/pages/RunLocatorPage'
+import { AdjustedRerunModal } from '../../src/components/run/AdjustedRerunModal'
 import { RunLogPanel } from '../../src/components/run/RunLogPanel'
 import { RunPage } from '../../src/pages/RunPage'
-
 const runDetailFixture = (): RunDetail => ({
   run: {
     id: 'run-1',
@@ -599,6 +599,37 @@ describe('RunPage backend unavailable', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '下载完整日志' }))
     await waitFor(() => expect(downloadLogs).toHaveBeenCalledWith('run-1', 'combined'))
+  })
+
+  it('submits adjusted rerun directly and does not preflight the mutable configuration', async () => {
+    const detail = runDetailFixture()
+    const adjustedRerun = vi.spyOn(api, 'adjustedRerun').mockResolvedValue(detail.run)
+    const preflight = vi.spyOn(api, 'preflight')
+    const onSubmitted = vi.fn()
+
+    render(
+      <AdjustedRerunModal
+        open
+        detail={detail}
+        onClose={() => {}}
+        onSubmitted={onSubmitted}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '创建新 Run' }))
+    await waitFor(() => expect(adjustedRerun).toHaveBeenCalled())
+    expect(preflight).not.toHaveBeenCalled()
+    expect(adjustedRerun).toHaveBeenCalledWith(
+      'run-1',
+      expect.objectContaining({
+        project_version_id: 'version-1',
+        environment_version_id: 'env-1',
+        command: 'python train.py',
+        working_directory: '.',
+      }),
+      expect.any(String),
+    )
+    expect(onSubmitted).toHaveBeenCalledWith(detail.run)
   })
 
   it('collapses logs when rerun navigation changes the Run ID', async () => {

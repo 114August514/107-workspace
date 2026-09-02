@@ -263,20 +263,27 @@ class RunService:
     async def _redacted_log_chunks(
         self, run_id: str, stream: LogStream, secret_values: list[str]
     ) -> AsyncIterator[bytes]:
-        overlap = max((len(value) for value in secret_values), default=0) - 1
-        carry = ""
+        """Redact complete secrets while retaining only possible secret prefixes."""
+        if not secret_values:
+            async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
+                yield raw
+            return
+
+        pending = ""
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
-            if overlap <= 0:
-                yield raw
-                continue
-            carry += decoder.decode(raw)
-            if len(carry) > overlap:
-                safe, carry = carry[:-overlap], carry[-overlap:]
+            pending += decoder.decode(raw)
+            keep = _secret_prefix_suffix_length(pending, secret_values)
+            if keep:
+                safe, pending = pending[:-keep], pending[-keep:]
+            else:
+                safe, pending = pending, ""
+            if safe:
                 yield redact(safe, secret_values).encode("utf-8")
-        carry += decoder.decode(b"", final=True)
-        if carry:
-            yield redact(carry, secret_values).encode("utf-8")
+
+        pending += decoder.decode(b"", final=True)
+        if pending:
+            yield redact(pending, secret_values).encode("utf-8")
 
     async def list_artifact_files(self, user_id: str, artifact_id: str) -> list[ArtifactEntry]:
         artifact = await self._require_artifact(user_id, artifact_id)
@@ -1162,6 +1169,17 @@ class RunService:
                     problems.append(problem)
 
         return problems
+
+
+def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:
+    """Return the longest suffix that can still grow into a known Secret."""
+    longest = 0
+    for value in secret_values:
+        for length in range(min(len(value) - 1, len(text)), longest, -1):
+            if text.endswith(value[:length]):
+                longest = length
+                break
+    return longest
 
 
 def _as_resolved_env(

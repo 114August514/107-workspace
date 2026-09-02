@@ -120,3 +120,45 @@ async def test_run_logs_and_artifact_downloads_are_complete(client, session) -> 
         f"/api/v1/artifacts/{artifact['id']}/download", headers={"X-User": "foreign"}
     )
     assert foreign.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("secret_value", ["ABCDEF", "Z"])
+async def test_log_download_redacts_secret_across_chunk_boundary(
+    client, session, secret_value
+) -> None:
+    _, environment_version_id = await use_default_environment(session, client)
+    project = await create_project_with_version(client, name="stream-redaction")
+    await grant_test_entitlement(session, "student")
+    secret = await client.put(
+        f"/api/v1/projects/{project['id']}/secrets",
+        json={"name": "TOKEN", "value": secret_value},
+    )
+    assert secret.status_code == 204
+    configuration = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "boundary",
+            "command": (
+                "python -c \"import os,sys; sys.stdout.write('x' * 65535 + os.environ['TOKEN'])\""
+            ),
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": environment_version_id,
+            "environment_variables": {"TOKEN": "${{ secrets.TOKEN }}"},
+        },
+    )
+    assert configuration.status_code == 201
+    created = await client.post(
+        f"/api/v1/projects/{project['id']}/runs",
+        json={"run_configuration_id": configuration.json()["id"]},
+    )
+    assert created.status_code == 201
+    await wait_for_run(client, created.json()["id"])
+
+    logs = await client.get(
+        f"/api/v1/runs/{created.json()['id']}/logs/download",
+        params={"stream": "stdout"},
+    )
+    assert logs.status_code == 200
+    assert secret_value.encode() not in logs.content
+    assert logs.content.endswith(b"***")

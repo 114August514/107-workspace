@@ -404,7 +404,6 @@ export function RunPage() {
           {adjustedRerunOpen && detail.data ? (
             <AdjustedRerunModal
               open
-              projectId={run.project_id}
               detail={detail.data}
               onClose={() => setAdjustedRerunOpen(false)}
               onSubmitted={(created) => {
