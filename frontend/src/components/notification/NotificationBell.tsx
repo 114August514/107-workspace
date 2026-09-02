@@ -147,26 +147,57 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
       )}
       {preferencesOpen && (
         <div className={styles.panelBody} aria-label="通知设置">
-          <Text weight="semibold">可选通知</Text>
-          <ul>
-            {preferences.data
-              ?.filter((preference) => !preference.mandatory)
-              .map((preference) => (
-                <li key={preference.type}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={preference.enabled}
-                      onChange={() => void updatePreference(preference)}
-                    />{' '}
-                    {preference.type}
-                  </label>
-                </li>
-              ))}
-          </ul>
-          <Text>重要系统通知始终开启。</Text>
+          <AsyncState
+            loading={preferences.loading}
+            loadingText="正在加载通知设置…"
+            error={toAsyncError(preferences.error)}
+            onRetry={preferences.reload}
+          >
+            {preferences.data && (
+              <>
+                <Text weight="semibold">可选通知</Text>
+                <ul>
+                  {preferences.data
+                    .filter((preference) => !preference.mandatory)
+                    .map((preference) => (
+                      <li key={preference.type}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={preference.enabled}
+                            onChange={() => void updatePreference(preference)}
+                          />{' '}
+                          {notificationLabel(preference.type)}
+                        </label>
+                      </li>
+                    ))}
+                </ul>
+                <Text weight="semibold">重要系统通知</Text>
+                <ul>
+                  {preferences.data
+                    .filter((preference) => preference.mandatory)
+                    .map((preference) => (
+                      <li key={preference.type}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={preference.enabled}
+                            disabled
+                            readOnly
+                            aria-label={`${notificationLabel(preference.type)}（始终开启）`}
+                          />{' '}
+                          {notificationLabel(preference.type)} <Label size="small">始终开启</Label>
+                        </label>
+                      </li>
+                    ))}
+                </ul>
+                <Text>重要系统通知始终开启。</Text>
+              </>
+            )}
+          </AsyncState>
         </div>
       )}
+
       <div className={styles.panelBody}>
         <AsyncState
           loading={notifications.loading}

@@ -104,6 +104,47 @@ async def test_optional_preferences_suppress_only_optional_events(client, sessio
 
 
 @pytest.mark.asyncio
+async def test_role_change_notifies_the_affected_member(client) -> None:
+    await _user_id(client, ALICE)
+    bob_id = await _user_id(client, BOB)
+    group = await client.post(
+        "/api/v1/user-groups",
+        json={"name": "Role notification lab"},
+        headers=ALICE,
+    )
+    assert group.status_code == 201
+    group_id = group.json()["id"]
+    invited = await client.post(
+        f"/api/v1/user-groups/{group_id}/members",
+        json={"username": "bob"},
+        headers=ALICE,
+    )
+    assert invited.status_code == 201
+    accepted = await client.post(
+        f"/api/v1/user-groups/{group_id}/invitation",
+        json={"accept": True},
+        headers=BOB,
+    )
+    assert accepted.status_code == 204
+
+    changed = await client.patch(
+        f"/api/v1/user-groups/{group_id}/members/{bob_id}",
+        json={"role": "admin"},
+        headers=ALICE,
+    )
+    assert changed.status_code == 200
+
+    notifications = await client.get("/api/v1/notifications", headers=BOB)
+    assert notifications.status_code == 200
+    role_change = next(
+        item for item in notifications.json()["items"] if item["type"] == "role_changed"
+    )
+    assert role_change["mandatory"] is True
+    assert role_change["target_type"] == "user_group"
+    assert role_change["target_id"] == group_id
+
+
+@pytest.mark.asyncio
 async def test_core_event_notifiers_have_explicit_types_and_targets(
     client, session, context
 ) -> None:

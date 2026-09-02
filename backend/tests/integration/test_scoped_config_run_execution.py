@@ -94,6 +94,13 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     )
     assert run.status_code == 201
     detail = await wait_for_run(client, run.json()["id"])
+    notifications = await client.get("/api/v1/notifications")
+    assert notifications.status_code == 200
+    assert any(
+        item["type"] == "run_succeeded" and item["target_id"] == run.json()["id"]
+        for item in notifications.json()["items"]
+    )
+
     snapshot = detail["snapshot"]
     assert snapshot["environment_variables"] == {
         "LEVEL": "project-level",
@@ -256,3 +263,6 @@ async def test_scheduler_submit_failure_persists_run_and_notification(
     notification = next(item for item in items if item["type"] == "run_submit_failed")
     assert notification["target_type"] == "run"
     assert notification["target_id"] == run["id"]
+    incident = next(item for item in items if item["type"] == "platform_incident")
+    assert incident["mandatory"] is True
+    assert incident["target_type"] is None
