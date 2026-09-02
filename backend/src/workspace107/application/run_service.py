@@ -273,11 +273,21 @@ class RunService:
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
             pending += decoder.decode(raw)
-            keep = _secret_prefix_suffix_length(pending, secret_values)
-            if keep:
-                safe, pending = pending[:-keep], pending[-keep:]
+            complete_end = _last_secret_end(pending, secret_values)
+            if complete_end:
+                remainder = pending[complete_end:]
+                keep = _secret_prefix_suffix_length(remainder, secret_values)
+                if keep:
+                    safe = pending[:complete_end] + remainder[:-keep]
+                    pending = remainder[-keep:]
+                else:
+                    safe, pending = pending, ""
             else:
-                safe, pending = pending, ""
+                keep = _secret_prefix_suffix_length(pending, secret_values)
+                if keep:
+                    safe, pending = pending[:-keep], pending[-keep:]
+                else:
+                    safe, pending = pending, ""
             if safe:
                 yield redact(safe, secret_values).encode("utf-8")
 
@@ -1169,6 +1179,22 @@ class RunService:
                     problems.append(problem)
 
         return problems
+
+
+def _last_secret_end(text: str, secret_values: list[str]) -> int:
+    """Return the furthest end position of any complete known Secret."""
+    furthest = 0
+    for value in secret_values:
+        if not value:
+            continue
+        start = 0
+        while True:
+            found = text.find(value, start)
+            if found < 0:
+                break
+            furthest = max(furthest, found + len(value))
+            start = found + 1
+    return furthest
 
 
 def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:

@@ -123,7 +123,7 @@ async def test_run_logs_and_artifact_downloads_are_complete(client, session) -> 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("secret_value", ["ABCDEF", "Z"])
+@pytest.mark.parametrize("secret_value", ["ABCDEF", "Z", "aaa"])
 async def test_log_download_redacts_secret_across_chunk_boundary(
     client, session, secret_value
 ) -> None:
