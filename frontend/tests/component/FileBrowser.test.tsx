@@ -120,7 +120,8 @@ describe('FileBrowser', () => {
     mocks.uploadArchive.mockRejectedValue(new Error('压缩包包含符号链接条目「link」，已拒绝展开'))
 
     const { container } = renderBrowser()
-    await screen.findByRole('button', { name: /上传压缩包/ })
+    fireEvent.click(screen.getByRole('button', { name: '添加文件' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '上传压缩包（zip）' }))
 
     const input = pickInput(container, false)
     Object.defineProperty(input, 'files', { value: [makeFile('bundle.zip')] })
@@ -149,11 +150,12 @@ describe('FileBrowser', () => {
     renderBrowser()
 
     const directoryRow = (await screen.findAllByRole('row')).find((row) =>
-      within(row).queryByRole('button', { name: '删除 data' }),
+      within(row).queryByRole('link', { name: 'data' }),
     )
     if (!directoryRow) throw new Error('找不到 data 目录行')
-    fireEvent.click(within(directoryRow).getByRole('button', { name: '删除 data' }))
-    fireEvent.click(await screen.findByRole('button', { name: /^删\s*除$/ }))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    fireEvent.click(within(directoryRow).getByRole('button', { name: '更多操作 data' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }))
 
     await waitFor(() => {
       expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'data')
@@ -161,7 +163,7 @@ describe('FileBrowser', () => {
     expect(
       await screen.findByText('还没有文件。先新建一个，再保存 Project Version。'),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '删除 data' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '更多操作 data' })).not.toBeInTheDocument()
   })
 
   it('只读场景不暴露任何写入口', async () => {

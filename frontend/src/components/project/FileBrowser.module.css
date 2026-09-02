@@ -1,9 +1,72 @@
+.fileSurface {
+  display: grid;
+  gap: var(--base-size-16);
+}
+
 .fileToolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--base-size-12);
+  gap: var(--base-size-8);
   flex-wrap: wrap;
+}
+
+.fileTable {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-small);
+}
+
+.fileTable th,
+.fileTable td {
+  padding: var(--base-size-8) var(--base-size-12);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fileTable th {
+  color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.fileTable tbody tr:hover {
+  background: var(--bgColor-muted);
+}
+
+.nameCell {
+  min-width: 16rem;
+}
+
+.fileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fgColor-accent);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fileLink:hover {
+  text-decoration: underline;
+}
+
+.fileLink:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: var(--base-size-4);
+}
+
+.actionCell {
+  width: var(--base-size-32);
+  text-align: right !important;
+}
+
+.actionCell > * {
+  float: right;
 }
 
 .fileContext {

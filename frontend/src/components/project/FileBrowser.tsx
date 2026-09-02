@@ -1,34 +1,24 @@
 import {
-  CopyOutlined,
-  DeleteOutlined,
-  DownloadOutlined,
-  EditOutlined,
-  FolderOutlined,
-  FileAddOutlined,
-  FolderAddOutlined,
-  UploadOutlined,
-} from '@ant-design/icons'
+  FileDirectoryIcon,
+  FileIcon,
+  KebabHorizontalIcon,
+  PlusIcon,
+  UploadIcon,
+} from '@primer/octicons-react'
 import {
-  Alert,
-  Button,
-  Drawer,
-  Form,
-  Input,
-  Popconfirm,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd'
-import type { ColumnsType } from 'antd/es/table'
+  ActionList,
+  ActionMenu,
+  Button as PrimerButton,
+  IconButton,
+  Link as PrimerLink,
+} from '@primer/react'
+import { Alert, Button, Drawer, Form, Input, Space, Tag, Typography, message } from 'antd'
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { can } from '../../api/types'
 import type { FileContent, Project, ProjectFile, ProjectVersionDetail } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
-import { field } from '../../utils/field'
 import { formatBytes, formatRelative } from '../../utils/format'
 import { AsyncSection } from '../common/AsyncSection'
 import styles from './FileBrowser.module.css'
@@ -299,94 +289,74 @@ export function FileBrowser({
   const currentSegments = currentPath ? currentPath.split('/') : []
   const currentName = (path: string) => path.split('/').at(-1) ?? path
 
-  const columns: ColumnsType<FileTreeNode> = [
-    {
-      title: '名称',
-      dataIndex: field<FileTreeNode>('path'),
-      render: (path: string, node) =>
-        node.isDirectory ? (
-          <Link to={directoryHref(path)} title={path}>
-            <Space size="small">
-              <FolderOutlined />
-              <Typography.Text>{currentName(path)}</Typography.Text>
-            </Space>
-          </Link>
-        ) : (
-          <Button type="link" size="small" title={path} onClick={() => openFile(path)}>
-            {currentName(path)}
-          </Button>
-        ),
-    },
-    {
-      title: '大小',
-      width: 110,
-      render: (_, node) => (node.file ? formatBytes(node.file.size) : '—'),
-    },
-    {
-      title: '最近修改',
-      width: 130,
-      render: (_, node) => (node.file ? formatRelative(node.file.updated_at) : '—'),
-    },
-    {
-      title: '操作',
-      width: 260,
-      key: 'actions',
-      render: (_, node) =>
-        !canWrite ? null : (
-          <Space size={0}>
+  const fileActions = (node: FileTreeNode) => {
+    if (!canWrite) return null
+    return (
+      <ActionMenu>
+        <ActionMenu.Anchor>
+          <IconButton
+            icon={KebabHorizontalIcon}
+            variant="invisible"
+            size="small"
+            aria-label={`更多操作 ${node.path}`}
+          />
+        </ActionMenu.Anchor>
+        <ActionMenu.Overlay align="end" width="auto">
+          <ActionList>
             {node.file && (
-              <Button
-                type="link"
-                size="small"
-                icon={<DownloadOutlined />}
-                onClick={() => downloadFile(node.path)}
-              >
-                下载
-              </Button>
+              <ActionList.Item onSelect={() => void downloadFile(node.path)}>下载</ActionList.Item>
             )}
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => {
+            <ActionList.Item
+              onSelect={() => {
                 promptForm.setFieldsValue({ path: node.path })
                 setPrompt({ mode: 'rename', source: node.path })
               }}
             >
               改名
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={() => {
+            </ActionList.Item>
+            <ActionList.Item
+              onSelect={() => {
                 promptForm.setFieldsValue({ path: `${node.path}-copy` })
                 setPrompt({ mode: 'copy', source: node.path })
               }}
             >
               复制
-            </Button>
-            <Popconfirm
-              title={`删除 ${node.path}？`}
-              description="目录会连同其中所有文件一起删除。"
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-              onConfirm={() => removePath(node.path)}
+            </ActionList.Item>
+            <ActionList.Divider />
+            <ActionList.Item
+              variant="danger"
+              onSelect={() => {
+                if (window.confirm(`删除 ${node.path}？`)) void removePath(node.path)
+              }}
             >
-              <Button
-                type="text"
-                danger
-                size="small"
-                icon={<DeleteOutlined />}
-                aria-label={`删除 ${node.path}`}
-              />
-            </Popconfirm>
-          </Space>
-        ),
-    },
-  ]
+              删除
+            </ActionList.Item>
+          </ActionList>
+        </ActionMenu.Overlay>
+      </ActionMenu>
+    )
+  }
 
+  const rows = tree.map((node) => (
+    <tr key={node.key}>
+      <td className={styles.nameCell}>
+        {node.isDirectory ? (
+          <PrimerLink as={Link} to={directoryHref(node.path)} className={styles.fileLink}>
+            <FileDirectoryIcon size={16} />
+            {currentName(node.path)}
+          </PrimerLink>
+        ) : (
+          <button type="button" className={styles.fileLink} onClick={() => openFile(node.path)}>
+            <FileIcon size={16} />
+            {currentName(node.path)}
+          </button>
+        )}
+      </td>
+      <td>{node.file ? formatBytes(node.file.size) : '—'}</td>
+      <td>{node.file ? formatRelative(node.file.updated_at) : '—'}</td>
+      <td className={styles.actionCell}>{fileActions(node)}</td>
+    </tr>
+  ))
   const failedUploads = uploads.filter((task) => task.status !== 'success')
   const breadcrumb = (
     <nav className={styles.breadcrumb} aria-label="文件路径">
@@ -402,7 +372,6 @@ export function FileBrowser({
       })}
     </nav>
   )
-
   const fileContext = version ? (
     <div className={styles.fileContext}>
       <Link to={directoryHref('')} className={styles.refControl}>
@@ -410,93 +379,94 @@ export function FileBrowser({
       </Link>
     </div>
   ) : null
+  const uploadMenu = canWrite ? (
+    <ActionMenu>
+      <ActionMenu.Button leadingVisual={PlusIcon}>添加文件</ActionMenu.Button>
+      <ActionMenu.Overlay align="end" width="auto">
+        <ActionList>
+          <ActionList.Item
+            onSelect={() => {
+              promptForm.resetFields()
+              setPrompt({ mode: 'new-file' })
+            }}
+          >
+            新建文件
+          </ActionList.Item>
+          <ActionList.Item
+            onSelect={() => {
+              promptForm.resetFields()
+              setPrompt({ mode: 'mkdir' })
+            }}
+          >
+            新建目录
+          </ActionList.Item>
+          <ActionList.Item onSelect={() => archiveInputRef.current?.click()}>
+            上传压缩包（zip）
+          </ActionList.Item>
+        </ActionList>
+      </ActionMenu.Overlay>
+    </ActionMenu>
+  ) : null
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      {fileContext && <div className={styles.fileToolbar}>{fileContext}</div>}
+    <div className={styles.fileSurface}>
+      {fileContext}
       {breadcrumb}
       {canWrite && (
-        <>
-          <Space wrap>
-            <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-              上传文件
-            </Button>
-            <Button icon={<UploadOutlined />} onClick={() => archiveInputRef.current?.click()}>
-              上传压缩包（zip）
-            </Button>
-            <Button
-              icon={<FolderAddOutlined />}
-              onClick={() => {
-                promptForm.resetFields()
-                setPrompt({ mode: 'mkdir' })
-              }}
-            >
-              新建目录
-            </Button>
-            <Button
-              icon={<FileAddOutlined />}
-              onClick={() => {
-                promptForm.resetFields()
-                setPrompt({ mode: 'new-file' })
-              }}
-            >
-              新建文件
-            </Button>
-            {/* 隐藏 input 换取对上传行为的完全控制；label 由上面的按钮承担。 */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                void uploadOneByOne(Array.from(event.target.files ?? []))
-                event.target.value = ''
-              }}
-            />
-            <input
-              ref={archiveInputRef}
-              type="file"
-              accept=".zip,application/zip"
-              hidden
-              onChange={(event) => {
-                void uploadArchive(event.target.files)
-                event.target.value = ''
-              }}
-            />
-          </Space>
+        <div className={styles.fileToolbar}>
+          <PrimerButton leadingVisual={UploadIcon} onClick={() => fileInputRef.current?.click()}>
+            上传文件
+          </PrimerButton>
+          {uploadMenu}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(event) => {
+              void uploadOneByOne(Array.from(event.target.files ?? []))
+              event.target.value = ''
+            }}
+          />
+          <input
+            ref={archiveInputRef}
+            type="file"
+            accept=".zip,application/zip"
+            hidden
+            onChange={(event) => {
+              void uploadArchive(event.target.files)
+              event.target.value = ''
+            }}
+          />
+        </div>
+      )}
 
-          {uploads.length > 0 && (
-            <Alert
-              type={failedUploads.length > 0 ? 'warning' : 'success'}
-              showIcon
-              message={
-                <Space wrap size={[8, 8]}>
-                  {uploads.map((task) => (
-                    <Tag
-                      key={task.key}
-                      color={
-                        task.status === 'success'
-                          ? 'green'
-                          : task.status === 'failed'
-                            ? 'red'
-                            : 'blue'
-                      }
-                    >
-                      {task.name}
-                      {task.status === 'uploading' && '（上传中）'}
-                      {task.status === 'failed' && `：${task.detail ?? '失败'}`}
-                    </Tag>
-                  ))}
-                </Space>
-              }
-              action={
-                <Button size="small" onClick={() => setUploads([])}>
-                  清除记录
-                </Button>
-              }
-            />
-          )}
-        </>
+      {uploads.length > 0 && (
+        <Alert
+          type={failedUploads.length > 0 ? 'warning' : 'success'}
+          showIcon
+          message={
+            <Space wrap size={[8, 8]}>
+              {uploads.map((task) => (
+                <Tag
+                  key={task.key}
+                  color={
+                    task.status === 'success' ? 'green' : task.status === 'failed' ? 'red' : 'blue'
+                  }
+                >
+                  {task.name}
+                  {task.status === 'uploading' && '（上传中）'}
+                  {task.status === 'failed' && `：${task.detail ?? '失败'}`}
+                </Tag>
+              ))}
+            </Space>
+          }
+          action={
+            <Button size="small" onClick={() => setUploads([])}>
+              清除记录
+            </Button>
+          }
+        />
       )}
 
       <AsyncSection
@@ -507,14 +477,17 @@ export function FileBrowser({
           canWrite ? '还没有文件。先新建一个，再保存 Project Version。' : '这个 Project 还没有文件'
         }
       >
-        <Table
-          rowKey="key"
-          size="small"
-          dataSource={tree}
-          columns={columns}
-          pagination={false}
-          scroll={{ x: true }}
-        />
+        <table className={styles.fileTable} aria-label="文件列表">
+          <thead>
+            <tr>
+              <th scope="col">名称</th>
+              <th scope="col">大小</th>
+              <th scope="col">最近修改</th>
+              <th scope="col" aria-label="操作" />
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
       </AsyncSection>
       {readmeEntry && (
         <section className={styles.readme} aria-labelledby="readme-title">
@@ -537,7 +510,7 @@ export function FileBrowser({
         onCancel={() => setPrompt(null)}
         onOk={submitPrompt}
       />
-    </Space>
+    </div>
   )
 }
 
