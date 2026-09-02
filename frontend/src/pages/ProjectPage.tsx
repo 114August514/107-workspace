@@ -131,7 +131,7 @@ function FilesContextControls({ projectId }: { projectId: string }) {
   return (
     <div className={styles.fileContextControls} aria-label="Files context">
       <Link to={projectViewHref(projectId, 'files')} className={styles.refControl}>
-        Working State
+        Working State <span aria-hidden>▾</span>
       </Link>
       <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
         {changes.data?.length ?? '—'} changes
@@ -245,15 +245,13 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
 
   const content =
     view === 'working' ? (
-      <Card>
-        <FileBrowser
-          projectId={projectId}
-          access={project.data}
-          onChanged={bump}
-          currentPath={currentPath}
-          basePath={`/projects/${projectId}/files`}
-        />
-      </Card>
+      <FileBrowser
+        projectId={projectId}
+        access={project.data}
+        onChanged={bump}
+        currentPath={currentPath}
+        basePath={`/projects/${projectId}/files`}
+      />
     ) : view === 'changes' ? (
       <Card>
         <VersionPanel
@@ -364,19 +362,21 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
 
   return (
     <Stack gap="large">
-      <AsyncSection loading={project.loading} error={project.error}>
-        {project.data && (
-          <PageHeader
-            title={
-              view === 'version' && version.data
-                ? `${version.data.label} · 只读`
-                : PAGE_TITLES[view]
-            }
-            description={project.data.description || '这个 Project 还没有填写说明'}
-            tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
-          />
-        )}
-      </AsyncSection>
+      {section === 'files' && view === 'working' ? null : (
+        <AsyncSection loading={project.loading} error={project.error}>
+          {project.data && (
+            <PageHeader
+              title={
+                view === 'version' && version.data
+                  ? `${version.data.label} · 只读`
+                  : PAGE_TITLES[view]
+              }
+              description={project.data.description || '这个 Project 还没有填写说明'}
+              tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
+            />
+          )}
+        </AsyncSection>
+      )}
 
       {filesContent}
 
