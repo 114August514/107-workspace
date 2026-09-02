@@ -135,7 +135,11 @@ export function VersionPanel({
       key: 'actions',
       render: (_, version) => (
         <Space size={0}>
-          <Button type="link" size="small" onClick={() => navigate(`/versions/${version.id}`)}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => navigate(`/projects/${projectId}/files/versions/${version.id}`)}
+          >
             查看详情
           </Button>
           {canWrite && (

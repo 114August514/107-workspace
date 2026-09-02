@@ -23,20 +23,24 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useMemo, useRef, useState } from 'react'
-
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { Project, ProjectFile } from '../../api/types'
+import type { FileContent, Project, ProjectFile, ProjectVersionDetail } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { formatBytes, formatRelative } from '../../utils/format'
 import { AsyncSection } from '../common/AsyncSection'
+import styles from './FileBrowser.module.css'
 
 interface Props {
   projectId: string
   /** Current Project authority; undefined while the detail request is pending. */
   access: Project | undefined
   onChanged: () => void
+  currentPath?: string
+  basePath?: string
+  version?: ProjectVersionDetail
 }
 
 /** 路径输入抽屉的四种用途。rename/copy 带源路径，其余只收一个目标路径。 */
@@ -77,49 +81,107 @@ interface FileTreeNode {
   children?: FileTreeNode[]
 }
 
-/** ProjectFile only stores files; derive directory rows from every path prefix. */
-function projectFileTree(files: ProjectFile[]): FileTreeNode[] {
-  const roots: FileTreeNode[] = []
+/** ProjectFile only stores files; derive the current directory's direct children. */
+function projectFileTree(files: ProjectFile[], currentPath: string): FileTreeNode[] {
+  const prefix = currentPath ? `${currentPath}/` : ''
   const directories = new Map<string, FileTreeNode>()
+  const entries: FileTreeNode[] = []
 
   for (const file of [...files].sort((left, right) => left.path.localeCompare(right.path))) {
-    const parts = file.path.split('/')
-    let children = roots
-    for (let index = 0; index < parts.length - 1; index += 1) {
-      const path = parts.slice(0, index + 1).join('/')
-      let directory = directories.get(path)
-      if (!directory) {
-        directory = { key: `directory:${path}`, path, isDirectory: true, children: [] }
+    if (!file.path.startsWith(prefix)) continue
+    const relative = file.path.slice(prefix.length)
+    if (!relative || relative === '.gitkeep') continue
+    const [first, ...rest] = relative.split('/')
+    if (rest.length > 0) {
+      const path = `${prefix}${first}`
+      if (!directories.has(path)) {
+        const directory = { key: `directory:${path}`, path, isDirectory: true }
         directories.set(path, directory)
-        children.push(directory)
+        entries.push(directory)
       }
-      children = directory.children ?? []
+      continue
     }
-
-    if (parts.at(-1) !== '.gitkeep') {
-      children.push({
-        key: `file:${file.path}`,
-        path: file.path,
-        isDirectory: false,
-        file,
-      })
-    }
+    entries.push({ key: `file:${file.path}`, path: file.path, isDirectory: false, file })
   }
-  return roots
+  return entries.sort((left, right) => {
+    if (left.isDirectory !== right.isDirectory) return left.isDirectory ? -1 : 1
+    return left.path.localeCompare(right.path)
+  })
+}
+function MarkdownPreview({ content }: { content: string }) {
+  const blocks = content
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+  return (
+    <div className={styles.markdownPreview}>
+      {blocks.map((block, index) => {
+        const lines = block.split('\n')
+        const heading = lines[0]?.match(/^#{1,6}\s+(.+)$/)
+        if (heading) {
+          return (
+            <Typography.Title
+              key={index}
+              level={Math.min(heading[0].indexOf(' '), 5) as 1 | 2 | 3 | 4 | 5}
+            >
+              {heading[1]}
+            </Typography.Title>
+          )
+        }
+        if (lines.every((line) => /^[-*]\s+/.test(line))) {
+          return (
+            <ul key={index}>
+              {lines.map((line) => (
+                <li key={line}>{line.replace(/^[-*]\s+/, '')}</li>
+              ))}
+            </ul>
+          )
+        }
+        if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+          return (
+            <ol key={index}>
+              {lines.map((line) => (
+                <li key={line}>{line.replace(/^\d+\.\s+/, '')}</li>
+              ))}
+            </ol>
+          )
+        }
+        if (lines[0]?.startsWith('```')) {
+          return (
+            <pre key={index}>
+              <code>{lines.slice(1, -1).join('\n')}</code>
+            </pre>
+          )
+        }
+        return <Typography.Paragraph key={index}>{lines.join(' ')}</Typography.Paragraph>
+      })}
+    </div>
+  )
 }
 
 /** Project Working Tree：可编辑的当前文件状态。 */
-export function FileBrowser({ projectId, access, onChanged }: Props) {
-  const canWrite = can(access, 'project.content.write')
-  const files = useAsync<ProjectFile[]>(() => api.listFiles(projectId), [projectId])
-  const tree = useMemo(() => projectFileTree(files.data ?? []), [files.data])
-  const [editing, setEditing] = useState<{
-    path: string
-    content: string
-    /** 后端只返回了前 256 KB。截断的内容**不能存回去**。 */
-    truncated: boolean
-  } | null>(null)
-  const [saving, setSaving] = useState(false)
+export function FileBrowser({
+  projectId,
+  access,
+  onChanged,
+  currentPath = '',
+  basePath = `/projects/${projectId}/files`,
+  version,
+}: Props) {
+  const readOnly = version !== undefined
+  const canWrite = !readOnly && can(access, 'project.content.write')
+  const navigate = useNavigate()
+  const files = useAsync<ProjectFile[]>(
+    () =>
+      version
+        ? Promise.resolve(version.files.map((file) => ({ ...file, updated_at: null })))
+        : api.listFiles(projectId),
+    [projectId, version?.id],
+  )
+  const tree = useMemo(
+    () => projectFileTree(files.data ?? [], currentPath),
+    [files.data, currentPath],
+  )
   const [prompt, setPrompt] = useState<PathPrompt | null>(null)
   const [promptForm] = Form.useForm<{ path: string }>()
   const [uploads, setUploads] = useState<UploadTask[]>([])
@@ -137,29 +199,19 @@ export function FileBrowser({ projectId, access, onChanged }: Props) {
     )
   }
 
-  const openFile = async (path: string) => {
-    try {
-      const file = await api.readFile(projectId, path)
-      setEditing({ path, content: file.content, truncated: file.truncated })
-    } catch (error) {
-      message.error((error as Error).message)
-    }
+  const openFile = (path: string) => {
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+    navigate(`${basePath}/file/${encodedPath}`)
   }
 
-  const saveFile = async () => {
-    if (!editing) return
-    setSaving(true)
-    try {
-      await api.writeFile(projectId, editing.path, editing.content)
-      message.success(`已保存 ${editing.path}`)
-      setEditing(null)
-      refresh()
-    } catch (error) {
-      message.error((error as Error).message)
-    } finally {
-      setSaving(false)
-    }
-  }
+  const readmePath = currentPath ? `${currentPath}/README.md` : 'README.md'
+  const readmeEntry = files.data?.find((file) => file.path === readmePath)
+  const readme = useAsync<FileContent | null>(() => {
+    if (!readmeEntry) return Promise.resolve(null)
+    return version
+      ? api.readVersionFile(version.id, readmePath)
+      : api.readFile(projectId, readmePath)
+  }, [projectId, version?.id, readmePath, readmeEntry?.content_hash])
 
   /** 上传入口统一走这里：逐个文件一个请求，成败互不影响。 */
   const uploadOneByOne = async (picked: File[]) => {
@@ -242,20 +294,26 @@ export function FileBrowser({ projectId, access, onChanged }: Props) {
       message.error((error as Error).message)
     }
   }
+  const directoryHref = (path: string) =>
+    `${basePath}${path ? `/tree/${path.split('/').map(encodeURIComponent).join('/')}` : ''}`
+  const currentSegments = currentPath ? currentPath.split('/') : []
+  const currentName = (path: string) => path.split('/').at(-1) ?? path
 
   const columns: ColumnsType<FileTreeNode> = [
     {
-      title: '路径',
+      title: '名称',
       dataIndex: field<FileTreeNode>('path'),
       render: (path: string, node) =>
         node.isDirectory ? (
-          <Space size="small">
-            <FolderOutlined />
-            <Typography.Text>{path}</Typography.Text>
-          </Space>
+          <Link to={directoryHref(path)} title={path}>
+            <Space size="small">
+              <FolderOutlined />
+              <Typography.Text>{currentName(path)}</Typography.Text>
+            </Space>
+          </Link>
         ) : (
-          <Button type="link" size="small" onClick={() => openFile(path)}>
-            {path}
+          <Button type="link" size="small" title={path} onClick={() => openFile(path)}>
+            {currentName(path)}
           </Button>
         ),
     },
@@ -265,7 +323,7 @@ export function FileBrowser({ projectId, access, onChanged }: Props) {
       render: (_, node) => (node.file ? formatBytes(node.file.size) : '—'),
     },
     {
-      title: '修改时间',
+      title: '最近修改',
       width: 130,
       render: (_, node) => (node.file ? formatRelative(node.file.updated_at) : '—'),
     },
@@ -330,9 +388,33 @@ export function FileBrowser({ projectId, access, onChanged }: Props) {
   ]
 
   const failedUploads = uploads.filter((task) => task.status !== 'success')
+  const breadcrumb = (
+    <nav className={styles.breadcrumb} aria-label="文件路径">
+      <Link to={directoryHref('')}>/</Link>
+      {currentSegments.map((segment, index) => {
+        const path = currentSegments.slice(0, index + 1).join('/')
+        return (
+          <span key={path}>
+            <span aria-hidden> / </span>
+            <Link to={directoryHref(path)}>{segment}</Link>
+          </span>
+        )
+      })}
+    </nav>
+  )
+
+  const fileContext = version ? (
+    <div className={styles.fileContext}>
+      <Link to={directoryHref('')} className={styles.refControl}>
+        {version.label} · 只读
+      </Link>
+    </div>
+  ) : null
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      {fileContext && <div className={styles.fileToolbar}>{fileContext}</div>}
+      {breadcrumb}
       {canWrite && (
         <>
           <Space wrap>
@@ -430,11 +512,24 @@ export function FileBrowser({ projectId, access, onChanged }: Props) {
           size="small"
           dataSource={tree}
           columns={columns}
-          defaultExpandAllRows
           pagination={false}
           scroll={{ x: true }}
         />
       </AsyncSection>
+      {readmeEntry && (
+        <section className={styles.readme} aria-labelledby="readme-title">
+          <AsyncSection loading={readme.loading} error={readme.error}>
+            {readme.data && (
+              <>
+                <Typography.Title id="readme-title" level={4}>
+                  README.md
+                </Typography.Title>
+                <MarkdownPreview content={readme.data.content} />
+              </>
+            )}
+          </AsyncSection>
+        </section>
+      )}
 
       <PathPromptDrawer
         prompt={prompt}
@@ -442,48 +537,6 @@ export function FileBrowser({ projectId, access, onChanged }: Props) {
         onCancel={() => setPrompt(null)}
         onOk={submitPrompt}
       />
-
-      <Drawer
-        open={editing !== null}
-        title={editing?.path}
-        width={720}
-        onClose={() => setEditing(null)}
-        extra={
-          <Space>
-            <Button onClick={() => setEditing(null)}>
-              {canWrite && !editing?.truncated ? '取消' : '关闭'}
-            </Button>
-            {/* 截断的内容不给保存按钮。存回去等于把文件裁到 256 KB，
-                而且是静默发生的——用户以为自己只改了一行。 */}
-            {canWrite && !editing?.truncated && (
-              <Button type="primary" onClick={saveFile} loading={saving}>
-                保存
-              </Button>
-            )}
-          </Space>
-        }
-      >
-        {editing?.truncated && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="这个文件太大，只显示了开头一部分"
-            description="为了不把剩下的内容截断，这里只能查看不能保存。要修改请在本地编辑后重新上传。"
-          />
-        )}
-        <Input.TextArea
-          readOnly={!canWrite || editing?.truncated}
-          value={editing?.content ?? ''}
-          onChange={(event) =>
-            setEditing((current) =>
-              current ? { ...current, content: event.target.value } : current,
-            )
-          }
-          autoSize={{ minRows: 24, maxRows: 40 }}
-          style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 }}
-        />
-      </Drawer>
     </Space>
   )
 }

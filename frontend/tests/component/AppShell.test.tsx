@@ -191,7 +191,7 @@ describe('AppShell 壳层', () => {
     const navigation = screen.getByRole('navigation', { name: 'Project navigation' })
     expect(within(navigation).getByRole('link', { name: 'Files' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=files&view=working',
+      '/projects/p-1/files',
     )
     expect(within(navigation).getByRole('link', { name: 'Runs' })).toHaveAttribute(
       'aria-current',
@@ -199,11 +199,11 @@ describe('AppShell 壳层', () => {
     )
     expect(within(navigation).getByRole('link', { name: 'Activity' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=activity',
+      '/projects/p-1/activity',
     )
     expect(within(navigation).getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=settings',
+      '/projects/p-1/settings',
     )
   })
 

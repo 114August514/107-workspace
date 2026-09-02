@@ -178,7 +178,7 @@ export function RunPage() {
             <header className={styles.runHeader} aria-label="Run header">
               <Link
                 as={RouterLink}
-                to={`/projects/${run.project_id}?tab=runs&view=history`}
+                to={`/projects/${run.project_id}/runs`}
                 className={styles.backLink}
               >
                 <ArrowLeftIcon size={16} aria-hidden />

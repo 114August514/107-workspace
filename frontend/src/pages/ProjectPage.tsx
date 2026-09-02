@@ -5,7 +5,17 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
-import type { ActivityPage, ForkSource, Project, RunConfiguration, RunPage } from '../api/types'
+import type {
+  ActivityPage,
+  Environment,
+  ForkSource,
+  Project,
+  ProjectVersionDetail,
+  ProjectVersionPage,
+  RunConfiguration,
+  RunPage,
+  WorkingChange,
+} from '../api/types'
 import { useAsync, type AsyncState as AsyncResource } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
@@ -15,11 +25,13 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { FileBrowser } from '../components/project/FileBrowser'
 import { VersionPanel } from '../components/project/VersionPanel'
+import { FileViewer } from '../components/project/FileViewer'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
 import { RunTable } from '../components/run/RunTable'
 import { SubmitRunModal } from '../components/run/SubmitRunModal'
 import { RunConfigurationPanel } from '../components/runconfig/RunConfigurationPanel'
 import { tablePagination } from '../utils/pagination'
+import { formatRelative } from '../utils/format'
 import styles from './ProjectPage.module.css'
 
 type ProjectSection = 'files' | 'runs' | 'activity' | 'settings'
@@ -34,78 +46,160 @@ const PAGE_TITLES = {
   configurations: 'Run configurations',
   activity: 'Activity',
   settings: 'Settings',
+  version: 'Version',
+  file: 'File',
 } as const
+type ProjectView = FilesView | RunsView | 'activity' | 'settings' | 'version' | 'file'
 
-function resolveProjectLocation(search: URLSearchParams): {
+interface ProjectLocation {
   section: ProjectSection
-  view: FilesView | RunsView | 'activity' | 'settings'
-} {
-  const tab = search.get('tab')
-  const view = search.get('view')
-  if (tab === 'activity' || tab === 'activities') return { section: 'activity', view: 'activity' }
-  if (tab === 'settings') return { section: 'settings', view: 'settings' }
-  if (tab === 'runs' || tab === 'configurations') {
+  view: ProjectView
+  currentPath: string
+  versionId?: string
+  filePath?: string
+}
+
+function resolveProjectPath(pathname: string, projectId: string): ProjectLocation {
+  const prefix = `/projects/${projectId}`
+  const segments = pathname.startsWith(prefix)
+    ? pathname.slice(prefix.length).split('/').filter(Boolean).map(decodeURIComponent)
+    : []
+  const section = segments[0]
+  if (section === 'activity') return { section: 'activity', view: 'activity', currentPath: '' }
+  if (section === 'settings') return { section: 'settings', view: 'settings', currentPath: '' }
+  if (section === 'runs') {
     return {
       section: 'runs',
-      view: tab === 'configurations' || view === 'configurations' ? 'configurations' : 'history',
+      view: segments[1] === 'configurations' ? 'configurations' : 'history',
+      currentPath: '',
     }
+  }
+  if (segments[1] === 'file' && segments[2]) {
+    return {
+      section: 'files',
+      view: 'file',
+      currentPath: segments.slice(2, -1).join('/'),
+      filePath: segments.slice(2).join('/'),
+    }
+  }
+  if (segments[1] === 'changes') return { section: 'files', view: 'changes', currentPath: '' }
+  if (segments[1] === 'versions') {
+    if (segments[2] && segments[3] === 'file' && segments[4]) {
+      return {
+        section: 'files',
+        view: 'file',
+        versionId: segments[2],
+        currentPath: segments.slice(4, -1).join('/'),
+        filePath: segments.slice(4).join('/'),
+      }
+    }
+    if (segments[2]) {
+      return {
+        section: 'files',
+        view: 'version',
+        versionId: segments[2],
+        currentPath: segments[3] === 'tree' ? segments.slice(4).join('/') : '',
+      }
+    }
+    return { section: 'files', view: 'versions', currentPath: '' }
   }
   return {
     section: 'files',
-    view:
-      tab === 'versions' || view === 'versions'
-        ? 'versions'
-        : view === 'changes'
-          ? 'changes'
-          : 'working',
+    view: 'working',
+    currentPath: segments[1] === 'tree' ? segments.slice(2).join('/') : '',
   }
 }
 
 function projectViewHref(projectId: string, section: ProjectSection, view?: FilesView | RunsView) {
-  if (section === 'activity' || section === 'settings')
-    return `/projects/${projectId}?tab=${section}`
-  return `/projects/${projectId}?tab=${section}&view=${view}`
+  if (section === 'activity' || section === 'settings') return `/projects/${projectId}/${section}`
+  if (section === 'files') {
+    if (view === 'changes') return `/projects/${projectId}/files/changes`
+    if (view === 'versions') return `/projects/${projectId}/files/versions`
+    return `/projects/${projectId}/files`
+  }
+  return view === 'configurations'
+    ? `/projects/${projectId}/runs/configurations`
+    : `/projects/${projectId}/runs`
 }
 
-function ProjectSubNavigation({
-  projectId,
-  section,
-  view,
-}: {
-  projectId: string
-  section: ProjectSection
-  view: FilesView | RunsView | 'activity' | 'settings'
-}) {
-  const items =
-    section === 'files'
-      ? ([
-          ['working', 'Working State'],
-          ['changes', 'Changes'],
-          ['versions', 'Versions'],
-        ] as const)
-      : section === 'runs'
-        ? ([
-            ['history', 'History'],
-            ['configurations', 'Configurations'],
-          ] as const)
-        : null
-  if (!items) return null
+function FilesContextControls({ projectId }: { projectId: string }) {
+  const changes = useAsync<WorkingChange[]>(() => api.workingChanges(projectId), [projectId])
+  const versions = useAsync<ProjectVersionPage>(
+    () => api.listVersions(projectId, { page: 1, page_size: 1 }),
+    [projectId],
+  )
   return (
-    <nav className={styles.subNavigation} aria-label={`${section} sections`}>
-      {items.map(([itemView, label]) => (
-        <Link
-          key={itemView}
-          to={projectViewHref(projectId, section, itemView)}
-          className={styles.subNavigationLink}
-          aria-current={view === itemView ? 'page' : undefined}
-        >
-          {label}
-        </Link>
-      ))}
-    </nav>
+    <div className={styles.fileContextControls} aria-label="Files context">
+      <Link to={projectViewHref(projectId, 'files')} className={styles.refControl}>
+        Working State
+      </Link>
+      <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
+        {changes.data?.length ?? '—'} changes
+      </Link>
+      <Link to={projectViewHref(projectId, 'files', 'versions')} className={styles.contextLink}>
+        Versions {versions.data?.total ?? '—'}
+      </Link>
+    </div>
   )
 }
 
+function ProjectAbout({ project, projectId }: { project: Project | undefined; projectId: string }) {
+  const versions = useAsync<ProjectVersionPage>(
+    () => api.listVersions(projectId, { page: 1, page_size: 1 }),
+    [projectId],
+  )
+  const environments = useAsync<Environment[]>(
+    () => api.environmentsForProject(projectId),
+    [projectId],
+  )
+  if (!project) return null
+  const latestVersion = versions.data?.items[0]
+  const defaultEnvironment = environments.data
+    ?.flatMap((environment) => environment.versions.map((version) => ({ environment, version })))
+    .find(({ version }) => version.id === project.environment_version_id)
+  return (
+    <aside className={styles.aboutRail} aria-label="About">
+      <h2>About</h2>
+      <Card className={styles.aboutCard}>
+        <p>{project.description || '这个 Project 还没有填写说明。'}</p>
+        <dl className={styles.aboutFacts}>
+          <div>
+            <dt>Latest version</dt>
+            <dd>{latestVersion?.label ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Updated</dt>
+            <dd>{formatRelative(project.updated_at)}</dd>
+          </div>
+          <div>
+            <dt>Owner</dt>
+            <dd>{project.owner.display_name}</dd>
+          </div>
+          <div>
+            <dt>Visibility</dt>
+            <dd>{project.visibility}</dd>
+          </div>
+          {defaultEnvironment && (
+            <div>
+              <dt>Default environment</dt>
+              <dd>{`${defaultEnvironment.environment.name} · ${defaultEnvironment.version.version}`}</dd>
+            </div>
+          )}
+        </dl>
+        {environments.data && environments.data.length > 0 && (
+          <section className={styles.relatedResources} aria-labelledby="related-resources-title">
+            <h3 id="related-resources-title">Related resources</h3>
+            {environments.data.map((environment) => (
+              <Link key={environment.id} to={`/environments/${environment.id}`}>
+                {environment.name}
+              </Link>
+            ))}
+          </section>
+        )}
+      </Card>
+    </aside>
+  )
+}
 /**
  * Project 页面：以 Files / Runs / Activity / Settings 组织既有 Project 能力。
  *
@@ -115,7 +209,14 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
   const { projectId = '' } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const { section, view } = resolveProjectLocation(new URLSearchParams(location.search))
+  const { section, view, currentPath, versionId, filePath } = resolveProjectPath(
+    location.pathname,
+    projectId,
+  )
+  const version = useAsync<ProjectVersionDetail | undefined>(
+    () => (versionId ? api.getVersion(versionId) : Promise.resolve(undefined)),
+    [versionId],
+  )
   const [token, setToken] = useState(0)
   const bump = () => {
     setToken((value) => value + 1)
@@ -135,11 +236,23 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
     () => api.listProjectActivities(projectId, { page_size: 20 }),
     [projectId, token],
   )
+  const fileBasePath = versionId
+    ? `/projects/${projectId}/files/versions/${versionId}`
+    : `/projects/${projectId}/files`
+  const fileBackHref = currentPath
+    ? `${fileBasePath}/tree/${currentPath.split('/').map(encodeURIComponent).join('/')}`
+    : fileBasePath
 
   const content =
     view === 'working' ? (
       <Card>
-        <FileBrowser projectId={projectId} access={project.data} onChanged={bump} />
+        <FileBrowser
+          projectId={projectId}
+          access={project.data}
+          onChanged={bump}
+          currentPath={currentPath}
+          basePath={`/projects/${projectId}/files`}
+        />
       </Card>
     ) : view === 'changes' ? (
       <Card>
@@ -163,6 +276,36 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
           onVersionSaved={bump}
         />
       </Card>
+    ) : view === 'file' ? (
+      <AsyncSection
+        loading={versionId ? version.loading : false}
+        error={versionId ? version.error : undefined}
+      >
+        {filePath && (!versionId || version.data) && (
+          <FileViewer
+            projectId={projectId}
+            access={project.data}
+            path={filePath}
+            backHref={fileBackHref}
+            version={version.data}
+          />
+        )}
+      </AsyncSection>
+    ) : view === 'version' ? (
+      <AsyncSection loading={version.loading} error={version.error}>
+        {version.data && (
+          <Card>
+            <FileBrowser
+              projectId={projectId}
+              access={project.data}
+              onChanged={() => undefined}
+              currentPath={currentPath}
+              basePath={`/projects/${projectId}/files/versions/${version.data.id}`}
+              version={version.data}
+            />
+          </Card>
+        )}
+      </AsyncSection>
     ) : view === 'history' ? (
       <PrimerListCard>
         <AsyncState
@@ -206,20 +349,36 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
       </Card>
     )
 
+  const filesContent =
+    section === 'files' ? (
+      <div className={styles.filesLayout}>
+        <div className={styles.filesMain}>
+          {view !== 'version' && view !== 'file' && <FilesContextControls projectId={projectId} />}
+          {content}
+        </div>
+        <ProjectAbout project={project.data} projectId={projectId} />
+      </div>
+    ) : (
+      content
+    )
+
   return (
     <Stack gap="large">
       <AsyncSection loading={project.loading} error={project.error}>
         {project.data && (
           <PageHeader
-            title={PAGE_TITLES[view]}
+            title={
+              view === 'version' && version.data
+                ? `${version.data.label} · 只读`
+                : PAGE_TITLES[view]
+            }
             description={project.data.description || '这个 Project 还没有填写说明'}
             tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
           />
         )}
       </AsyncSection>
 
-      <ProjectSubNavigation projectId={projectId} section={section} view={view} />
-      {content}
+      {filesContent}
 
       <SubmitRunModal
         open={submitting !== null}

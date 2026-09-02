@@ -59,16 +59,15 @@ export function AppShell({ username, onUsernameChange, home, project, children }
   const [navigationOpen, setNavigationOpen] = useState(false)
   const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const currentProject = project.data?.id === projectId ? project.data : undefined
-  const requestedTab = new URLSearchParams(location.search).get('tab')
-  const projectArea = location.pathname.includes('/runs/')
+  const projectPath = projectId ? `/projects/${projectId}` : ''
+  const projectSubpath = projectPath ? location.pathname.slice(projectPath.length) : ''
+  const projectArea = projectSubpath.startsWith('/runs')
     ? 'runs'
-    : requestedTab === 'runs' || requestedTab === 'configurations'
-      ? 'runs'
-      : requestedTab === 'activity' || requestedTab === 'activities'
-        ? 'activity'
-        : requestedTab === 'settings'
-          ? 'settings'
-          : 'files'
+    : projectSubpath.startsWith('/activity')
+      ? 'activity'
+      : projectSubpath.startsWith('/settings')
+        ? 'settings'
+        : 'files'
 
   useEffect(() => {
     setNavigationOpen(false)
@@ -172,7 +171,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
             >
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=files&view=working`}
+                to={`/projects/${projectId}/files`}
                 leadingVisual={<FileDirectoryIcon />}
                 aria-current={projectArea === 'files' ? 'page' : undefined}
               >
@@ -180,7 +179,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               </UnderlineNav.Item>
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=runs&view=history`}
+                to={`/projects/${projectId}/runs`}
                 leadingVisual={<PlayIcon />}
                 aria-current={projectArea === 'runs' ? 'page' : undefined}
               >
@@ -188,14 +187,14 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               </UnderlineNav.Item>
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=activity`}
+                to={`/projects/${projectId}/activity`}
                 aria-current={projectArea === 'activity' ? 'page' : undefined}
               >
                 {appShellCopy.activity}
               </UnderlineNav.Item>
               <UnderlineNav.Item
                 as={RouterLink}
-                to={`/projects/${projectId}?tab=settings`}
+                to={`/projects/${projectId}/settings`}
                 leadingVisual={<GearIcon />}
                 aria-current={projectArea === 'settings' ? 'page' : undefined}
               >

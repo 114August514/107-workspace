@@ -1,0 +1,77 @@
+.fileToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-12);
+  flex-wrap: wrap;
+}
+
+.fileContext {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+
+.refControl,
+.contextLink {
+  color: var(--fgColor-accent);
+  font-weight: var(--base-text-weight-semibold);
+  text-decoration: none;
+}
+
+.refControl:hover,
+.contextLink:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb {
+  display: flex;
+  gap: var(--base-size-4);
+  overflow-x: auto;
+  color: var(--fgColor-muted);
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+  white-space: nowrap;
+}
+
+.breadcrumb a {
+  color: var(--fgColor-default);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.readme {
+  padding: var(--base-size-16);
+  border: var(--borderWidth-thin) solid var(--borderColor-muted);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-default);
+}
+
+.markdownPreview {
+  color: var(--fgColor-default);
+  line-height: var(--text-body-lineHeight-medium);
+}
+
+.markdownPreview pre {
+  overflow-x: auto;
+  padding: var(--base-size-12);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+}
+
+@media not all and (min-width: 48rem) {
+  .fileToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .fileContext {
+    overflow-x: auto;
+  }
+}

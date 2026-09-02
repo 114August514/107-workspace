@@ -1,30 +1,92 @@
-.subNavigation {
-  display: flex;
-  gap: var(--base-size-16);
-  overflow-x: auto;
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+.filesLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+  gap: var(--base-size-24);
+  align-items: start;
 }
 
-.subNavigationLink {
-  flex: 0 0 auto;
-  padding: var(--base-size-8) var(--base-size-4);
-  border-bottom: var(--borderWidth-thick) solid transparent;
-  color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
+.filesMain {
+  min-width: 0;
+}
+
+.fileContextControls {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-16);
+  min-height: var(--base-size-40);
+  margin-bottom: var(--base-size-12);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.refControl,
+.contextLink {
+  color: var(--fgColor-accent);
   font-weight: var(--base-text-weight-semibold);
   text-decoration: none;
 }
 
-.subNavigationLink:hover {
-  color: var(--fgColor-default);
+.refControl:hover,
+.contextLink:hover {
+  text-decoration: underline;
 }
 
-.subNavigationLink:focus-visible {
-  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
-  outline-offset: -2px;
+.aboutRail {
+  min-width: 0;
 }
 
-.subNavigationLink[aria-current='page'] {
-  border-bottom-color: var(--borderColor-accent-emphasis);
-  color: var(--fgColor-default);
+.aboutRail h2 {
+  margin: 0 0 var(--base-size-8);
+  font-size: var(--text-title-size-medium);
+}
+
+.aboutCard {
+  padding: var(--base-size-16);
+}
+
+.aboutCard p {
+  margin-top: 0;
+  color: var(--fgColor-muted);
+  line-height: var(--text-body-lineHeight-medium);
+}
+
+.aboutFacts {
+  display: grid;
+  gap: var(--base-size-12);
+  margin: 0;
+}
+
+.aboutFacts div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--base-size-12);
+}
+
+.aboutFacts dt {
+  color: var(--fgColor-muted);
+}
+
+.aboutFacts dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.relatedResources {
+  display: grid;
+  gap: var(--base-size-8);
+  margin-top: var(--base-size-16);
+  padding-top: var(--base-size-16);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.relatedResources h3 {
+  margin: 0;
+  font-size: var(--text-title-size-small);
+}
+
+@media not all and (min-width: 48rem) {
+  .filesLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

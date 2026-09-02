@@ -329,7 +329,7 @@ describe('RunPage backend unavailable', () => {
     expect(screen.queryByRole('link', { name: '版本' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Runs' })).toHaveAttribute(
       'href',
-      '/projects/project-1?tab=runs&view=history',
+      '/projects/project-1/runs',
     )
 
     const runHeader = screen.getByRole('banner', { name: 'Run header' })
