@@ -1,3 +1,6 @@
+import { TriangleDownIcon } from '@primer/octicons-react'
+import { Button as PrimerButton, SelectPanel, Text } from '@primer/react'
+import type { ActionListItemInput } from '@primer/react/deprecated'
 import { BranchesOutlined } from '@ant-design/icons'
 import { Card, Empty, Tag } from 'antd'
 import { useState } from 'react'
@@ -123,16 +126,88 @@ function projectViewHref(projectId: string, section: ProjectSection, view?: File
 }
 
 function FilesContextControls({ projectId }: { projectId: string }) {
+  const navigate = useNavigate()
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const changes = useAsync<WorkingChange[]>(() => api.workingChanges(projectId), [projectId])
   const versions = useAsync<ProjectVersionPage>(
-    () => api.listVersions(projectId, { page: 1, page_size: 1 }),
+    () => api.listVersions(projectId, { page: 1, page_size: 50 }),
     [projectId],
   )
+  const options: ActionListItemInput[] = [
+    { id: 'working-state', text: 'Working State' },
+    ...(versions.data?.items ?? []).map((version) => ({
+      id: version.id,
+      text: version.label,
+    })),
+  ]
+  const error = toAsyncError(versions.error)
+  const close = () => {
+    setOpen(false)
+    setQuery('')
+  }
   return (
     <div className={styles.fileContextControls} aria-label="Files context">
-      <Link to={projectViewHref(projectId, 'files')} className={styles.refControl}>
-        Working State <span aria-hidden>▾</span>
-      </Link>
+      <SelectPanel
+        open={open}
+        onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
+        renderAnchor={({ children: _children, ...anchorProps }) => (
+          <PrimerButton
+            {...anchorProps}
+            trailingVisual={TriangleDownIcon}
+            aria-label="选择 Files 状态"
+            aria-haspopup="dialog"
+          >
+            Working State
+          </PrimerButton>
+        )}
+        title="选择 Files 状态"
+        placeholder="Working State"
+        placeholderText="搜索状态或 Version"
+        inputLabel="搜索状态或 Version"
+        filterValue={query}
+        onFilterChange={setQuery}
+        items={options}
+        selected={options[0]}
+        onSelectedChange={(item: ActionListItemInput | undefined) => {
+          if (!item) return
+          close()
+          navigate(
+            item.id === 'working-state'
+              ? projectViewHref(projectId, 'files')
+              : `/projects/${projectId}/files/versions/${item.id}`,
+          )
+        }}
+        loading={versions.loading}
+        initialLoadingType="spinner"
+        message={
+          error
+            ? {
+                variant: 'error' as const,
+                title: '无法加载 Project Versions。',
+                body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
+                action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
+              }
+            : !versions.loading && options.length === 1
+              ? {
+                  variant: 'empty' as const,
+                  title: '还没有保存的 Version。',
+                  body: '保存 Version 后，可以从这里切换到只读文件内容。',
+                }
+              : undefined
+        }
+        notice={
+          versions.data?.has_more
+            ? { text: '仅显示最近 50 个 Version，请使用 Versions 查看全部。', variant: 'info' }
+            : undefined
+        }
+        width="auto"
+        height="auto"
+        overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
+        align="start"
+        disableFullscreenOnNarrow
+        aria-label="Files 状态"
+      />
       <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
         {changes.data?.length ?? '—'} changes
       </Link>
