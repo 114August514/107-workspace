@@ -1,15 +1,9 @@
-import {
-  FileDirectoryIcon,
-  FileIcon,
-  KebabHorizontalIcon,
-  PlusIcon,
-  UploadIcon,
-} from '@primer/octicons-react'
+import { FileDirectoryIcon, FileIcon, PlusIcon, UploadIcon } from '@primer/octicons-react'
 import {
   ActionList,
   ActionMenu,
   Button as PrimerButton,
-  IconButton,
+  ConfirmationDialog,
   Link as PrimerLink,
 } from '@primer/react'
 import { Alert, Button, Drawer, Form, Input, Space, Tag, message } from 'antd'
@@ -34,7 +28,7 @@ interface Props {
   version?: ProjectVersionDetail
 }
 
-/** 路径输入抽屉的四种用途。rename/copy 带源路径，其余只收一个目标路径。 */
+/** 当前目录级动作；文件对象操作位于文件查看页。 */
 type PathPromptMode = 'new-file' | 'mkdir' | 'rename' | 'copy'
 
 interface PathPrompt {
@@ -60,8 +54,8 @@ const PATH_PROMPT_COPY: Record<PathPromptMode, { title: string; label: string; e
     label: '目录路径',
     extra: '空目录以 .gitkeep 占位文件存在，这样才能出现在列表里并保存进版本。',
   },
-  rename: { title: '重命名 / 移动', label: '新路径', extra: '目录会连同其中所有文件一起移动。' },
-  copy: { title: '复制', label: '目标路径', extra: '目标已存在的同路径文件会被覆盖。' },
+  rename: { title: '重命名目录', label: '新路径', extra: '目录会连同其中所有文件一起移动。' },
+  copy: { title: '复制目录', label: '目标路径', extra: '目标已存在的同路径文件会被覆盖。' },
 }
 
 interface FileTreeNode {
@@ -126,6 +120,7 @@ export function FileBrowser({
   const [prompt, setPrompt] = useState<PathPrompt | null>(null)
   const [promptForm] = Form.useForm<{ path: string }>()
   const [uploads, setUploads] = useState<UploadTask[]>([])
+  const [deleteDirectoryOpen, setDeleteDirectoryOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const archiveInputRef = useRef<HTMLInputElement>(null)
 
@@ -218,76 +213,34 @@ export function FileBrowser({
     }
   }
 
-  const removePath = async (path: string) => {
+  const deleteDirectory = async () => {
     try {
-      await api.deletePath(projectId, path)
-      message.success(`已删除 ${path}`)
+      await api.deletePath(projectId, currentPath)
+      setDeleteDirectoryOpen(false)
       refresh()
     } catch (error) {
       message.error((error as Error).message)
     }
   }
 
-  const downloadFile = async (path: string) => {
-    try {
-      await api.downloadFile(projectId, path)
-    } catch (error) {
-      message.error((error as Error).message)
-    }
-  }
   const directoryHref = (path: string) =>
     `${basePath}${path ? `/tree/${path.split('/').map(encodeURIComponent).join('/')}` : ''}`
   const currentSegments = currentPath ? currentPath.split('/') : []
   const currentName = (path: string) => path.split('/').at(-1) ?? path
-
-  const fileActions = (node: FileTreeNode) => {
-    if (!canWrite) return null
-    return (
-      <ActionMenu>
-        <ActionMenu.Anchor>
-          <IconButton
-            icon={KebabHorizontalIcon}
-            variant="invisible"
-            size="small"
-            aria-label={`更多操作 ${node.path}`}
-          />
-        </ActionMenu.Anchor>
-        <ActionMenu.Overlay align="end" width="auto">
-          <ActionList>
-            {node.file && (
-              <ActionList.Item onSelect={() => void downloadFile(node.path)}>下载</ActionList.Item>
-            )}
-            <ActionList.Item
-              onSelect={() => {
-                promptForm.setFieldsValue({ path: node.path })
-                setPrompt({ mode: 'rename', source: node.path })
-              }}
-            >
-              改名
-            </ActionList.Item>
-            <ActionList.Item
-              onSelect={() => {
-                promptForm.setFieldsValue({ path: `${node.path}-copy` })
-                setPrompt({ mode: 'copy', source: node.path })
-              }}
-            >
-              复制
-            </ActionList.Item>
-            <ActionList.Divider />
-            <ActionList.Item
-              variant="danger"
-              onSelect={() => {
-                if (window.confirm(`删除 ${node.path}？`)) void removePath(node.path)
-              }}
-            >
-              删除
-            </ActionList.Item>
-          </ActionList>
-        </ActionMenu.Overlay>
-      </ActionMenu>
-    )
-  }
-
+  const breadcrumb = (
+    <nav className={styles.breadcrumb} aria-label="文件路径">
+      <Link to={directoryHref('')}>/</Link>
+      {currentSegments.map((segment, index) => {
+        const path = currentSegments.slice(0, index + 1).join('/')
+        return (
+          <span key={path}>
+            <span aria-hidden> / </span>
+            <Link to={directoryHref(path)}>{segment}</Link>
+          </span>
+        )
+      })}
+    </nav>
+  )
   const rows = tree.map((node) => (
     <tr key={node.key}>
       <td className={styles.nameCell}>
@@ -305,24 +258,8 @@ export function FileBrowser({
       </td>
       <td>{node.file ? formatBytes(node.file.size) : '—'}</td>
       <td>{node.file ? formatRelative(node.file.updated_at) : '—'}</td>
-      <td className={styles.actionCell}>{fileActions(node)}</td>
     </tr>
   ))
-  const failedUploads = uploads.filter((task) => task.status !== 'success')
-  const breadcrumb = (
-    <nav className={styles.breadcrumb} aria-label="文件路径">
-      <Link to={directoryHref('')}>/</Link>
-      {currentSegments.map((segment, index) => {
-        const path = currentSegments.slice(0, index + 1).join('/')
-        return (
-          <span key={path}>
-            <span aria-hidden> / </span>
-            <Link to={directoryHref(path)}>{segment}</Link>
-          </span>
-        )
-      })}
-    </nav>
-  )
   const fileContext = version ? (
     <div className={styles.fileContext}>
       <Link to={directoryHref('')} className={styles.refControl}>
@@ -358,6 +295,36 @@ export function FileBrowser({
       </ActionMenu.Overlay>
     </ActionMenu>
   ) : null
+  const directoryActions =
+    canWrite && currentPath ? (
+      <ActionMenu>
+        <ActionMenu.Button>目录操作</ActionMenu.Button>
+        <ActionMenu.Overlay align="end" width="auto">
+          <ActionList>
+            <ActionList.Item
+              onSelect={() => {
+                promptForm.setFieldsValue({ path: currentPath })
+                setPrompt({ mode: 'rename', source: currentPath })
+              }}
+            >
+              重命名目录
+            </ActionList.Item>
+            <ActionList.Item
+              onSelect={() => {
+                promptForm.setFieldsValue({ path: `${currentPath}-copy` })
+                setPrompt({ mode: 'copy', source: currentPath })
+              }}
+            >
+              复制目录
+            </ActionList.Item>
+            <ActionList.Item variant="danger" onSelect={() => setDeleteDirectoryOpen(true)}>
+              删除目录
+            </ActionList.Item>
+          </ActionList>
+        </ActionMenu.Overlay>
+      </ActionMenu>
+    ) : null
+  const failedUploads = uploads.filter((task) => task.status !== 'success')
 
   return (
     <div className={styles.fileSurface}>
@@ -369,6 +336,7 @@ export function FileBrowser({
             上传文件
           </PrimerButton>
           {uploadMenu}
+          {directoryActions}
           <input
             ref={fileInputRef}
             type="file"
@@ -391,7 +359,6 @@ export function FileBrowser({
           />
         </div>
       )}
-
       {uploads.length > 0 && (
         <Alert
           type={failedUploads.length > 0 ? 'warning' : 'success'}
@@ -419,7 +386,6 @@ export function FileBrowser({
           }
         />
       )}
-
       <AsyncSection
         loading={files.loading}
         error={files.error}
@@ -434,7 +400,6 @@ export function FileBrowser({
               <th scope="col">名称</th>
               <th scope="col">大小</th>
               <th scope="col">最近修改</th>
-              <th scope="col" aria-label="操作" />
             </tr>
           </thead>
           <tbody>{rows}</tbody>
@@ -453,7 +418,19 @@ export function FileBrowser({
           )}
         </AsyncSection>
       )}
-
+      {deleteDirectoryOpen && (
+        <ConfirmationDialog
+          title={`删除目录“${currentPath}”？`}
+          onClose={(gesture) => {
+            if (gesture === 'confirm') void deleteDirectory()
+            else setDeleteDirectoryOpen(false)
+          }}
+          confirmButtonContent="删除目录"
+          confirmButtonType="danger"
+        >
+          删除后，该目录中的文件也会从 Working State 删除。
+        </ConfirmationDialog>
+      )}
       <PathPromptDrawer
         prompt={prompt}
         form={promptForm}
@@ -464,7 +441,7 @@ export function FileBrowser({
   )
 }
 
-/** 新建 / 建目录 / 改名 / 复制共用的小抽屉，差别只在文案和提交动作。 */
+/** 当前目录级的新建文件与新建目录表单。 */
 function PathPromptDrawer({
   prompt,
   form,
@@ -487,16 +464,6 @@ function PathPromptDrawer({
     >
       {prompt && (
         <Form form={form} layout="vertical" onFinish={onOk}>
-          {prompt.mode === 'rename' && (
-            <Form.Item label="原路径">
-              <Input value={prompt.source} disabled />
-            </Form.Item>
-          )}
-          {prompt.mode === 'copy' && (
-            <Form.Item label="源路径">
-              <Input value={prompt.source} disabled />
-            </Form.Item>
-          )}
           <Form.Item
             name="path"
             label={copy?.label}

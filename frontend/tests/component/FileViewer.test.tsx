@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   readFile: vi.fn(),
   readVersionFile: vi.fn(),
   writeFile: vi.fn(),
+  downloadFile: vi.fn(),
+  movePath: vi.fn(),
+  copyPath: vi.fn(),
+  deletePath: vi.fn(),
 }))
 
 vi.mock('../../src/api/client', () => ({ api: mocks }))
@@ -81,5 +85,26 @@ describe('FileViewer', () => {
     await waitFor(() =>
       expect(mocks.writeFile).toHaveBeenCalledWith('project-1', 'train.py', 'print(2)'),
     )
+  })
+  it('keeps file actions in the file header', async () => {
+    mocks.readFile.mockResolvedValue({ path: 'train.py', content: 'print(1)', truncated: false })
+
+    render(
+      <MemoryRouter>
+        <FileViewer
+          projectId="project-1"
+          access={project}
+          path="train.py"
+          backHref="/projects/project-1/files"
+          onChanged={() => {}}
+        />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('button', { name: '下载文件' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '更多文件操作 train.py' }))
+    expect(await screen.findByRole('menuitem', { name: '重命名' })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: '复制' })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: '删除' })).toBeVisible()
   })
 })

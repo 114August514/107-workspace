@@ -1,3 +1,4 @@
+import { DownloadIcon } from '@primer/octicons-react'
 import { Button, Card, Tag, Typography } from 'antd'
 import { Highlight, themes } from 'prism-react-renderer'
 import { useEffect, useState } from 'react'
@@ -7,16 +8,17 @@ import { api } from '../../api/client'
 import { toAsyncError } from '../../api/errors'
 import { can } from '../../api/types'
 import type { FileContent, Project, ProjectVersionDetail } from '../../api/types'
+import styles from './FileViewer.module.css'
 import { useAsync } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
-import styles from './FileViewer.module.css'
-
+import { FileObjectActions } from './FileObjectActions'
 interface Props {
   projectId: string
   access: Project | undefined
   path: string
   backHref: string
   version?: ProjectVersionDetail
+  onChanged?: () => void
 }
 function languageForPath(path: string): string {
   const extension = path.split('.').at(-1)?.toLowerCase()
@@ -35,7 +37,7 @@ function languageForPath(path: string): string {
   return languages[extension ?? ''] ?? 'text'
 }
 
-export function FileViewer({ projectId, access, path, backHref, version }: Props) {
+export function FileViewer({ projectId, access, path, backHref, version, onChanged }: Props) {
   const navigate = useNavigate()
   const readOnly = version !== undefined
   const canWrite = !readOnly && can(access, 'project.content.write')
@@ -74,7 +76,22 @@ export function FileViewer({ projectId, access, path, backHref, version }: Props
           <Typography.Title level={3}>{path}</Typography.Title>
           {version && <Tag color="blue">{version.label} · 只读</Tag>}
         </div>
-        <Button onClick={() => navigate(backHref)}>返回 Files</Button>
+        <div className={styles.headerActions}>
+          {!version && (
+            <Button icon={<DownloadIcon />} onClick={() => void api.downloadFile(projectId, path)}>
+              下载文件
+            </Button>
+          )}
+          <Button onClick={() => navigate(backHref)}>返回 Files</Button>
+          {!version && onChanged && (
+            <FileObjectActions
+              projectId={projectId}
+              path={path}
+              canWrite={canWrite}
+              onChanged={onChanged}
+            />
+          )}
+        </div>
       </div>
       <AsyncState
         loading={file.loading}

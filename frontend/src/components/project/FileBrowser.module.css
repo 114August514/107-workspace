@@ -60,15 +60,6 @@
   outline-offset: var(--base-size-4);
 }
 
-.actionCell {
-  width: var(--base-size-32);
-  text-align: right !important;
-}
-
-.actionCell > * {
-  float: right;
-}
-
 .fileContext {
   display: flex;
   align-items: center;

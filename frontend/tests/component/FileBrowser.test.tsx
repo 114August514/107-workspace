@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -77,10 +77,15 @@ describe('FileBrowser', () => {
     cleanup()
     vi.resetAllMocks()
   })
-  function renderBrowser(access: Project = writer) {
+  function renderBrowser(access: Project = writer, currentPath = '') {
     return render(
       <MemoryRouter>
-        <FileBrowser projectId="proj-1" access={access} onChanged={() => {}} />
+        <FileBrowser
+          projectId="proj-1"
+          access={access}
+          onChanged={() => {}}
+          currentPath={currentPath}
+        />
       </MemoryRouter>,
     )
   }
@@ -134,7 +139,7 @@ describe('FileBrowser', () => {
     })
   })
 
-  it('显示当前目录的直接子目录，并以目录路径执行危险操作后刷新结果', async () => {
+  it('在目录页使用目录上下文操作，而不是列表行操作', async () => {
     mocks.listFiles
       .mockResolvedValueOnce([
         {
@@ -147,15 +152,13 @@ describe('FileBrowser', () => {
       .mockResolvedValueOnce([])
     mocks.deletePath.mockResolvedValue(undefined)
 
-    renderBrowser()
+    renderBrowser(writer, 'data')
 
-    const directoryRow = (await screen.findAllByRole('row')).find((row) =>
-      within(row).queryByRole('link', { name: 'data' }),
-    )
-    if (!directoryRow) throw new Error('找不到 data 目录行')
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
-    fireEvent.click(within(directoryRow).getByRole('button', { name: '更多操作 data' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '删除' }))
+    expect(await screen.findByRole('link', { name: 'raw' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /更多操作/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '目录操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除目录' }))
+    fireEvent.click(await screen.findByRole('button', { name: '删除目录' }))
 
     await waitFor(() => {
       expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'data')
@@ -163,7 +166,6 @@ describe('FileBrowser', () => {
     expect(
       await screen.findByText('还没有文件。先新建一个，再保存 Project Version。'),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '更多操作 data' })).not.toBeInTheDocument()
   })
 
   it('只读场景不暴露任何写入口', async () => {

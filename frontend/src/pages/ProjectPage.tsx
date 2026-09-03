@@ -361,6 +361,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             path={filePath}
             backHref={fileBackHref}
             version={version.data}
+            onChanged={() => navigate(fileBackHref)}
           />
         )}
       </AsyncSection>
