@@ -37,6 +37,7 @@ from ..domain.errors import (
     PermissionDenied,
     PreflightRejected,
     SchedulerError,
+    SharedResourceUnavailable,
     ValidationFailed,
 )
 from ..domain.models import (
@@ -585,6 +586,7 @@ class RunService:
                     binding.access_path,
                     binding.source_subpath,
                     access.project.owner,
+                    raise_unavailable=True,
                 )
             if problem is not None:
                 problems.append(problem)
@@ -650,7 +652,13 @@ class RunService:
                     environment=environment,
                 )
             )
-        except (SchedulerError, OSError, ObjectNotFound, ValidationFailed) as exc:
+        except (
+            SharedResourceUnavailable,
+            SchedulerError,
+            OSError,
+            ObjectNotFound,
+            ValidationFailed,
+        ) as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
             run.finished_at = self._clock.now()
@@ -670,18 +678,8 @@ class RunService:
                     title="平台调度服务异常",
                     body="本次 Run 未能提交到调度系统，请稍后重试。",
                 )
-            shared_resource_failure = (
-                isinstance(exc, (ObjectNotFound, ValidationFailed))
-                and "Shared Resource Version" in str(exc)
-            ) or (
-                isinstance(exc, OSError)
-                and any(
-                    binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
-                    for binding in snapshot.input_bindings
-                )
-            )
-            if shared_resource_failure:
-                await self._notify_shared_resource_consumers(run, snapshot, str(exc))
+            if isinstance(exc, SharedResourceUnavailable):
+                await self._notify_shared_resource_consumers(run, exc.version_id, str(exc))
             return
 
         run.scheduler_job_id = job_id
@@ -725,12 +723,13 @@ class RunService:
         )
 
     async def _notify_shared_resource_consumers(
-        self, run: Run, snapshot: RunSnapshot, detail: str
+        self, run: Run, version_id: str, detail: str
     ) -> None:
         """通知使用了当前不可用精确版本的 Project。
 
         Shared Resource Version 没有独立的 availability 状态；Core 触发契约是：
         Run 提交或物化阶段发现精确版本/内容不可用时，通知该 Project 的当前成员。
+        ``version_id`` 来自实际失败的 binding，不从整个 Snapshot 猜测。
         """
         project = await self._repos.projects.get(run.project_id)
         if project is None:
@@ -743,20 +742,14 @@ class RunService:
                 for member in await self._repos.memberships.list_for_user_group(project.owner.id)
                 if member.is_active
             ]
-        version_ids = {
-            binding.source_id
-            for binding in snapshot.input_bindings
-            if binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION
-        }
-        for version_id in version_ids:
-            for recipient_id in recipients:
-                await self._notifier.shared_resource_unavailable(
-                    recipient_id=recipient_id,
-                    project_id=project.id,
-                    project_name=project.name,
-                    asset_label=version_id,
-                    detail=detail,
-                )
+        for recipient_id in recipients:
+            await self._notifier.shared_resource_unavailable(
+                recipient_id=recipient_id,
+                project_id=project.id,
+                project_name=project.name,
+                asset_label=version_id,
+                detail=detail,
+            )
 
     async def _resolve_project_version(
         self, project_id: str, version_id: str | None
@@ -936,13 +929,18 @@ class RunService:
         access_path: str,
         subpath: str,
         project_owner: OwnerReference,
+        *,
+        raise_unavailable: bool = False,
     ) -> str | None:
         """Validate actor discovery and exact Project-owner asset use."""
         version = await shared_resource_version_for_owner_use(
             self._repos, user_id, version_id, project_owner
         )
         if version is None:
-            return f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
+            message = f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
+            if raise_unavailable:
+                raise SharedResourceUnavailable(version_id, message)
+            return message
         if subpath and not version.contains_subpath(subpath):
             return f"输入 {access_path} 引用的子路径 {subpath!r} 不存在"
         return None
@@ -968,7 +966,10 @@ class RunService:
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 version = await self._repos.shared_resources.get_version_by_id(binding.source_id)
                 if version is None:  # pragma: no cover - 提交前检查已校验过
-                    raise ObjectNotFound("Shared Resource Version", binding.source_id)
+                    raise SharedResourceUnavailable(
+                        binding.source_id,
+                        f"输入 {binding.access_path} 引用的 Shared Resource Version 不存在",
+                    )
                 inputs.append(
                     RunInput(
                         source_type=binding.source_type,

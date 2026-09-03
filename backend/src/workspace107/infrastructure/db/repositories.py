@@ -477,18 +477,9 @@ class ProjectRepositoryImpl:
         config_projects = select(t.RunConfigurationRow.project_id).where(
             t.RunConfigurationRow.environment_version_id == version_id
         )
-        snapshot_projects = (
-            select(t.RunRow.project_id)
-            .join(
-                t.RunSnapshotEnvironmentReferenceRow,
-                t.RunSnapshotEnvironmentReferenceRow.snapshot_id == t.RunRow.snapshot_id,
-            )
-            .where(t.RunSnapshotEnvironmentReferenceRow.environment_version_id == version_id)
-        )
         stmt = select(t.ProjectRow).where(
             (t.ProjectRow.environment_version_id == version_id)
             | t.ProjectRow.id.in_(config_projects)
-            | t.ProjectRow.id.in_(snapshot_projects)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
@@ -1015,13 +1006,6 @@ class RunSnapshotRepositoryImpl:
 
     async def add(self, snapshot: RunSnapshot) -> None:
         self._session.add(t.RunSnapshotRow(id=snapshot.id, payload=snapshot.to_payload()))
-        await _flush(self._session)
-        self._session.add(
-            t.RunSnapshotEnvironmentReferenceRow(
-                snapshot_id=snapshot.id,
-                environment_version_id=snapshot.environment_version_id,
-            )
-        )
         await _flush(self._session)
 
     async def get(self, snapshot_id: str) -> RunSnapshot | None:

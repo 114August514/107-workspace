@@ -327,24 +327,6 @@ class RunSnapshotRow(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 
-class RunSnapshotEnvironmentReferenceRow(Base):
-    """Run Snapshot 使用的精确 Environment Version，供可用性通知反查消费者。"""
-
-    __tablename__ = "run_snapshot_environment_references"
-
-    snapshot_id: Mapped[str] = mapped_column(
-        ID, ForeignKey("run_snapshots.id", ondelete="CASCADE"), primary_key=True
-    )
-    environment_version_id: Mapped[str] = mapped_column(ID)
-
-    __table_args__ = (
-        Index(
-            "ix_run_snapshot_environment_ref_version",
-            "environment_version_id",
-        ),
-    )
-
-
 class RunRow(Base):
     __tablename__ = "runs"
 
