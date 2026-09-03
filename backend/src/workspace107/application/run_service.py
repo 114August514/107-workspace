@@ -1197,17 +1197,6 @@ def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:
     return longest
 
 
-def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:
-    """Return the longest suffix that can still grow into a known Secret."""
-    longest = 0
-    for value in secret_values:
-        for length in range(min(len(value) - 1, len(text)), longest, -1):
-            if text.endswith(value[:length]):
-                longest = length
-                break
-    return longest
-
-
 def _as_resolved_env(
     literals: dict[str, str], secret_refs: dict[str, SecretReference]
 ) -> ResolvedEnv:
