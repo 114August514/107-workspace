@@ -123,9 +123,12 @@ async def test_run_logs_and_artifact_downloads_are_complete(client, session) -> 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("secret_value", ["ABCDEF", "Z", "aaa"])
+@pytest.mark.parametrize(
+    ("secret_value", "padding", "repetitions"),
+    [("ABCDEF", 65535, 1), ("Z", 65535, 1), ("aaa", 65535, 1), ("aa", 65533, 2)],
+)
 async def test_log_download_redacts_secret_across_chunk_boundary(
-    client, session, secret_value
+    client, session, secret_value, padding, repetitions
 ) -> None:
     _, environment_version_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="stream-redaction")
@@ -140,7 +143,9 @@ async def test_log_download_redacts_secret_across_chunk_boundary(
         json={
             "name": "boundary",
             "command": (
-                "python -c \"import os,sys; sys.stdout.write('x' * 65535 + os.environ['TOKEN'])\""
+                f'python -c "import os,sys; '
+                f"sys.stdout.write('x' * {padding} + "
+                f"os.environ['TOKEN'] * {repetitions})\""
             ),
             "compute_plan_id": "plan_cpu_quick",
             "environment_version_id": environment_version_id,

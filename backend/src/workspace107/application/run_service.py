@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import codecs
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
@@ -264,36 +265,40 @@ class RunService:
         self, run_id: str, stream: LogStream, secret_values: list[str]
     ) -> AsyncIterator[bytes]:
         """Redact complete secrets while retaining only possible secret prefixes."""
-        if not secret_values:
+        values = [value for value in secret_values if value]
+        if not values:
             async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
                 yield raw
             return
 
+        pattern = re.compile(
+            "|".join(
+                re.escape(value) for value in sorted(dict.fromkeys(values), key=len, reverse=True)
+            )
+        )
         pending = ""
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
             pending += decoder.decode(raw)
-            complete_end = _last_secret_end(pending, secret_values)
-            if complete_end:
-                remainder = pending[complete_end:]
-                keep = _secret_prefix_suffix_length(remainder, secret_values)
-                if keep:
-                    safe = pending[:complete_end] + remainder[:-keep]
-                    pending = remainder[-keep:]
+            while pending:
+                uncertain_start = len(pending) - _secret_prefix_suffix_length(pending, values)
+                match = pattern.search(pending)
+                if match is None:
+                    if uncertain_start == 0:
+                        break
+                    safe, pending = pending[:uncertain_start], pending[uncertain_start:]
+                elif match.end() <= uncertain_start:
+                    safe, pending = pending[: match.end()], pending[match.end() :]
+                elif uncertain_start and match.start() >= uncertain_start:
+                    safe, pending = pending[:uncertain_start], pending[uncertain_start:]
                 else:
-                    safe, pending = pending, ""
-            else:
-                keep = _secret_prefix_suffix_length(pending, secret_values)
-                if keep:
-                    safe, pending = pending[:-keep], pending[-keep:]
-                else:
-                    safe, pending = pending, ""
-            if safe:
-                yield redact(safe, secret_values).encode("utf-8")
+                    break
+                if safe:
+                    yield redact(safe, values).encode("utf-8")
 
         pending += decoder.decode(b"", final=True)
         if pending:
-            yield redact(pending, secret_values).encode("utf-8")
+            yield redact(pending, values).encode("utf-8")
 
     async def list_artifact_files(self, user_id: str, artifact_id: str) -> list[ArtifactEntry]:
         artifact = await self._require_artifact(user_id, artifact_id)
@@ -1181,20 +1186,15 @@ class RunService:
         return problems
 
 
-def _last_secret_end(text: str, secret_values: list[str]) -> int:
-    """Return the furthest end position of any complete known Secret."""
-    furthest = 0
+def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:
+    """Return the longest suffix that can still grow into a known Secret."""
+    longest = 0
     for value in secret_values:
-        if not value:
-            continue
-        start = 0
-        while True:
-            found = text.find(value, start)
-            if found < 0:
+        for length in range(min(len(value) - 1, len(text)), longest, -1):
+            if text.endswith(value[:length]):
+                longest = length
                 break
-            furthest = max(furthest, found + len(value))
-            start = found + 1
-    return furthest
+    return longest
 
 
 def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:

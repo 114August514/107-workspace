@@ -607,14 +607,7 @@ describe('RunPage backend unavailable', () => {
     const preflight = vi.spyOn(api, 'preflight')
     const onSubmitted = vi.fn()
 
-    render(
-      <AdjustedRerunModal
-        open
-        detail={detail}
-        onClose={() => {}}
-        onSubmitted={onSubmitted}
-      />,
-    )
+    render(<AdjustedRerunModal open detail={detail} onClose={() => {}} onSubmitted={onSubmitted} />)
 
     fireEvent.click(await screen.findByRole('button', { name: '创建新 Run' }))
     await waitFor(() => expect(adjustedRerun).toHaveBeenCalled())

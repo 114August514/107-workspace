@@ -52,11 +52,7 @@ export function AdjustedRerunModal({ open, detail, onClose, onSubmitted }: Props
   return <AdjustedRerunForm detail={detail} onClose={onClose} onSubmitted={onSubmitted} />
 }
 
-function AdjustedRerunForm({
-  detail,
-  onClose,
-  onSubmitted,
-}: Omit<Props, 'open'>) {
+function AdjustedRerunForm({ detail, onClose, onSubmitted }: Omit<Props, 'open'>) {
   const formRef = useRef<HTMLFormElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
   const [values, setValues] = useState(() => initialValues(detail))
@@ -152,7 +148,8 @@ function AdjustedRerunForm({
       <form ref={formRef} id="adjusted-rerun-form" onSubmit={submit}>
         <Stack gap="normal">
           <Text as="p" className={styles.muted}>
-            以当前 Run Snapshot 为起点。提交会创建新的 Run，不会修改来源 Run；环境、输入和算力权益按当前状态重新校验。
+            以当前 Run Snapshot 为起点。提交会创建新的 Run，不会修改来源
+            Run；环境、输入和算力权益按当前状态重新校验。
           </Text>
           {problems.length > 0 ? (
             <Flash variant="danger" role="alert">
@@ -216,21 +213,24 @@ function AdjustedRerunForm({
               Compute Request
             </Text>
             <div className={styles.adjustedRerunComputeGrid}>
-              {(['nodes', 'cpus', 'memory_mb', 'gpus', 'time_limit_minutes'] as const).map((field) => (
-                <FormControl key={field} disabled={submitting} id={`adjusted-rerun-${field}`}>
-                  <FormControl.Label>{field}</FormControl.Label>
-                  <TextInput
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={String(values.compute_request[field])}
-                    onChange={(event) => updateRequest(field, Number(event.target.value))}
-                  />
-                </FormControl>
-              ))}
+              {(['nodes', 'cpus', 'memory_mb', 'gpus', 'time_limit_minutes'] as const).map(
+                (field) => (
+                  <FormControl key={field} disabled={submitting} id={`adjusted-rerun-${field}`}>
+                    <FormControl.Label>{field}</FormControl.Label>
+                    <TextInput
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={String(values.compute_request[field])}
+                      onChange={(event) => updateRequest(field, Number(event.target.value))}
+                    />
+                  </FormControl>
+                ),
+              )}
             </div>
             <Text as="p" className={styles.muted}>
-              当前请求：{describeComputeRequest(detail.snapshot.compute_request)}；修改后以表单值为准。
+              当前请求：{describeComputeRequest(detail.snapshot.compute_request)}
+              ；修改后以表单值为准。
             </Text>
           </section>
           <section aria-labelledby="adjusted-rerun-input-title">
@@ -256,7 +256,11 @@ function AdjustedRerunForm({
                       </Select.Option>
                     </Select>
                   </FormControl>
-                  <FormControl required disabled={submitting} id={`adjusted-rerun-binding-source-${index}`}>
+                  <FormControl
+                    required
+                    disabled={submitting}
+                    id={`adjusted-rerun-binding-source-${index}`}
+                  >
                     <FormControl.Label>来源 ID</FormControl.Label>
                     <TextInput
                       value={binding.source_id}
@@ -264,12 +268,18 @@ function AdjustedRerunForm({
                       onChange={(event) => updateBinding(index, { source_id: event.target.value })}
                     />
                   </FormControl>
-                  <FormControl required disabled={submitting} id={`adjusted-rerun-binding-access-${index}`}>
+                  <FormControl
+                    required
+                    disabled={submitting}
+                    id={`adjusted-rerun-binding-access-${index}`}
+                  >
                     <FormControl.Label>访问路径</FormControl.Label>
                     <TextInput
                       value={binding.access_path}
                       block
-                      onChange={(event) => updateBinding(index, { access_path: event.target.value })}
+                      onChange={(event) =>
+                        updateBinding(index, { access_path: event.target.value })
+                      }
                     />
                   </FormControl>
                   <FormControl disabled={submitting} id={`adjusted-rerun-binding-subpath-${index}`}>
@@ -277,7 +287,9 @@ function AdjustedRerunForm({
                     <TextInput
                       value={binding.source_subpath}
                       block
-                      onChange={(event) => updateBinding(index, { source_subpath: event.target.value })}
+                      onChange={(event) =>
+                        updateBinding(index, { source_subpath: event.target.value })
+                      }
                     />
                   </FormControl>
                   <Button
@@ -285,7 +297,10 @@ function AdjustedRerunForm({
                     variant="invisible"
                     disabled={submitting}
                     onClick={() =>
-                      update('input_bindings', values.input_bindings.filter((_, itemIndex) => itemIndex !== index))
+                      update(
+                        'input_bindings',
+                        values.input_bindings.filter((_, itemIndex) => itemIndex !== index),
+                      )
                     }
                   >
                     删除
