@@ -5,7 +5,7 @@ import {
   FileIcon,
   PackageIcon,
 } from '@primer/octicons-react'
-import { Banner, IconButton, Label, Link, Text } from '@primer/react'
+import { Banner, Button, IconButton, Label, Link, Text } from '@primer/react'
 import { Blankslate } from '@primer/react/experimental'
 import { useMemo, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
@@ -226,6 +226,20 @@ function ArtifactGroup({
   runId: string
 }) {
   const [open, setOpen] = useState(true)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
+
+  const downloadArchive = async () => {
+    setDownloading(true)
+    setDownloadError(false)
+    try {
+      await api.downloadArtifactFile(artifact.id)
+    } catch {
+      setDownloadError(true)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <details
@@ -249,13 +263,29 @@ function ArtifactGroup({
         </div>
       </summary>
       <div className={styles.artifactGroupBody}>
-        {artifact.description ? (
-          <Text as="p" size="small" className={styles.artifactDescription}>
-            {artifact.description}
-          </Text>
-        ) : null}
         {artifact.status === 'available' ? (
-          <ArtifactFiles artifact={artifact} projectId={projectId} runId={runId} />
+          <>
+            <Button
+              leadingVisual={DownloadIcon}
+              size="small"
+              loading={downloading}
+              disabled={downloading}
+              onClick={() => void downloadArchive()}
+            >
+              下载完整 Artifact
+            </Button>
+            {downloadError ? (
+              <Banner variant="critical">
+                <Banner.Title>Artifact 下载失败</Banner.Title>
+              </Banner>
+            ) : null}
+            {artifact.description ? (
+              <Text as="p" size="small" className={styles.artifactDescription}>
+                {artifact.description}
+              </Text>
+            ) : null}
+            <ArtifactFiles artifact={artifact} projectId={projectId} runId={runId} />
+          </>
         ) : (
           <div className={styles.emptyInline}>内容已清理；运行产物记录仍保留在 Run 历史中。</div>
         )}

@@ -12,8 +12,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 下载 Artifact 文件
-         * @description 仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。
+         * 下载 Artifact 文件或完整归档
+         * @description 下载单文件，或省略 path 下载保持原结构的完整 ZIP 归档。
          */
         get: operations["download_artifact_file_api_v1_artifacts__artifact_id__download_get"];
         put?: never;
@@ -1073,6 +1073,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/logs/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载 Run 日志
+         * @description 下载完整 stdout、stderr 或合并日志，不受页面尾部预览上限影响。
+         */
+        get: operations["download_logs_api_v1_runs__run_id__logs_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/rerun": {
         parameters: {
             query?: never;
@@ -1084,12 +1104,29 @@ export interface paths {
         put?: never;
         /**
          * 重新运行 Run
-         * @description 需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。
-         *
-         *     重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带
-         *     ``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。
+         * @description 基于历史 Snapshot 精确重跑，来源 Run 不变。
          */
         post: operations["rerun_api_v1_runs__run_id__rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/rerun/adjusted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 调整后重新运行 Run
+         * @description 以历史 Snapshot 为初始值，调整后创建新的 Run；来源 Run 不变。
+         */
+        post: operations["adjusted_rerun_api_v1_runs__run_id__rerun_adjusted_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1692,6 +1729,28 @@ export interface components {
             /** Target Name */
             target_name: string;
             target_type: components["schemas"]["TargetType"];
+        };
+        /**
+         * AdjustedRerunIn
+         * @description 从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。
+         */
+        AdjustedRerunIn: {
+            /** Command */
+            command: string;
+            compute_request: components["schemas"]["ComputeRequestModel"];
+            /** Environment Version Id */
+            environment_version_id: string;
+            /** Input Bindings */
+            input_bindings?: components["schemas"]["InputBindingModel"][];
+            /** Name */
+            name: string;
+            /** Project Version Id */
+            project_version_id: string;
+            /**
+             * Working Directory
+             * @default .
+             */
+            working_directory: string;
         };
         /** ArtifactEntryOut */
         ArtifactEntryOut: {
@@ -2699,18 +2758,21 @@ export interface components {
         /**
          * RunDraftIn
          * @description 一次提交意图。
-         *
-         *     除 run_configuration_id 外都可以不传——不传就用运行方案里的值。
-         *     这些字段用 ``| None`` 而不是空字符串默认值，是为了让契约如实表达
-         *     「可以不传」，生成的前端类型才不会要求调用方硬塞一个空串。
          */
         RunDraftIn: {
             /** Command Override */
             command_override?: string | null;
             compute_request_override?: components["schemas"]["ComputeRequestModel"] | null;
+            /** Environment Version Id Override */
+            environment_version_id_override?: string | null;
+            /** Input Bindings Override */
+            input_bindings_override?: components["schemas"]["InputBindingModel"][] | null;
             /** Name */
             name?: string | null;
-            /** Project Version Id */
+            /**
+             * Project Version Id
+             * @description None 表示使用 Project 的最新版本。
+             */
             project_version_id?: string | null;
             /** Run Configuration Id */
             run_configuration_id: string;
@@ -3172,8 +3234,8 @@ export type $defs = Record<string, never>;
 export interface operations {
     download_artifact_file_api_v1_artifacts__artifact_id__download_get: {
         parameters: {
-            query: {
-                path: string;
+            query?: {
+                path?: string | null;
             };
             header?: {
                 "X-User"?: string | null;
@@ -3185,7 +3247,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 产物文件内容 */
+            /** @description 产物文件或 ZIP 归档 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8109,6 +8171,86 @@ export interface operations {
             };
         };
     };
+    download_logs_api_v1_runs__run_id__logs_download_get: {
+        parameters: {
+            query?: {
+                stream?: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 完整 Run 日志 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     rerun_api_v1_runs__run_id__rerun_post: {
         parameters: {
             query?: never;
@@ -8123,7 +8265,99 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 幂等重放，返回上一次重跑的 Run */
+            /** @description 幂等重放 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    adjusted_rerun_api_v1_runs__run_id__rerun_adjusted_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+                "X-User"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustedRerunIn"];
+            };
+        };
+        responses: {
+            /** @description 幂等重放 */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -11,6 +11,9 @@
 
 from __future__ import annotations
 
+import codecs
+import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from ..domain import ids
@@ -80,6 +83,8 @@ class RunDraft:
     name: str = ""
     command_override: str = ""
     working_directory_override: str = ""
+    environment_version_id_override: str = ""
+    input_bindings_override: tuple[InputBinding, ...] | None = None
     compute_request_override: dict[str, int] | None = None
 
 
@@ -211,15 +216,7 @@ class RunService:
         """
         access = await self._guard.run(user_id, run_id)
         snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
-        secret_values: list[str] = []
-        if snapshot is not None:
-            secret_values = await self._secrets.redaction_values(access.run.id)
-            if (
-                access.run.submitted_at is not None
-                and snapshot.env_secret_refs
-                and not secret_values
-            ):
-                raise ValidationFailed("Run Secret redaction retention is unavailable")
+        secret_values = await self._log_secret_values(access.run, snapshot)
 
         chunks: list[RunLogChunk] = []
         for stream in (LogStream.STDOUT, LogStream.STDERR):
@@ -235,7 +232,73 @@ class RunService:
             )
         return chunks
 
-    # -- Artifact 内容 --------------------------------------------------
+    async def stream_logs(self, user_id: str, run_id: str, stream: str) -> AsyncIterator[bytes]:
+        """授权后流式返回完整日志，避免下载受尾部预览限制或占满内存。"""
+        access = await self._guard.run(user_id, run_id)
+        snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
+        secret_values = await self._log_secret_values(access.run, snapshot)
+        streams = (
+            (LogStream.STDOUT, LogStream.STDERR) if stream == "combined" else (LogStream(stream),)
+        )
+
+        async def chunks() -> AsyncIterator[bytes]:
+            for index, selected in enumerate(streams):
+                if index and stream == "combined":
+                    yield b"\n\n--- stderr ---\n"
+                async for chunk in self._redacted_log_chunks(run_id, selected, secret_values):
+                    yield chunk
+
+        return chunks()
+
+    async def _log_secret_values(self, run: Run, snapshot: RunSnapshot | None) -> list[str]:
+        secret_values = await self._secrets.redaction_values(run.id)
+        if (
+            run.submitted_at is not None
+            and snapshot is not None
+            and snapshot.env_secret_refs
+            and not secret_values
+        ):
+            raise ValidationFailed("Run Secret redaction retention is unavailable")
+        return secret_values
+
+    async def _redacted_log_chunks(
+        self, run_id: str, stream: LogStream, secret_values: list[str]
+    ) -> AsyncIterator[bytes]:
+        """Redact complete secrets while retaining only possible secret prefixes."""
+        values = [value for value in secret_values if value]
+        if not values:
+            async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
+                yield raw
+            return
+
+        pattern = re.compile(
+            "|".join(
+                re.escape(value) for value in sorted(dict.fromkeys(values), key=len, reverse=True)
+            )
+        )
+        pending = ""
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        async for raw in self._storage.iter_log(run_id, stream, chunk_size=64 * 1024):
+            pending += decoder.decode(raw)
+            while pending:
+                uncertain_start = len(pending) - _secret_prefix_suffix_length(pending, values)
+                match = pattern.search(pending)
+                if match is None:
+                    if uncertain_start == 0:
+                        break
+                    safe, pending = pending[:uncertain_start], pending[uncertain_start:]
+                elif match.end() <= uncertain_start:
+                    safe, pending = pending[: match.end()], pending[match.end() :]
+                elif uncertain_start and match.start() >= uncertain_start:
+                    safe, pending = pending[:uncertain_start], pending[uncertain_start:]
+                else:
+                    break
+                if safe:
+                    yield redact(safe, values).encode("utf-8")
+
+        pending += decoder.decode(b"", final=True)
+        if pending:
+            yield redact(pending, values).encode("utf-8")
 
     async def list_artifact_files(self, user_id: str, artifact_id: str) -> list[ArtifactEntry]:
         artifact = await self._require_artifact(user_id, artifact_id)
@@ -248,6 +311,21 @@ class RunService:
         artifact = await self._require_artifact(user_id, artifact_id)
         data = await self._storage.read_artifact_file(artifact.id, path)
         return data, path.rsplit("/", 1)[-1]
+
+    async def stream_artifact(
+        self, user_id: str, artifact_id: str, path: str | None
+    ) -> tuple[AsyncIterator[bytes], str]:
+        artifact = await self._require_artifact(user_id, artifact_id)
+        if path:
+            return (
+                self._storage.iter_artifact_file(artifact.id, path, chunk_size=64 * 1024),
+                path.rsplit("/", 1)[-1],
+            )
+        filename = f"{artifact.name or artifact.id}.zip"
+        return (
+            self._storage.iter_artifact_archive(artifact.id, chunk_size=64 * 1024),
+            filename,
+        )
 
     async def _require_artifact(self, user_id: str, artifact_id: str) -> Artifact:
         """取 Artifact 并校验访问权。
@@ -289,6 +367,7 @@ class RunService:
             configuration,
             access.project.owner,
             problems,
+            draft.environment_version_id_override,
         )
 
         plan = await self._repos.compute_plans.get(configuration.compute_plan_id)
@@ -317,7 +396,14 @@ class RunService:
         )
         problems.extend(resolved.problems)
 
-        problems.extend(await self._check_inputs(user_id, configuration, access.project.owner))
+        problems.extend(
+            await self._check_inputs(
+                user_id,
+                configuration,
+                access.project.owner,
+                draft.input_bindings_override,
+            )
+        )
 
         return PreflightResult(
             problems=problems,
@@ -387,7 +473,11 @@ class RunService:
             resolved_env=_as_resolved_env(
                 result.resolved_env_literals, result.resolved_env_secret_refs
             ),
-            input_bindings=configuration.input_bindings,
+            input_bindings=(
+                draft.input_bindings_override
+                if draft.input_bindings_override is not None
+                else configuration.input_bindings
+            ),
             compute_plan_id=result.compute_plan.id,
             compute_request=result.compute_request,
             scheduler=resolve_scheduler_configuration(result.compute_plan, result.compute_request),
@@ -396,7 +486,6 @@ class RunService:
             created_at=now,
         )
         await self._repos.run_snapshots.add(snapshot)
-
         run = Run(
             id=ids.new_id(ids.RUN),
             project_id=project_id,
@@ -511,6 +600,109 @@ class RunService:
             access.project.owner,
             ActivityAction.RUN_SUBMITTED,
             detail=f"重跑自 {access.run.name}",
+        )
+        return RunSubmission(run=run, created=True)
+
+    async def adjusted_rerun(
+        self,
+        user_id: str,
+        run_id: str,
+        draft: RunDraft,
+        *,
+        idempotency_key: str | None = None,
+    ) -> RunSubmission:
+        """以历史 Snapshot 为基线，调整配置后创建新的 Run。"""
+        access = await self._guard.run(user_id, run_id, needs=Capability.RUN_SUBMIT)
+        replayed = await self._replay_or_reserve(
+            user_id, idempotency_key, "adjusted_rerun", source_run_id=run_id
+        )
+        if replayed is not None:
+            return RunSubmission(run=replayed, created=False)
+
+        source = await self._repos.run_snapshots.get(access.run.snapshot_id)
+        if source is None:  # pragma: no cover - 数据损坏才会发生
+            raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
+        await self._repos.entitlements.lock_for_plan(user_id, source.compute_plan_id)
+
+        project_version = await self._repos.project_versions.get(draft.project_version_id or "")
+        environment_version = await environment_version_for_owner_use(
+            self._repos,
+            user_id,
+            draft.environment_version_id_override or source.environment_version_id,
+            access.project.owner,
+        )
+        plan = await self._repos.compute_plans.get(source.compute_plan_id)
+        problems: list[str] = []
+        if not draft.command_override.strip():
+            problems.append("执行命令不能为空")
+        if project_version is None or project_version.project_id != source.project_id:
+            problems.append("调整后的 Project Version 不存在或不属于当前 Project")
+        if environment_version is None:
+            problems.append("调整后的运行环境版本不存在或无权供当前 Project 使用")
+        elif environment_version.availability.value != "available":
+            problems.append(f"运行环境版本 {environment_version.version} 当前不可用")
+        if plan is None:
+            problems.append("来源算力方案已不存在")
+        if problems:
+            raise PreflightRejected(problems)
+        assert project_version is not None and environment_version is not None and plan is not None
+
+        request = (
+            ComputeRequest(**draft.compute_request_override)
+            if draft.compute_request_override is not None
+            else source.compute_request
+        )
+        bindings = draft.input_bindings_override
+        candidate = build_snapshot(
+            snapshot_id=ids.new_id(ids.RUN_SNAPSHOT),
+            project_id=source.project_id,
+            project_version_id=project_version.id,
+            source_run_configuration_id=source.source_run_configuration_id,
+            working_directory=draft.working_directory_override or source.working_directory,
+            command=(draft.command_override or source.command).strip(),
+            environment_version_id=environment_version.id,
+            environment_definition_hash=environment_version.definition_hash,
+            environment_execution_spec=environment_version.execution_spec,
+            resolved_env=_as_resolved_env(source.env_literals, source.env_secret_refs),
+            input_bindings=bindings if bindings is not None else source.input_bindings,
+            compute_plan_id=plan.id,
+            compute_request=request,
+            scheduler=resolve_scheduler_configuration(plan, request),
+            artifact_rules=source.artifact_rules,
+            initiated_by_user_id=user_id,
+            created_at=self._clock.now(),
+        )
+        problems = await self._revalidate_snapshot(candidate, access, user_id)
+        if problems:
+            raise PreflightRejected(problems)
+
+        await self._repos.run_snapshots.add(candidate)
+        run = Run(
+            id=ids.new_id(ids.RUN),
+            project_id=source.project_id,
+            project_version_id=project_version.id,
+            project_version_label=project_version.label,
+            snapshot_id=candidate.id,
+            compute_plan_id=candidate.compute_plan_id,
+            source_run_configuration_id=source.source_run_configuration_id,
+            source_run_id=access.run.id,
+            name=draft.name.strip() or access.run.name,
+            status=RunStatus.QUEUED,
+            initiated_by_user_id=user_id,
+            created_at=candidate.created_at,
+        )
+        await self._repos.runs.add(run)
+        await self._record_event(
+            run.id, RunEventType.CREATED, f"基于 Run {access.run.id} 调整后重新运行"
+        )
+        await self._attach_idempotency(user_id, idempotency_key, run.id)
+        await self._submit(run, candidate, project_version)
+        await self._record_run_activity(
+            user_id,
+            run,
+            access.project.owner,
+            ActivityAction.RUN_SUBMITTED,
+            detail=f"调整后重跑自 {access.run.name}",
         )
         return RunSubmission(run=run, created=True)
 
@@ -720,13 +912,12 @@ class RunService:
         configuration: RunConfiguration,
         project_owner: OwnerReference,
         problems: list[str],
+        override_id: str = "",
     ) -> EnvironmentVersion | None:
-        """运行方案必须精确引用一个 Environment Version（#41、GR-205）。
-
-        没有任何继承或回退：运行时只使用保存运行方案时已经确定的 Environment Version。
-        """
+        """Resolve the exact Environment Version selected for this submission."""
+        version_id = override_id or configuration.environment_version_id
         version = await environment_version_for_owner_use(
-            self._repos, user_id, configuration.environment_version_id, project_owner
+            self._repos, user_id, version_id, project_owner
         )
         if version is None:
             problems.append("运行方案引用的运行环境版本不存在或无权供当前 Project 使用")
@@ -836,9 +1027,11 @@ class RunService:
         user_id: str,
         configuration: RunConfiguration,
         project_owner: OwnerReference,
+        bindings: tuple[InputBinding, ...] | None = None,
     ) -> list[str]:
         problems: list[str] = []
-        for binding in configuration.input_bindings:
+        selected = bindings if bindings is not None else configuration.input_bindings
+        for binding in selected:
             if binding.source_type is InputSourceType.ARTIFACT:
                 problem = await self._artifact_input_problem(
                     binding.source_id, binding.access_path, project_owner
@@ -991,6 +1184,17 @@ class RunService:
                     problems.append(problem)
 
         return problems
+
+
+def _secret_prefix_suffix_length(text: str, secret_values: list[str]) -> int:
+    """Return the longest suffix that can still grow into a known Secret."""
+    longest = 0
+    for value in secret_values:
+        for length in range(min(len(value) - 1, len(text)), longest, -1):
+            if text.endswith(value[:length]):
+                longest = length
+                break
+    return longest
 
 
 def _as_resolved_env(

@@ -20,6 +20,8 @@ import type {
   ApiErrorBody,
   ArtifactEntry,
   ComputePlan,
+  ComputeRequest,
+  InputBinding,
   Entitlement,
   Environment,
   EnvironmentPublicationAttempt,
@@ -670,6 +672,45 @@ export const api = {
         },
       }),
     ),
+  adjustedRerun: async (
+    id: string,
+    payload: {
+      name: string
+      project_version_id: string
+      environment_version_id: string
+      working_directory: string
+      command: string
+      input_bindings: InputBinding[]
+      compute_request: ComputeRequest
+    },
+    idempotencyKey?: string,
+  ): Promise<Run> =>
+    unwrap(
+      await http.POST('/api/v1/runs/{run_id}/rerun/adjusted', {
+        params: {
+          path: { run_id: id },
+          header: { 'Idempotency-Key': idempotencyKey ?? null },
+        },
+        body: payload,
+      }),
+    ),
+
+  downloadLogs: async (id: string, stream: 'stdout' | 'stderr' | 'combined'): Promise<void> => {
+    const result = unwrap(
+      await http.GET('/api/v1/runs/{run_id}/logs/download', {
+        params: { path: { run_id: id }, query: { stream } },
+        parseAs: 'blob',
+      }),
+    )
+    const url = URL.createObjectURL(result)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${stream}.log`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
 
   syncRuns: async (): Promise<{ changed: number }> => unwrap(await http.POST('/api/v1/runs/sync')),
 
@@ -689,23 +730,18 @@ export const api = {
       }),
     ),
 
-  /**
-   * 下载 Artifact 文件。
-   *
-   * 走 fetch 而不是直接给 `<a href>`，因为下载同样需要带上身份请求头——
-   * 否则浏览器会用默认身份去取，拿到 404。
-   */
-  downloadArtifactFile: async (id: string, path: string): Promise<void> => {
+  /** 下载 Artifact 文件；省略 path 时由后端返回完整 ZIP。 */
+  downloadArtifactFile: async (id: string, path?: string): Promise<void> => {
     const blob = unwrap(
       await http.GET('/api/v1/artifacts/{artifact_id}/download', {
-        params: { path: { artifact_id: id }, query: { path } },
+        params: { path: { artifact_id: id }, query: path ? { path } : {} },
         parseAs: 'blob',
       }),
     )
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = path.split('/').pop() ?? 'artifact'
+    link.download = path?.split('/').pop() ?? 'artifact.zip'
     document.body.appendChild(link)
     link.click()
     link.remove()
