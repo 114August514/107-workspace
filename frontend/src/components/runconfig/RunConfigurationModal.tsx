@@ -361,10 +361,12 @@ export function RunConfigurationModal({
         <SharedResourceInputBindings />
 
         <Typography.Title level={5}>环境变量</Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-          值可以是字面量，也可以用 <Typography.Text code>{'${{ vars.NAME }}'}</Typography.Text> 或{' '}
-          <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text> 引用 Project / Project
-          Owner scope；发起 User 配置使用显式 user namespace。
+        <Typography.Paragraph type="secondary" style={{ marginTop: -8, marginBottom: 4 }}>
+          值可以是字面量，也可以是引用：<Typography.Text code>{'${{ vars.NAME }}'}</Typography.Text>{' '}
+          与 <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text> 按 Project → Project
+          Owner 顺序解析；<Typography.Text code>{'${{ user.vars.NAME }}'}</Typography.Text> 与{' '}
+          <Typography.Text code>{'${{ user.secrets.NAME }}'}</Typography.Text> 只解析发起这次 Run 的
+          User，不回退到 Project。同名时的最终结果由后端确认。
         </Typography.Paragraph>
         <Form.List name="env">
           {(fields, { add, remove }) => (
@@ -375,7 +377,10 @@ export function RunConfigurationModal({
                     <Input placeholder="EPOCHS" style={{ width: 220 }} />
                   </Form.Item>
                   <Form.Item name={[field.name, 'value']} style={{ marginBottom: 8 }}>
-                    <Input placeholder="5 或 ${{ vars.EPOCHS }}" style={{ width: 340 }} />
+                    <Input
+                      placeholder="5、${{ vars.EPOCHS }} 或 ${{ user.vars.EPOCHS }}"
+                      style={{ width: 340 }}
+                    />
                   </Form.Item>
                   <MinusCircleOutlined onClick={() => remove(field.name)} />
                 </Space>
