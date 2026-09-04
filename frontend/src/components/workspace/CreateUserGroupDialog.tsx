@@ -44,7 +44,7 @@ export function CreateUserGroupForm({
     try {
       const userGroup = await api.createUserGroup(trimmed, description.trim())
       onCreated(userGroup)
-      onClose()
+      if (!page) onClose()
     } catch (error) {
       setSubmitError(toAsyncError(error as Error) ?? null)
     } finally {
