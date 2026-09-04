@@ -14,6 +14,7 @@ async def test_user_group_owner_and_execution_contracts_are_current(
     assert models["UserGroupCapability"]["enum"] == [
         "user_group.view",
         "user_group.update",
+        "user_group.delete",
         "member.view",
         "member.invite",
         "member.remove",

@@ -345,6 +345,8 @@ class RunService:
 
         带幂等键时，同一个键的重复请求返回上一次的结果，不会再跑一次。
         """
+        if await self._repos.projects.get_for_update(project_id) is None:
+            raise ObjectNotFound("Project", project_id)
         access = await self._guard.project(user_id, project_id, needs=Capability.RUN_SUBMIT)
 
         replayed = await self._replay_or_reserve(
@@ -434,6 +436,8 @@ class RunService:
         同时按重新执行时的权限和资源资格重新校验全部引用（设计稿 §3.4.3）。
         """
         access = await self._guard.run(user_id, run_id, needs=Capability.RUN_SUBMIT)
+        if await self._repos.projects.get_for_update(access.run.project_id) is None:
+            raise ObjectNotFound("Run", run_id)
 
         replayed = await self._replay_or_reserve(
             user_id, idempotency_key, "rerun", source_run_id=run_id
@@ -516,6 +520,8 @@ class RunService:
 
     async def cancel(self, user_id: str, run_id: str) -> Run:
         access = await self._guard.run(user_id, run_id, needs=Capability.RUN_CANCEL)
+        if await self._repos.projects.get_for_update(access.run.project_id) is None:
+            raise ObjectNotFound("Run", run_id)
         run = access.run
         if run.is_terminal:
             raise ConflictError(f"Run 已处于终态 {run.status}，无法取消")

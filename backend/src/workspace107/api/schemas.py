@@ -165,6 +165,24 @@ class ProjectUpdateIn(Model):
     visibility: ProjectVisibility | None = None
 
 
+class DeletionImpactItemOut(Model):
+    """删除确认页面展示的一类影响对象数量。"""
+
+    kind: str
+    count: int
+
+
+class DeletionImpactOut(Model):
+    """删除操作的可见影响摘要，不包含 Secret 值或内部内容。"""
+
+    resource_type: Literal["user_group", "project"]
+    resource_id: str
+    resource_name: str
+    can_delete: bool
+    problems: list[str] = Field(default_factory=list)
+    items: list[DeletionImpactItemOut] = Field(default_factory=list)
+
+
 class ProjectFileOut(Model):
     path: str
     size: int

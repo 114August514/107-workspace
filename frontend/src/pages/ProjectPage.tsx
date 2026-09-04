@@ -1,11 +1,19 @@
+import { Alert, Button, Card, Modal, Tabs, Tag } from 'antd'
 import { BranchesOutlined } from '@ant-design/icons'
-import { Card, Tabs, Tag } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
-import type { ActivityPage, ForkSource, Project, RunConfiguration, RunPage } from '../api/types'
+import {
+  can,
+  type ActivityPage,
+  type DeletionImpact,
+  type ForkSource,
+  type Project,
+  type RunConfiguration,
+  type RunPage,
+} from '../api/types'
 import { useAsync, type AsyncState as AsyncResource } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
@@ -45,6 +53,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
       ? requestedTab
       : 'files'
   const [token, setToken] = useState(0)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const bump = () => {
     setToken((value) => value + 1)
     void project.reload({ silent: true })
@@ -72,6 +81,13 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             title={PAGE_TITLES[activeTab]}
             description={project.data.description || '这个 Project 还没有填写说明'}
             tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
+            actions={
+              can(project.data, 'project.delete') ? (
+                <Button danger onClick={() => setDeleteOpen(true)}>
+                  删除 Project
+                </Button>
+              ) : null
+            }
           />
         )}
       </AsyncSection>
@@ -170,6 +186,14 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
         onClose={() => setSubmitting(null)}
         onSubmitted={(run) => navigate(`/projects/${run.project_id}/runs/${run.id}`)}
       />
+
+      {deleteOpen && project.data ? (
+        <DeleteProjectModal
+          project={project.data}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => navigate('/')}
+        />
+      ) : null}
     </Stack>
   )
 }
@@ -191,5 +215,106 @@ function ForkSourceTag({ source }: { source: ForkSource }) {
         label
       )}
     </Tag>
+  )
+}
+
+const PROJECT_DELETION_LABELS: Record<string, string> = {
+  working_state_files: 'Working State 文件',
+  versions: 'Project Version',
+  branches: 'Project Branch',
+  configurations: 'Run Configuration',
+  variables: 'Project Variable',
+  secrets: 'Project Secret',
+  runs: 'Run',
+  snapshots: 'Run Snapshot',
+  run_events: 'Run Event',
+  artifacts: 'Artifact',
+  activities: 'Activity',
+  notifications: 'Notification',
+  fork_relation: '当前 Fork 来源记录',
+  fork_dependents_preserved: '保留的派生目标来源记录',
+}
+
+function DeleteProjectModal({
+  project,
+  onClose,
+  onDeleted,
+}: {
+  project: Project
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const impact = useAsync<DeletionImpact>(
+    () => api.getProjectDeletionImpact(project.id),
+    [project.id],
+  )
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<Error | undefined>()
+  const viewError = toAsyncError(submitError ?? impact.error)
+  const canConfirm = impact.data?.can_delete === true && !submitting
+  const items = impact.data?.items ?? []
+  const problems = impact.data?.problems ?? []
+
+  const submit = async () => {
+    if (!canConfirm) return
+    setSubmitting(true)
+    setSubmitError(undefined)
+    try {
+      await api.deleteProject(project.id)
+      onDeleted()
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error : new Error('delete failed'))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title={`删除 Project“${project.name}”？`}
+      okText="删除 Project"
+      cancelText="取消"
+      onCancel={() => {
+        if (!submitting) onClose()
+      }}
+      onOk={() => void submit()}
+      confirmLoading={submitting}
+      okButtonProps={{ danger: true, disabled: !canConfirm }}
+    >
+      <p>删除后，其 Working State、Version、Run Configuration、Run 和从属记录将结束生命周期。</p>
+      {impact.loading ? <p>正在读取删除影响…</p> : null}
+      {impact.data ? (
+        <>
+          <p>将处理以下记录：</p>
+          <ul>
+            {items
+              .filter((item) => item.count > 0)
+              .map((item) => (
+                <li key={item.kind}>
+                  {PROJECT_DELETION_LABELS[item.kind] ?? item.kind}：{item.count}
+                </li>
+              ))}
+          </ul>
+          {problems.map((problem) => (
+            <Alert key={problem} type="warning" showIcon message={problem} />
+          ))}
+        </>
+      ) : null}
+      {viewError ? (
+        <Alert
+          type="error"
+          showIcon
+          message={viewError.message}
+          description={viewError.problems?.join('；')}
+          action={
+            impact.error && !submitError ? (
+              <Button type="link" onClick={() => void impact.reload()}>
+                重试读取影响
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
+    </Modal>
   )
 }

@@ -306,6 +306,8 @@ class SharedResourceService:
             raise PermissionDenied(
                 f"当前角色（{role.value}）无权{describe(Capability.SHARED_RESOURCE_MANAGE)}"
             )
+        if await self._repos.user_groups.get_for_update(owner.id) is None:
+            raise ObjectNotFound("Owner", owner.id)
 
     async def _create_with_owner(
         self,

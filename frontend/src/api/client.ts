@@ -21,6 +21,7 @@ import type {
   ArtifactEntry,
   ComputePlan,
   Entitlement,
+  DeletionImpact,
   Environment,
   EnvironmentPublicationAttempt,
   EnvironmentVersion,
@@ -268,6 +269,21 @@ export const api = {
       }),
     ),
 
+  getUserGroupDeletionImpact: async (id: string): Promise<DeletionImpact> =>
+    unwrap(
+      await http.GET('/api/v1/user-groups/{user_group_id}/deletion-impact', {
+        params: { path: { user_group_id: id } },
+      }),
+    ),
+
+  deleteUserGroup: async (id: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/user-groups/{user_group_id}', {
+        params: { path: { user_group_id: id }, query: { confirm: true } },
+      }),
+    )
+  },
+
   createUserGroup: async (name: string, description: string): Promise<UserGroup> =>
     unwrap(await http.POST('/api/v1/user-groups', { body: { name, description } })),
 
@@ -360,6 +376,21 @@ export const api = {
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),
     ),
+
+  getProjectDeletionImpact: async (id: string): Promise<DeletionImpact> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/deletion-impact', {
+        params: { path: { project_id: id } },
+      }),
+    ),
+
+  deleteProject: async (id: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/projects/{project_id}', {
+        params: { path: { project_id: id }, query: { confirm: true } },
+      }),
+    )
+  },
 
   updateProject: async (
     id: string,

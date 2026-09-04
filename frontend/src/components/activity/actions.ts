@@ -12,6 +12,7 @@ import { isRunStatus, runStatusLabel } from '../../utils/runStatus'
 const ACTION_TEXT: Record<ActivityAction, string> = {
   user_group_created: '创建了 User Group',
   user_group_updated: '修改了 User Group 设置',
+  user_group_deleted: '删除了 User Group',
   member_invited: '邀请了',
   member_joined: '加入了 User Group',
   member_left: '退出了 User Group',
@@ -20,6 +21,7 @@ const ACTION_TEXT: Record<ActivityAction, string> = {
   ownership_transferred: '把 User Group 所有权转让给',
   project_created: '创建了 Project',
   project_updated: '修改了 Project',
+  project_deleted: '删除了 Project',
   project_forked: '派生出 Project',
   version_saved: '保存了版本',
   version_restored: '恢复到版本',
