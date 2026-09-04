@@ -8,6 +8,28 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class EnvironmentRuntimeKind(StrEnum):
+    MODULES = "modules"
+    APPTAINER_SIF = "apptainer_sif"
+
+
+class EnvironmentAvailability(StrEnum):
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+    DEPRECATED = "deprecated"
+
+
+class EnvironmentPublicationStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {self.SUCCEEDED, self.FAILED}
+
+
 class MembershipRole(StrEnum):
     """A User's role in one exact User Group."""
 
@@ -96,6 +118,22 @@ class ArtifactStatus(StrEnum):
 
     AVAILABLE = "available"
     CLEANED = "cleaned"
+
+
+class SharedResourcePublicationStatus(StrEnum):
+    """Durable publication attempt state."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {
+            SharedResourcePublicationStatus.SUCCEEDED,
+            SharedResourcePublicationStatus.FAILED,
+        }
 
 
 class InputSourceType(StrEnum):
@@ -187,3 +225,6 @@ class NotificationType(StrEnum):
     RUN_SUCCEEDED = "run_succeeded"
     RUN_FAILED = "run_failed"
     RUN_SUBMIT_FAILED = "run_submit_failed"
+    ENVIRONMENT_UNAVAILABLE = "environment_unavailable"
+    SHARED_RESOURCE_UNAVAILABLE = "shared_resource_unavailable"
+    PLATFORM_INCIDENT = "platform_incident"

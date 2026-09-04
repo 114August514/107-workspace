@@ -8,7 +8,7 @@ export interface AsyncState<T> {
   data: T | undefined
   loading: boolean
   error: ApiError | Error | undefined
-  reload: () => void
+  reload: (options?: { silent?: boolean }) => Promise<void>
 }
 
 /**
@@ -20,8 +20,8 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
   const [data, setData] = useState<T>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | Error>()
-  const [tick, setTick] = useState(0)
   const alive = useRef(true)
+  const dataRef = useRef<T | undefined>(undefined)
   const sequence = useRef(0)
   const loaderRef = useRef(loader)
   loaderRef.current = loader
@@ -33,42 +33,65 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
     }
   }, [])
 
-  useEffect(() => {
+  const reload = useCallback(async (options: { silent?: boolean } = {}) => {
     const request = ++sequence.current
-    setLoading(true)
-    setError(undefined)
-    loaderRef
-      .current()
-      .then((result) => {
-        if (alive.current && request === sequence.current) setData(result)
-      })
-      .catch((exc: Error) => {
-        if (alive.current && request === sequence.current) setError(exc)
-      })
-      .finally(() => {
-        if (alive.current && request === sequence.current) setLoading(false)
-      })
+    const silent = options.silent === true && dataRef.current !== undefined
+    if (!silent) {
+      setLoading(true)
+      setError(undefined)
+    }
+
+    try {
+      const result = await loaderRef.current()
+      if (alive.current && request === sequence.current) {
+        dataRef.current = result
+        setData(result)
+        setError(undefined)
+      }
+    } catch (exc) {
+      if (alive.current && request === sequence.current && !silent) {
+        setError(exc as Error)
+      }
+    } finally {
+      if (alive.current && request === sequence.current) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void reload()
     // loader 通过 ref 传递，依赖只看调用方声明的 deps。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, tick])
+  }, [...deps, reload])
 
-  const reload = useCallback(() => setTick((n) => n + 1), [])
   return { data, loading, error, reload }
 }
 
 /**
- * 按固定间隔轮询，直到 `stop` 返回 true。
- *
- * Run 状态来自调度系统，前端只能轮询——这也是为什么每次轮询前会先触发一次
- * 后端的状态同步。
+ * 串行轮询。上一次 callback 完成后再等待完整间隔，避免慢请求互相重叠。
+ * `active` 关闭或组件卸载后不再安排下一次轮询。
  */
-export function usePolling(callback: () => void, intervalMs: number, active: boolean): void {
+export function usePolling(
+  callback: () => void | Promise<void>,
+  intervalMs: number,
+  active: boolean,
+): void {
   const saved = useRef(callback)
   saved.current = callback
 
   useEffect(() => {
     if (!active) return
-    const timer = window.setInterval(() => saved.current(), intervalMs)
-    return () => window.clearInterval(timer)
+    let cancelled = false
+    let timer: number | undefined
+
+    const poll = async () => {
+      await saved.current()
+      if (!cancelled) timer = window.setTimeout(poll, intervalMs)
+    }
+
+    timer = window.setTimeout(poll, intervalMs)
+    return () => {
+      cancelled = true
+      if (timer !== undefined) window.clearTimeout(timer)
+    }
   }, [intervalMs, active])
 }

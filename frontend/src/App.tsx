@@ -1,15 +1,26 @@
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { lazy, Suspense, useCallback, useRef, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { api, getCurrentUser, setCurrentUser } from './api/client'
-import type { Home } from './api/types'
+import type { Home, Project } from './api/types'
 import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
+import { EnvironmentsSection } from './components/usergroup/EnvironmentsSection'
+import { MembersSection } from './components/usergroup/MembersSection'
+import { OverviewSection } from './components/usergroup/OverviewSection'
+import { ProjectsSection } from './components/usergroup/ProjectsSection'
+import { SettingsSection } from './components/usergroup/SettingsSection'
+import { SharedResourcesSection } from './components/usergroup/SharedResourcesSection'
 import { AppShell } from './components/layout/AppShell'
+import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
+import { EnvironmentListPage } from './pages/EnvironmentListPage'
+import { EnvironmentPage } from './pages/EnvironmentPage'
+import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
+import { RunLocatorPage } from './pages/RunLocatorPage'
 import { SharedResourcePage } from './pages/SharedResourcePage'
 import { SharedResourceVersionPage } from './pages/SharedResourceVersionPage'
 import { VersionDetailPage } from './pages/VersionDetailPage'
@@ -71,6 +82,7 @@ function ProductSession({
   username: string
   onUsernameChange: (username: string) => void
 }) {
+  const location = useLocation()
   const homeRequest = useRef<Promise<Home> | null>(null)
   const loadHome = () => {
     if (homeRequest.current) return homeRequest.current
@@ -83,21 +95,68 @@ function ProductSession({
     return request
   }
   const home = useAsync<Home>(loadHome, [username])
+  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const project = useAsync<Project | undefined>(
+    () => (projectId ? api.getProject(projectId) : Promise.resolve(undefined)),
+    [username, projectId],
+  )
+  const routedProject: AsyncResource<Project | undefined> = {
+    ...project,
+    data: project.data?.id === projectId ? project.data : undefined,
+  }
 
   return (
-    <AppShell username={username} onUsernameChange={onUsernameChange} home={home}>
-      <ProductRoutes username={username} home={home} />
+    <AppShell
+      username={username}
+      onUsernameChange={onUsernameChange}
+      home={home}
+      project={routedProject}
+    >
+      <ProductRoutes username={username} home={home} project={routedProject} />
     </AppShell>
   )
 }
 
-export function ProductRoutes({ username, home }: { username: string; home: AsyncResource<Home> }) {
+export function ProductRoutes({
+  username,
+  home,
+  project,
+}: {
+  username: string
+  home: AsyncResource<Home>
+  project: AsyncResource<Project | undefined>
+}) {
   return (
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
-      <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
-      <Route path="/projects/:projectId" element={<ProjectPage key={username} />} />
-      <Route path="/runs/:runId" element={<RunPage key={username} />} />
+      <Route
+        path="/user-groups/:userGroupId"
+        element={<UserGroupPage key={username} onMembershipChanged={home.reload} />}
+      >
+        <Route index element={<OverviewSection />} />
+        <Route path="members" element={<MembersSection />} />
+        <Route path="projects" element={<ProjectsSection />} />
+        <Route path="shared-resources" element={<SharedResourcesSection />} />
+        <Route path="environments" element={<EnvironmentsSection />} />
+        <Route path="settings" element={<SettingsSection />} />
+        <Route path="*" element={<Navigate to=".." replace />} />
+      </Route>
+      <Route path="/environments" element={<EnvironmentListPage key={username} />} />
+      <Route path="/environments/:environmentId" element={<EnvironmentPage key={username} />} />
+      <Route
+        path="/environment-versions/:versionId"
+        element={<EnvironmentVersionPage key={username} />}
+      />
+      <Route
+        path="/projects/:projectId"
+        element={<ProjectPage key={username} project={project} />}
+      />
+      <Route path="/projects/:projectId/runs/:runId" element={<RunPage key={username} />} />
+      <Route
+        path="/projects/:projectId/runs/:runId/artifacts/:artifactId/file"
+        element={<ArtifactFilePreviewPage key={username} />}
+      />
+      <Route path="/runs/:runId" element={<RunLocatorPage key={username} />} />
       <Route path="/versions/:versionId" element={<VersionDetailPage key={username} />} />
       <Route path="/shared-resources/:resourceId" element={<SharedResourcePage key={username} />} />
       <Route

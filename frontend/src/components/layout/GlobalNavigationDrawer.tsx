@@ -1,4 +1,10 @@
-import { HomeIcon, OrganizationIcon, ProjectIcon, XIcon } from '@primer/octicons-react'
+import {
+  ContainerIcon,
+  HomeIcon,
+  OrganizationIcon,
+  ProjectIcon,
+  XIcon,
+} from '@primer/octicons-react'
 import { Button, Dialog, IconButton, NavList, type DialogHeaderProps } from '@primer/react'
 import { useRef, useState, type RefObject } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
@@ -65,6 +71,25 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
                   <HomeIcon />
                 </NavList.LeadingVisual>
                 <span className={styles.itemText}>{globalNavigationCopy.home}</span>
+              </NavList.Item>
+
+              <NavList.Item
+                className={styles.item}
+                as={RouterLink}
+                to="/environments"
+                aria-current={
+                  location.pathname === '/environments' ||
+                  location.pathname.startsWith('/environments/') ||
+                  location.pathname.startsWith('/environment-versions/')
+                    ? 'page'
+                    : undefined
+                }
+                onClick={onClose}
+              >
+                <NavList.LeadingVisual>
+                  <ContainerIcon />
+                </NavList.LeadingVisual>
+                <span className={styles.itemText}>{globalNavigationCopy.environments}</span>
               </NavList.Item>
 
               <NavList.Group title={globalNavigationCopy.userGroupsGroup}>

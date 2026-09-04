@@ -24,10 +24,12 @@ import contextlib
 import hashlib
 import os
 import shutil
+import tempfile
+import zipfile
 from pathlib import Path
 
 from ...domain.enums import InputSourceType, LogStream
-from ...domain.errors import ObjectNotFound
+from ...domain.errors import ObjectNotFound, SharedResourceUnavailable, ValidationFailed
 from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunInput, RunPaths
 
 READONLY_DIR = 0o555
@@ -63,6 +65,15 @@ class LocalStorage:
 
     async def blob_exists(self, content_hash: str) -> bool:
         return await asyncio.to_thread(self._blob_path(content_hash).exists)
+
+    async def resolve_blob_path(self, content_hash: str) -> Path:
+        target = self._blob_path(content_hash)
+        if not await asyncio.to_thread(target.is_file):
+            raise ObjectNotFound("文件内容", content_hash)
+        actual = await asyncio.to_thread(_file_sha256, target)
+        if actual != content_hash:
+            raise ValidationFailed("CAS 文件内容与 Environment SIF 摘要不一致")
+        return target.resolve()
 
     # -- Run 工作目录 ---------------------------------------------------
 
@@ -145,7 +156,19 @@ class LocalStorage:
                         stripped = relative_path
                     file_target = target / stripped
                     file_target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(self._blob_path(content_hash), file_target)
+                    source = self._blob_path(content_hash)
+                    if not source.is_file():
+                        raise SharedResourceUnavailable(
+                            entry.source_id,
+                            f"输入 {entry.access_path} 引用的 Shared Resource Version 内容不可用",
+                        )
+                    try:
+                        shutil.copyfile(source, file_target)
+                    except FileNotFoundError as exc:
+                        raise SharedResourceUnavailable(
+                            entry.source_id,
+                            f"输入 {entry.access_path} 引用的 Shared Resource Version 内容不可用",
+                        ) from exc
             else:  # pragma: no cover - 枚举封闭，未来加新来源类型时这里会显式失败
                 raise FileNotFoundError(f"未知输入来源类型 {entry.source_type!r}")
 
@@ -160,6 +183,12 @@ class LocalStorage:
         paths = self.run_paths(run_id)
         target = paths.stdout if stream is LogStream.STDOUT else paths.stderr
         return await asyncio.to_thread(_read_tail, target, max_bytes)
+
+    async def iter_log(self, run_id: str, stream: LogStream, *, chunk_size: int):
+        paths = self.run_paths(run_id)
+        target = paths.stdout if stream is LogStream.STDOUT else paths.stderr
+        async for chunk in _read_chunks(target, chunk_size):
+            yield chunk
 
     async def cleanup_run_directory(self, run_id: str) -> None:
         await asyncio.to_thread(_force_rmtree, self.run_paths(run_id).root)
@@ -216,9 +245,29 @@ class LocalStorage:
     async def read_artifact_file(self, artifact_id: str, path: str) -> bytes:
         root = (self._artifacts / artifact_id).resolve()
         target = (root / path).resolve()
-        if not str(target).startswith(str(root)) or not target.is_file():
+        if root not in target.parents or not target.is_file():
             raise ObjectNotFound("Artifact 文件", path)
         return await asyncio.to_thread(target.read_bytes)
+
+    async def iter_artifact_file(self, artifact_id: str, path: str, *, chunk_size: int):
+        root = (self._artifacts / artifact_id).resolve()
+        target = (root / path).resolve()
+        if root not in target.parents or not target.is_file():
+            raise ObjectNotFound("Artifact 文件", path)
+        async for chunk in _read_chunks(target, chunk_size):
+            yield chunk
+
+    async def iter_artifact_archive(self, artifact_id: str, *, chunk_size: int):
+        root = (self._artifacts / artifact_id).resolve()
+        if not root.is_dir():
+            raise ObjectNotFound("Artifact 内容", artifact_id)
+        temporary = await asyncio.to_thread(_create_archive, root)
+        try:
+            async for chunk in _read_chunks(temporary, chunk_size):
+                yield chunk
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                await asyncio.to_thread(temporary.unlink)
 
     async def delete_artifact_content(self, artifact_id: str) -> None:
         await asyncio.to_thread(_force_rmtree, self._artifacts / artifact_id)
@@ -234,6 +283,44 @@ def _write_atomic(target: Path, data: bytes) -> None:
     temporary = target.with_suffix(".tmp")
     temporary.write_bytes(data)
     temporary.replace(target)
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+async def _read_chunks(path: Path, chunk_size: int):
+    if not await asyncio.to_thread(path.is_file):
+        return
+    handle = await asyncio.to_thread(path.open, "rb")
+    try:
+        while True:
+            chunk = await asyncio.to_thread(handle.read, chunk_size)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        await asyncio.to_thread(handle.close)
+
+
+def _create_archive(root: Path) -> Path:
+    with tempfile.NamedTemporaryFile(
+        prefix="workspace107-artifact-", suffix=".zip", delete=False
+    ) as handle:
+        archive = Path(handle.name)
+    try:
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            for path in sorted(root.rglob("*")):
+                if path.is_file() and not path.is_symlink():
+                    bundle.write(path, path.relative_to(root).as_posix())
+    except Exception:
+        archive.unlink(missing_ok=True)
+        raise
+    return archive
 
 
 def _read_tail(path: Path, max_bytes: int) -> tuple[str, bool]:

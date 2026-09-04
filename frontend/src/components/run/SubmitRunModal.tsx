@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
 import type { PreflightResult, Run, RunConfiguration } from '../../api/types'
 import { describeComputeRequest } from '../../utils/format'
+import { InputBindingSummary } from '../runconfig/InputBindingSummary'
 
 interface Props {
   open: boolean
@@ -154,8 +155,41 @@ export function SubmitRunModal({ open, projectId, configuration, onClose, onSubm
             },
             {
               key: 'environment',
-              label: '运行环境版本',
-              children: preflight?.environment_version_id ?? '—',
+              label: 'Environment Version',
+              children: checking ? (
+                '检查中…'
+              ) : preflight?.environment_version ? (
+                <Space wrap size={6}>
+                  <Typography.Text>{preflight.environment_version.version}</Typography.Text>
+                  <Tag
+                    color={
+                      preflight.environment_version.availability === 'available'
+                        ? 'green'
+                        : 'orange'
+                    }
+                  >
+                    {preflight.environment_version.availability === 'available'
+                      ? '当前可用'
+                      : '当前不可用'}
+                  </Tag>
+                  <Typography.Text code>{preflight.environment_version.id}</Typography.Text>
+                </Space>
+              ) : (
+                <Typography.Text code>
+                  {configuration?.environment_version_id ?? '—'}
+                </Typography.Text>
+              ),
+            },
+            {
+              key: 'inputs',
+              label: '运行输入',
+              children: (
+                <InputBindingSummary
+                  bindings={configuration?.input_bindings ?? []}
+                  checking={checking}
+                  preflightOk={preflight?.ok ?? null}
+                />
+              ),
             },
             {
               key: 'compute',

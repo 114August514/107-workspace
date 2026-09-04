@@ -60,6 +60,7 @@ const homeData: Home = {
       snapshot_id: 's-1',
       status: 'succeeded',
       initiated_by_user_id: 'u-1',
+      initiated_by_username: 'student',
       created_at: '2026-08-15T10:00:00Z',
       submitted_at: null,
       started_at: null,
@@ -125,6 +126,10 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
 
     expect(await screen.findByText('首次基线运行')).toBeInTheDocument()
     expect(await screen.findByText('cpu-basic')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '首次基线运行' })).toHaveAttribute(
+      'href',
+      '/projects/p-1/runs/r-1',
+    )
   })
 
   it('HomePage 正文不自行渲染导航或重复的 User Group、Project 卡片', async () => {

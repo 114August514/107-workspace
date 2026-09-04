@@ -17,9 +17,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import httpx
+from sqlalchemy import event, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import grant_test_entitlement, wait_for_run
+from tests.helpers import (
+    grant_test_entitlement,
+    process_shared_resource_publication,
+    wait_for_run,
+)
+from workspace107.api.deps import AppContext
 from workspace107.application.run_service import RunDraft
 from workspace107.domain import ids
 from workspace107.domain.config_scope import ConfigScope
@@ -32,8 +38,10 @@ from workspace107.infrastructure.db.tables import (
     EnvironmentRow,
     EnvironmentVersionRow,
     ProjectRow,
+    RunRow,
     SharedResourceRow,
     SharedResourceVersionFileRow,
+    UserRow,
 )
 
 ALICE = {"X-User": "alice"}
@@ -67,8 +75,6 @@ async def _create_environment(
             environment_id=environment_id,
             version="1",
             description="",
-            image="python:3.12-slim",
-            setup_command="",
         )
     )
     await session.commit()
@@ -165,7 +171,7 @@ async def _preflight(
 
 
 async def test_run_records_initiating_user_end_to_end(
-    client: httpx.AsyncClient, session: AsyncSession
+    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
 ) -> None:
     group = await _create_group(client, "Initiator Group")
     _, environment_version_id = await _create_environment(session, owner_user_group_id=group)
@@ -182,12 +188,14 @@ async def test_run_records_initiating_user_end_to_end(
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["initiated_by_user_id"] == alice_id
+    assert body["initiated_by_username"] == "alice"
     assert "created_by" not in body
 
     detail = await client.get(f"/api/v1/runs/{body['id']}", headers=ALICE)
     detail.raise_for_status()
     assert detail.json()["run"]["initiated_by_user_id"] == alice_id
     assert detail.json()["snapshot"]["initiated_by_user_id"] == alice_id
+    assert detail.json()["run"]["initiated_by_username"] == "alice"
 
     # 同一 User Group 的另一个成员提交同一个运行方案：身份跟着发起人走。
     await _join_group(client, group)
@@ -200,6 +208,58 @@ async def test_run_records_initiating_user_end_to_end(
     )
     assert bob_run.status_code == 201, bob_run.text
     assert bob_run.json()["initiated_by_user_id"] == bob_id
+    assert bob_run.json()["initiated_by_username"] == "bob"
+
+    # History resolves every Run's recorded User, not the current viewer.
+    user_projection_selects = 0
+
+    def count_user_projection(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        nonlocal user_projection_selects
+        if "FROM users" in statement and "users.id IN" in statement:
+            user_projection_selects += 1
+
+    event.listen(context.engine.sync_engine, "before_cursor_execute", count_user_projection)
+    try:
+        history = await client.get(
+            f"/api/v1/projects/{project['id']}/runs?page_size=20", headers=ALICE
+        )
+    finally:
+        event.remove(context.engine.sync_engine, "before_cursor_execute", count_user_projection)
+    history.raise_for_status()
+    assert {
+        item["initiated_by_user_id"]: item["initiated_by_username"]
+        for item in history.json()["items"]
+    } == {alice_id: "alice", bob_id: "bob"}
+    assert user_projection_selects == 1
+
+    # Username is a current authoritative User projection, not a Run snapshot.
+    await session.execute(
+        update(UserRow).where(UserRow.id == bob_id).values(username="bob-renamed")
+    )
+    await session.commit()
+    bob_detail = await client.get(f"/api/v1/runs/{bob_run.json()['id']}", headers=ALICE)
+    bob_detail.raise_for_status()
+    assert bob_detail.json()["run"]["initiated_by_username"] == "bob-renamed"
+
+    # A broken historical reference remains explicit: retain the canonical ID and
+    # return null instead of presenting that internal ID as an account name.
+    await session.execute(
+        update(RunRow)
+        .where(RunRow.id == bob_run.json()["id"])
+        .values(initiated_by_user_id="usr_missing")
+    )
+    await session.commit()
+    missing_detail = await client.get(f"/api/v1/runs/{bob_run.json()['id']}", headers=ALICE)
+    missing_detail.raise_for_status()
+    assert missing_detail.json()["run"]["initiated_by_user_id"] == "usr_missing"
+    assert missing_detail.json()["run"]["initiated_by_username"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +462,9 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
         headers=ALICE,
     )
     resource_version.raise_for_status()
-    shared_version_id = resource_version.json()["id"]
+    shared_version_id = await process_shared_resource_publication(
+        context, str(resource_version.json()["id"])
+    )
 
     configuration = await _create_configuration(
         client,
@@ -430,7 +492,7 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
     repos = SqlRepositories(session)
     version = await repos.project_versions.get(detail.snapshot.project_version_id)
     assert version is not None
-    await services.runs.validate_execution_context(detail.run, detail.snapshot)
+    await services.runs.validate_execution_context(detail.run.run, detail.snapshot)
 
     prepare_calls: list[str] = []
     scheduler_calls: list[str] = []
@@ -449,18 +511,18 @@ async def test_execution_context_revalidates_current_identity_and_exact_referenc
     async def assert_execution_rejected(message: str) -> None:
         prepare_count = len(prepare_calls)
         scheduler_count = len(scheduler_calls)
-        await services.runs._submit(detail.run, detail.snapshot, version)
-        assert detail.run.status.value == "submit_failed"
-        assert message in detail.run.failure_reason
+        await services.runs._submit(detail.run.run, detail.snapshot, version)
+        assert detail.run.run.status.value == "submit_failed"
+        assert message in detail.run.run.failure_reason
         assert len(prepare_calls) == prepare_count
         assert len(scheduler_calls) == scheduler_count
 
     environment = await session.get(EnvironmentVersionRow, environment_version_id)
     assert environment is not None
-    environment.available = False
+    environment.availability = "unavailable"
     await session.flush()
     await assert_execution_rejected("当前不可用")
-    environment.available = True
+    environment.availability = "available"
     await session.flush()
     environment_asset = await session.get(EnvironmentRow, environment.environment_id)
     assert environment_asset is not None
@@ -748,6 +810,7 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     assert body["id"] != run_id
     assert body["source_run_id"] == run_id
     assert body["initiated_by_user_id"] == bob_id
+    assert body["name"] == original.json()["name"]
 
     rerun_detail = await client.get(f"/api/v1/runs/{body['id']}", headers=BOB)
     rerun_detail.raise_for_status()

@@ -166,12 +166,14 @@ class RunConfigurationService:
         )
         if version is None:
             raise ObjectNotFound("Environment Version", data.environment_version_id)
+        if version.availability.value != "available":
+            raise ValidationFailed("Environment Version 当前不可用")
         environment_version_id = version.id
 
         env: dict[str, EnvValue] = parse_env_map(data.environment_variables or {})
 
         bindings: list[InputBinding] = []
-        seen_paths: set[str] = set()
+        seen_paths: list[str] = []
         for raw in data.input_bindings or []:
             source_type = InputSourceType(raw.get("source_type", InputSourceType.ARTIFACT.value))
             if source_type not in (
@@ -186,13 +188,15 @@ class RunConfigurationService:
                 source_subpath=raw.get("source_subpath", ""),
             )
             if binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
-                if (
-                    await shared_resource_version_for_owner_use(
-                        self._repos, user_id, binding.source_id, project_owner
-                    )
-                    is None
-                ):
+                version = await shared_resource_version_for_owner_use(
+                    self._repos, user_id, binding.source_id, project_owner
+                )
+                if version is None:
                     raise ObjectNotFound("Shared Resource Version", binding.source_id)
+                if binding.source_subpath and not version.contains_subpath(binding.source_subpath):
+                    raise ValidationFailed(
+                        f"输入 {binding.access_path} 引用的子路径 {binding.source_subpath!r} 不存在"
+                    )
             else:
                 # Artifact 直接输入仅限同一 Project Owner（GR-405）；
                 # 跨 Owner 必须先发布成 Shared Resource 并走 USE Grant。
@@ -204,9 +208,19 @@ class RunConfigurationService:
                 )
                 if source_project is None or source_project.owner != project_owner:
                     raise ObjectNotFound("Artifact", binding.source_id)
-            if binding.access_path in seen_paths:
-                raise ConflictError(f"输入访问路径 {binding.access_path} 重复")
-            seen_paths.add(binding.access_path)
+            conflicting_path = next(
+                (
+                    path
+                    for path in seen_paths
+                    if _input_access_paths_conflict(path, binding.access_path)
+                ),
+                None,
+            )
+            if conflicting_path is not None:
+                raise ConflictError(
+                    f"输入访问路径 {binding.access_path} 与 {conflicting_path} 重复或互相包含"
+                )
+            seen_paths.append(binding.access_path)
             bindings.append(binding)
 
         request: ComputeRequest | None = None
@@ -251,3 +265,10 @@ class _ParsedConfiguration:
     input_bindings: tuple[InputBinding, ...]
     compute_request: ComputeRequest | None
     artifact_rules: tuple[ArtifactCollectionRule, ...]
+
+
+def _input_access_paths_conflict(left: str, right: str) -> bool:
+    """两个规范化绝对路径不能指向同一位置，也不能形成父子覆盖。"""
+    if left == right or left == "/" or right == "/":
+        return True
+    return left.startswith(right + "/") or right.startswith(left + "/")

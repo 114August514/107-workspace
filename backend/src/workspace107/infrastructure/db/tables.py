@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -111,7 +112,7 @@ class ProjectRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32))
     visibility: Mapped[str] = mapped_column(String(32), default="owner_scope")
-    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True, index=True)
     default_run_configuration_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -203,9 +204,66 @@ class EnvironmentVersionRow(Base):
     environment_id: Mapped[str] = mapped_column(ID, ForeignKey("environments.id"), index=True)
     version: Mapped[str] = mapped_column(String(64))
     description: Mapped[str] = mapped_column(Text, default="")
-    image: Mapped[str] = mapped_column(String(255))
-    setup_command: Mapped[str] = mapped_column(Text, default="")
-    available: Mapped[bool] = mapped_column(Boolean, default=True)
+    runtime_kind: Mapped[str] = mapped_column(String(32), default="modules")
+    definition: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    definition_hash: Mapped[str] = mapped_column(String(64), default="test-definition")
+    execution_spec: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=lambda: {"kind": "modules", "commands": []}
+    )
+    validation_summary: Mapped[str] = mapped_column(Text, default="test fixture")
+    validation_evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    availability: Mapped[str] = mapped_column(String(32), default="available")
+    availability_reason: Mapped[str] = mapped_column(String(128), default="test_fixture")
+    availability_detail: Mapped[str] = mapped_column(Text, default="")
+    availability_checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now().astimezone()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("environment_id", "version", name="uq_environment_version_label"),
+        CheckConstraint(
+            "runtime_kind IN ('modules', 'apptainer_sif')",
+            name="ck_environment_versions_runtime_kind",
+        ),
+        CheckConstraint(
+            "availability IN ('available', 'unavailable', 'deprecated')",
+            name="ck_environment_versions_availability",
+        ),
+    )
+
+
+class EnvironmentPublicationAttemptRow(Base):
+    __tablename__ = "environment_publication_attempts"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    environment_id: Mapped[str] = mapped_column(ID, ForeignKey("environments.id"), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    version: Mapped[str] = mapped_column(String(64))
+    description: Mapped[str] = mapped_column(Text, default="")
+    runtime_kind: Mapped[str] = mapped_column(String(32))
+    candidate_definition: Mapped[dict[str, Any]] = mapped_column(JSON)
+    validation_summary: Mapped[str] = mapped_column(Text)
+    validation_evidence: Mapped[dict[str, Any]] = mapped_column(JSON)
+    failure_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("environment_versions.id"), nullable=True
+    )
+    created_by: Mapped[str] = mapped_column(ID, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'succeeded', 'failed')",
+            name="ck_environment_publication_attempts_status",
+        ),
+        CheckConstraint(
+            "runtime_kind IN ('modules', 'apptainer_sif')",
+            name="ck_environment_publication_attempts_runtime_kind",
+        ),
+    )
 
 
 class ComputePlanRow(Base):
@@ -252,7 +310,7 @@ class RunConfigurationRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     working_directory: Mapped[str] = mapped_column(String(1024), default=".")
     command: Mapped[str] = mapped_column(Text)
-    environment_version_id: Mapped[str] = mapped_column(ID)
+    environment_version_id: Mapped[str] = mapped_column(ID, index=True)
     environment_variables: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     input_bindings: Mapped[list[Any]] = mapped_column(JSON, default=list)
     compute_plan_id: Mapped[str] = mapped_column(ID)
@@ -412,6 +470,18 @@ class NotificationRow(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class NotificationPreferenceRow(Base):
+    """Explicit overrides for optional notification categories; absent means enabled."""
+
+    __tablename__ = "notification_preferences"
+
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"))
+    notification_type: Mapped[str] = mapped_column(String(64))
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    __table_args__ = (PrimaryKeyConstraint("user_id", "notification_type"),)
+
+
 class ForkRelationRow(Base):
     """Fork 来源记录。
 
@@ -485,11 +555,76 @@ class SharedResourceVersionRow(Base):
     )
     sequence: Mapped[int] = mapped_column(Integer)
     description: Mapped[str] = mapped_column(Text, default="")
+    manifest_hash: Mapped[str] = mapped_column(String(64))
+    validation_summary: Mapped[str] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         UniqueConstraint("shared_resource_id", "sequence", name="uq_shared_resource_version_seq"),
+    )
+
+
+class SharedResourcePublicationAttemptRow(Base):
+    """Durable candidate state and validation result."""
+
+    __tablename__ = "shared_resource_publication_attempts"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    shared_resource_id: Mapped[str] = mapped_column(
+        ID, ForeignKey("shared_resources.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    validation_summary: Mapped[str] = mapped_column(Text)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version_id: Mapped[str | None] = mapped_column(
+        ID, ForeignKey("shared_resource_versions.id"), nullable=True, unique=True
+    )
+    created_by: Mapped[str] = mapped_column(ID)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'succeeded', 'failed')",
+            name="ck_shared_resource_publication_attempt_status",
+        ),
+        CheckConstraint(
+            "(status = 'pending' AND started_at IS NULL AND finished_at IS NULL "
+            "AND version_id IS NULL AND failure_reason IS NULL) OR "
+            "(status = 'processing' AND started_at IS NOT NULL AND finished_at IS NULL "
+            "AND version_id IS NULL AND failure_reason IS NULL) OR "
+            "(status = 'succeeded' AND started_at IS NOT NULL AND finished_at IS NOT NULL "
+            "AND version_id IS NOT NULL AND failure_reason IS NULL) OR "
+            "(status = 'failed' AND started_at IS NOT NULL AND finished_at IS NOT NULL "
+            "AND version_id IS NULL AND failure_reason IS NOT NULL)",
+            name="ck_shared_resource_publication_attempt_result",
+        ),
+        Index("ix_shared_resource_publication_attempt_claim", "status", "started_at", "created_at"),
+        Index(
+            "ix_shared_resource_publication_attempt_resource", "shared_resource_id", "created_at"
+        ),
+    )
+
+
+class SharedResourcePublicationFileRow(Base):
+    """Candidate manifest entry retained independently of publication success."""
+
+    __tablename__ = "shared_resource_publication_files"
+
+    attempt_id: Mapped[str] = mapped_column(
+        ID,
+        ForeignKey("shared_resource_publication_attempts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    path: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    size: Mapped[int] = mapped_column(Integer)
+    content_hash: Mapped[str] = mapped_column(String(64))
+
+    __table_args__ = (
+        CheckConstraint("size >= 0", name="ck_shared_resource_publication_file_size"),
     )
 
 

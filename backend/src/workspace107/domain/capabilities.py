@@ -95,6 +95,10 @@ class Capability(StrEnum):
     SHARED_RESOURCE_VERSION_CREATE = "shared_resource.version.create"
     """为 Shared Resource 上传文件形成新的不可变版本。"""
 
+    # -- Environment ------------------------------------------------------
+    ENVIRONMENT_VERSION_CREATE = "environment.version.create"
+    """Publish an immutable validated runtime version for an Environment."""
+
     # -- Grant -------------------------------------------------------------
     GRANT_MANAGE = "grant.manage"
     """管理跨 Owner USE Grant（创建、查看、撤销）。"""
@@ -121,6 +125,7 @@ _CONTRIBUTE: frozenset[Capability] = _VIEW_ONLY | {
     Capability.RUN_CANCEL,
     Capability.SHARED_RESOURCE_MANAGE,
     Capability.SHARED_RESOURCE_VERSION_CREATE,
+    Capability.ENVIRONMENT_VERSION_CREATE,
 }
 
 # 管空间需要的能力：改设置、邀请和移除普通成员、管配置。

@@ -32,8 +32,6 @@ async def _group_environment_version(session: AsyncSession, user_group_id: str) 
             environment_id=environment_id,
             version="1",
             description="",
-            image="python:3.12-slim",
-            setup_command="",
         )
     )
     await session.commit()
@@ -174,6 +172,48 @@ async def test_discovery_lists_public_projects_but_home_feed_does_not(client) ->
     home = await client.get("/api/v1/me", headers=BOB)
     assert home.status_code == 200
     assert all(item["id"] != project_id for item in home.json()["recent_projects"])
+
+
+@pytest.mark.asyncio
+async def test_project_discovery_filters_by_owner_and_name(client) -> None:
+    owner_id = await ensure_user_group(client, headers=ALICE)
+    other_owner = await client.post(
+        "/api/v1/user-groups",
+        json={"name": "Other Owner", "description": ""},
+        headers=ALICE,
+    )
+    assert other_owner.status_code == 201, other_owner.text
+    other_owner_id = other_owner.json()["id"]
+    for group_id, name in (
+        (owner_id, "Target Training"),
+        (owner_id, "Other Work"),
+        (other_owner_id, "Target Elsewhere"),
+    ):
+        created = await client.post(
+            "/api/v1/projects",
+            json={"owner": {"kind": "user_group", "id": group_id}, "name": name},
+            headers=ALICE,
+        )
+        assert created.status_code == 201, created.text
+
+    response = await client.get(
+        "/api/v1/projects",
+        params={
+            "owner_kind": "user_group",
+            "owner_id": owner_id,
+            "query": "training",
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 200, response.text
+    assert [item["name"] for item in response.json()["items"]] == ["Target Training"]
+
+    incomplete = await client.get(
+        "/api/v1/projects",
+        params={"owner_kind": "user_group"},
+        headers=ALICE,
+    )
+    assert incomplete.status_code == 422
 
 
 @pytest.mark.asyncio

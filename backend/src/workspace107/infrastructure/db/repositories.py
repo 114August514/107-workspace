@@ -18,6 +18,9 @@ from ...domain.config_scope import ConfigScope
 from ...domain.enums import (
     ActivityAction,
     ArtifactStatus,
+    EnvironmentAvailability,
+    EnvironmentPublicationStatus,
+    EnvironmentRuntimeKind,
     InputSourceType,
     MembershipRole,
     MembershipStatus,
@@ -26,6 +29,7 @@ from ...domain.enums import (
     ProjectVisibility,
     RunEventType,
     RunStatus,
+    SharedResourcePublicationStatus,
     TargetType,
 )
 from ...domain.errors import ConflictError
@@ -35,12 +39,14 @@ from ...domain.models import (
     Artifact,
     ArtifactCollectionRule,
     Environment,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     IdempotencyRecord,
     InputBinding,
     Membership,
     Notification,
+    NotificationPreference,
     Project,
     ProjectFile,
     ProjectVersion,
@@ -50,6 +56,7 @@ from ...domain.models import (
     RunEvent,
     SharedResource,
     SharedResourceFile,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
     User,
     UserGroup,
@@ -434,7 +441,14 @@ class ProjectRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return [_to_project(row) for row in rows]
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
         # Owner scope + PUBLIC projects the User can discover.
         group_ids = select(t.MembershipRow.user_group_id).where(
             t.MembershipRow.user_id == user_id,
@@ -443,12 +457,32 @@ class ProjectRepositoryImpl:
         owner_scope = (
             t.ProjectRow.owner_user_id == user_id
         ) | t.ProjectRow.owner_user_group_id.in_(group_ids)
-        stmt = (
-            select(t.ProjectRow)
-            .where((t.ProjectRow.visibility == ProjectVisibility.PUBLIC.value) | owner_scope)
-            .order_by(t.ProjectRow.updated_at.desc())
+        stmt = select(t.ProjectRow).where(
+            (t.ProjectRow.visibility == ProjectVisibility.PUBLIC.value) | owner_scope
         )
+        if owner is not None:
+            owner_column = (
+                t.ProjectRow.owner_user_id
+                if owner.kind is OwnerKind.USER
+                else t.ProjectRow.owner_user_group_id
+            )
+            stmt = stmt.where(owner_column == owner.id)
+        normalized_query = query.strip() if query else ""
+        if normalized_query:
+            stmt = stmt.where(t.ProjectRow.name.icontains(normalized_query, autoescape=True))
+        stmt = stmt.order_by(t.ProjectRow.updated_at.desc())
         return await _paginate(self._session, stmt, page, _to_project)
+
+    async def list_using_environment_version(self, version_id: str) -> list[Project]:
+        config_projects = select(t.RunConfigurationRow.project_id).where(
+            t.RunConfigurationRow.environment_version_id == version_id
+        )
+        stmt = select(t.ProjectRow).where(
+            (t.ProjectRow.environment_version_id == version_id)
+            | t.ProjectRow.id.in_(config_projects)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_project(row) for row in rows]
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool:
         owner_column = (
@@ -699,6 +733,28 @@ class EnvironmentRepositoryImpl:
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_environment_version(row) if row else None
 
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        owner_user_id, owner_group_id = _owner_columns(owner)
+        stmt = (
+            select(t.EnvironmentRow)
+            .where(
+                t.EnvironmentRow.owner_user_id == owner_user_id,
+                t.EnvironmentRow.owner_user_group_id == owner_group_id,
+            )
+            .order_by(t.EnvironmentRow.name, t.EnvironmentRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment(row) for row in rows]
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        stmt = (
+            select(t.EnvironmentVersionRow)
+            .where(t.EnvironmentVersionRow.environment_id == environment_id)
+            .order_by(t.EnvironmentVersionRow.version.desc(), t.EnvironmentVersionRow.id)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment_version(row) for row in rows]
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentVersionRow, version_id)
@@ -708,6 +764,109 @@ class EnvironmentRepositoryImpl:
         """Trusted exact lookup for grant-authorized use."""
         row = await self._session.get(t.EnvironmentRow, environment_id)
         return _to_environment(row) if row else None
+
+    async def add_version(self, version: EnvironmentVersion) -> None:
+        self._session.add(
+            t.EnvironmentVersionRow(
+                id=version.id,
+                environment_id=version.environment_id,
+                version=version.version,
+                description=version.description,
+                runtime_kind=version.runtime_kind.value,
+                definition=version.definition,
+                definition_hash=version.definition_hash,
+                execution_spec=version.execution_spec,
+                validation_summary=version.validation_summary,
+                validation_evidence=version.validation_evidence,
+                availability=version.availability.value,
+                availability_reason=version.availability_reason,
+                availability_detail=version.availability_detail,
+                availability_checked_at=version.availability_checked_at,
+            )
+        )
+        await self._session.flush()
+
+    async def add_attempt(self, attempt: EnvironmentPublicationAttempt) -> None:
+        self._session.add(_environment_attempt_row(attempt))
+        await self._session.flush()
+
+    async def update_attempt(self, attempt: EnvironmentPublicationAttempt) -> None:
+        row = await self._session.get(t.EnvironmentPublicationAttemptRow, attempt.id)
+        if row is None:
+            return
+        for name in (
+            "status",
+            "validation_summary",
+            "validation_evidence",
+            "failure_code",
+            "failure_reason",
+            "version_id",
+            "started_at",
+            "finished_at",
+        ):
+            value = getattr(attempt, name)
+            setattr(row, name, value.value if hasattr(value, "value") else value)
+        await self._session.flush()
+
+    async def get_attempt_by_id(self, attempt_id: str) -> EnvironmentPublicationAttempt | None:
+        row = await self._session.get(t.EnvironmentPublicationAttemptRow, attempt_id)
+        return _to_environment_attempt(row) if row else None
+
+    async def list_attempts_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> list[EnvironmentPublicationAttempt]:
+        stmt = (
+            select(t.EnvironmentPublicationAttemptRow)
+            .join(
+                t.EnvironmentRow,
+                t.EnvironmentRow.id == t.EnvironmentPublicationAttemptRow.environment_id,
+            )
+            .where(
+                t.EnvironmentPublicationAttemptRow.environment_id == environment_id,
+                _asset_discovery_predicate(
+                    t.EnvironmentRow.owner_user_id,
+                    t.EnvironmentRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
+            .order_by(t.EnvironmentPublicationAttemptRow.created_at.desc())
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_environment_attempt(row) for row in rows]
+
+    async def update_version_availability(
+        self,
+        version_id: str,
+        availability: EnvironmentAvailability,
+        reason: str,
+        detail: str,
+        checked_at: datetime,
+    ) -> EnvironmentVersion | None:
+        row = await self._session.get(t.EnvironmentVersionRow, version_id)
+        if row is None:
+            return None
+        row.availability = availability.value
+        row.availability_reason = reason
+        row.availability_detail = detail
+        row.availability_checked_at = checked_at
+        await self._session.flush()
+        return _to_environment_version(row)
+
+    async def claim_pending_attempt(self, now: datetime) -> EnvironmentPublicationAttempt | None:
+        stmt = (
+            select(t.EnvironmentPublicationAttemptRow)
+            .where(t.EnvironmentPublicationAttemptRow.status.in_(["pending", "processing"]))
+            .order_by(t.EnvironmentPublicationAttemptRow.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return None
+        row.status = EnvironmentPublicationStatus.PROCESSING.value
+        row.started_at = now
+        await self._session.flush()
+        return _to_environment_attempt(row)
 
 
 class ComputePlanRepositoryImpl:
@@ -1236,6 +1395,53 @@ class NotificationRepositoryImpl:
         )
         return int(result.rowcount or 0) > 0
 
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool:
+        result = await self._session.execute(
+            update(t.NotificationRow)
+            .where(
+                t.NotificationRow.id == notification_id,
+                t.NotificationRow.recipient_id == user_id,
+                t.NotificationRow.read_at.is_not(None),
+            )
+            .values(read_at=None)
+        )
+        return int(result.rowcount or 0) > 0
+
+    async def is_enabled(self, user_id: str, type: NotificationType) -> bool:
+        row = await self._session.get(t.NotificationPreferenceRow, (user_id, type.value))
+        return row is None or row.enabled
+
+    async def list_preferences(self, user_id: str) -> list[NotificationPreference]:
+        stmt = select(t.NotificationPreferenceRow).where(
+            t.NotificationPreferenceRow.user_id == user_id
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [
+            NotificationPreference(
+                user_id=row.user_id,
+                type=NotificationType(row.notification_type),
+                enabled=row.enabled,
+            )
+            for row in rows
+        ]
+
+    async def set_preference(
+        self, user_id: str, type: NotificationType, enabled: bool
+    ) -> NotificationPreference:
+        row = await self._session.get(t.NotificationPreferenceRow, (user_id, type.value))
+        if row is None:
+            self._session.add(
+                t.NotificationPreferenceRow(
+                    user_id=user_id,
+                    notification_type=type.value,
+                    enabled=enabled,
+                )
+            )
+        else:
+            row.enabled = enabled
+        await _flush(self._session)
+        return NotificationPreference(user_id=user_id, type=type, enabled=enabled)
+
     async def mark_all_read(self, user_id: str, at: datetime) -> int:
         result = await self._session.execute(
             update(t.NotificationRow)
@@ -1340,13 +1546,7 @@ class SharedResourceRepositoryImpl:
     async def list_discoverable_for_user(self, user_id: str) -> list[SharedResource]:
         stmt = (
             select(t.SharedResourceRow)
-            .where(
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                )
-            )
+            .where(_shared_resource_discovery_predicate(user_id))
             .order_by(t.SharedResourceRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
@@ -1357,14 +1557,104 @@ class SharedResourceRepositoryImpl:
     ) -> SharedResource | None:
         stmt = select(t.SharedResourceRow).where(
             t.SharedResourceRow.id == resource_id,
-            _asset_discovery_predicate(
-                t.SharedResourceRow.owner_user_id,
-                t.SharedResourceRow.owner_user_group_id,
-                user_id,
-            ),
+            _shared_resource_discovery_predicate(user_id),
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         return _to_shared_resource(row) if row else None
+
+    async def add_attempt(self, attempt: SharedResourcePublicationAttempt) -> None:
+        self._session.add(
+            t.SharedResourcePublicationAttemptRow(
+                id=attempt.id,
+                shared_resource_id=attempt.shared_resource_id,
+                status=attempt.status.value,
+                description=attempt.description,
+                validation_summary=attempt.validation_summary,
+                failure_reason=attempt.failure_reason,
+                version_id=attempt.version_id,
+                created_by=attempt.created_by,
+                created_at=attempt.created_at,
+                started_at=attempt.started_at,
+                finished_at=attempt.finished_at,
+            )
+        )
+        await _flush(self._session)
+        for entry in attempt.files:
+            self._session.add(
+                t.SharedResourcePublicationFileRow(
+                    attempt_id=attempt.id,
+                    path=entry.path,
+                    size=entry.size,
+                    content_hash=entry.content_hash,
+                )
+            )
+        await _flush(self._session)
+
+    async def update_attempt(self, attempt: SharedResourcePublicationAttempt) -> None:
+        row = await self._session.get(t.SharedResourcePublicationAttemptRow, attempt.id)
+        if row is None:
+            return
+        row.status = attempt.status.value
+        row.validation_summary = attempt.validation_summary
+        row.failure_reason = attempt.failure_reason
+        row.version_id = attempt.version_id
+        row.started_at = attempt.started_at
+        row.finished_at = attempt.finished_at
+        await _flush(self._session)
+
+    async def claim_next_attempt(
+        self, *, now: datetime, recover_before: datetime
+    ) -> SharedResourcePublicationAttempt | None:
+        stmt = (
+            select(t.SharedResourcePublicationAttemptRow)
+            .where(
+                or_(
+                    t.SharedResourcePublicationAttemptRow.status
+                    == SharedResourcePublicationStatus.PENDING.value,
+                    and_(
+                        t.SharedResourcePublicationAttemptRow.status
+                        == SharedResourcePublicationStatus.PROCESSING.value,
+                        t.SharedResourcePublicationAttemptRow.started_at <= recover_before,
+                    ),
+                )
+            )
+            .order_by(t.SharedResourcePublicationAttemptRow.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return None
+        row.status = SharedResourcePublicationStatus.PROCESSING.value
+        row.validation_summary = "正在校验候选内容"
+        row.started_at = now
+        await _flush(self._session)
+        return await self._hydrate_attempt(row)
+
+    async def get_attempt_discoverable_for_user(
+        self, user_id: str, attempt_id: str
+    ) -> SharedResourcePublicationAttempt | None:
+        stmt = (
+            select(t.SharedResourcePublicationAttemptRow)
+            .join(
+                t.SharedResourceRow,
+                t.SharedResourceRow.id == t.SharedResourcePublicationAttemptRow.shared_resource_id,
+            )
+            .where(
+                t.SharedResourcePublicationAttemptRow.id == attempt_id,
+                _asset_discovery_predicate(
+                    t.SharedResourceRow.owner_user_id,
+                    t.SharedResourceRow.owner_user_group_id,
+                    user_id,
+                ),
+            )
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return await self._hydrate_attempt(row) if row else None
+
+    async def get_attempt_by_id(self, attempt_id: str) -> SharedResourcePublicationAttempt | None:
+        row = await self._session.get(t.SharedResourcePublicationAttemptRow, attempt_id)
+        return await self._hydrate_attempt(row) if row else None
 
     async def add_version(self, version: SharedResourceVersion) -> None:
         self._session.add(
@@ -1373,6 +1663,8 @@ class SharedResourceRepositoryImpl:
                 shared_resource_id=version.shared_resource_id,
                 sequence=version.sequence,
                 description=version.description,
+                manifest_hash=version.manifest_hash,
+                validation_summary=version.validation_summary,
                 created_by=version.created_by,
                 created_at=version.created_at,
             )
@@ -1404,11 +1696,7 @@ class SharedResourceRepositoryImpl:
             )
             .where(
                 t.SharedResourceVersionRow.id == version_id,
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                ),
+                _shared_resource_discovery_predicate(user_id),
             )
         )
         row = (await self._session.execute(stmt)).scalar_one_or_none()
@@ -1434,18 +1722,20 @@ class SharedResourceRepositoryImpl:
             )
             .where(
                 t.SharedResourceRow.id == resource_id,
-                _asset_discovery_predicate(
-                    t.SharedResourceRow.owner_user_id,
-                    t.SharedResourceRow.owner_user_group_id,
-                    user_id,
-                ),
+                _shared_resource_discovery_predicate(user_id),
             )
             .order_by(t.SharedResourceVersionRow.sequence.desc())
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [await self._hydrate_version(row) for row in rows]
 
-    async def next_version_sequence(self, resource_id: str) -> int:
+    async def next_version_sequence_for_publication(self, resource_id: str) -> int:
+        # Serialize publication per Shared Resource before deriving the aggregate sequence.
+        await self._session.execute(
+            select(t.SharedResourceRow.id)
+            .where(t.SharedResourceRow.id == resource_id)
+            .with_for_update()
+        )
         stmt = select(func.max(t.SharedResourceVersionRow.sequence)).where(
             t.SharedResourceVersionRow.shared_resource_id == resource_id
         )
@@ -1468,8 +1758,37 @@ class SharedResourceRepositoryImpl:
                 SharedResourceFile(path=f.path, size=f.size, content_hash=f.content_hash)
                 for f in files
             ),
+            manifest_hash=row.manifest_hash,
+            validation_summary=row.validation_summary,
             created_by=row.created_by,
             created_at=_required(row.created_at),
+        )
+
+    async def _hydrate_attempt(
+        self, row: t.SharedResourcePublicationAttemptRow
+    ) -> SharedResourcePublicationAttempt:
+        stmt = (
+            select(t.SharedResourcePublicationFileRow)
+            .where(t.SharedResourcePublicationFileRow.attempt_id == row.id)
+            .order_by(t.SharedResourcePublicationFileRow.path)
+        )
+        files = (await self._session.execute(stmt)).scalars().all()
+        return SharedResourcePublicationAttempt(
+            id=row.id,
+            shared_resource_id=row.shared_resource_id,
+            status=SharedResourcePublicationStatus(row.status),
+            description=row.description,
+            files=tuple(
+                SharedResourceFile(path=file.path, size=file.size, content_hash=file.content_hash)
+                for file in files
+            ),
+            validation_summary=row.validation_summary,
+            failure_reason=row.failure_reason,
+            version_id=row.version_id,
+            created_by=row.created_by,
+            created_at=_required(row.created_at),
+            started_at=_aware(row.started_at),
+            finished_at=_aware(row.finished_at),
         )
 
 
@@ -1627,6 +1946,48 @@ def _asset_discovery_predicate(owner_user_column: Any, owner_group_column: Any, 
     return (owner_user_column == user_id) | owner_group_column.in_(active_group_ids)
 
 
+def _shared_resource_discovery_predicate(user_id: str):
+    """Owner-scope discovery extended by valid USE Grants (Issue #55).
+
+    A resource is also discoverable when a USE Grant issued under its *current*
+    Owner covers it (Target = ALL or the exact resource) and the acting User is
+    the grantee personally or an active member of a grantee UserGroup.  Grants
+    never add management capability; the guard keeps role resolution owner-scoped.
+    """
+    active_group_ids = select(t.MembershipRow.user_group_id).where(
+        t.MembershipRow.user_id == user_id,
+        t.MembershipRow.status == MembershipStatus.ACTIVE.value,
+    )
+    grantor_matches = (
+        (t.GrantRow.grantor_kind == OwnerKind.USER.value)
+        & (t.GrantRow.grantor_id == t.SharedResourceRow.owner_user_id)
+    ) | (
+        (t.GrantRow.grantor_kind == OwnerKind.USER_GROUP.value)
+        & (t.GrantRow.grantor_id == t.SharedResourceRow.owner_user_group_id)
+    )
+    grantee_matches = (
+        (t.GrantRow.grantee_kind == OwnerKind.USER.value) & (t.GrantRow.grantee_id == user_id)
+    ) | (
+        (t.GrantRow.grantee_kind == OwnerKind.USER_GROUP.value)
+        & t.GrantRow.grantee_id.in_(active_group_ids)
+    )
+    target_matches = (t.GrantRow.target_kind == GrantTargetKind.ALL.value) | (
+        (t.GrantRow.target_kind == GrantTargetKind.SHARED_RESOURCE.value)
+        & (t.GrantRow.target_id == t.SharedResourceRow.id)
+    )
+    covering_use_grant = select(t.GrantRow.id).where(
+        t.GrantRow.action == GrantAction.USE.value,
+        grantor_matches,
+        grantee_matches,
+        target_matches,
+    )
+    return (
+        (t.SharedResourceRow.owner_user_id == user_id)
+        | t.SharedResourceRow.owner_user_group_id.in_(active_group_ids)
+        | covering_use_grant.exists()
+    )
+
+
 def _owner_reference(owner_user_id: str | None, owner_user_group_id: str | None) -> OwnerReference:
     if owner_user_id is not None and owner_user_group_id is None:
         return OwnerReference(OwnerKind.USER, owner_user_id)
@@ -1714,9 +2075,62 @@ def _to_environment_version(row: t.EnvironmentVersionRow) -> EnvironmentVersion:
         environment_id=row.environment_id,
         version=row.version,
         description=row.description,
-        image=row.image,
-        setup_command=row.setup_command,
-        available=row.available,
+        runtime_kind=EnvironmentRuntimeKind(row.runtime_kind),
+        definition=dict(row.definition),
+        definition_hash=row.definition_hash,
+        execution_spec=dict(row.execution_spec),
+        validation_summary=row.validation_summary,
+        validation_evidence=dict(row.validation_evidence),
+        availability=EnvironmentAvailability(row.availability),
+        availability_reason=row.availability_reason,
+        availability_detail=row.availability_detail,
+        availability_checked_at=_required(row.availability_checked_at),
+    )
+
+
+def _environment_attempt_row(
+    attempt: EnvironmentPublicationAttempt,
+) -> t.EnvironmentPublicationAttemptRow:
+    return t.EnvironmentPublicationAttemptRow(
+        id=attempt.id,
+        environment_id=attempt.environment_id,
+        status=attempt.status.value,
+        version=attempt.version,
+        description=attempt.description,
+        runtime_kind=attempt.runtime_kind.value,
+        candidate_definition=attempt.candidate_definition,
+        validation_summary=attempt.validation_summary,
+        validation_evidence=attempt.validation_evidence,
+        failure_code=attempt.failure_code,
+        failure_reason=attempt.failure_reason,
+        version_id=attempt.version_id,
+        created_by=attempt.created_by,
+        created_at=attempt.created_at,
+        started_at=attempt.started_at,
+        finished_at=attempt.finished_at,
+    )
+
+
+def _to_environment_attempt(
+    row: t.EnvironmentPublicationAttemptRow,
+) -> EnvironmentPublicationAttempt:
+    return EnvironmentPublicationAttempt(
+        id=row.id,
+        environment_id=row.environment_id,
+        status=EnvironmentPublicationStatus(row.status),
+        version=row.version,
+        description=row.description,
+        runtime_kind=EnvironmentRuntimeKind(row.runtime_kind),
+        candidate_definition=dict(row.candidate_definition),
+        validation_summary=row.validation_summary,
+        validation_evidence=dict(row.validation_evidence),
+        failure_code=row.failure_code,
+        failure_reason=row.failure_reason,
+        version_id=row.version_id,
+        created_by=row.created_by,
+        created_at=_required(row.created_at),
+        started_at=row.started_at,
+        finished_at=row.finished_at,
     )
 
 

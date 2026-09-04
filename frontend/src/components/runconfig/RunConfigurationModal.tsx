@@ -16,13 +16,17 @@ import {
 } from 'antd'
 import { useEffect, useState } from 'react'
 
-import { api } from '../../api/client'
+import { ApiError, api } from '../../api/client'
 import type {
   ComputePlan,
   Environment,
   RunConfiguration,
   RunConfigurationInput,
 } from '../../api/types'
+import {
+  SharedResourceInputBindings,
+  type SharedResourceInputRow,
+} from './SharedResourceInputBindings'
 
 interface Props {
   open: boolean
@@ -61,6 +65,7 @@ interface FormValues {
   time_limit_minutes: number
   env: EnvRow[]
   rules: RuleRow[]
+  inputs: SharedResourceInputRow[]
 }
 
 export function RunConfigurationModal({
@@ -74,8 +79,13 @@ export function RunConfigurationModal({
 }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [submitting, setSubmitting] = useState(false)
+  const [saveError, setSaveError] = useState<ApiError | Error | null>(null)
   const planId = Form.useWatch('compute_plan_id', form)
   const custom = Form.useWatch('use_custom_resources', form)
+  const environmentVersionId = Form.useWatch('environment_version_id', form)
+  const selectedEnvironmentVersion = environments
+    .flatMap((environment) => environment.versions.map((version) => ({ environment, version })))
+    .find(({ version }) => version.id === environmentVersionId)
   const plan = plans.find((item) => item.id === planId)
 
   useEffect(() => {
@@ -83,6 +93,7 @@ export function RunConfigurationModal({
     const fallbackPlan = plans[0]
     const request = editing?.compute_request
     const source = plans.find((item) => item.id === editing?.compute_plan_id) ?? fallbackPlan
+    setSaveError(null)
     form.setFieldsValue({
       name: editing?.name ?? '默认运行',
       description: editing?.description ?? '',
@@ -105,6 +116,13 @@ export function RunConfigurationModal({
         name: rule.name,
         optional: rule.optional,
       })),
+      inputs: (editing?.input_bindings ?? [])
+        .filter((binding) => binding.source_type === 'shared_resource_version')
+        .map((binding) => ({
+          source_id: binding.source_id,
+          source_subpath: binding.source_subpath,
+          access_path: binding.access_path,
+        })),
     })
   }, [open, editing, plans, form])
 
@@ -122,7 +140,8 @@ export function RunConfigurationModal({
   }
 
   const submit = async () => {
-    const values = await form.validateFields()
+    const values = await form.validateFields().catch(() => null)
+    if (!values) return
     const payload: RunConfigurationInput = {
       name: values.name,
       description: values.description ?? '',
@@ -136,10 +155,17 @@ export function RunConfigurationModal({
       artifact_rules: (values.rules ?? [])
         .filter((row) => row?.path)
         .map((row) => ({ path: row.path, name: row.name ?? '', optional: row.optional ?? true })),
-      // 这个弹窗不管输入绑定，但 PUT 是整体替换——不带上就等于清空。
-      // 编辑一次名称就把 Artifact 输入全丢了，而且没有任何提示。
-      // **表单没管的字段，提交时要原样带回去。**
-      input_bindings: editing?.input_bindings ?? [],
+      input_bindings: [
+        ...(editing?.input_bindings ?? []).filter(
+          (binding) => binding.source_type !== 'shared_resource_version',
+        ),
+        ...(values.inputs ?? []).map((row) => ({
+          source_type: 'shared_resource_version' as const,
+          source_id: row.source_id ?? '',
+          source_subpath: row.source_subpath ?? '',
+          access_path: row.access_path ?? '',
+        })),
+      ],
       compute_request: values.use_custom_resources
         ? {
             nodes: values.nodes,
@@ -152,6 +178,7 @@ export function RunConfigurationModal({
     }
 
     setSubmitting(true)
+    setSaveError(null)
     try {
       if (editing) {
         await api.updateRunConfiguration(editing.id, payload)
@@ -163,25 +190,25 @@ export function RunConfigurationModal({
       onSaved()
       onClose()
     } catch (error) {
-      message.error((error as Error).message)
+      setSaveError(error instanceof Error ? error : new Error(String(error)))
     } finally {
       setSubmitting(false)
     }
   }
 
   const environmentOptions = environments.map((environment) => ({
-    label: environment.name,
+    label: `${environment.name} · Owner ${environment.owner.display_name}`,
     options: environment.versions.map((version) => ({
       value: version.id,
-      label: `${environment.name} · ${version.version}`,
-      disabled: !version.available,
+      label: `${version.version} · ${version.availability === 'available' ? '可用' : '当前不可用'}`,
+      disabled: version.availability !== 'available',
     })),
   }))
 
   return (
     <Modal
       open={open}
-      width={760}
+      width={900}
       title={editing ? '编辑运行方案' : '新建运行方案'}
       okText="保存"
       cancelText="取消"
@@ -191,6 +218,30 @@ export function RunConfigurationModal({
       destroyOnHidden
     >
       <Form form={form} layout="vertical" requiredMark="optional">
+        {saveError && (
+          <Alert
+            type="error"
+            showIcon
+            message="无法保存运行方案"
+            description={
+              <Space direction="vertical" size={4}>
+                <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                  {(saveError instanceof ApiError && saveError.problems.length > 0
+                    ? saveError.problems
+                    : [saveError.message]
+                  ).map((problem) => (
+                    <li key={problem}>{problem}</li>
+                  ))}
+                </ul>
+                {saveError instanceof ApiError && saveError.requestId && (
+                  <Typography.Text type="secondary">
+                    请求标识：{saveError.requestId}
+                  </Typography.Text>
+                )}
+              </Space>
+            }
+          />
+        )}
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item
@@ -221,13 +272,30 @@ export function RunConfigurationModal({
           <Input placeholder="这个方案用在什么场景" />
         </Form.Item>
 
+        {environmentVersionId && !selectedEnvironmentVersion ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="已保存的 Environment Version 当前无 USE 资格或已删除"
+            description="运行方案仍保留原 exact version ID，不会自动切换。请选择一个当前可用版本后再保存。"
+          />
+        ) : selectedEnvironmentVersion &&
+          selectedEnvironmentVersion.version.availability !== 'available' ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="已保存的 Environment Version 当前不可用"
+            description="运行方案仍保留原 exact version ID，不会自动切换。请选择一个当前可用版本后再保存。"
+          />
+        ) : null}
+
         <Form.Item
           name="environment_version_id"
-          label="运行环境"
-          rules={[{ required: true, message: '请选择运行环境' }]}
-          extra="运行方案固定引用这个版本；创建 Run 时不会再继承默认环境"
+          label="Environment Version"
+          rules={[{ required: true, message: '请选择 Environment Version' }]}
+          extra="保存后固定引用这个版本；默认值变化、版本不可用或 USE Grant 撤销都不会静默切换"
         >
-          <Select placeholder="选择运行环境" options={environmentOptions} />
+          <Select placeholder="选择确定的 Environment Version" options={environmentOptions} />
         </Form.Item>
 
         <Form.Item
@@ -289,6 +357,8 @@ export function RunConfigurationModal({
             </Row>
           </>
         )}
+
+        <SharedResourceInputBindings />
 
         <Typography.Title level={5}>环境变量</Typography.Title>
         <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>

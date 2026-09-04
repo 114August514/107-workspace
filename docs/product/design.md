@@ -314,6 +314,9 @@ Project 派生、模板发布与复用
 
 运行环境是由 User 或 User Group 拥有、供 Project 执行代码时复用的独立资产。Run Configuration 与 Run Snapshot 均引用确定的 Environment Version。
 
+Environment Version 当前只支持 `modules` 与 `apptainer_sif` 两种显式 runtime；发布必须通过对应类型校验，失败不得形成可用 Version。
+Run Configuration 与 Run Snapshot 使用确定的 Environment Version；版本不可用或不兼容时明确失败，不自动回退或替换为其他版本。
+
 ```text
 运行环境
 │

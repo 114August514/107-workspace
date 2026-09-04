@@ -10,9 +10,35 @@ acting User (Grantee) allows use.  A Grant with Target = ALL covers all Grantor 
 from __future__ import annotations
 
 from ..domain.grant import GrantTargetKind
-from ..domain.models import EnvironmentVersion, SharedResourceVersion
+from ..domain.models import Environment, EnvironmentVersion, SharedResourceVersion
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.repositories import Repositories
+
+
+async def environment_for_owner_use(
+    repos: Repositories,
+    user_id: str,
+    environment_id: str,
+    target_owner: OwnerReference,
+) -> Environment | None:
+    """Return an Environment authorized for one consuming Owner context."""
+    environment = await repos.environments.get_discoverable_for_user(user_id, environment_id)
+    if environment is not None and environment.owner == target_owner:
+        return environment
+
+    environment = await repos.environments.get_by_id(environment_id)
+    if environment is None or environment.owner == target_owner:
+        return None
+    if await _has_use_grant(
+        repos,
+        user_id,
+        target_owner,
+        GrantTargetKind.ENVIRONMENT,
+        environment.id,
+        environment.owner,
+    ):
+        return environment
+    return None
 
 
 async def environment_version_for_owner_use(
@@ -21,24 +47,14 @@ async def environment_version_for_owner_use(
     version_id: str,
     target_owner: OwnerReference,
 ) -> EnvironmentVersion | None:
-    """Return an Environment Version authorized for ``target_owner`` use.
-
-    1. Same-owner discovery path (Issue #39): actor-discoverable version whose
-       Environment is owned by ``target_owner``.
-    2. Grant path (Issue #40): trusted lookup of version + environment; if the
-       environment Owner differs from ``target_owner``, a USE Grant for either
-       ``target_owner`` or the acting user (as a User grantee) authorizes use.
-    """
-    # 1. Same-owner path (Issue #39 logic unchanged)
-    version = await repos.environments.get_version_discoverable_for_user(user_id, version_id)
-    if version is not None:
-        environment = await repos.environments.get_discoverable_for_user(
-            user_id, version.environment_id
-        )
-        if environment is not None and environment.owner == target_owner:
-            return version
-    # 2. Grant path: cross-owner use
-    return await _environment_version_for_grant_use(repos, user_id, version_id, target_owner)
+    """Return one exact version when its Environment is authorized for the Owner."""
+    version = await repos.environments.get_version_by_id(version_id)
+    if version is None:
+        return None
+    environment = await environment_for_owner_use(
+        repos, user_id, version.environment_id, target_owner
+    )
+    return version if environment is not None else None
 
 
 async def shared_resource_version_for_owner_use(
@@ -61,34 +77,6 @@ async def shared_resource_version_for_owner_use(
             return version
     # 2. Grant path: cross-owner use
     return await _shared_resource_version_for_grant_use(repos, user_id, version_id, target_owner)
-
-
-async def _environment_version_for_grant_use(
-    repos: Repositories,
-    user_id: str,
-    version_id: str,
-    target_owner: OwnerReference,
-) -> EnvironmentVersion | None:
-    version = await repos.environments.get_version_by_id(version_id)  # trusted lookup
-    if version is None:
-        return None
-    environment = await repos.environments.get_by_id(version.environment_id)  # trusted lookup
-    if environment is None:
-        return None
-    # Cross-owner use only: if the asset Owner IS the target_owner, discovery
-    # should have found it in the same-owner path above.  Fail closed here.
-    if environment.owner == target_owner:
-        return None
-    if await _has_use_grant(
-        repos,
-        user_id,
-        target_owner,
-        GrantTargetKind.ENVIRONMENT,
-        environment.id,
-        environment.owner,
-    ):
-        return version
-    return None
 
 
 async def _shared_resource_version_for_grant_use(

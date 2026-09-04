@@ -19,6 +19,9 @@ from .config_scope import ConfigScope
 from .enums import (
     ActivityAction,
     ArtifactStatus,
+    EnvironmentAvailability,
+    EnvironmentPublicationStatus,
+    EnvironmentRuntimeKind,
     InputSourceType,
     LogStream,
     MembershipRole,
@@ -28,6 +31,7 @@ from .enums import (
     ProjectVisibility,
     RunEventType,
     RunStatus,
+    SharedResourcePublicationStatus,
     TargetType,
 )
 from .errors import ValidationFailed
@@ -191,17 +195,42 @@ class Environment:
 
 @dataclass(frozen=True, slots=True)
 class EnvironmentVersion:
-    """Environment 已发布的确定版本。发布后不可修改。"""
+    """Published immutable runtime definition plus current availability projection."""
 
     id: str
     environment_id: str
     version: str
     description: str
-    image: str
-    """底层执行基础的标识，例如容器镜像或 module 集合。"""
-    setup_command: str = ""
-    """执行用户命令之前运行的准备命令，可为空。"""
-    available: bool = True
+    runtime_kind: EnvironmentRuntimeKind
+    definition: dict[str, object]
+    definition_hash: str
+    execution_spec: dict[str, object]
+    validation_summary: str
+    validation_evidence: dict[str, object]
+    availability: EnvironmentAvailability
+    availability_reason: str
+    availability_detail: str
+    availability_checked_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class EnvironmentPublicationAttempt:
+    id: str
+    environment_id: str
+    status: EnvironmentPublicationStatus
+    version: str
+    description: str
+    runtime_kind: EnvironmentRuntimeKind
+    candidate_definition: dict[str, object]
+    validation_summary: str
+    validation_evidence: dict[str, object]
+    failure_code: str | None
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 # --------------------------------------------------------------------------
@@ -229,10 +258,13 @@ class InputBinding:
     source_subpath: str = ""
 
     def __post_init__(self) -> None:
-        if not self.access_path.startswith("/"):
+        candidate = self.access_path.strip().replace("\\", "/")
+        if not candidate.startswith("/"):
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 必须是绝对路径")
-        if ".." in self.access_path.split("/"):
+        if ".." in candidate.split("/"):
             raise ValidationFailed(f"输入访问路径 {self.access_path!r} 不允许包含 ..")
+        normalized = "/" + posixpath.normpath(candidate).lstrip("/")
+        object.__setattr__(self, "access_path", normalized)
         if self.source_subpath:
             candidate = self.source_subpath.strip().replace("\\", "/").lstrip("/")
             if not candidate:
@@ -456,16 +488,21 @@ class Notification:
     target_type: TargetType | None = None
     target_id: str | None = None
     mandatory: bool = False
-    """不可关闭的重要通知（设计稿 §2.10 C）。
-
-    当前迁移实现还没有偏好设置，但标记要先带上——否则后续增加偏好时，
-    历史数据分不出哪些是当初就不允许屏蔽的。
-    """
+    """不可关闭的重要通知；偏好设置不会影响它的产生。"""
     read_at: datetime | None = None
 
     @property
     def is_read(self) -> bool:
         return self.read_at is not None
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationPreference:
+    """A user's opt-in state for one non-mandatory notification category."""
+
+    user_id: str
+    type: NotificationType
+    enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,6 +562,24 @@ class SharedResourceFile:
 
 
 @dataclass(frozen=True, slots=True)
+class SharedResourcePublicationAttempt:
+    """Durable candidate and validation result; never a published Version itself."""
+
+    id: str
+    shared_resource_id: str
+    status: SharedResourcePublicationStatus
+    description: str
+    files: tuple[SharedResourceFile, ...]
+    validation_summary: str
+    failure_reason: str | None
+    version_id: str | None
+    created_by: str
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SharedResourceVersion:
     """Shared Resource 已发布的不可变内容版本（GR-201）。
 
@@ -542,12 +597,20 @@ class SharedResourceVersion:
     """在该 Shared Resource 内自增，用于展示为 v1、v2……"""
     description: str
     files: tuple[SharedResourceFile, ...]
+    manifest_hash: str
+    validation_summary: str
     created_by: str
     created_at: datetime
 
     @property
     def label(self) -> str:
         return f"v{self.sequence}"
+
+    def contains_subpath(self, subpath: str) -> bool:
+        """Return whether a normalized path names a file or directory in this version."""
+        return any(
+            file.path == subpath or file.path.startswith(subpath + "/") for file in self.files
+        )
 
     @property
     def total_size(self) -> int:

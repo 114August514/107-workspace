@@ -9,9 +9,13 @@
   border-bottom: var(--borderWidth-thin) solid var(--borderColor-default);
 }
 
+.projectHeader {
+  border-bottom: 0;
+}
+
 .headerInner {
-  min-height: var(--base-size-48);
-  padding: var(--base-size-8) var(--base-size-24);
+  padding-block: var(--base-size-12);
+  padding-inline: var(--base-size-16);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -41,6 +45,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .brand:focus-visible {
   outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
   outline-offset: 2px;
@@ -48,6 +53,99 @@
 
 .brand:hover {
   color: var(--fgColor-default);
+}
+
+.projectContext {
+  display: flex;
+  flex: 1 1 auto;
+  height: var(--base-size-32);
+  min-width: 0;
+  align-items: center;
+  gap: var(--base-size-2);
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--fgColor-default);
+}
+
+.projectContextItem,
+.projectContextLabel {
+  min-width: 0;
+}
+
+.projectContext a.projectContextItem {
+  color: inherit;
+}
+.projectContextItem [data-component='buttonContent'] {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.projectContextItem [data-component='text'] {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.projectContextLabel {
+  display: block;
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectOwner,
+.projectName {
+  min-width: calc(3ch + 2 * var(--control-medium-paddingInline-normal));
+}
+
+.projectOwner {
+  flex: 0 2 auto;
+  min-width: calc(3ch + 2 * var(--base-size-6));
+  padding-inline: var(--base-size-6);
+}
+
+.projectName {
+  flex: 0 1 auto;
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.projectSelector {
+  flex: 0 1 auto;
+  min-width: calc(3ch + var(--base-size-8) + var(--base-size-4) + var(--base-size-24));
+}
+
+.projectSelector > :first-child {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.projectSelector > :last-child {
+  flex: 0 0 auto;
+}
+
+.projectSelector .projectName {
+  width: 100%;
+  padding-inline: var(--base-size-8) var(--base-size-4);
+}
+
+.projectSelector .projectSwitcherTrigger {
+  width: var(--base-size-24);
+  min-width: var(--base-size-24);
+  flex: 0 0 var(--base-size-24);
+}
+
+.projectSeparator,
+.projectLoading {
+  color: var(--fgColor-muted);
+}
+
+.projectRetry {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--fgColor-danger);
 }
 
 .actions {
@@ -78,9 +176,35 @@
   min-width: 0;
 }
 
+.projectNavigationSurface {
+  height: var(--base-size-40);
+  overflow: hidden;
+  background: var(--bgColor-muted);
+}
+
+.projectNavigation {
+  transform: translateY(calc(-1 * var(--base-size-8)));
+}
+
+.projectNavigation a:hover {
+  color: var(--fgColor-default);
+}
+
+.projectNavigation a:hover [data-component='text'] {
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.projectSelectPanel [data-component='ActionList.Item']::after {
+  display: none;
+}
+
+.projectSelectPanel [data-component='FilteredActionList.Header'] {
+  box-shadow: none;
+}
+
 .contextGuide {
   min-height: var(--base-size-44);
-  padding: var(--base-size-8) 50px;
+  padding: var(--base-size-8) var(--base-size-48);
   border-top: var(--borderWidth-thin) solid var(--borderColor-default);
   box-sizing: border-box;
   display: flex;
@@ -90,22 +214,29 @@
   color: var(--fgColor-muted);
 }
 
-/* Primer PageLayout narrow 边界：小于 48rem。 */
-@media (max-width: calc(48rem - 0.02px)) {
+/* Primer viewportRange.narrow, excluding the medium breakpoint itself. */
+@media not all and (min-width: 48rem) {
   .persistentSidebar {
     display: none;
   }
 
   .headerInner {
-    padding-inline: var(--base-size-8);
+    align-items: stretch;
+    flex-wrap: wrap;
     gap: var(--base-size-8);
+  }
+
+  .headerStart,
+  .actions {
+    flex-basis: 100%;
+  }
+
+  .actions {
+    justify-content: flex-end;
+    gap: var(--base-size-4);
   }
 
   .contextGuide {
     padding-inline: var(--base-size-16);
-  }
-
-  .actions {
-    gap: var(--base-size-4);
   }
 }

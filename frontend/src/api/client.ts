@@ -20,19 +20,27 @@ import type {
   ApiErrorBody,
   ArtifactEntry,
   ComputePlan,
+  ComputeRequest,
+  InputBinding,
   Entitlement,
   Environment,
+  EnvironmentPublicationAttempt,
+  EnvironmentVersion,
   FileContent,
   Home,
   Invitation,
   LogChunk,
   Member,
   MembershipRole,
+  Notification,
   NotificationPage,
-  PreflightResult,
+  NotificationPreference,
   PageQuery,
   ForkSource,
+  Grant,
+  OwnerReference,
   Project,
+  ProjectPage,
   ProjectFile,
   ProjectVersion,
   ProjectVersionPage,
@@ -46,11 +54,13 @@ import type {
   SharedResource,
   SharedResourceCreate,
   SharedResourceDetail,
+  SharedResourcePublicationAttempt,
   SharedResourceUpdate,
-  SharedResourceVersion,
+  PreflightResult,
   SharedResourceVersionDetail,
   VersionDiff,
   WorkingChange,
+  WorkingChangeDetail,
   UserGroup,
 } from './types'
 
@@ -176,6 +186,80 @@ export const api = {
   home: async (): Promise<Home> => unwrap(await http.GET('/api/v1/me')),
   environments: async (): Promise<Environment[]> =>
     unwrap(await http.GET('/api/v1/catalog/environments')),
+  environment: async (id: string): Promise<Environment> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environments/{environment_id}', {
+        params: { path: { environment_id: id } },
+      }),
+    ),
+  environmentVersion: async (id: string): Promise<EnvironmentVersion> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environment-versions/{version_id}', {
+        params: { path: { version_id: id } },
+      }),
+    ),
+  publishModulesEnvironment: async (
+    id: string,
+    body: { version: string; description: string; modules: string[] },
+  ): Promise<EnvironmentPublicationAttempt> =>
+    unwrap(
+      await http.POST(
+        '/api/v1/catalog/environments/{environment_id}/publication-attempts/modules',
+        { params: { path: { environment_id: id } }, body },
+      ),
+    ),
+  publishSifEnvironment: async (
+    id: string,
+    payload: {
+      version: string
+      sif: File
+      source_uri: string
+      source_digest: string
+      architecture: 'x86_64'
+    },
+  ): Promise<EnvironmentPublicationAttempt> => {
+    const form = new FormData()
+    form.append('version', payload.version)
+    form.append('sif', payload.sif)
+    form.append('source_uri', payload.source_uri)
+    form.append('source_digest', payload.source_digest)
+    form.append('architecture', payload.architecture)
+    form.append('description', '')
+    return unwrap(
+      await http.POST(
+        '/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif',
+        {
+          params: { path: { environment_id: id } },
+          body: form as unknown as {
+            version: string
+            sif: string
+            source_uri: string
+            source_digest: string
+            architecture: string
+            description: string
+          },
+        },
+      ),
+    )
+  },
+  environmentPublicationAttempts: async (id: string): Promise<EnvironmentPublicationAttempt[]> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environments/{environment_id}/publication-attempts', {
+        params: { path: { environment_id: id } },
+      }),
+    ),
+  environmentPublicationAttempt: async (id: string): Promise<EnvironmentPublicationAttempt> =>
+    unwrap(
+      await http.GET('/api/v1/catalog/environment-publication-attempts/{attempt_id}', {
+        params: { path: { attempt_id: id } },
+      }),
+    ),
+  refreshEnvironmentAvailability: async (id: string): Promise<EnvironmentVersion> =>
+    unwrap(
+      await http.POST('/api/v1/catalog/environment-versions/{version_id}/availability/refresh', {
+        params: { path: { version_id: id } },
+      }),
+    ),
   computePlans: async (): Promise<ComputePlan[]> =>
     unwrap(await http.GET('/api/v1/catalog/compute-plans')),
 
@@ -194,7 +278,10 @@ export const api = {
 
   updateUserGroup: async (
     id: string,
-    payload: { name?: string; description?: string },
+    payload: {
+      name?: string
+      description?: string
+    },
   ): Promise<UserGroup> =>
     unwrap(
       await http.PATCH('/api/v1/user-groups/{user_group_id}', {
@@ -242,6 +329,15 @@ export const api = {
     )
   },
 
+  /** 主动退出 User Group。Owner 需先转让所有权，后端会拒绝。 */
+  leaveUserGroup: async (id: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/user-groups/{user_group_id}/leave', {
+        params: { path: { user_group_id: id } },
+      }),
+    )
+  },
+
   /** 我收到的、还没处理的邀请。 */
   listInvitations: async (): Promise<Invitation[]> => unwrap(await http.GET('/api/v1/invitations')),
 
@@ -258,6 +354,25 @@ export const api = {
     unwrap(await http.GET('/api/v1/me/entitlements')),
 
   // -- Project -----------------------------------------------------------
+  listOwnerProjects: async (
+    owner: OwnerReference,
+    options: PageQuery & { query?: string } = {},
+  ): Promise<ProjectPage> =>
+    unwrap(
+      await http.GET('/api/v1/projects', {
+        params: {
+          query: {
+            ...options,
+            owner_kind: owner.kind,
+            owner_id: owner.id,
+          },
+        },
+      }),
+    ),
+
+  /** 当前 User 可见的 Project：自有、有效 User Group 拥有的与 PUBLIC。分页。 */
+  listProjects: async (query: PageQuery = {}): Promise<ProjectPage> =>
+    unwrap(await http.GET('/api/v1/projects', { params: { query } })),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
@@ -277,6 +392,13 @@ export const api = {
       await http.PATCH('/api/v1/projects/{project_id}', {
         params: { path: { project_id: id } },
         body: payload,
+      }),
+    ),
+
+  environmentsForProject: async (id: string): Promise<Environment[]> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/environments', {
+        params: { path: { project_id: id } },
       }),
     ),
 
@@ -303,6 +425,24 @@ export const api = {
       }),
     ),
 
+  /**
+   * multipart 上传。多选时调用方逐个文件调一次而不是一次打包全部：
+   * 一个请求一个文件的成败，失败的用户才分得清是哪个文件出了问题。
+   */
+  uploadFiles: async (id: string, files: File[]): Promise<ProjectFile[]> => {
+    const form = new FormData()
+    for (const file of files) {
+      form.append('files', file)
+    }
+    return unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/upload', {
+        params: { path: { project_id: id } },
+        // 契约把 files 标成 string[]，实际是 File；理由同 publishSharedResourceVersion。
+        body: form as unknown as { files: string[] },
+      }),
+    )
+  },
+
   deletePath: async (id: string, path: string): Promise<void> => {
     unwrap(
       await http.DELETE('/api/v1/projects/{project_id}/files', {
@@ -319,11 +459,86 @@ export const api = {
       }),
     ),
 
+  copyPath: async (id: string, source: string, destination: string): Promise<ProjectFile[]> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/copy', {
+        params: { path: { project_id: id } },
+        body: { source, destination },
+      }),
+    ),
+
+  createDirectory: async (id: string, path: string): Promise<ProjectFile> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/mkdir', {
+        params: { path: { project_id: id } },
+        body: { path },
+      }),
+    ),
+
+  /**
+   * 上传 zip 压缩包并展开到工作区。
+   *
+   * 与 `publishSharedResourceVersion` 同理：契约类型把文件标成 string，
+   * 这里实际是 File，FormData 由浏览器补 Content-Type 和 boundary。
+   */
+  uploadArchive: async (id: string, file: File, prefix = ''): Promise<ProjectFile[]> => {
+    const form = new FormData()
+    form.append('file', file)
+    return unwrap(
+      await http.POST('/api/v1/projects/{project_id}/files/archive', {
+        params: {
+          path: { project_id: id },
+          query: prefix ? { prefix } : undefined,
+        },
+        body: form as unknown as { file: string },
+      }),
+    )
+  },
+
+  /**
+   * 下载 Project 文件。
+   *
+   * 走 fetch 拿 blob 再触发浏览器下载，而不是直接给 `<a href>`——
+   * 请求要带身份头，理由同 `downloadArtifactFile`。
+   */
+  downloadFile: async (id: string, path: string): Promise<void> => {
+    const blob = unwrap(
+      await http.GET('/api/v1/projects/{project_id}/files/download', {
+        params: { path: { project_id: id }, query: { path } },
+        parseAs: 'blob',
+      }),
+    )
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = path.split('/').pop() ?? 'file'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
+
   // -- 版本 --------------------------------------------------------------
   workingChanges: async (id: string): Promise<WorkingChange[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/changes', {
         params: { path: { project_id: id } },
+      }),
+    ),
+
+  workingChangeDetail: async (id: string, path: string): Promise<WorkingChangeDetail> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/changes/detail', {
+        params: { path: { project_id: id }, query: { path } },
+      }),
+    ),
+
+  /** 放弃指定未保存变更，返回剩余的未保存变更。 */
+  discardChanges: async (id: string, paths: string[]): Promise<WorkingChange[]> =>
+    unwrap(
+      await http.POST('/api/v1/projects/{project_id}/changes/discard', {
+        params: { path: { project_id: id } },
+        body: { paths },
       }),
     ),
 
@@ -473,6 +688,45 @@ export const api = {
         },
       }),
     ),
+  adjustedRerun: async (
+    id: string,
+    payload: {
+      name: string
+      project_version_id: string
+      environment_version_id: string
+      working_directory: string
+      command: string
+      input_bindings: InputBinding[]
+      compute_request: ComputeRequest
+    },
+    idempotencyKey?: string,
+  ): Promise<Run> =>
+    unwrap(
+      await http.POST('/api/v1/runs/{run_id}/rerun/adjusted', {
+        params: {
+          path: { run_id: id },
+          header: { 'Idempotency-Key': idempotencyKey ?? null },
+        },
+        body: payload,
+      }),
+    ),
+
+  downloadLogs: async (id: string, stream: 'stdout' | 'stderr' | 'combined'): Promise<void> => {
+    const result = unwrap(
+      await http.GET('/api/v1/runs/{run_id}/logs/download', {
+        params: { path: { run_id: id }, query: { stream } },
+        parseAs: 'blob',
+      }),
+    )
+    const url = URL.createObjectURL(result)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${stream}.log`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
 
   syncRuns: async (): Promise<{ changed: number }> => unwrap(await http.POST('/api/v1/runs/sync')),
 
@@ -484,23 +738,26 @@ export const api = {
       }),
     ),
 
-  /**
-   * 下载 Artifact 文件。
-   *
-   * 走 fetch 而不是直接给 `<a href>`，因为下载同样需要带上身份请求头——
-   * 否则浏览器会用默认身份去取，拿到 404。
-   */
-  downloadArtifactFile: async (id: string, path: string): Promise<void> => {
-    const blob = unwrap(
+  readArtifactFile: async (id: string, path: string): Promise<Blob> =>
+    unwrap(
       await http.GET('/api/v1/artifacts/{artifact_id}/download', {
         params: { path: { artifact_id: id }, query: { path } },
+        parseAs: 'blob',
+      }),
+    ),
+
+  /** 下载 Artifact 文件；省略 path 时由后端返回完整 ZIP。 */
+  downloadArtifactFile: async (id: string, path?: string): Promise<void> => {
+    const blob = unwrap(
+      await http.GET('/api/v1/artifacts/{artifact_id}/download', {
+        params: { path: { artifact_id: id }, query: path ? { path } : {} },
         parseAs: 'blob',
       }),
     )
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = path.split('/').pop() ?? 'artifact'
+    link.download = path?.split('/').pop() ?? 'artifact.zip'
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -537,19 +794,15 @@ export const api = {
     ),
 
   /**
-   * 发布 Shared Resource 新版本。
+   * Upload a Shared Resource publication candidate.
    *
-   * 后端是 multipart/form-data：每个文件挂在 `files` 下，`description` 是普通
-   * 字段，`prefix` 走 query。openapi-fetch 的默认序列化器会把 FormData 原样
-   * 透传，浏览器自动补 Content-Type 和 boundary——所以这里手动构造 FormData。
-   *
-   * 契约里 `files` 的类型是 `string[]`（openapi-typescript 对 UploadFile 的
-   * 近似），但运行时放的是 File 对象，所以这一处要 cast。
+   * The 202 response is a durable attempt, not a Version. Callers must read the attempt
+   * until it succeeds or fails before treating any version as published.
    */
-  publishSharedResourceVersion: async (
+  createSharedResourcePublicationAttempt: async (
     resourceId: string,
     payload: { files: File[]; description: string; prefix?: string },
-  ): Promise<SharedResourceVersion> => {
+  ): Promise<SharedResourcePublicationAttempt> => {
     const form = new FormData()
     for (const file of payload.files) {
       form.append('files', file)
@@ -570,10 +823,25 @@ export const api = {
     )
   },
 
-  getSharedResourceVersion: async (versionId: string): Promise<SharedResourceVersionDetail> =>
+  getSharedResourcePublicationAttempt: async (
+    attemptId: string,
+    signal?: AbortSignal,
+  ): Promise<SharedResourcePublicationAttempt> =>
+    unwrap(
+      await http.GET('/api/v1/shared-resource-publication-attempts/{attempt_id}', {
+        params: { path: { attempt_id: attemptId } },
+        signal,
+      }),
+    ),
+
+  getSharedResourceVersion: async (
+    versionId: string,
+    signal?: AbortSignal,
+  ): Promise<SharedResourceVersionDetail> =>
     unwrap(
       await http.GET('/api/v1/shared-resource-versions/{version_id}', {
         params: { path: { version_id: versionId } },
+        signal,
       }),
     ),
 
@@ -636,6 +904,13 @@ export const api = {
       }),
     ) ?? null,
 
+  listGrants: async (query: {
+    target_kind?: 'environment' | 'shared_resource' | 'all' | null
+    target_id?: string | null
+    grantor_kind?: 'user' | 'user_group' | null
+    grantor_id?: string | null
+  }): Promise<Grant[]> => unwrap(await http.GET('/api/v1/grants', { params: { query } })),
+
   // -- 活动流 ------------------------------------------------------------
   listUserGroupActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
     unwrap(
@@ -668,7 +943,29 @@ export const api = {
     )
   },
 
+  markNotificationUnread: async (id: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/notifications/{notification_id}/unread', {
+        params: { path: { notification_id: id } },
+      }),
+    )
+  },
+
   markAllNotificationsRead: async (): Promise<void> => {
     unwrap(await http.POST('/api/v1/notifications/read-all'))
   },
+
+  listNotificationPreferences: async (): Promise<NotificationPreference[]> =>
+    unwrap(await http.GET('/api/v1/notifications/preferences')),
+
+  setNotificationPreference: async (
+    type: Notification['type'],
+    enabled: boolean,
+  ): Promise<NotificationPreference> =>
+    unwrap(
+      await http.PUT('/api/v1/notifications/preferences/{notification_type}', {
+        params: { path: { notification_type: type } },
+        body: { enabled },
+      }),
+    ),
 }

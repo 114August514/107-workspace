@@ -9,6 +9,7 @@ Version 不会重复占用空间，而且 ProjectVersion 的不可变性天然�
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -92,6 +93,10 @@ class StoragePort(Protocol):
 
     async def blob_exists(self, content_hash: str) -> bool: ...
 
+    async def resolve_blob_path(self, content_hash: str) -> Path:
+        """Return a scheduler-visible CAS path after rechecking the exact digest."""
+        ...
+
     # -- Run 工作目录 ---------------------------------------------------
 
     def run_paths(self, run_id: str) -> RunPaths: ...
@@ -115,6 +120,24 @@ class StoragePort(Protocol):
         """读取日志尾部，返回内容和是否被截断。"""
         ...
 
+    async def iter_log(
+        self, run_id: str, stream: LogStream, *, chunk_size: int
+    ) -> AsyncIterator[bytes]:
+        """以小块读取完整日志，不把文件一次性载入应用内存。"""
+        ...
+
+    async def iter_artifact_file(
+        self, artifact_id: str, path: str, *, chunk_size: int
+    ) -> AsyncIterator[bytes]:
+        """以小块读取 Artifact 文件。"""
+        ...
+
+    async def iter_artifact_archive(
+        self, artifact_id: str, *, chunk_size: int
+    ) -> AsyncIterator[bytes]:
+        """以小块读取 Artifact 的完整归档。"""
+        ...
+
     async def cleanup_run_directory(self, run_id: str) -> None: ...
 
     # -- Artifact -------------------------------------------------------
@@ -131,10 +154,6 @@ class StoragePort(Protocol):
     async def list_artifact_files(self, artifact_id: str) -> list[ArtifactEntry]: ...
 
     async def read_artifact_file(self, artifact_id: str, path: str) -> bytes: ...
-
     async def delete_artifact_content(self, artifact_id: str) -> None:
-        """删除 Artifact 的存储内容。
-
-        当前实现只删内容、不删记录，使历史 Run 仍能显示标识、摘要和清理状态。
-        """
+        """删除 Artifact 的存储内容。"""
         ...

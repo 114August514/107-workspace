@@ -21,14 +21,19 @@ export function formatDuration(seconds: number | null | undefined): string {
   const hours = Math.floor(total / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const rest = total % 60
-  if (hours > 0) return `${hours} 小时 ${minutes} 分`
-  if (minutes > 0) return `${minutes} 分 ${rest} 秒`
+  if (hours > 0) return minutes > 0 ? `${hours} 小时 ${minutes} 分` : `${hours} 小时`
+  if (minutes > 0) return rest > 0 ? `${minutes} 分 ${rest} 秒` : `${minutes} 分钟`
   return `${rest} 秒`
 }
 
 export function formatTime(value: string | null | undefined): string {
   if (!value) return '—'
   return dayjs(value).format('YYYY-MM-DD HH:mm:ss')
+}
+
+export function formatTimelineTime(value: string | null | undefined): string {
+  if (!value) return '—'
+  return dayjs(value).format('HH:mm:ss')
 }
 
 export function formatRelative(value: string | null | undefined): string {
@@ -42,6 +47,11 @@ export function formatRelative(value: string | null | undefined): string {
   const days = Math.floor(hours / 24)
   if (days < 30) return `${days} 天前`
   return then.format('YYYY-MM-DD')
+}
+
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  return dayjs(value).format('YYYY-MM-DD')
 }
 
 export function formatMemory(megabytes: number): string {

@@ -14,16 +14,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.deps import build_services
+from ..application.environment_publication import canonicalize_modules, definition_hash
 from ..application.run_configuration_service import RunConfigurationInput
 from ..config import get_settings
 from ..domain import ids
 from ..domain.config_scope import ConfigScope
-from ..domain.enums import MembershipRole, MembershipStatus
+from ..domain.enums import (
+    EnvironmentAvailability,
+    EnvironmentRuntimeKind,
+    MembershipRole,
+    MembershipStatus,
+)
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..infrastructure.db import tables as t
 from ..main import build_context
@@ -58,25 +65,44 @@ _PLATFORM_ENVIRONMENTS = (
     },
 )
 
+
+def _module_version(
+    *, id: str, environment_id: str, version: str, description: str, modules: list[str]
+) -> dict[str, object]:
+    definition, execution = canonicalize_modules(modules)
+    return {
+        "id": id,
+        "environment_id": environment_id,
+        "version": version,
+        "description": description,
+        "runtime_kind": EnvironmentRuntimeKind.MODULES.value,
+        "definition": definition,
+        "definition_hash": definition_hash(definition),
+        "execution_spec": execution,
+        "validation_summary": "平台固定的 107 Modules 运行环境",
+        "validation_evidence": {"validator": "platform_seed_v1"},
+        "availability": EnvironmentAvailability.AVAILABLE.value,
+        "availability_reason": "platform_reference",
+        "availability_detail": "由当前平台 PDF 模块清单确认",
+        "availability_checked_at": datetime(2026, 6, 28),
+    }
+
+
 _PLATFORM_ENVIRONMENT_VERSIONS = (
-    {
-        "id": PLATFORM_ENVIRONMENT_VERSION_ID,
-        "environment_id": PLATFORM_ENVIRONMENT_ID,
-        "version": "3.12",
-        "description": "Python 3.12 标准库环境。",
-        "image": "python:3.12-slim",
-        "setup_command": "",
-        "available": True,
-    },
-    {
-        "id": PLATFORM_PYTORCH_ENVIRONMENT_VERSION_ID,
-        "environment_id": PLATFORM_PYTORCH_ENVIRONMENT_ID,
-        "version": "2.4-cuda12.1",
-        "description": "PyTorch 2.4 + CUDA 12.1。可用性以平台页面为准。",
-        "image": "pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime",
-        "setup_command": "",
-        "available": True,
-    },
+    _module_version(
+        id=PLATFORM_ENVIRONMENT_VERSION_ID,
+        environment_id=PLATFORM_ENVIRONMENT_ID,
+        version="3.12",
+        description="Python 3.12 平台 Modules 环境。",
+        modules=["python3.12/3.12"],
+    ),
+    _module_version(
+        id=PLATFORM_PYTORCH_ENVIRONMENT_VERSION_ID,
+        environment_id=PLATFORM_PYTORCH_ENVIRONMENT_ID,
+        version="python3.12-cuda12.6",
+        description="平台 Python 3.12 + CUDA 12.6（CUDA 内含 cuDNN）。",
+        modules=["python3.12/3.12", "cuda/12.6"],
+    ),
 )
 
 DEMO_SCRIPT = '''"""演示训练脚本。
@@ -288,14 +314,23 @@ async def _seed_demo_environment(session: AsyncSession) -> None:
         )
     )
     await session.flush()
+    definition, execution = canonicalize_modules(["python3.12/3.12"])
     session.add(
         t.EnvironmentVersionRow(
             id=DEMO_ENVIRONMENT_VERSION_ID,
             environment_id=DEMO_ENVIRONMENT_ID,
             version="3.12",
-            description="Python 3.12 标准库环境。",
-            image="python:3.12-slim",
-            setup_command="",
+            description="Python 3.12 平台 Modules 环境。",
+            runtime_kind=EnvironmentRuntimeKind.MODULES.value,
+            definition=definition,
+            definition_hash=definition_hash(definition),
+            execution_spec=execution,
+            validation_summary="平台固定的 107 Modules 运行环境",
+            validation_evidence={"validator": "platform_seed_v1"},
+            availability=EnvironmentAvailability.AVAILABLE.value,
+            availability_reason="platform_reference",
+            availability_detail="由当前平台 PDF 模块清单确认",
+            availability_checked_at=datetime(2026, 6, 28),
         )
     )
     await session.flush()

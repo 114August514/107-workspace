@@ -7,7 +7,12 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 
 from __future__ import annotations
 
+import io
 import posixpath
+import re
+import stat
+import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from ..domain import ids
@@ -50,6 +55,10 @@ from .ownership import owner_summaries as resolve_owner_summaries
 
 MAX_INLINE_PREVIEW_BYTES = 512 * 1024
 
+# 压缩包展开预算的默认值；组合根会用配置覆盖。
+DEFAULT_MAX_ARCHIVE_TOTAL_BYTES = 128 * 1024 * 1024
+DEFAULT_MAX_ARCHIVE_ENTRIES = 500
+
 
 def normalize_path(raw: str) -> str:
     """把用户传入的路径规范化为仓库内相对路径。
@@ -65,6 +74,39 @@ def normalize_path(raw: str) -> str:
     return normalized
 
 
+def _is_directory_marker(path: str) -> bool:
+    return path.rsplit("/", 1)[-1] == ".gitkeep"
+
+
+def _validate_user_file_paths(paths: Iterable[str]) -> None:
+    """Reject the reserved marker from user-supplied file inputs."""
+    for path in paths:
+        if _is_directory_marker(path):
+            raise ValidationFailed("「.gitkeep」是系统保留的空目录占位文件名")
+
+
+def _validate_file_namespace(
+    existing_paths: Iterable[str],
+    proposed_paths: Iterable[str],
+    *,
+    removed_paths: Iterable[str] = (),
+) -> None:
+    """Ensure the resulting file set has no file/directory name collisions."""
+    proposed = list(proposed_paths)
+    if len(proposed) != len(set(proposed)):
+        raise ConflictError("目标中有多个文件规范化为同一路径")
+
+    final_paths = set(existing_paths)
+    final_paths.difference_update(removed_paths)
+    final_paths.update(proposed)
+    for path in sorted(final_paths):
+        parts = path.split("/")
+        for index in range(1, len(parts)):
+            ancestor = "/".join(parts[:index])
+            if ancestor in final_paths:
+                raise ConflictError(f"「{ancestor}」已是文件，不能同时作为目录")
+
+
 @dataclass(frozen=True, slots=True)
 class VersionDiffEntry:
     path: str
@@ -77,6 +119,18 @@ class WorkingTreeChange:
     change: ChangeKind
 
 
+@dataclass(frozen=True, slots=True)
+class WorkingChangeDetail:
+    """一个未保存变更的两侧内容事实，由路由层负责预览截断与解码。"""
+
+    path: str
+    change: ChangeKind
+    previous: bytes | None
+    """基线（最近保存版本）中的内容；新增时为空。"""
+    current: bytes | None
+    """当前工作区内容；删除时为空。"""
+
+
 class ProjectService:
     def __init__(
         self,
@@ -87,6 +141,8 @@ class ProjectService:
         activity: ActivityRecorder,
         *,
         max_file_bytes: int,
+        max_archive_total_bytes: int = DEFAULT_MAX_ARCHIVE_TOTAL_BYTES,
+        max_archive_entries: int = DEFAULT_MAX_ARCHIVE_ENTRIES,
     ) -> None:
         self._repos = repos
         self._guard = guard
@@ -96,14 +152,28 @@ class ProjectService:
         # 上限从组合根注入而不是读全局配置：用例的依赖都写在构造函数上，
         # 测试要换一个小上限也不用改环境变量。
         self._max_file_bytes = max_file_bytes
+        self._max_archive_total_bytes = max_archive_total_bytes
+        self._max_archive_entries = max_archive_entries
 
     # -- Project --------------------------------------------------------
 
     async def list_recent_for_user(self, user_id: str, *, limit: int = 10) -> list[Project]:
         return await self._repos.projects.list_for_user(user_id, limit=limit)
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
-        return await self._repos.projects.list_discoverable_for_user(user_id, page)
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
+        return await self._repos.projects.list_discoverable_for_user(
+            user_id,
+            page,
+            owner=owner,
+            query=query,
+        )
 
     async def get(self, user_id: str, project_id: str) -> ProjectAccess:
         return await self._guard.project(user_id, project_id)
@@ -255,13 +325,24 @@ class ProjectService:
             user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
         )
         normalized = normalize_path(path)
+        _validate_user_file_paths([normalized])
+        existing = await self._repos.project_files.list_for_project(project_id)
+        _validate_file_namespace((file.path for file in existing), [normalized])
+        record = await self._store_entry(project_id, normalized, content)
+        await self._touch(access.project)
+        return record
 
+    async def _store_entry(self, project_id: str, path: str, content: bytes) -> ProjectFile:
+        """写入单个文件条目：上限校验、内容寻址存储、元数据 upsert。
+
+        鉴权和刷新项目修改时间由调用方负责；批量写入时只 touch 一次。
+        """
         # 中间件按 Content-Length 挡掉的是明显超大的请求，
         # 但那个头可能缺失或被伪造，所以真正的上限在这里再判一次。
         if len(content) > self._max_file_bytes:
             limit_mb = self._max_file_bytes // (1024 * 1024)
             raise ValidationFailed(
-                f"文件 {normalized} 超过单个文件上限 {limit_mb} MB。"
+                f"文件 {path} 超过单个文件上限 {limit_mb} MB。"
                 "大数据集和模型权重应当作为共享资源管理，不要放进 Project 文件。"
             )
 
@@ -269,13 +350,12 @@ class ProjectService:
 
         record = ProjectFile(
             project_id=project_id,
-            path=normalized,
+            path=path,
             size=len(content),
             content_hash=content_hash,
             updated_at=self._clock.now(),
         )
         await self._repos.project_files.upsert(record)
-        await self._touch(access.project)
         return record
 
     async def delete_path(self, user_id: str, project_id: str, path: str) -> int:
@@ -315,12 +395,24 @@ class ProjectService:
         matched = [f for f in existing if f.path == src or f.path.startswith(src + "/")]
         if not matched:
             raise ObjectNotFound("文件或目录", src)
+        proposed: list[tuple[ProjectFile, str]] = []
+        for file in matched:
+            suffix = file.path[len(src) :]
+            proposed.append((file, dst + suffix))
+        for file, new_path in proposed:
+            if _is_directory_marker(file.path) != _is_directory_marker(new_path):
+                raise ValidationFailed(
+                    "不能在普通文件和系统保留的「.gitkeep」占位文件之间移动或复制"
+                )
+        _validate_file_namespace(
+            (file.path for file in existing),
+            (new_path for _, new_path in proposed),
+            removed_paths=(file.path for file in matched),
+        )
 
         moved: list[ProjectFile] = []
         now = self._clock.now()
-        for file in matched:
-            suffix = file.path[len(src) :]
-            new_path = dst + suffix
+        for file, new_path in proposed:
             await self._repos.project_files.delete(project_id, file.path)
             record = ProjectFile(
                 project_id=project_id,
@@ -334,6 +426,184 @@ class ProjectService:
 
         await self._touch(access.project)
         return moved
+
+    async def copy_path(
+        self, user_id: str, project_id: str, source: str, destination: str
+    ) -> list[ProjectFile]:
+        """复制文件或目录，返回复制出的文件。
+
+        内容按摘要寻址，复制只新增元数据行、不搬运字节；目标已存在的
+        同路径文件会被覆盖。
+        """
+        access = await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
+        )
+        src = normalize_path(source)
+        dst = normalize_path(destination)
+        if src == dst:
+            raise ValidationFailed("源路径和目标路径相同")
+        if dst.startswith(src + "/"):
+            raise ValidationFailed("不能把目录复制到自己的子目录中")
+
+        existing = await self._repos.project_files.list_for_project(project_id)
+        matched = [f for f in existing if f.path == src or f.path.startswith(src + "/")]
+        if not matched:
+            raise ObjectNotFound("文件或目录", src)
+        proposed = [(file, dst + file.path[len(src) :]) for file in matched]
+        for file, new_path in proposed:
+            if _is_directory_marker(file.path) != _is_directory_marker(new_path):
+                raise ValidationFailed(
+                    "不能在普通文件和系统保留的「.gitkeep」占位文件之间移动或复制"
+                )
+        _validate_file_namespace(
+            (file.path for file in existing),
+            (new_path for _, new_path in proposed),
+        )
+
+        copied: list[ProjectFile] = []
+        now = self._clock.now()
+        for file, new_path in proposed:
+            record = ProjectFile(
+                project_id=project_id,
+                path=new_path,
+                size=file.size,
+                content_hash=file.content_hash,
+                updated_at=now,
+            )
+            await self._repos.project_files.upsert(record)
+            copied.append(record)
+
+        await self._touch(access.project)
+        return copied
+
+    async def create_directory(self, user_id: str, project_id: str, path: str) -> ProjectFile:
+        """创建目录。
+
+        目录本身不是实体，靠其中文件的路径前缀存在；这里写入一个
+        ``.gitkeep`` 占位文件，让空目录在文件列表里可见、能保存进版本。
+        """
+        access = await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
+        )
+        normalized = normalize_path(path)
+        existing = await self._repos.project_files.list_for_project(project_id)
+        if any(
+            file.path == normalized or file.path.startswith(normalized + "/") for file in existing
+        ):
+            raise ConflictError(f"目录「{normalized}」已存在")
+        placeholder = f"{normalized}/.gitkeep"
+        _validate_file_namespace((file.path for file in existing), [placeholder])
+
+        record = await self._store_entry(project_id, placeholder, b"")
+        await self._touch(access.project)
+        return record
+
+    async def upload_archive(
+        self, user_id: str, project_id: str, filename: str, data: bytes, *, prefix: str = ""
+    ) -> list[ProjectFile]:
+        """上传并展开 zip 压缩包到工作区，返回写入的文件。
+
+        展开前逐条目校验（见 :meth:`_extract_archive`），全部校验通过才
+        开始写入；同路径文件会被覆盖。
+        """
+        access = await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
+        )
+        normalized_prefix = normalize_path(prefix) if prefix.strip() else ""
+        entries = self._extract_archive(filename, data)
+        target_entries = [
+            (
+                f"{normalized_prefix}/{relative_path}" if normalized_prefix else relative_path,
+                payload,
+            )
+            for relative_path, payload in entries
+        ]
+        _validate_user_file_paths(target for target, _ in target_entries)
+        existing = await self._repos.project_files.list_for_project(project_id)
+        _validate_file_namespace(
+            (file.path for file in existing),
+            (target for target, _ in target_entries),
+        )
+
+        written: list[ProjectFile] = []
+        for target, payload in target_entries:
+            written.append(await self._store_entry(project_id, target, payload))
+        await self._touch(access.project)
+        return written
+
+    def _extract_archive(self, filename: str, data: bytes) -> list[tuple[str, bytes]]:
+        """把压缩包安全展开成 ``(相对路径, 内容)`` 列表。
+
+        只支持 zip。逐条目拒绝路径穿越（经 :func:`normalize_path`）、绝对
+        路径、符号链接和加密条目；按声明的条目数和解压后总大小设预算，
+        防止 zip 炸弹。原始请求体的大小由请求体中间件负责。任何条目不
+        合法就整体拒绝——不做部分展开。
+        """
+        try:
+            archive = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile as exc:
+            raise ValidationFailed(f"「{filename}」不是有效的 zip 压缩包") from exc
+
+        with archive:
+            members: list[tuple[zipfile.ZipInfo, str]] = []
+            total_uncompressed = 0
+            for info in archive.infolist():
+                raw_name = info.filename
+                if raw_name.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", raw_name):
+                    raise ValidationFailed(f"压缩包包含绝对路径条目「{raw_name}」，已拒绝展开")
+
+                name = raw_name.replace("\\", "/")
+                if stat.S_ISLNK(info.external_attr >> 16):
+                    raise ValidationFailed(f"压缩包包含符号链接条目「{name}」，已拒绝展开")
+                if info.flag_bits & 0x1:
+                    raise ValidationFailed(f"压缩包包含加密条目「{name}」，不支持展开")
+                if info.is_dir():
+                    continue
+
+                normalized = normalize_path(name)
+                if info.file_size > self._max_file_bytes:
+                    limit_mb = self._max_file_bytes // (1024 * 1024)
+                    raise ValidationFailed(f"压缩包内的「{name}」超过单个文件上限 {limit_mb} MB")
+                total_uncompressed += info.file_size
+                if total_uncompressed > self._max_archive_total_bytes:
+                    limit_mb = self._max_archive_total_bytes // (1024 * 1024)
+                    raise ValidationFailed(f"压缩包解压后超过总大小上限 {limit_mb} MB")
+                members.append((info, normalized))
+
+            if not members:
+                raise ValidationFailed(f"压缩包「{filename}」中没有可展开的文件")
+            if len(members) > self._max_archive_entries:
+                raise ValidationFailed(
+                    f"压缩包含有 {len(members)} 个文件，超过 {self._max_archive_entries} 个的上限"
+                )
+            _validate_file_namespace((), (name for _, name in members))
+
+            entries: list[tuple[str, bytes]] = []
+            for info, name in members:
+                # 声明大小之外再多读一个字节：头部谎报大小时在这里暴露，
+                # 内存占用也始终有界。
+                try:
+                    with archive.open(info) as member:
+                        payload = member.read(self._max_file_bytes + 1)
+                except zipfile.BadZipFile as exc:
+                    raise ValidationFailed(
+                        f"压缩包「{filename}」已损坏，无法读取条目「{name}」"
+                    ) from exc
+                if len(payload) != info.file_size:
+                    raise ValidationFailed(
+                        f"压缩包内的「{name}」实际内容与声明大小不符，已拒绝展开"
+                    )
+                entries.append((name, payload))
+            return entries
+
+    async def download_file(self, user_id: str, project_id: str, path: str) -> tuple[str, bytes]:
+        """读取完整文件用于下载，返回 ``(文件名, 内容字节)``。"""
+        await self._guard.project(user_id, project_id, owner_scope=True)
+        normalized = normalize_path(path)
+        record = await self._repos.project_files.get(project_id, normalized)
+        if record is None:
+            raise ObjectNotFound("文件", normalized)
+        return posixpath.basename(record.path), await self._storage.read_blob(record.content_hash)
 
     # -- 版本 -----------------------------------------------------------
 
@@ -364,6 +634,102 @@ class ProjectService:
         }
         return [
             WorkingTreeChange(path=path, change=change) for path, change in _diff(baseline, current)
+        ]
+
+    async def working_change_detail(
+        self, user_id: str, project_id: str, path: str
+    ) -> WorkingChangeDetail:
+        """查看一个未保存变更的内容级详情：基线内容与工作区内容。"""
+        await self._guard.project(user_id, project_id, owner_scope=True)
+        normalized = normalize_path(path)
+
+        latest = await self._repos.project_versions.latest(project_id)
+        baseline = {f.path: f for f in latest.files} if latest else {}
+        files = await self._repos.project_files.list_for_project(project_id)
+        current = {f.path: f for f in files}
+
+        previous_hash = baseline[normalized].content_hash if normalized in baseline else None
+        current_hash = current[normalized].content_hash if normalized in current else None
+        if previous_hash == current_hash:
+            raise ObjectNotFound("未保存变更", normalized)
+
+        return WorkingChangeDetail(
+            path=normalized,
+            change=_change_kind(previous_hash, current_hash),
+            previous=await self._storage.read_blob(previous_hash) if previous_hash else None,
+            current=await self._storage.read_blob(current_hash) if current_hash else None,
+        )
+
+    async def discard_changes(
+        self, user_id: str, project_id: str, paths: list[str]
+    ) -> list[WorkingTreeChange]:
+        """放弃指定的未保存变更，把工作区恢复到最近版本对应的内容。
+
+        只影响 Working State，历史版本不动（GR-201）。没有待放弃变化的
+        路径按幂等处理、直接跳过；返回剩余的未保存变更。
+        """
+        access = await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
+        )
+        normalized_paths: list[str] = []
+        seen: set[str] = set()
+        for raw in paths:
+            normalized = normalize_path(raw)
+            if normalized not in seen:
+                seen.add(normalized)
+                normalized_paths.append(normalized)
+
+        latest = await self._repos.project_versions.latest(project_id)
+        baseline = {f.path: f for f in latest.files} if latest else {}
+        pending_hashes = {
+            f.path: f.content_hash
+            for f in await self._repos.project_files.list_for_project(project_id)
+        }
+        pending = dict(_diff({p: f.content_hash for p, f in baseline.items()}, pending_hashes))
+        resulting_paths = set(pending_hashes)
+        for path in normalized_paths:
+            change = pending.get(path)
+            if change is ChangeKind.ADDED:
+                resulting_paths.discard(path)
+            elif change is not None:
+                resulting_paths.add(path)
+        _validate_file_namespace((), resulting_paths)
+
+        now = self._clock.now()
+        discarded = False
+        for path in normalized_paths:
+            change = pending.get(path)
+            if change is None:
+                continue
+            if change is ChangeKind.ADDED:
+                await self._repos.project_files.delete(project_id, path)
+            else:
+                # MODIFIED 用基线内容覆盖回去，REMOVED 按基线重建；
+                # 两者都是复用基线条目的内容摘要，不写新 blob。
+                entry = baseline[path]
+                await self._repos.project_files.upsert(
+                    ProjectFile(
+                        project_id=project_id,
+                        path=path,
+                        size=entry.size,
+                        content_hash=entry.content_hash,
+                        updated_at=now,
+                    )
+                )
+            discarded = True
+
+        if discarded:
+            await self._touch(access.project)
+
+        remaining_current = {
+            f.path: f.content_hash
+            for f in await self._repos.project_files.list_for_project(project_id)
+        }
+        return [
+            WorkingTreeChange(path=path, change=change)
+            for path, change in _diff(
+                {p: f.content_hash for p, f in baseline.items()}, remaining_current
+            )
         ]
 
     async def save_version(self, user_id: str, project_id: str, message: str) -> ProjectVersion:
@@ -672,3 +1038,11 @@ def _diff(left: dict[str, str], right: dict[str, str]) -> list[tuple[str, Change
         elif left[path] != right[path]:
             changes.append((path, ChangeKind.MODIFIED))
     return changes
+
+
+def _change_kind(previous_hash: str | None, current_hash: str | None) -> ChangeKind:
+    if previous_hash is None:
+        return ChangeKind.ADDED
+    if current_hash is None:
+        return ChangeKind.REMOVED
+    return ChangeKind.MODIFIED

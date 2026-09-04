@@ -26,8 +26,8 @@ def make_snapshot() -> RunSnapshot:
         working_directory="src",
         command="python train.py",
         environment_version_id="ev_1",
-        environment_image="python:3.12-slim",
-        environment_setup_command="pip install -r requirements.txt",
+        environment_definition_hash="test-definition",
+        environment_execution_spec={"kind": "modules", "commands": []},
         resolved_env=ResolvedEnv(
             literals={"EPOCHS": "5"},
             secret_refs={"TOKEN": SecretReference(ConfigScope.user("owner"), "HF_TOKEN")},
@@ -90,6 +90,25 @@ def test_input_access_path_rejects_parent_components() -> None:
             source_id="art_1",
             access_path="/inputs/../../etc",
         )
+
+
+@pytest.mark.parametrize(
+    ("raw", "normalized"),
+    [
+        (" /inputs/train/ ", "/inputs/train"),
+        ("/inputs//train", "/inputs/train"),
+        ("/inputs/./train", "/inputs/train"),
+        ("\\inputs\\train", "/inputs/train"),
+    ],
+)
+def test_input_access_path_is_canonicalized(raw: str, normalized: str) -> None:
+    binding = InputBinding(
+        source_type=InputSourceType.ARTIFACT,
+        source_id="art_1",
+        access_path=raw,
+    )
+
+    assert binding.access_path == normalized
 
 
 def test_artifact_collection_path_must_be_relative() -> None:

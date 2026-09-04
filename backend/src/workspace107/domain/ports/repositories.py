@@ -13,16 +13,19 @@ from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
 from ..config_scope import ConfigScope
+from ..enums import EnvironmentAvailability, NotificationType
 from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
     Artifact,
     Environment,
+    EnvironmentPublicationAttempt,
     EnvironmentVersion,
     ForkRelation,
     IdempotencyRecord,
     Membership,
     Notification,
+    NotificationPreference,
     Project,
     ProjectFile,
     ProjectVersion,
@@ -30,6 +33,7 @@ from ..models import (
     RunConfiguration,
     RunEvent,
     SharedResource,
+    SharedResourcePublicationAttempt,
     SharedResourceVersion,
     User,
     UserGroup,
@@ -81,9 +85,18 @@ class ProjectRepository(Protocol):
         """按最近更新时间列出用户可见的 Project，用于个人首页。"""
         ...
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
-        """列出用户可发现的 Project：Owner scope + PUBLIC。"""
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
+        """列出用户可发现的 Project，可按 Owner 与名称过滤。"""
         ...
+
+    async def list_using_environment_version(self, version_id: str) -> list[Project]: ...
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool: ...
 
@@ -119,6 +132,14 @@ class EnvironmentRepository(Protocol):
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
     ) -> EnvironmentVersion | None: ...
+    async def list_for_owner(self, owner: OwnerReference) -> list[Environment]:
+        """Trusted owner lookup; application authorization remains authoritative."""
+        ...
+
+    async def list_versions(self, environment_id: str) -> list[EnvironmentVersion]:
+        """Trusted version lookup after the parent Environment is authorized."""
+        ...
+
     async def get_version_by_id(self, version_id: str) -> EnvironmentVersion | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
@@ -126,6 +147,25 @@ class EnvironmentRepository(Protocol):
     async def get_by_id(self, environment_id: str) -> Environment | None:
         """Trusted exact lookup for grant-authorized use."""
         ...
+
+    async def add_version(self, version: EnvironmentVersion) -> None: ...
+    async def add_attempt(self, attempt: EnvironmentPublicationAttempt) -> None: ...
+    async def update_attempt(self, attempt: EnvironmentPublicationAttempt) -> None: ...
+    async def get_attempt_by_id(self, attempt_id: str) -> EnvironmentPublicationAttempt | None: ...
+    async def list_attempts_discoverable_for_user(
+        self, user_id: str, environment_id: str
+    ) -> list[EnvironmentPublicationAttempt]: ...
+    async def update_version_availability(
+        self,
+        version_id: str,
+        availability: EnvironmentAvailability,
+        reason: str,
+        detail: str,
+        checked_at: datetime,
+    ) -> EnvironmentVersion | None: ...
+    async def claim_pending_attempt(
+        self, now: datetime
+    ) -> EnvironmentPublicationAttempt | None: ...
 
 
 class ComputePlanRepository(Protocol):
@@ -225,7 +265,13 @@ class NotificationRepository(Protocol):
         """标记已读。返回 False 表示这条通知不属于这个人或不存在。"""
         ...
 
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool: ...
     async def mark_all_read(self, user_id: str, at: datetime) -> int: ...
+    async def is_enabled(self, user_id: str, type: NotificationType) -> bool: ...
+    async def list_preferences(self, user_id: str) -> list[NotificationPreference]: ...
+    async def set_preference(
+        self, user_id: str, type: NotificationType, enabled: bool
+    ) -> NotificationPreference: ...
 
 
 class ForkRelationRepository(Protocol):
@@ -238,9 +284,10 @@ class ForkRelationRepository(Protocol):
 class SharedResourceRepository(Protocol):
     """Shared Resource persistence with repository-enforced discovery.
 
-    User-facing reads always require an actor and filter by exact User ownership or
-    active Membership of the owning UserGroup. #40 may extend this predicate with a
-    valid USE Grant; #39 has no all-authenticated catalog path.
+    User-facing reads always require an actor and filter by exact User ownership,
+    active Membership of the owning UserGroup, or a valid USE Grant issued by the
+    resource's current Owner to the actor or one of their active UserGroups. Grant
+    discovery does not add management capability or an all-authenticated catalog path.
     """
 
     async def add(self, resource: SharedResource) -> None: ...
@@ -249,6 +296,17 @@ class SharedResourceRepository(Protocol):
     async def get_discoverable_for_user(
         self, user_id: str, resource_id: str
     ) -> SharedResource | None: ...
+    async def add_attempt(self, attempt: SharedResourcePublicationAttempt) -> None: ...
+    async def update_attempt(self, attempt: SharedResourcePublicationAttempt) -> None: ...
+    async def claim_next_attempt(
+        self, *, now: datetime, recover_before: datetime
+    ) -> SharedResourcePublicationAttempt | None: ...
+    async def get_attempt_discoverable_for_user(
+        self, user_id: str, attempt_id: str
+    ) -> SharedResourcePublicationAttempt | None: ...
+    async def get_attempt_by_id(
+        self, attempt_id: str
+    ) -> SharedResourcePublicationAttempt | None: ...
     async def add_version(self, version: SharedResourceVersion) -> None: ...
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
@@ -264,7 +322,9 @@ class SharedResourceRepository(Protocol):
         """Trusted exact lookup for grant-authorized use."""
         ...
 
-    async def next_version_sequence(self, resource_id: str) -> int: ...
+    async def next_version_sequence_for_publication(self, resource_id: str) -> int:
+        """Lock the resource aggregate and return its next immutable version sequence."""
+        ...
 
 
 class GrantRepository(Protocol):

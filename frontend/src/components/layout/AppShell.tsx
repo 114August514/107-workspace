@@ -1,16 +1,35 @@
-import { PlusIcon, ThreeBarsIcon } from '@primer/octicons-react'
-import { defaultPaneWidth, IconButton, PageLayout } from '@primer/react'
+import {
+  FileDirectoryIcon,
+  GearIcon,
+  PlayIcon,
+  PlusIcon,
+  ThreeBarsIcon,
+} from '@primer/octicons-react'
+import {
+  Button,
+  ButtonGroup,
+  defaultPaneWidth,
+  IconButton,
+  PageLayout,
+  UnderlineNav,
+} from '@primer/react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
 
-import type { Home } from '../../api/types'
+import type { Home, Project } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { BrandMark } from '../../brand/BrandMark'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { ContextGuide } from './ContextGuide'
+import {
+  UserGroupHeaderContext,
+  UserGroupHeaderNav,
+  UserGroupProvider,
+} from '../usergroup/UserGroupHeaderNav'
 import { appShellCopy } from './copy'
+import { ProjectSwitcher } from './ProjectSwitcher'
 import { UserSwitcher } from './UserSwitcher'
 import { WorkNavigation } from './WorkNavigation'
 import styles from './AppShell.module.css'
@@ -19,6 +38,7 @@ interface Props {
   username: string
   onUsernameChange: (username: string) => void
   home: AsyncResource<Home>
+  project: AsyncResource<Project | undefined>
   children: ReactNode
 }
 
@@ -28,86 +48,197 @@ const appShellStyle: AppShellStyle = {
   '--app-shell-sidebar-width': `${defaultPaneWidth.medium}px`,
 }
 
-export function AppShell({ username, onUsernameChange, home, children }: Props) {
+export function AppShell({ username, onUsernameChange, home, project, children }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
   const navigationId = useId()
   const navigationButtonRef = useRef<HTMLButtonElement>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
+  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const currentProject = project.data?.id === projectId ? project.data : undefined
+  const requestedTab = new URLSearchParams(location.search).get('tab')
+  const isUserGroupAssetList =
+    matchPath('/user-groups/:userGroupId/projects', location.pathname) !== null ||
+    matchPath('/user-groups/:userGroupId/shared-resources', location.pathname) !== null ||
+    matchPath('/user-groups/:userGroupId/environments', location.pathname) !== null
+  const projectArea = location.pathname.includes('/runs/')
+    ? 'runs'
+    : requestedTab === 'runs' || requestedTab === 'configurations'
+      ? 'runs'
+      : requestedTab === 'activities'
+        ? 'settings'
+        : 'files'
 
   useEffect(() => {
     setNavigationOpen(false)
   }, [location.pathname, username])
 
   return (
-    <div className={styles.shell} style={appShellStyle}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <div className={styles.headerStart}>
-            <IconButton
-              ref={navigationButtonRef}
-              icon={ThreeBarsIcon}
-              variant="default"
-              aria-label={appShellCopy.openNavigation}
-              aria-expanded={navigationOpen}
-              aria-controls={navigationId}
-              onClick={() => setNavigationOpen(true)}
-            />
-            <RouterLink to="/" className={styles.brand}>
-              <BrandMark size={24} decorative />
-              {appShellCopy.brand}
-            </RouterLink>
-          </div>
-          <div className={styles.actions}>
-            <IconButton
-              icon={PlusIcon}
-              variant="default"
-              aria-label={appShellCopy.createUserGroup}
-              onClick={() => setCreateOpen(true)}
-            />
-            {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
+    <UserGroupProvider>
+      <div className={styles.shell} style={appShellStyle}>
+        <header
+          className={`${styles.header} ${projectId || location.pathname.startsWith('/user-groups/') ? styles.projectHeader : ''}`}
+        >
+          <div className={styles.headerInner}>
+            <div className={styles.headerStart}>
+              <IconButton
+                ref={navigationButtonRef}
+                icon={ThreeBarsIcon}
+                variant="default"
+                aria-label={appShellCopy.openNavigation}
+                aria-expanded={navigationOpen}
+                aria-controls={navigationId}
+                onClick={() => setNavigationOpen(true)}
+              />
+              <RouterLink to="/" className={styles.brand}>
+                <BrandMark size={24} decorative />
+                {appShellCopy.brand}
+              </RouterLink>
+              {projectId ? (
+                <div
+                  className={styles.projectContext}
+                  role="group"
+                  aria-label={appShellCopy.projectContextLabel}
+                >
+                  {currentProject ? (
+                    <>
+                      <Button
+                        as={RouterLink}
+                        to={
+                          currentProject.owner.kind === 'user_group'
+                            ? `/user-groups/${currentProject.owner.id}`
+                            : '/'
+                        }
+                        variant="invisible"
+                        className={`${styles.projectContextItem} ${styles.projectOwner}`}
+                      >
+                        <span className={styles.projectContextLabel}>
+                          {currentProject.owner.display_name}
+                        </span>
+                      </Button>
+                      <span className={styles.projectSeparator} aria-hidden>
+                        /
+                      </span>
+                      <ButtonGroup className={styles.projectSelector}>
+                        <Button
+                          as={RouterLink}
+                          to={`/projects/${projectId}`}
+                          variant="invisible"
+                          className={`${styles.projectContextItem} ${styles.projectName}`}
+                        >
+                          <span className={styles.projectContextLabel}>{currentProject.name}</span>
+                        </Button>
+                        <ProjectSwitcher project={currentProject} />
+                      </ButtonGroup>
+                    </>
+                  ) : project.error ? (
+                    <Button
+                      variant="invisible"
+                      className={styles.projectRetry}
+                      onClick={() => void project.reload()}
+                    >
+                      {appShellCopy.projectError}
+                    </Button>
+                  ) : (
+                    <span className={styles.projectLoading} role="status">
+                      {appShellCopy.projectLoading}
+                    </span>
+                  )}
+                </div>
+              ) : location.pathname === '/' ? null : (
+                <UserGroupHeaderContext />
+              )}
+            </div>
+            <div className={styles.actions}>
+              <IconButton
+                icon={PlusIcon}
+                variant="default"
+                aria-label={appShellCopy.createUserGroup}
+                onClick={() => setCreateOpen(true)}
+              />
+              {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
                 避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
-            <NotificationBell key={username} username={username} />
-            <UserSwitcher value={username} onChange={onUsernameChange} />
+              <NotificationBell key={username} username={username} />
+              <UserSwitcher value={username} onChange={onUsernameChange} />
+            </div>
           </div>
+          <UserGroupHeaderNav />
+          {projectId ? (
+            <div className={styles.projectNavigationSurface}>
+              <UnderlineNav
+                aria-label={appShellCopy.projectNavigationLabel}
+                className={styles.projectNavigation}
+                hideIconsBreakpoint={null}
+              >
+                <UnderlineNav.Item
+                  as={RouterLink}
+                  to={`/projects/${projectId}?tab=files`}
+                  leadingVisual={<FileDirectoryIcon />}
+                  aria-current={projectArea === 'files' ? 'page' : undefined}
+                >
+                  {appShellCopy.files}
+                </UnderlineNav.Item>
+                <UnderlineNav.Item
+                  as={RouterLink}
+                  to={`/projects/${projectId}?tab=runs`}
+                  leadingVisual={<PlayIcon />}
+                  aria-current={projectArea === 'runs' ? 'page' : undefined}
+                >
+                  {appShellCopy.runs}
+                </UnderlineNav.Item>
+                <UnderlineNav.Item
+                  as={RouterLink}
+                  to={`/projects/${projectId}?tab=activities`}
+                  leadingVisual={<GearIcon />}
+                  aria-current={projectArea === 'settings' ? 'page' : undefined}
+                >
+                  {appShellCopy.settings}
+                </UnderlineNav.Item>
+              </UnderlineNav>
+            </div>
+          ) : null}
+        </header>
+
+        <div className={styles.body}>
+          {location.pathname === '/' ? (
+            <aside className={styles.persistentSidebar} aria-label={appShellCopy.sidebarLabel}>
+              {home.data ? <WorkNavigation home={home.data} /> : null}
+            </aside>
+          ) : null}
+          <main className={styles.main}>
+            <PageLayout containerWidth="full" padding="none" rowGap="none" columnGap="none">
+              <PageLayout.Content
+                as="div"
+                width={isUserGroupAssetList ? 'full' : 'xlarge'}
+                padding={isUserGroupAssetList ? 'none' : 'normal'}
+              >
+                {children}
+              </PageLayout.Content>
+            </PageLayout>
+          </main>
         </div>
-      </header>
 
-      <div className={styles.body}>
-        {location.pathname === '/' ? (
-          <aside className={styles.persistentSidebar} aria-label={appShellCopy.sidebarLabel}>
-            {home.data ? <WorkNavigation home={home.data} /> : null}
-          </aside>
+        <ContextGuide pathname={location.pathname} />
+
+        {navigationOpen ? (
+          <GlobalNavigationDrawer
+            id={navigationId}
+            home={home}
+            returnFocusRef={navigationButtonRef}
+            onClose={() => setNavigationOpen(false)}
+          />
         ) : null}
-        <main className={styles.main}>
-          <PageLayout containerWidth="full" padding="none" rowGap="none" columnGap="none">
-            <PageLayout.Content as="div" width="xlarge" padding="normal">
-              {children}
-            </PageLayout.Content>
-          </PageLayout>
-        </main>
-      </div>
 
-      <ContextGuide pathname={location.pathname} />
-
-      {navigationOpen ? (
-        <GlobalNavigationDrawer
-          id={navigationId}
-          home={home}
-          returnFocusRef={navigationButtonRef}
-          onClose={() => setNavigationOpen(false)}
+        <CreateUserGroupDialog
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(userGroup) => {
+            home.reload()
+            navigate(`/user-groups/${userGroup.id}`)
+          }}
         />
-      ) : null}
-
-      <CreateUserGroupDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(userGroup) => {
-          home.reload()
-          navigate(`/user-groups/${userGroup.id}`)
-        }}
-      />
-    </div>
+      </div>
+    </UserGroupProvider>
   )
 }
