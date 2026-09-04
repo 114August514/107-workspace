@@ -1,11 +1,9 @@
-import { OrganizationIcon, PeopleIcon } from '@primer/octicons-react'
-import { Label, Text } from '@primer/react'
+import { OrganizationIcon } from '@primer/octicons-react'
+import { Label } from '@primer/react'
 import { Outlet, matchPath, useLocation } from 'react-router-dom'
 
-import { api } from '../api/client'
-import type { Member, UserGroup } from '../api/types'
+import type { UserGroup } from '../api/types'
 import { toAsyncError } from '../api/errors'
-import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { useCurrentUserGroup } from '../components/usergroup/userGroupContext'
 import {
@@ -18,19 +16,6 @@ export interface UserGroupOutletContext {
   userGroup: UserGroup
   reload: () => void
   onMembershipChanged?: () => void
-}
-
-function GroupMemberCount({ groupId }: { groupId: string }) {
-  const members = useAsync<Member[]>(() => api.listMembers(groupId), [groupId])
-  if (!members.data) return null
-  const active = members.data.filter((member) => member.status === 'active').length
-  if (active === 0) return null
-  return (
-    <Text as="p" className={styles.memberCount}>
-      <PeopleIcon className={styles.memberCountIcon} size={16} aria-hidden="true" />
-      {`${active} 位成员`}
-    </Text>
-  )
 }
 
 export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: () => void }) {
@@ -47,21 +32,20 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
         onRetry={group.reload}
       >
         {group.userGroup ? (
-          <>
+          <div className={isOverview ? styles.overviewInner : undefined}>
             {isOverview ? (
               <header className={styles.header}>
-                <div className={styles.titleRow}>
-                  <OrganizationIcon className={styles.titleIcon} size={24} aria-hidden="true" />
-                  <h1 className={styles.title}>{group.userGroup.name}</h1>
-                  <Label variant="accent">{copy.page.kind}</Label>
-                  <Label variant={group.userGroup.role === 'owner' ? 'attention' : 'default'}>
-                    {userGroupRoleLabel(group.userGroup.role)}
-                  </Label>
+                <span className={styles.avatar} aria-hidden="true">
+                  <OrganizationIcon size={32} />
+                </span>
+                <div className={styles.identity}>
+                  <div className={styles.titleRow}>
+                    <h1 className={styles.title}>{group.userGroup.name}</h1>
+                    <Label variant={group.userGroup.role === 'owner' ? 'attention' : 'default'}>
+                      {userGroupRoleLabel(group.userGroup.role)}
+                    </Label>
+                  </div>
                 </div>
-                <Text as="p" className={styles.description}>
-                  {group.userGroup.description || copy.page.fallbackDescription}
-                </Text>
-                <GroupMemberCount groupId={group.userGroup.id} />
               </header>
             ) : null}
 
@@ -76,7 +60,7 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
                 }
               />
             </div>
-          </>
+          </div>
         ) : null}
       </AsyncState>
     </div>

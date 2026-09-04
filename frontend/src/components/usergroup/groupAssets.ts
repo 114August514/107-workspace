@@ -17,18 +17,48 @@ export interface GroupAssetsResult<T> {
   truncated: boolean
 }
 
+export interface GroupProjectList extends GroupAssetsResult<Project> {
+  /** 组内 Project 自己是派生副本。 */
+  forkedIds: Set<string>
+  /** 组内 Project 被其他可见 Project 当作 Fork 来源。 */
+  sourceIds: Set<string>
+}
+
 export function isOwnedByGroup(owner: OwnerSummary, groupId: string): boolean {
   return owner.kind === 'user_group' && owner.id === groupId
 }
 
-export async function loadGroupProjects(groupId: string): Promise<GroupAssetsResult<Project>> {
+export async function loadGroupProjects(groupId: string): Promise<GroupProjectList> {
   const items: Project[] = []
+  const visible: Project[] = []
+  let truncated = true
   for (let page = 1; page <= PROJECT_PAGE_LIMIT; page += 1) {
     const result = await api.listProjects({ page, page_size: PROJECT_PAGE_SIZE })
+    visible.push(...result.items)
     items.push(...result.items.filter((project) => isOwnedByGroup(project.owner, groupId)))
-    if (!result.has_more) return { items, truncated: false }
+    if (!result.has_more) {
+      truncated = false
+      break
+    }
   }
-  return { items, truncated: true }
+
+  const groupIds = new Set(items.map((project) => project.id))
+  const forkedIds = new Set<string>()
+  const sourceIds = new Set<string>()
+  await Promise.all(
+    visible.map(async (project) => {
+      try {
+        const source = await api.forkSource(project.id)
+        if (source === null) return
+        if (groupIds.has(project.id)) forkedIds.add(project.id)
+        if (groupIds.has(source.source_project_id)) sourceIds.add(source.source_project_id)
+      } catch {
+        // 单条来源读失败时不影响列表，该条既不标 Fork 也不标 Source。
+      }
+    }),
+  )
+
+  return { items, truncated, forkedIds, sourceIds }
 }
 
 export async function loadGroupSharedResources(groupId: string): Promise<SharedResource[]> {

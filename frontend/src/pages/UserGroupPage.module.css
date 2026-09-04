@@ -3,19 +3,46 @@
   width: 100%;
   min-width: 0;
   flex-direction: column;
-  gap: var(--base-size-16);
+  gap: var(--base-size-24);
+}
+
+.overviewInner {
+  display: flex;
+  width: 100%;
+  max-width: 80rem;
+  min-width: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: var(--base-size-24);
 }
 
 .header {
   display: flex;
   width: 100%;
   min-width: 0;
-  margin-inline: auto;
-  max-width: 67.5rem;
+  align-items: center;
+  gap: var(--base-size-16);
+}
+
+.avatar {
+  display: flex;
+  flex: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--fgColor-muted);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-muted);
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 0;
-  padding-inline: var(--base-size-16);
-  box-sizing: border-box;
+  gap: var(--base-size-4);
 }
 
 .titleRow {
@@ -26,41 +53,14 @@
   gap: var(--base-size-8);
 }
 
-.titleIcon {
-  flex: none;
-  color: var(--fgColor-muted);
-}
-
 .title {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--fgColor-default);
-  font-size: var(--text-title-size-medium);
+  font-size: var(--text-title-size-large);
   font-weight: var(--base-text-weight-semibold);
-  line-height: var(--text-title-lineHeight-medium);
-}
-
-.description {
-  margin: var(--base-size-12) 0 0;
-  color: var(--fgColor-muted);
-  line-height: var(--text-body-lineHeight-medium);
-  overflow-wrap: anywhere;
-}
-
-.memberCount {
-  display: flex;
-  margin: var(--base-size-8) 0 0;
-  align-items: center;
-  gap: var(--base-size-4);
-  color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
-  line-height: var(--text-body-lineHeight-small);
-}
-
-.memberCountIcon {
-  flex: none;
-  color: var(--fgColor-muted);
+  line-height: var(--text-title-lineHeight-large);
 }
 
 .sectionContent {
@@ -68,7 +68,18 @@
 }
 
 @media (max-width: 48rem) {
-  .page {
-    gap: var(--base-size-12);
+  .page,
+  .overviewInner {
+    gap: var(--base-size-16);
+  }
+
+  .avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .title {
+    font-size: var(--text-title-size-medium);
+    line-height: var(--text-title-lineHeight-medium);
   }
 }

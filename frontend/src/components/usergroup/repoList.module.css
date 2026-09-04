@@ -7,6 +7,13 @@
   align-items: stretch;
 }
 
+.layoutPlain {
+  display: flex;
+  min-width: 0;
+  min-height: calc(100dvh - 8rem);
+  flex-direction: column;
+}
+
 .sidebar {
   min-width: 0;
   padding: var(--base-size-16) var(--base-size-12) var(--base-size-24) var(--base-size-16);
@@ -17,6 +24,24 @@
 .sidebar :global([data-component='ActionList.GroupHeading']) {
   font-size: var(--text-body-size-medium);
   font-weight: var(--base-text-weight-semibold);
+}
+
+.typeItem {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.typeIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--fgColor-muted);
+}
+
+.typeIcon svg {
+  width: var(--base-size-16);
+  height: var(--base-size-16);
 }
 
 .typeLabel {

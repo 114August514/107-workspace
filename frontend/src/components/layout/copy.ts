@@ -6,6 +6,7 @@ export const appShellCopy = {
   createUserGroup: '创建 User Group',
   sidebarLabel: '首页工作入口',
   projectContextLabel: '当前 Project',
+  userGroupContextLabel: '当前 User Group',
   projectNavigationLabel: 'Project navigation',
   projectLoading: '正在加载 Project context…',
   projectError: 'Project context 加载失败，重试',

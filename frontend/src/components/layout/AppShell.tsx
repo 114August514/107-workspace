@@ -22,7 +22,11 @@ import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { ContextGuide } from './ContextGuide'
-import { UserGroupHeaderNav, UserGroupProvider } from '../usergroup/UserGroupHeaderNav'
+import {
+  UserGroupHeaderContext,
+  UserGroupHeaderNav,
+  UserGroupProvider,
+} from '../usergroup/UserGroupHeaderNav'
 import { appShellCopy } from './copy'
 import { ProjectSwitcher } from './ProjectSwitcher'
 import { UserSwitcher } from './UserSwitcher'
@@ -81,7 +85,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
     <UserGroupProvider>
       <div className={styles.shell} style={appShellStyle}>
         <header
-          className={`${styles.header} ${projectId ? styles.projectHeader : ''}`}
+          className={`${styles.header} ${projectId || location.pathname.startsWith('/user-groups/') ? styles.projectHeader : ''}`}
         >
           <div className={styles.headerInner}>
             <div className={styles.headerStart}>
@@ -154,7 +158,9 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                 </div>
               ) : location.pathname === '/' ? (
                 <span className={styles.homeContext}>{appShellCopy.homeContext}</span>
-              ) : null}
+              ) : (
+                <UserGroupHeaderContext />
+              )}
             </div>
             <div className={styles.actions}>
               <IconButton

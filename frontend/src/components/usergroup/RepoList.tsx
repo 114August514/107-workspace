@@ -5,7 +5,13 @@ import { Link as RouterLink } from 'react-router-dom'
 
 import { AsyncState } from '../common/AsyncState'
 import { RepoTypeNav } from './RepoTypeNav'
-import { matchesRepoType, useRepoTypeFilter, type RepoTypeFlags } from './repoType'
+import {
+  matchesRepoType,
+  REPO_TYPE_FILTERS,
+  useRepoTypeFilter,
+  type RepoTypeFilter,
+  type RepoTypeFlags,
+} from './repoType'
 import styles from './repoList.module.css'
 import { userGroupPageCopy as copy } from './userGroupCopy'
 
@@ -22,6 +28,7 @@ export interface RepoListItem {
 
 interface Props {
   titleId: string
+  title?: string
   listLabel: string
   searchPlaceholder: string
   countLabel: (count: number) => string
@@ -34,10 +41,12 @@ interface Props {
   emptyDescription?: string
   items: RepoListItem[]
   truncatedNote?: string | null
+  typeFilters?: readonly RepoTypeFilter[]
 }
 
 export function RepoList({
   titleId,
+  title,
   listLabel,
   searchPlaceholder,
   countLabel,
@@ -50,8 +59,10 @@ export function RepoList({
   emptyDescription,
   items,
   truncatedNote,
+  typeFilters = REPO_TYPE_FILTERS,
 }: Props) {
-  const type = useRepoTypeFilter()
+  const type = useRepoTypeFilter(typeFilters)
+  const showTypeNav = typeFilters.length > 1
   const [query, setQuery] = useState('')
   const normalized = query.trim().toLowerCase()
   const visible = useMemo(() => {
@@ -66,12 +77,12 @@ export function RepoList({
   const showFilterMiss = !loading && !error && items.length > 0 && visible.length === 0
 
   return (
-    <div className={styles.layout}>
-      <RepoTypeNav />
+    <div className={showTypeNav ? styles.layout : styles.layoutPlain}>
+      {showTypeNav ? <RepoTypeNav types={typeFilters} /> : null}
       <section className={styles.section} aria-labelledby={titleId}>
         <div className={styles.sectionInner}>
           <h2 id={titleId} className={styles.title}>
-            {copy.list.types[type]}
+            {title ?? copy.list.types[type]}
           </h2>
           <div className={styles.search}>
             <TextInput

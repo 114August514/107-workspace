@@ -90,7 +90,6 @@ describe('UserGroupPage 分区导航信息架构', () => {
     renderUserGroupRoute('/user-groups/grp_lab')
 
     await screen.findByRole('heading', { name: 'Research Lab' })
-    expect(screen.getByText('User Group')).toBeInTheDocument()
     expect(screen.getAllByText('所有者').length).toBeGreaterThan(0)
     expect(screen.getByText('Governance only')).toBeInTheDocument()
 

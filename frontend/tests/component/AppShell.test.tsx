@@ -574,6 +574,18 @@ describe('AppShell Header 的 User Group 分区导航', () => {
     )
   })
 
+  it('User Group 路由下 Header 第一行显示组名并可返回组概览', async () => {
+    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    renderShell('student', readyHome(), '/user-groups/grp-1/members')
+
+    const context = await screen.findByRole('group', { name: '当前 User Group' })
+    expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
+      'href',
+      '/user-groups/grp-1',
+    )
+  })
+
   it('离开 User Group 路由后 Header 恢复单行，不再渲染分区导航', async () => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)

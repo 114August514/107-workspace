@@ -86,8 +86,9 @@ describe('User Group 概览分区', () => {
     renderOverview()
 
     await screen.findByRole('heading', { name: 'Research Lab' })
+    expect((await screen.findAllByText('2 位成员')).length).toBeGreaterThan(0)
+    expect(screen.getByRole('heading', { name: 'About' })).toBeInTheDocument()
     expect(screen.getByText('Lab description')).toBeInTheDocument()
-    await screen.findByText('2 位成员')
   })
 
   it('REQ-21-13 Project 仓库列表：名称与查看全部入口，且不展示其他模块', async () => {
@@ -100,6 +101,7 @@ describe('User Group 概览分区', () => {
     const viewAll = within(projectRow).getByRole('link', { name: '查看全部' })
     expect(viewAll).toHaveAttribute('href', '/user-groups/grp_lab/projects')
 
+    expect(screen.getByRole('heading', { name: 'About' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: '共享资源' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '运行环境' })).toBeNull()
     expect(screen.queryByRole('heading', { name: '近期活动' })).toBeNull()

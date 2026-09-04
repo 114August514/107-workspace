@@ -36,6 +36,7 @@ import type {
   PreflightResult,
   PageQuery,
   ForkSource,
+  Grant,
   OwnerReference,
   Project,
   ProjectPage,
@@ -900,6 +901,13 @@ export const api = {
         params: { path: { project_id: projectId } },
       }),
     ) ?? null,
+
+  listGrants: async (query: {
+    target_kind?: 'environment' | 'shared_resource' | 'all' | null
+    target_id?: string | null
+    grantor_kind?: 'user' | 'user_group' | null
+    grantor_id?: string | null
+  }): Promise<Grant[]> => unwrap(await http.GET('/api/v1/grants', { params: { query } })),
 
   // -- 活动流 ------------------------------------------------------------
   listUserGroupActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>

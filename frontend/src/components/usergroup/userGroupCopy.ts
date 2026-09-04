@@ -30,6 +30,8 @@ export const userGroupPageCopy = {
     emptyProjects: '这个 User Group 还没有 Project。',
     emptyDescription: '这个 Project 还没有填写说明。',
     truncated: 'Project 较多，仅展示前一部分；完整列表请查看全部。',
+    about: 'About',
+    createdAt: (date: string) => `创建于 ${date}`,
   },
   nav: {
     overview: 'Overview',
@@ -72,6 +74,7 @@ export const userGroupPageCopy = {
     visibilityPublic: 'Public',
     visibilityOwnerScope: '仅成员可见',
     archived: '已归档',
+    forked: 'Fork',
     createdAt: (relative: string) => `创建于 ${relative}`,
     availableVersions: (available: number, total: number) => `${available}/${total} 个版本可用`,
     typeNavLabel: 'Type',
