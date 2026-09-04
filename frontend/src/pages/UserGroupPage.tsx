@@ -1,66 +1,66 @@
-import { HomeIcon, OrganizationIcon } from '@primer/octicons-react'
-import { Label, Link, Text } from '@primer/react'
-import { Link as RouterLink, useParams } from 'react-router-dom'
+import { OrganizationIcon } from '@primer/octicons-react'
+import { Label } from '@primer/react'
+import { Outlet, matchPath, useLocation } from 'react-router-dom'
 
-import { api } from '../api/client'
-import { toAsyncError } from '../api/errors'
 import type { UserGroup } from '../api/types'
-import { useAsync } from '../api/useAsync'
+import { toAsyncError } from '../api/errors'
 import { AsyncState } from '../components/common/AsyncState'
-import { MemberPanel } from '../components/workspace/MemberPanel'
+import { useCurrentUserGroup } from '../components/usergroup/userGroupContext'
 import {
-  membershipRoleLabel,
-  userGroupGovernanceCopy as copy,
-} from '../components/workspace/memberCopy'
+  userGroupPageCopy as copy,
+  userGroupRoleLabel,
+} from '../components/usergroup/userGroupCopy'
 import styles from './UserGroupPage.module.css'
 
-/** User Group identity and Membership governance only. */
-export function UserGroupPage() {
-  const { userGroupId = '' } = useParams()
-  const userGroup = useAsync<UserGroup>(() => api.getUserGroup(userGroupId), [userGroupId])
+export interface UserGroupOutletContext {
+  userGroup: UserGroup
+  reload: () => void
+  onMembershipChanged?: () => void
+}
+
+export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: () => void }) {
+  const group = useCurrentUserGroup()
+  const { pathname } = useLocation()
+  const isOverview = matchPath('/user-groups/:userGroupId', pathname) !== null
 
   return (
     <div className={styles.page}>
       <AsyncState
-        loading={userGroup.loading && !userGroup.data}
+        loading={group.loading && !group.userGroup}
         loadingText={copy.page.loading}
-        error={toAsyncError(userGroup.error)}
-        onRetry={userGroup.reload}
+        error={toAsyncError(group.error)}
+        onRetry={group.reload}
       >
-        {userGroup.data ? (
-          <>
-            <nav className={styles.breadcrumb} aria-label={copy.page.breadcrumbLabel}>
-              <HomeIcon aria-hidden="true" />
-              <Link as={RouterLink} to="/">
-                {copy.page.home}
-              </Link>
-              <span aria-hidden="true">/</span>
-              <span>{userGroup.data.name}</span>
-            </nav>
-
-            <div className={styles.contextLayout}>
-              <aside className={styles.identityRail} aria-label={copy.page.identityLabel}>
-                <header className={styles.identityHeader}>
-                  <OrganizationIcon className={styles.titleIcon} size={24} aria-hidden="true" />
-                  <h1 className={styles.title}>{userGroup.data.name}</h1>
-                </header>
-                <div className={styles.identityLabels}>
-                  <Label variant="accent">{copy.page.kind}</Label>
-                  <Label variant={userGroup.data.role === 'owner' ? 'attention' : 'default'}>
-                    {membershipRoleLabel(userGroup.data.role)}
-                  </Label>
+        {group.userGroup ? (
+          <div className={isOverview ? styles.overviewInner : undefined}>
+            {isOverview ? (
+              <header className={styles.header}>
+                <span className={styles.avatar} aria-hidden="true">
+                  <OrganizationIcon size={32} />
+                </span>
+                <div className={styles.identity}>
+                  <div className={styles.titleRow}>
+                    <h1 className={styles.title}>{group.userGroup.name}</h1>
+                    <Label variant={group.userGroup.role === 'owner' ? 'attention' : 'default'}>
+                      {userGroupRoleLabel(group.userGroup.role)}
+                    </Label>
+                  </div>
                 </div>
-                <Text as="p" className={styles.description}>
-                  {userGroup.data.description || copy.page.fallbackDescription}
-                </Text>
-                <div className={styles.sectionIndicator}>
-                  <span className={styles.currentSection}>{copy.page.membersTitle}</span>
-                </div>
-              </aside>
+              </header>
+            ) : null}
 
-              <MemberPanel userGroup={userGroup.data} onUserGroupChanged={userGroup.reload} />
+            <div className={styles.sectionContent}>
+              <Outlet
+                context={
+                  {
+                    userGroup: group.userGroup,
+                    reload: group.reload,
+                    onMembershipChanged,
+                  } satisfies UserGroupOutletContext
+                }
+              />
             </div>
-          </>
+          </div>
         ) : null}
       </AsyncState>
     </div>
