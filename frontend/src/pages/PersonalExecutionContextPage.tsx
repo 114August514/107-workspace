@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
-import type { Home, Variable } from '../api/types'
+import type { Home, Secret, Variable } from '../api/types'
 import { useAsync, type AsyncState as AsyncResource } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { formatTime } from '../utils/format'
@@ -37,7 +37,7 @@ export function PersonalExecutionContextPage({ username, home }: Props) {
 function ExecutionContext({ username, home }: { username: string; home: Home }) {
   const user = home.user
   const variables = useAsync<Variable[]>(() => api.listUserVariables(user.id), [username, user.id])
-  const secrets = useAsync<string[]>(() => api.listUserSecrets(user.id), [username, user.id])
+  const secrets = useAsync<Secret[]>(() => api.listUserSecrets(user.id), [username, user.id])
 
   return (
     <div className={styles.content}>
@@ -250,7 +250,7 @@ function VariableSection({ userId, state }: { userId: string; state: AsyncResour
   )
 }
 
-function SecretSection({ userId, state }: { userId: string; state: AsyncResource<string[]> }) {
+function SecretSection({ userId, state }: { userId: string; state: AsyncResource<Secret[]> }) {
   const [name, setName] = useState('')
   const [value, setValue] = useState('')
   const [replacing, setReplacing] = useState(false)
@@ -352,16 +352,16 @@ function SecretSection({ userId, state }: { userId: string; state: AsyncResource
         emptyText="还没有 User Secret"
       >
         <ul className={styles.configList}>
-          {(state.data ?? []).map((secretName) => (
-            <li key={secretName} className={styles.configItem}>
-              <strong>{secretName}</strong>
+          {(state.data ?? []).map((secret) => (
+            <li key={secret.name} className={styles.configItem}>
+              <strong>{secret.name}</strong>
               <div className={styles.rowActions}>
                 <Button
                   size="small"
-                  aria-label={`替换或轮换 ${secretName}`}
+                  aria-label={`替换或轮换 ${secret.name}`}
                   onClick={() => {
                     setReplacing(true)
-                    setName(secretName)
+                    setName(secret.name)
                     setValue('')
                   }}
                 >
@@ -370,8 +370,8 @@ function SecretSection({ userId, state }: { userId: string; state: AsyncResource
                 <Button
                   size="small"
                   variant="danger"
-                  aria-label={`删除 ${secretName} Secret`}
-                  onClick={() => void remove(secretName)}
+                  aria-label={`删除 ${secret.name} Secret`}
+                  onClick={() => void remove(secret.name)}
                 >
                   删除
                 </Button>

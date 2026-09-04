@@ -382,7 +382,7 @@ export const api = {
     )
   },
 
-  listUserSecrets: async (userId: string): Promise<string[]> =>
+  listUserSecrets: async (userId: string): Promise<Secret[]> =>
     unwrap(
       await http.GET('/api/v1/users/{user_id}/secrets', {
         params: { path: { user_id: userId } },
