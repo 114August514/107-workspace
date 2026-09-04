@@ -2572,6 +2572,7 @@ export interface components {
             secret_references: {
                 [key: string]: string;
             };
+            slurm_projection: components["schemas"]["SlurmProjectionOut"] | null;
         };
         /** ProjectCreateOwnedIn */
         ProjectCreateOwnedIn: {
@@ -3155,6 +3156,19 @@ export interface components {
             total_size: number;
             /** Validation Summary */
             validation_summary: string;
+        };
+        /**
+         * SlurmProjectionAvailability
+         * @enum {string}
+         */
+        SlurmProjectionAvailability: "available" | "unavailable" | "unknown";
+        /** SlurmProjectionOut */
+        SlurmProjectionOut: {
+            availability: components["schemas"]["SlurmProjectionAvailability"];
+            /** Detail */
+            detail: string;
+            /** Reason */
+            reason: string;
         };
         /** SyncOut */
         SyncOut: {

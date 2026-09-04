@@ -32,6 +32,7 @@ from ..domain.enums import (
 )
 from ..domain.grant import UseQualificationScope
 from ..domain.ownership import OwnerKind
+from ..domain.slurm_projection import SlurmProjectionAvailability
 
 
 class Model(BaseModel):
@@ -540,6 +541,12 @@ class RunDraftIn(Model):
     compute_request_override: ComputeRequestModel | None = None
 
 
+class SlurmProjectionOut(Model):
+    availability: SlurmProjectionAvailability
+    reason: str
+    detail: str
+
+
 class AdjustedRerunIn(Model):
     """从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。"""
 
@@ -559,6 +566,7 @@ class PreflightOut(Model):
     environment_version: EnvironmentVersionOut | None
     compute_plan_id: str | None
     compute_request: ComputeRequestModel | None
+    slurm_projection: SlurmProjectionOut | None
     resolved_environment_variables: dict[str, str]
     secret_references: dict[str, str]
     """环境变量名 -> Secret 名称。永远只有名称，没有值。"""

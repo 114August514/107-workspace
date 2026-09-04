@@ -1881,6 +1881,16 @@
             "description": "环境变量名 -> Secret 名称。永远只有名称，没有值。",
             "title": "Secret References",
             "type": "object"
+          },
+          "slurm_projection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlurmProjectionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1890,6 +1900,7 @@
           "environment_version",
           "compute_plan_id",
           "compute_request",
+          "slurm_projection",
           "resolved_environment_variables",
           "secret_references"
         ],
@@ -3517,6 +3528,37 @@
           "created_at"
         ],
         "title": "SharedResourceVersionOut",
+        "type": "object"
+      },
+      "SlurmProjectionAvailability": {
+        "enum": [
+          "available",
+          "unavailable",
+          "unknown"
+        ],
+        "title": "SlurmProjectionAvailability",
+        "type": "string"
+      },
+      "SlurmProjectionOut": {
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/SlurmProjectionAvailability"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "availability",
+          "reason",
+          "detail"
+        ],
+        "title": "SlurmProjectionOut",
         "type": "object"
       },
       "SyncOut": {
