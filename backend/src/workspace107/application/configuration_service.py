@@ -47,9 +47,6 @@ class ConfigurationService:
     async def delete_variable(self, scope: ConfigScope, name: str) -> None:
         await self._repos.variables.delete(scope, name)
 
-    async def list_secret_names(self, scope: ConfigScope) -> list[str]:
-        return sorted(await self._secrets.list_names(scope))
-
     async def list_secret_summaries(self, scope: ConfigScope) -> list[Secret]:
         """按名称排序的 Secret 元数据；明文永远不出 vault。"""
         return sorted(await self._secrets.list_secrets(scope), key=lambda s: s.name)
