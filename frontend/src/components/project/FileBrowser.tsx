@@ -256,8 +256,8 @@ export function FileBrowser({
           </button>
         )}
       </td>
-      <td>{node.file ? formatBytes(node.file.size) : '—'}</td>
-      <td>{node.file ? formatRelative(node.file.updated_at) : '—'}</td>
+      <td className={styles.metaCell}>{node.file ? formatBytes(node.file.size) : '—'}</td>
+      <td className={styles.metaCell}>{node.file ? formatRelative(node.file.updated_at) : '—'}</td>
     </tr>
   ))
   const fileContext = version ? (
@@ -398,8 +398,12 @@ export function FileBrowser({
           <thead>
             <tr>
               <th scope="col">名称</th>
-              <th scope="col">大小</th>
-              <th scope="col">最近修改</th>
+              <th scope="col" className={styles.metaCell}>
+                大小
+              </th>
+              <th scope="col" className={styles.metaCell}>
+                最近修改
+              </th>
             </tr>
           </thead>
           <tbody>{rows}</tbody>

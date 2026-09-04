@@ -12,6 +12,7 @@
 
 .fileTable {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   color: var(--fgColor-default);
   font-size: var(--text-body-size-small);
@@ -35,7 +36,23 @@
 }
 
 .nameCell {
-  min-width: 16rem;
+  width: auto;
+  min-width: 0;
+}
+
+.fileTable th:nth-child(2),
+.fileTable td:nth-child(2) {
+  width: 6rem;
+}
+
+.fileTable th:nth-child(3),
+.fileTable td:nth-child(3) {
+  width: 9rem;
+}
+
+.metaCell {
+  text-align: right !important;
+  white-space: nowrap;
 }
 
 .fileLink {

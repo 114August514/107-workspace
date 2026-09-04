@@ -95,9 +95,9 @@ export function FileObjectActions({ projectId, path, canWrite, onChanged }: Prop
         <ActionMenu.Overlay align="end" width="auto">
           <ActionList>
             <ActionList.Item onSelect={() => void download()}>下载文件</ActionList.Item>
+            <ActionList.Divider />
             <ActionList.Item onSelect={() => openEdit('rename')}>重命名</ActionList.Item>
             <ActionList.Item onSelect={() => openEdit('copy')}>复制</ActionList.Item>
-            <ActionList.Divider />
             <ActionList.Item variant="danger" onSelect={() => setDeleteOpen(true)}>
               删除
             </ActionList.Item>
