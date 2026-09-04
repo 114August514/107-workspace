@@ -345,14 +345,22 @@ class VariableRepositoryImpl:
         )
         rows = (await self._session.execute(stmt)).scalars().all()
         return [
-            Variable(scope=scope, name=r.name, value=r.value, updated_at=r.updated_at) for r in rows
+            Variable(
+                scope=scope,
+                name=r.name,
+                value=r.value,
+                updated_at=_required(r.updated_at),
+            )
+            for r in rows
         ]
 
     async def get(self, scope: ConfigScope, name: str) -> Variable | None:
         row = await self._session.get(t.VariableRow, (scope.kind.value, scope.id, name))
         if row is None:
             return None
-        return Variable(scope=scope, name=row.name, value=row.value, updated_at=row.updated_at)
+        return Variable(
+            scope=scope, name=row.name, value=row.value, updated_at=_required(row.updated_at)
+        )
 
     async def upsert(self, variable: Variable) -> None:
         key = (variable.scope.kind.value, variable.scope.id, variable.name)

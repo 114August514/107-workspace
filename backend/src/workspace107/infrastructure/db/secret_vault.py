@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...domain.config_scope import ConfigScope, SecretReference
 from ...domain.models import Secret
 from . import tables as t
+from .repositories import _required
 
 
 class DatabaseSecretVault:
@@ -61,7 +62,7 @@ class DatabaseSecretVault:
             t.SecretRow.scope_id == scope.id,
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [Secret(scope=scope, name=r.name, updated_at=r.updated_at) for r in rows]
+        return [Secret(scope=scope, name=r.name, updated_at=_required(r.updated_at)) for r in rows]
 
     async def resolve(self, references: list[SecretReference]) -> dict[SecretReference, str]:
         result: dict[SecretReference, str] = {}
