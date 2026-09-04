@@ -1,24 +1,21 @@
 .page {
   display: flex;
+  width: 100%;
   min-width: 0;
   flex-direction: column;
   gap: var(--base-size-16);
 }
 
-.breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--base-size-8);
-  color: var(--fgColor-muted);
-  font-size: var(--text-body-size-small);
-}
-
 .header {
   display: flex;
+  width: 100%;
   min-width: 0;
+  margin-inline: auto;
+  max-width: 67.5rem;
   flex-direction: column;
   gap: 0;
+  padding-inline: var(--base-size-16);
+  box-sizing: border-box;
 }
 
 .titleRow {
@@ -51,17 +48,27 @@
   overflow-wrap: anywhere;
 }
 
+.memberCount {
+  display: flex;
+  margin: var(--base-size-8) 0 0;
+  align-items: center;
+  gap: var(--base-size-4);
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  line-height: var(--text-body-lineHeight-small);
+}
+
+.memberCountIcon {
+  flex: none;
+  color: var(--fgColor-muted);
+}
+
 .sectionContent {
   min-width: 0;
-  padding-top: var(--base-size-16);
 }
 
 @media (max-width: 48rem) {
   .page {
     gap: var(--base-size-12);
-  }
-
-  .sectionContent {
-    padding-top: var(--base-size-12);
   }
 }

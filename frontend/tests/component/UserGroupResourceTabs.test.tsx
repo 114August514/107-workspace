@@ -69,6 +69,18 @@ const groupResource: SharedResource = {
   use_qualifications: [],
 }
 
+const runtimeFields = {
+  runtime_kind: 'modules' as const,
+  definition: { modules: ['python/3.12'] },
+  definition_hash: 'a'.repeat(64),
+  execution_spec: { kind: 'modules', commands: [] },
+  validation_summary: 'Validated modules',
+  validation_evidence: { validator: 'modules_allowlist_v1' },
+  availability_reason: 'validated',
+  availability_detail: 'Current platform evidence',
+  availability_checked_at: '2026-08-29T00:00:00Z',
+}
+
 const groupEnvironment: Environment = {
   id: 'env_group',
   name: 'Group Env',
@@ -78,20 +90,18 @@ const groupEnvironment: Environment = {
     {
       id: 'ev1',
       version: 'v1',
-      available: true,
       description: '',
       environment_id: 'env_group',
-      image: 'python:3.12',
-      setup_command: '',
+      availability: 'available',
+      ...runtimeFields,
     },
     {
       id: 'ev2',
       version: 'v2',
-      available: false,
       description: '',
       environment_id: 'env_group',
-      image: 'python:3.12',
-      setup_command: '',
+      availability: 'unavailable',
+      ...runtimeFields,
     },
   ],
 }
@@ -135,6 +145,11 @@ describe('User Group 资源分区', () => {
 
     const link = await screen.findByRole('link', { name: /Group Project/ })
     expect(link).toHaveAttribute('href', '/projects/prj_group')
+    const typeNav = screen.getByRole('navigation', { name: 'Type' })
+    expect(within(typeNav).getByRole('link', { name: 'All' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     expect(listProjects).toHaveBeenCalledWith({ page: 1, page_size: 200 })
     expect(screen.queryByText('Other Group Project')).not.toBeInTheDocument()
     expect(screen.queryByText('Personal Project')).not.toBeInTheDocument()
@@ -159,9 +174,9 @@ describe('User Group 资源分区', () => {
 
     renderSection('/user-groups/grp_lab/projects')
 
-    const archivedLink = await screen.findByRole('link', { name: /Archived Project/ })
-    expect(within(archivedLink).getByText('已归档')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Group Project/ })).toBeInTheDocument()
+    const archivedLink = await screen.findByRole('link', { name: 'Archived Project' })
+    expect(within(archivedLink.closest('li')!).getByText('已归档')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Group Project' })).toBeInTheDocument()
   })
 
   it('REQ-21-11 Project 分区跟随超过 5 页的分页不截断组 Project', async () => {
@@ -234,9 +249,9 @@ describe('User Group 资源分区', () => {
 
     renderSection('/user-groups/grp_lab/environments')
 
-    const link = await screen.findByRole('link', { name: /Group Env/ })
+    const link = await screen.findByRole('link', { name: 'Group Env' })
     expect(link).toHaveAttribute('href', '/environments/env_group')
-    expect(within(link).getByText('1/2 个版本可用')).toBeInTheDocument()
+    expect(within(link.closest('li')!).getByText('1/2 个版本可用')).toBeInTheDocument()
     expect(screen.queryByText('Other Env')).not.toBeInTheDocument()
   })
 

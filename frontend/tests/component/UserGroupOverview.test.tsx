@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../src/api/client'
-import type { ActivityPage, Member, UserGroup } from '../../src/api/types'
+import type { Member, UserGroup } from '../../src/api/types'
 import { OverviewSection } from '../../src/components/usergroup/OverviewSection'
 import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
@@ -36,41 +36,6 @@ const members: Member[] = [
   },
 ]
 
-const activities: ActivityPage = {
-  items: [
-    {
-      id: 'act-1',
-      action: 'member_joined',
-      actor_id: 'usr_bob',
-      actor_name: 'Bob',
-      created_at: '2026-08-18T00:00:00Z',
-      detail: '',
-      owner: { kind: 'user_group', id: 'grp_lab' },
-      project_id: null,
-      target_id: 'usr_bob',
-      target_name: 'Bob',
-      target_type: 'member',
-    },
-    {
-      id: 'act-2',
-      action: 'project_created',
-      actor_id: 'usr_alice',
-      actor_name: 'Alice',
-      created_at: '2026-08-19T00:00:00Z',
-      detail: '',
-      owner: { kind: 'user_group', id: 'grp_lab' },
-      project_id: 'prj_group',
-      target_id: 'prj_group',
-      target_name: 'Group Project',
-      target_type: 'project',
-    },
-  ],
-  page: 1,
-  page_size: 10,
-  total: 2,
-  has_more: false,
-}
-
 function renderOverview() {
   return render(
     <MemoryRouter initialEntries={['/user-groups/grp_lab']}>
@@ -89,7 +54,6 @@ describe('User Group 概览分区', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
     vi.spyOn(api, 'listMembers').mockResolvedValue(members)
-    vi.spyOn(api, 'listUserGroupActivities').mockResolvedValue(activities)
     vi.spyOn(api, 'listProjects').mockResolvedValue({
       items: [
         {
@@ -102,7 +66,7 @@ describe('User Group 概览分区', () => {
           default_run_configuration_id: null,
           created_by: 'usr_alice',
           created_at: '2026-08-17T00:00:00Z',
-          updated_at: null,
+          updated_at: '2026-08-21T00:00:00Z',
           owner: { kind: 'user_group', id: 'grp_lab', display_name: 'Research Lab' },
         },
       ],
@@ -111,8 +75,6 @@ describe('User Group 概览分区', () => {
       total: 1,
       has_more: false,
     })
-    vi.spyOn(api, 'listSharedResources').mockResolvedValue([])
-    vi.spyOn(api, 'environments').mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -120,53 +82,45 @@ describe('User Group 概览分区', () => {
     vi.restoreAllMocks()
   })
 
-  it('REQ-21-12 汇总基本信息：创建者经成员解析、成员数与我的角色', async () => {
+  it('REQ-21-12 身份头展示名称、角色与成员数', async () => {
     renderOverview()
 
-    const section = await screen.findByRole('region', { name: '基本信息' })
-    await screen.findByText('Alice', { selector: 'dd' })
-    expect(within(section).getByText('2 位')).toBeInTheDocument()
-    expect(within(section).getByText('所有者')).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Research Lab' })
+    expect(screen.getByText('Lab description')).toBeInTheDocument()
+    await screen.findByText('2 位成员')
   })
 
-  it('REQ-21-13 资产计数卡来自组拥有过滤并提供查看全部入口', async () => {
+  it('REQ-21-13 Project 仓库列表：名称与查看全部入口，且不展示其他模块', async () => {
     renderOverview()
 
-    const projectHeading = await screen.findByRole('heading', { name: 'Project', level: 3 })
-    const projectCard = projectHeading.closest('div')!.parentElement!
-    await within(projectCard).findByText('1 个条目')
-    const viewAll = within(projectCard).getByRole('link', { name: '查看全部' })
+    const projectHeading = await screen.findByRole('heading', { name: 'Project', level: 2 })
+    const projectRow = projectHeading.closest('section')!
+    const item = await within(projectRow).findByRole('link', { name: /Group Project/ })
+    expect(item).toHaveAttribute('href', '/projects/prj_group')
+    const viewAll = within(projectRow).getByRole('link', { name: '查看全部' })
     expect(viewAll).toHaveAttribute('href', '/user-groups/grp_lab/projects')
 
-    const resourceHeading = screen.getByRole('heading', { name: '共享资源', level: 3 })
-    const resourceCard = resourceHeading.closest('div')!.parentElement!
-    await within(resourceCard).findByText('这个 User Group 还没有共享资源。')
+    expect(screen.queryByRole('heading', { name: '共享资源' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '运行环境' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '近期活动' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '基本信息' })).toBeNull()
   })
 
-  it('REQ-21-14 活动卡按 page_size 10 拉取并渲染活动句子', async () => {
-    renderOverview()
-
-    const activityHeading = await screen.findByRole('heading', { name: '近期活动', level: 3 })
-    expect(api.listUserGroupActivities).toHaveBeenCalledWith('grp_lab', { page_size: 10 })
-    await within(activityHeading.parentElement!.parentElement!).findByText(/加入了 User Group/)
-    const activityCard = activityHeading.closest('div')!.parentElement!
-    const projectLink = within(activityCard).getByRole('link', { name: /Group Project/ })
-    expect(projectLink).toHaveAttribute('href', '/projects/prj_group')
-  })
-
-  it('REQ-21-15 单卡失败不影响其他卡渲染', async () => {
-    vi.spyOn(api, 'listSharedResources').mockRejectedValue(new Error('boom'))
+  it('REQ-21-14 无成员时不展示成员行', async () => {
+    vi.spyOn(api, 'listMembers').mockResolvedValue([])
 
     renderOverview()
 
-    const basicSection = await screen.findByRole('region', { name: '基本信息' })
-    await screen.findByText('Alice', { selector: 'dd' })
-    expect(basicSection).toBeInTheDocument()
-    const resourceHeading = await screen.findByRole('heading', { name: '共享资源', level: 3 })
-    const resourceCard = resourceHeading.closest('div')!.parentElement!
-    expect(within(resourceCard).getByRole('button', { name: '重试' })).toBeInTheDocument()
-    const activityHeading = screen.getByRole('heading', { name: '近期活动', level: 3 })
-    const activityCard = activityHeading.closest('div')!.parentElement!
-    await within(activityCard).findByText(/加入了 User Group/)
+    await screen.findByRole('heading', { name: 'Project', level: 2 })
+    expect(screen.queryByText(/位成员/)).toBeNull()
+  })
+
+  it('REQ-21-15 Project 列表失败时展示错误与重试，身份头仍渲染', async () => {
+    vi.spyOn(api, 'listProjects').mockRejectedValue(new Error('boom'))
+
+    renderOverview()
+
+    await screen.findByRole('heading', { name: 'Research Lab' })
+    await screen.findByRole('button', { name: '重试' })
   })
 })

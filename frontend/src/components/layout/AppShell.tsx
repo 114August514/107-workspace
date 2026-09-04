@@ -61,6 +61,10 @@ export function AppShell({ username, onUsernameChange, home, project, children }
   const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const currentProject = project.data?.id === projectId ? project.data : undefined
   const requestedTab = new URLSearchParams(location.search).get('tab')
+  const isUserGroupAssetList =
+    matchPath('/user-groups/:userGroupId/projects', location.pathname) !== null ||
+    matchPath('/user-groups/:userGroupId/shared-resources', location.pathname) !== null ||
+    matchPath('/user-groups/:userGroupId/environments', location.pathname) !== null
   const projectArea = location.pathname.includes('/runs/')
     ? 'runs'
     : requestedTab === 'runs' || requestedTab === 'configurations'
@@ -210,7 +214,11 @@ export function AppShell({ username, onUsernameChange, home, project, children }
           ) : null}
           <main className={styles.main}>
             <PageLayout containerWidth="full" padding="none" rowGap="none" columnGap="none">
-              <PageLayout.Content as="div" width="xlarge" padding="normal">
+              <PageLayout.Content
+                as="div"
+                width={isUserGroupAssetList ? 'full' : 'xlarge'}
+                padding={isUserGroupAssetList ? 'none' : 'normal'}
+              >
                 {children}
               </PageLayout.Content>
             </PageLayout>

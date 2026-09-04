@@ -566,9 +566,12 @@ describe('AppShell Header 的 User Group 分区导航', () => {
 
     const nav = await screen.findByRole('navigation', { name: 'User Group 分区导航' })
     expect(screen.getByRole('banner')).toContainElement(nav)
-    expect(within(nav).getByRole('link', { name: '设置' })).toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: '概览' })).not.toHaveAttribute('aria-current')
-    expect(within(nav).getByRole('link', { name: '设置' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   })
 
   it('离开 User Group 路由后 Header 恢复单行，不再渲染分区导航', async () => {
@@ -577,7 +580,7 @@ describe('AppShell Header 的 User Group 分区导航', () => {
     renderShell('student', readyHome(), '/user-groups/grp-1')
 
     await screen.findByRole('navigation', { name: 'User Group 分区导航' })
-    fireEvent.click(screen.getByRole('link', { name: '107 Workspace' }))
+    fireEvent.click(screen.getByRole('link', { name: '107 Workspace 首页' }))
 
     await waitFor(() => {
       expect(screen.queryByRole('navigation', { name: 'User Group 分区导航' })).toBeNull()

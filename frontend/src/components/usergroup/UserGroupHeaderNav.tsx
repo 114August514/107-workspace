@@ -56,7 +56,11 @@ export function UserGroupHeaderNav() {
   const sections = [
     { key: 'overview', label: copy.nav.overview, to: basePath },
     { key: 'projects', label: copy.nav.projects, to: `${basePath}/projects` },
-    { key: 'shared-resources', label: copy.nav.sharedResources, to: `${basePath}/shared-resources` },
+    {
+      key: 'shared-resources',
+      label: copy.nav.sharedResources,
+      to: `${basePath}/shared-resources`,
+    },
     { key: 'environments', label: copy.nav.environments, to: `${basePath}/environments` },
     { key: 'members', label: copy.nav.members, to: `${basePath}/members` },
     ...(can(userGroup, 'user_group.update')
@@ -66,7 +70,7 @@ export function UserGroupHeaderNav() {
 
   return (
     <div className={styles.contextNav}>
-      <UnderlineNav aria-label={copy.page.navLabel} variant="flush">
+      <UnderlineNav aria-label={copy.page.navLabel}>
         {sections.map((section) => (
           <UnderlineNav.Item
             key={section.key}

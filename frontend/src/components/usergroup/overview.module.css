@@ -1,72 +1,89 @@
-.overview {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: var(--base-size-16);
-  align-items: start;
-}
-
 .section {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--base-size-12);
-  padding: var(--base-size-16);
-  border: var(--borderWidth-thin) solid var(--borderColor-default);
-  border-radius: var(--borderRadius-medium);
+  gap: var(--base-size-16);
+}
+
+.sectionHeader {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--base-size-8);
 }
 
 .sectionTitle {
   margin: 0;
   color: var(--fgColor-default);
-  font-size: var(--text-title-size-medium);
+  font-size: var(--text-title-size-small);
   font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-title-lineHeight-small);
 }
 
-.infoGrid {
-  display: grid;
+.sectionLink {
+  flex: none;
+  color: var(--fgColor-accent);
+  font-size: var(--text-body-size-small);
+  text-decoration: none;
+}
+
+.sectionLink:hover {
+  text-decoration: underline;
+}
+
+.rowList {
+  display: flex;
+  min-width: 0;
   margin: 0;
-  grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr);
-  gap: 0;
+  padding: 0;
+  flex-direction: column;
+  list-style: none;
   overflow: hidden;
-  border: var(--borderWidth-thin) solid var(--borderColor-muted);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
   border-radius: var(--borderRadius-medium);
 }
 
-.infoGrid dt,
-.infoGrid dd {
-  margin: 0;
-  padding: var(--base-size-8) var(--base-size-12);
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+.row + .row {
+  border-top: var(--borderWidth-thin) solid var(--borderColor-default);
 }
 
-.infoGrid dt {
-  background: var(--bgColor-muted);
-  color: var(--fgColor-muted);
-  font-weight: var(--base-text-weight-semibold);
-}
-
-.infoGrid dd {
+.rowLink {
+  display: flex;
   min-width: 0;
-  overflow-wrap: anywhere;
+  min-height: 88px;
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: var(--base-size-4);
+  padding: var(--base-size-16);
+  color: inherit;
+  text-decoration: none;
 }
 
-.infoGrid dt:last-of-type,
-.infoGrid dd:last-of-type {
-  border-bottom: none;
+.rowLink:hover {
+  background: var(--bgColor-muted);
 }
 
-.countLine {
-  margin: 0;
+.rowName {
+  overflow: hidden;
   color: var(--fgColor-default);
+  font-size: var(--text-body-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cardLink {
-  color: var(--fgColor-accent);
+.rowDescription,
+.rowMeta {
+  overflow: hidden;
+  color: var(--fgColor-muted);
   font-size: var(--text-body-size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.cardLink:focus-visible {
-  outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
-  outline-offset: var(--base-size-2);
+.truncatedNote {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
 }

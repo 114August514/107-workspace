@@ -97,7 +97,14 @@ describe('UserGroupPage 分区导航信息架构', () => {
     const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
     const links = within(nav).getAllByRole('link')
     const labels = links.map((link) => link.textContent)
-    expect(labels).toEqual(['概览', 'Project', '共享资源', '运行环境', '成员', '设置'])
+    expect(labels).toEqual([
+      'Overview',
+      'Project',
+      'Shared Resource',
+      'Environment',
+      'Members',
+      'Settings',
+    ])
   })
 
   it('REQ-21-02 基础 URL 渲染概览分区，成员分区渲染成员治理面板', async () => {
@@ -116,11 +123,10 @@ describe('UserGroupPage 分区导航信息架构', () => {
   it('REQ-21-21 当前分区在导航中带 aria-current 选中态', async () => {
     renderUserGroupRoute('/user-groups/grp_lab/members')
 
-    await screen.findByRole('heading', { name: 'Research Lab' })
-    const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
-    const membersLink = within(nav).getByRole('link', { name: '成员' })
+    const nav = await screen.findByRole('navigation', { name: 'User Group 分区导航' })
+    const membersLink = within(nav).getByRole('link', { name: 'Members' })
     expect(membersLink).toHaveAttribute('aria-current', 'page')
-    expect(within(nav).getByRole('link', { name: '概览' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
     expect(within(nav).getByRole('link', { name: 'Project' })).not.toHaveAttribute('aria-current')
   })
 
@@ -129,8 +135,11 @@ describe('UserGroupPage 分区导航信息架构', () => {
 
     await screen.findByRole('heading', { name: 'Research Lab' })
     const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
-    expect(within(nav).getByRole('link', { name: '概览' })).toHaveAttribute('aria-current', 'page')
-    expect(within(nav).getByRole('link', { name: '成员' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: 'Overview' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(nav).getByRole('link', { name: 'Members' })).not.toHaveAttribute('aria-current')
   })
 
   it('REQ-21-03 Member 角色不显示设置分区', async () => {
@@ -139,10 +148,10 @@ describe('UserGroupPage 分区导航信息架构', () => {
 
     await screen.findByRole('heading', { name: 'Research Lab' })
     const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
-    expect(within(nav).queryByText('设置')).not.toBeInTheDocument()
-    expect(within(nav).getByText('概览')).toBeInTheDocument()
+    expect(within(nav).queryByText('Settings')).not.toBeInTheDocument()
+    expect(within(nav).getByText('Overview')).toBeInTheDocument()
     expect(within(nav).getByText('Project')).toBeInTheDocument()
-    expect(within(nav).getByText('成员')).toBeInTheDocument()
+    expect(within(nav).getByText('Members')).toBeInTheDocument()
   })
 
   it('REQ-21-04 不出现旧导航与 Workspace 术语', async () => {

@@ -1,50 +1,48 @@
-import { Link as RouterLink, useOutletContext } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 
 import { toAsyncError } from '../../api/errors'
+import { can, type SharedResource } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
-import { AsyncState } from '../common/AsyncState'
+import { formatRelative } from '../../utils/format'
 import type { UserGroupOutletContext } from '../../pages/UserGroupPage'
-import styles from './assets.module.css'
 import { loadGroupSharedResources } from './groupAssets'
+import { RepoList } from './RepoList'
+import { DEFAULT_REPO_TYPE_FLAGS } from './repoType'
 import { userGroupPageCopy as copy } from './userGroupCopy'
+
+function compareCreatedDesc(left: SharedResource, right: SharedResource): number {
+  return right.created_at.localeCompare(left.created_at)
+}
 
 export function SharedResourcesSection() {
   const { userGroup } = useOutletContext<UserGroupOutletContext>()
   const resources = useAsync(() => loadGroupSharedResources(userGroup.id), [userGroup.id])
-  const items = resources.data ?? []
+  const items = (resources.data ?? []).slice().sort(compareCreatedDesc)
 
   return (
-    <section className={styles.section} aria-labelledby="user-group-shared-resources-title">
-      <header className={styles.sectionHeader}>
-        <h2 id="user-group-shared-resources-title" className={styles.sectionTitle}>
-          {copy.sections.sharedResources.title}
-        </h2>
-        <p className={styles.sectionDescription}>{copy.sections.sharedResources.description}</p>
-      </header>
-      <AsyncState
-        loading={resources.loading}
-        loadingText="正在加载共享资源…"
-        error={toAsyncError(resources.error)}
-        onRetry={resources.reload}
-        empty={!resources.loading && resources.data !== undefined && items.length === 0}
-        emptyText="这个 User Group 还没有共享资源。"
-        emptyDescription="组拥有的共享资源会出现在这里。"
-      >
-        <ul className={styles.assetList} aria-label="共享资源列表">
-          {items.map((resource) => (
-            <li key={resource.id}>
-              <RouterLink className={styles.assetLink} to={`/shared-resources/${resource.id}`}>
-                <span className={styles.itemMain}>
-                  <span className={styles.itemTitle}>{resource.name}</span>
-                  <span className={styles.itemMeta}>
-                    {resource.description || '这个共享资源还没有填写说明。'}
-                  </span>
-                </span>
-              </RouterLink>
-            </li>
-          ))}
-        </ul>
-      </AsyncState>
-    </section>
+    <RepoList
+      titleId="user-group-shared-resources-title"
+      listLabel="共享资源列表"
+      searchPlaceholder={copy.list.searchSharedResources}
+      countLabel={copy.list.countSharedResources}
+      noMatches={copy.list.noMatches}
+      loading={resources.loading && !resources.data}
+      loadingText={copy.list.loadingSharedResources}
+      error={toAsyncError(resources.error)}
+      onRetry={resources.reload}
+      emptyText={copy.list.emptySharedResources}
+      emptyDescription={copy.list.emptySharedResourcesHint}
+      items={items.map((resource) => ({
+        id: resource.id,
+        name: resource.name,
+        to: `/shared-resources/${resource.id}`,
+        description: resource.description,
+        types: {
+          ...DEFAULT_REPO_TYPE_FLAGS,
+          admin: can(resource, 'shared_resource.manage'),
+        },
+        meta: copy.list.createdAt(formatRelative(resource.created_at)),
+      }))}
+    />
   )
 }

@@ -111,10 +111,10 @@ describe('User Group 设置分区', () => {
     }
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(memberGroup)
     vi.spyOn(api, 'listMembers').mockResolvedValue([])
-    vi.spyOn(api, 'listUserGroupActivities').mockResolvedValue({
+    vi.spyOn(api, 'listProjects').mockResolvedValue({
       items: [],
       page: 1,
-      page_size: 10,
+      page_size: 200,
       total: 0,
       has_more: false,
     })
@@ -131,7 +131,7 @@ describe('User Group 设置分区', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: '基本信息' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Research Lab' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/名称/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '保存设置' })).not.toBeInTheDocument()
   })
