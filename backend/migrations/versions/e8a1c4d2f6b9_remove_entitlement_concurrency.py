@@ -26,6 +26,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     with op.batch_alter_table("resource_entitlements", schema=None) as batch_op:
         batch_op.add_column(
-            sa.Column("max_concurrent_runs", sa.Integer(), server_default="1", nullable=False)
+            sa.Column(
+                "max_concurrent_runs",
+                sa.Integer(),
+                server_default=sa.text("1"),
+                nullable=False,
+            )
         )
+    with op.batch_alter_table("resource_entitlements", schema=None) as batch_op:
         batch_op.alter_column("max_concurrent_runs", server_default=None)
