@@ -2,6 +2,22 @@
   display: grid;
   gap: var(--base-size-16);
 }
+.directoryToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+
+.directoryToolbar > * {
+  min-width: 0;
+}
+
+.directoryToolbar .fileToolbar {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
 
 .fileToolbar {
   display: flex;
@@ -116,9 +132,17 @@
 }
 
 @media not all and (min-width: 48rem) {
-  .fileToolbar {
+  .directoryToolbar {
     align-items: stretch;
-    flex-direction: column;
+    flex-wrap: wrap;
+  }
+
+  .directoryToolbar .fileToolbar {
+    margin-left: 0;
+  }
+
+  .fileToolbar {
+    flex-wrap: wrap;
   }
 
   .fileContext {
