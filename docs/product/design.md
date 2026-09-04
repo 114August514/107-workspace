@@ -215,10 +215,10 @@ Project 与项目文件
 │   ├── [V1] 将 Project 更新推送到外部仓库
 │   ├── [V1] 查看最近一次拉取或推送结果
 │   ├── [V1] 从科大云盘导入文件或目录
+│   ├── [V1] 通过 CLI 增量同步本地目录
 │   │
 │   ├── [V2] 管理多个外部 Git 仓库
 │   ├── [V2] 配置分支同步关系
-│   ├── [V2] 通过 CLI 增量同步本地目录
 │   ├── [V2] 将项目文件导出到科大云盘
 │   ├── [V2] 处理外部仓库同步冲突
 │   │
@@ -2005,6 +2005,13 @@ Project Working State 表示 Project 当前可编辑的工作内容。
 Project Version 创建后内容不可变，用于固定某一确定的 Project 状态，并可以作为创建 Run 或新 Project 的确定来源。
 
 后续对 Working State 的修改不得改变已有 Project Version。
+
+本地目录同步使用平台签发的受控 Project 暂存目标和 `rsync + SSH`。暂存目标按 Project
+与发起 User 隔离并稳定复用，使重复同步可以只传输变化内容；客户端不能自选远端路径。
+传输完成后，平台重新校验当前 User 的内容写入权限、Project 相对路径、文件大小与命名空间，
+再把暂存内容创建或覆盖到 Working State。默认同步不删除 Working State 中仅远端存在的文件，
+也不自动创建 Project Version。项目根目录的 `.107ignore` 使用 gitignore-style pattern；
+`.git/`、`.venv/`、`node_modules/`、`__pycache__/` 和常见构建产物默认不进入同步。
 
 ##### 管理 Project Branch
 

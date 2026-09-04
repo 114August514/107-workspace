@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./var/workspace107.db"
     storage_root: Path = Path("./var/storage")
 
+    # Project 本地同步通过既有 SSH 身份把内容 rsync 到共享存储中的受控暂存区。
+    # target 是 rsync 的远端（例如 workspace107@login.example.edu）；remote_root
+    # 是该远端主机看到的绝对路径，必须与 storage_root/project-sync 指向同一目录。
+    project_sync_ssh_target: str = ""
+    project_sync_remote_root: str = ""
+
     scheduler: SchedulerKind = "mock"
     slurm_api_base_url: str = ""
     slurm_api_user: str = ""

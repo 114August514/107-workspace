@@ -11,10 +11,14 @@ dependencies = [
   "httpx>=0.28,<1",
   "pydantic>=2.11,<3",
   "pydantic-settings>=2.10,<3",
+  "pathspec>=0.12,<1",
   "python-multipart>=0.0.20,<1",
   "sqlalchemy[asyncio]>=2.0.41,<3",
   "uvicorn[standard]>=0.35,<1",
 ]
+
+[project.scripts]
+107 = "workspace107.cli:main"
 
 [project.optional-dependencies]
 postgres = ["asyncpg>=0.30,<1"]

@@ -93,6 +93,8 @@ cp ../.env.example .env
 | :--- | :--- |
 | `WORKSPACE107_DATABASE_URL` | 默认 SQLite；部署时改 PostgreSQL |
 | `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
+| `WORKSPACE107_PROJECT_SYNC_SSH_TARGET` | Project 本地同步使用的固定 `user@host` SSH 目标 |
+| `WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT` | SSH 主机看到的受控暂存根，须映射到 `STORAGE_ROOT/project-sync` |
 | `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
 | `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
 | `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |
@@ -110,6 +112,27 @@ curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
 ```
 
 接入学校统一身份认证后只需替换 `api/deps.py` 中的 `get_current_user`。
+
+## Project 本地目录同步
+
+安装后端包会提供 `107` 命令。开发环境可以直接运行：
+
+```bash
+WORKSPACE107_API_URL=http://127.0.0.1:8000/api/v1 \
+WORKSPACE107_USER=student \
+uv run 107 project sync ./my-project <project-id-or-exact-name>
+```
+
+CLI 先扫描本地目录并应用项目根目录的 `.107ignore`，随后从 API 获取固定的受控目标，
+通过 `rsync + SSH` 增量更新该暂存区，最后让 API 把内容应用到 Project Working State。
+暂存区内部使用镜像删除，以免已经删除或新近忽略的本地文件被再次 apply；Project Working
+State 本身不执行删除，也不会自动创建 Version。中断后重新执行同一命令会复用 rsync 的
+partial 与增量传输能力。
+
+服务端只有同时配置 `WORKSPACE107_PROJECT_SYNC_SSH_TARGET` 与
+`WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT` 才启用该入口。SSH 用户必须只能写入受控共享存储，
+并能写入 API 创建的 actor-scoped 目录；`REMOTE_ROOT` 必须是 SSH 主机对
+`STORAGE_ROOT/project-sync` 同一物理目录的绝对路径。
 
 ## 调度适配器
 

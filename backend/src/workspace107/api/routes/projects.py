@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Query, UploadFile, status
@@ -14,7 +15,7 @@ from ...domain.errors import ValidationFailed
 from ...domain.ownership import OwnerKind, OwnerReference
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, PageDep, ServicesDep
+from ..deps import ContextDep, CurrentUser, PageDep, ServicesDep
 
 router = APIRouter(tags=["project"])
 
@@ -132,6 +133,48 @@ async def update_project(
 
 
 # -- 文件 -------------------------------------------------------------------
+
+
+@router.post(
+    "/projects/{project_id}/sync",
+    response_model=s.ProjectSyncTargetOut,
+    summary="准备受控的 Project rsync 暂存目标",
+)
+async def prepare_project_sync(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    context: ContextDep,
+) -> s.ProjectSyncTargetOut:
+    """要求内容写入权限，返回当前用户不可自选的稳定 SSH 暂存目标。"""
+    key = await services.projects.prepare_sync(user.id, project_id)
+    settings = context.settings
+    if not settings.project_sync_ssh_target or not settings.project_sync_remote_root:
+        raise ValidationFailed("当前部署尚未配置 Project rsync 同步入口")
+    remote_root = PurePosixPath(settings.project_sync_remote_root)
+    if not remote_root.is_absolute() or ".." in remote_root.parts:
+        raise ValidationFailed("Project rsync 远端暂存根配置必须是绝对路径")
+
+    return s.ProjectSyncTargetOut(
+        ssh_target=settings.project_sync_ssh_target,
+        remote_path=(remote_root / key).as_posix(),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/sync/apply",
+    response_model=s.ProjectSyncApplyOut,
+    summary="将 rsync 暂存内容应用到 Project Working State",
+)
+async def apply_project_sync(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.ProjectSyncApplyOut:
+    """要求内容写入权限，只创建或覆盖暂存内容对应的路径，不删除额外文件。"""
+    result = await services.projects.apply_sync(user.id, project_id)
+    return s.ProjectSyncApplyOut(
+        scanned_files=result.scanned_files,
+        changed_files=result.changed_files,
+    )
 
 
 @router.get(

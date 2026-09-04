@@ -172,6 +172,16 @@ class ProjectFileOut(Model):
     updated_at: datetime | None
 
 
+class ProjectSyncTargetOut(Model):
+    ssh_target: str
+    remote_path: str
+
+
+class ProjectSyncApplyOut(Model):
+    scanned_files: int
+    changed_files: int
+
+
 class FileWriteIn(Model):
     path: str
     content: str

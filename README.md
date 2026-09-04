@@ -50,6 +50,15 @@ make check
 
 任务入口、可选目标和平台边界见 [`scripts/README.md`](scripts/README.md)。
 
+安装后端包后可用 rsync 将本地代码目录增量同步到有写权限的 Project：
+
+```bash
+107 project sync ./my-project <project-id-or-exact-name>
+```
+
+该入口需要部署方先配置受控 SSH 暂存目标；具体配置与 `.107ignore` 行为见
+[`backend/README.md`](backend/README.md#project-本地目录同步)。
+
 ## 架构
 
 后端是模块化单体，内部依赖按层次单向流动：

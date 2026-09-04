@@ -7,6 +7,7 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 
 from __future__ import annotations
 
+import hashlib
 import io
 import posixpath
 import re
@@ -129,6 +130,12 @@ class WorkingChangeDetail:
     """基线（最近保存版本）中的内容；新增时为空。"""
     current: bytes | None
     """当前工作区内容；删除时为空。"""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectSyncApplyResult:
+    scanned_files: int
+    changed_files: int
 
 
 class ProjectService:
@@ -331,6 +338,52 @@ class ProjectService:
         record = await self._store_entry(project_id, normalized, content)
         await self._touch(access.project)
         return record
+
+    async def prepare_sync(self, user_id: str, project_id: str) -> str:
+        """授权并准备 actor-scoped、可重复使用的 rsync 暂存区。"""
+        await self._guard.project(user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE)
+        return await self._storage.prepare_project_sync(project_id, user_id)
+
+    async def apply_sync(self, user_id: str, project_id: str) -> ProjectSyncApplyResult:
+        """把受控暂存区内容创建或覆盖到 Working State，不删除额外文件。"""
+        access = await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
+        )
+        staged = await self._storage.list_project_sync_files(project_id, user_id)
+        if not staged:
+            raise ValidationFailed("同步暂存区中没有可应用的文件")
+
+        paths: list[str] = []
+        for entry in staged:
+            normalized = normalize_path(entry.path)
+            if normalized != entry.path:
+                raise ValidationFailed(f"同步路径「{entry.path}」不是规范的 Project 相对路径")
+            if entry.size > self._max_file_bytes:
+                limit_mb = self._max_file_bytes // (1024 * 1024)
+                raise ValidationFailed(
+                    f"文件 {entry.path} 超过单个文件上限 {limit_mb} MB。"
+                    "大数据集和模型权重应当作为共享资源管理，不要放进 Project 文件。"
+                )
+            paths.append(normalized)
+
+        _validate_user_file_paths(paths)
+        existing = await self._repos.project_files.list_for_project(project_id)
+        _validate_file_namespace((file.path for file in existing), paths)
+        existing_by_path = {file.path: file for file in existing}
+
+        changed = 0
+        for entry in staged:
+            content = await self._storage.read_project_sync_file(project_id, user_id, entry.path)
+            content_hash = hashlib.sha256(content).hexdigest()
+            current = existing_by_path.get(entry.path)
+            if current is not None and current.content_hash == content_hash:
+                continue
+            await self._store_entry(project_id, entry.path, content)
+            changed += 1
+
+        if changed:
+            await self._touch(access.project)
+        return ProjectSyncApplyResult(scanned_files=len(staged), changed_files=changed)
 
     async def _store_entry(self, project_id: str, path: str, content: bytes) -> ProjectFile:
         """写入单个文件条目：上限校验、内容寻址存储、元数据 upsert。

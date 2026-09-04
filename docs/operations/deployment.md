@@ -57,6 +57,8 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 | `WORKSPACE107_HTTP_PORT` | Web 暴露端口，默认 `8107` |
 | `WORKSPACE107_SCHEDULER` | `mock` 或 `slurm` |
 | `WORKSPACE107_STORAGE_MOUNT` | API 与计算节点需要共同看到的存储来源 |
+| `WORKSPACE107_PROJECT_SYNC_SSH_TARGET` | 固定的 Project rsync SSH 目标；留空时禁用 |
+| `WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT` | SSH 主机看到的 `storage/project-sync` 绝对路径 |
 | `WORKSPACE107_SLURM_API_BASE_URL` | slurmrestd 地址 |
 | `WORKSPACE107_SLURM_API_USER` | Slurm API 用户 |
 | `WORKSPACE107_SLURM_JWT` | 等价于密码，只能从环境注入 |
@@ -111,6 +113,13 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 2. API 容器 UID/GID `10001:10001` 与共享目录权限匹配。
 3. 只读 Input Binding 在目标文件系统和运行身份下确实不可修改。
 4. 日志与 Artifact 的并发写入、清理和失败恢复行为符合平台要求。
+
+Project 本地同步还要求 SSH 入口看到同一共享存储。API 在
+`<WORKSPACE107_STORAGE_ROOT>/project-sync/<project>/<actor-key>` 创建稳定且受控的暂存区；
+`WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT` 必须指向 SSH 主机对 `project-sync` 的同一物理目录。
+SSH 运行身份需要写入这些目录，但不应获得共享存储其他区域的任意写权限。部署还应验证
+API UID/GID 与 SSH 身份的组权限、rsync 可执行文件、主机密钥信任和断线重试。CLI 从 API
+获取 exact 目标，不接受用户提供任意远端路径。
 
 只修改 `WORKSPACE107_STORAGE_MOUNT` 不会改变容器内应用路径；如果计算节点不能提供上述
 固定路径，必须先调整部署映射和应用配置并完成端到端验证。

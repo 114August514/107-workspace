@@ -55,6 +55,14 @@ class ArtifactEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectSyncEntry:
+    """受控 Project 同步暂存区中的一个普通文件。"""
+
+    path: str
+    size: int
+
+
+@dataclass(frozen=True, slots=True)
 class RunInput:
     """一次 Run 的一个输入绑定，按来源类型决定如何物化。
 
@@ -92,6 +100,18 @@ class StoragePort(Protocol):
     async def read_blob(self, content_hash: str) -> bytes: ...
 
     async def blob_exists(self, content_hash: str) -> bool: ...
+
+    # -- Project 本地同步暂存区 ---------------------------------------
+
+    async def prepare_project_sync(self, project_id: str, actor_id: str) -> str:
+        """创建稳定的 actor-scoped 暂存区并返回相对 storage key。"""
+        ...
+
+    async def list_project_sync_files(
+        self, project_id: str, actor_id: str
+    ) -> list[ProjectSyncEntry]: ...
+
+    async def read_project_sync_file(self, project_id: str, actor_id: str, path: str) -> bytes: ...
 
     async def resolve_blob_path(self, content_hash: str) -> Path:
         """Return a scheduler-visible CAS path after rechecking the exact digest."""

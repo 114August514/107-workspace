@@ -24,13 +24,20 @@ import contextlib
 import hashlib
 import os
 import shutil
+import stat
 import tempfile
 import zipfile
 from pathlib import Path
 
 from ...domain.enums import InputSourceType, LogStream
 from ...domain.errors import ObjectNotFound, ValidationFailed
-from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunInput, RunPaths
+from ...domain.ports.storage import (
+    ArtifactContent,
+    ArtifactEntry,
+    ProjectSyncEntry,
+    RunInput,
+    RunPaths,
+)
 
 READONLY_DIR = 0o555
 READONLY_FILE = 0o444
@@ -42,7 +49,8 @@ class LocalStorage:
         self._blobs = root / "blobs"
         self._runs = root / "runs"
         self._artifacts = root / "artifacts"
-        for path in (self._blobs, self._runs, self._artifacts):
+        self._project_sync = root / "project-sync"
+        for path in (self._blobs, self._runs, self._artifacts, self._project_sync):
             path.mkdir(parents=True, exist_ok=True)
 
     # -- 内容寻址存储 ---------------------------------------------------
@@ -65,6 +73,33 @@ class LocalStorage:
 
     async def blob_exists(self, content_hash: str) -> bool:
         return await asyncio.to_thread(self._blob_path(content_hash).exists)
+
+    # -- Project 本地同步暂存区 ---------------------------------------
+
+    def _project_sync_key(self, project_id: str, actor_id: str) -> str:
+        actor_key = hashlib.sha256(actor_id.encode()).hexdigest()[:32]
+        return f"{project_id}/{actor_key}"
+
+    def _project_sync_path(self, project_id: str, actor_id: str) -> Path:
+        return self._project_sync / self._project_sync_key(project_id, actor_id)
+
+    async def prepare_project_sync(self, project_id: str, actor_id: str) -> str:
+        target = self._project_sync_path(project_id, actor_id)
+        await asyncio.to_thread(target.mkdir, parents=True, exist_ok=True)
+        return self._project_sync_key(project_id, actor_id)
+
+    async def list_project_sync_files(
+        self, project_id: str, actor_id: str
+    ) -> list[ProjectSyncEntry]:
+        root = self._project_sync_path(project_id, actor_id)
+        return await asyncio.to_thread(_scan_project_sync, root)
+
+    async def read_project_sync_file(self, project_id: str, actor_id: str, path: str) -> bytes:
+        root = self._project_sync_path(project_id, actor_id).resolve()
+        target = (root / path).resolve()
+        if root not in target.parents or not target.is_file() or target.is_symlink():
+            raise ValidationFailed(f"同步暂存区中的路径「{path}」不是可读取的普通文件")
+        return await asyncio.to_thread(target.read_bytes)
 
     async def resolve_blob_path(self, content_hash: str) -> Path:
         target = self._blob_path(content_hash)
@@ -271,6 +306,31 @@ def _write_atomic(target: Path, data: bytes) -> None:
     temporary = target.with_suffix(".tmp")
     temporary.write_bytes(data)
     temporary.replace(target)
+
+
+def _scan_project_sync(root: Path) -> list[ProjectSyncEntry]:
+    if not root.is_dir():
+        raise ValidationFailed("Project 同步暂存区尚未准备")
+
+    entries: list[ProjectSyncEntry] = []
+    for directory, dirnames, filenames in os.walk(root, followlinks=False):
+        parent = Path(directory)
+        for name in dirnames:
+            candidate = parent / name
+            mode = candidate.lstat().st_mode
+            relative = candidate.relative_to(root).as_posix()
+            if stat.S_ISLNK(mode):
+                raise ValidationFailed(f"同步暂存区不接受符号链接「{relative}」")
+        for name in filenames:
+            candidate = parent / name
+            mode = candidate.lstat().st_mode
+            relative = candidate.relative_to(root).as_posix()
+            if stat.S_ISLNK(mode):
+                raise ValidationFailed(f"同步暂存区不接受符号链接「{relative}」")
+            if not stat.S_ISREG(mode):
+                raise ValidationFailed(f"同步暂存区只接受普通文件「{relative}」")
+            entries.append(ProjectSyncEntry(path=relative, size=candidate.stat().st_size))
+    return sorted(entries, key=lambda entry: entry.path)
 
 
 def _file_sha256(path: Path) -> str:
