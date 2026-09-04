@@ -1,4 +1,4 @@
-import { DownloadIcon } from '@primer/octicons-react'
+import { DownloadIcon, HomeIcon } from '@primer/octicons-react'
 import { Button, Card, Tag, Typography } from 'antd'
 import { Highlight, themes } from 'prism-react-renderer'
 import { useEffect, useState } from 'react'
@@ -17,6 +17,7 @@ interface Props {
   access: Project | undefined
   path: string
   backHref: string
+  rootHref?: string
   version?: ProjectVersionDetail
   onChanged?: () => void
 }
@@ -37,10 +38,24 @@ function languageForPath(path: string): string {
   return languages[extension ?? ''] ?? 'text'
 }
 
-export function FileViewer({ projectId, access, path, backHref, version, onChanged }: Props) {
+export function FileViewer({
+  projectId,
+  access,
+  path,
+  backHref,
+  rootHref = backHref,
+  version,
+  onChanged,
+}: Props) {
   const navigate = useNavigate()
   const readOnly = version !== undefined
   const canWrite = !readOnly && can(access, 'project.content.write')
+  const fileName = path.split('/').at(-1) ?? path
+  const directorySegments = path.split('/').slice(0, -1)
+  const directoryHref = (segments: string[]) =>
+    segments.length === 0
+      ? rootHref
+      : `${rootHref}/tree/${segments.map(encodeURIComponent).join('/')}`
   const file = useAsync<FileContent>(
     () => (version ? api.readVersionFile(version.id, path) : api.readFile(projectId, path)),
     [projectId, version?.id, path],
@@ -67,13 +82,26 @@ export function FileViewer({ projectId, access, path, backHref, version, onChang
   return (
     <div className={styles.page}>
       <nav className={styles.breadcrumb} aria-label="文件路径">
-        <Link to={backHref}>Files</Link>
-        <span aria-hidden> / </span>
-        <span>{path}</span>
+        <Link to={rootHref} aria-label="返回 Project 文件根目录">
+          <HomeIcon size={16} />
+        </Link>
+        {directorySegments.map((segment, index) => {
+          const segments = directorySegments.slice(0, index + 1)
+          return (
+            <span key={segments.join('/')}>
+              <span aria-hidden> / </span>
+              <Link to={directoryHref(segments)}>{segment}</Link>
+            </span>
+          )
+        })}
+        <span>
+          <span aria-hidden> / </span>
+          {fileName}
+        </span>
       </nav>
       <div className={styles.header}>
         <div>
-          <Typography.Title level={3}>{path}</Typography.Title>
+          <Typography.Title level={3}>{fileName}</Typography.Title>
           {version && <Tag color="blue">{version.label} · 只读</Tag>}
         </div>
         <div className={styles.headerActions}>

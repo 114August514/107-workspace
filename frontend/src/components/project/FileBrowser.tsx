@@ -1,4 +1,4 @@
-import { FileDirectoryIcon, FileIcon, PlusIcon, UploadIcon } from '@primer/octicons-react'
+import { FileDirectoryIcon, FileIcon, HomeIcon, PlusIcon, UploadIcon } from '@primer/octicons-react'
 import {
   ActionList,
   ActionMenu,
@@ -7,7 +7,7 @@ import {
   Link as PrimerLink,
 } from '@primer/react'
 import { Alert, Button, Drawer, Form, Input, Space, Tag, message } from 'antd'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { can } from '../../api/types'
@@ -26,6 +26,7 @@ interface Props {
   currentPath?: string
   basePath?: string
   version?: ProjectVersionDetail
+  contextControls?: ReactNode
 }
 
 /** 当前目录级动作；文件对象操作位于文件查看页。 */
@@ -94,7 +95,6 @@ function projectFileTree(files: ProjectFile[], currentPath: string): FileTreeNod
   })
 }
 
-/** Project Working Tree：可编辑的当前文件状态。 */
 export function FileBrowser({
   projectId,
   access,
@@ -102,6 +102,7 @@ export function FileBrowser({
   currentPath = '',
   basePath = `/projects/${projectId}/files`,
   version,
+  contextControls,
 }: Props) {
   const readOnly = version !== undefined
   const canWrite = !readOnly && can(access, 'project.content.write')
@@ -227,9 +228,11 @@ export function FileBrowser({
     `${basePath}${path ? `/tree/${path.split('/').map(encodeURIComponent).join('/')}` : ''}`
   const currentSegments = currentPath ? currentPath.split('/') : []
   const currentName = (path: string) => path.split('/').at(-1) ?? path
-  const breadcrumb = (
+  const breadcrumb = currentPath ? (
     <nav className={styles.breadcrumb} aria-label="文件路径">
-      <Link to={directoryHref('')}>/</Link>
+      <Link to={directoryHref('')} aria-label="返回 Project 文件根目录">
+        <HomeIcon size={16} />
+      </Link>
       {currentSegments.map((segment, index) => {
         const path = currentSegments.slice(0, index + 1).join('/')
         return (
@@ -240,7 +243,7 @@ export function FileBrowser({
         )
       })}
     </nav>
-  )
+  ) : null
   const rows = tree.map((node) => (
     <tr key={node.key}>
       <td className={styles.nameCell}>
@@ -328,37 +331,40 @@ export function FileBrowser({
 
   return (
     <div className={styles.fileSurface}>
-      {fileContext}
+      <div className={styles.directoryToolbar}>
+        {contextControls}
+        {fileContext}
+        {canWrite && (
+          <div className={styles.fileToolbar}>
+            <PrimerButton leadingVisual={UploadIcon} onClick={() => fileInputRef.current?.click()}>
+              上传文件
+            </PrimerButton>
+            {uploadMenu}
+            {directoryActions}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                void uploadOneByOne(Array.from(event.target.files ?? []))
+                event.target.value = ''
+              }}
+            />
+            <input
+              ref={archiveInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              hidden
+              onChange={(event) => {
+                void uploadArchive(event.target.files)
+                event.target.value = ''
+              }}
+            />
+          </div>
+        )}
+      </div>
       {breadcrumb}
-      {canWrite && (
-        <div className={styles.fileToolbar}>
-          <PrimerButton leadingVisual={UploadIcon} onClick={() => fileInputRef.current?.click()}>
-            上传文件
-          </PrimerButton>
-          {uploadMenu}
-          {directoryActions}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            onChange={(event) => {
-              void uploadOneByOne(Array.from(event.target.files ?? []))
-              event.target.value = ''
-            }}
-          />
-          <input
-            ref={archiveInputRef}
-            type="file"
-            accept=".zip,application/zip"
-            hidden
-            onChange={(event) => {
-              void uploadArchive(event.target.files)
-              event.target.value = ''
-            }}
-          />
-        </div>
-      )}
       {uploads.length > 0 && (
         <Alert
           type={failedUploads.length > 0 ? 'warning' : 'success'}

@@ -326,6 +326,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
         onChanged={bump}
         currentPath={currentPath}
         basePath={`/projects/${projectId}/files`}
+        contextControls={<FilesContextControls projectId={projectId} />}
       />
     ) : view === 'changes' ? (
       <Card>
@@ -360,6 +361,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             access={project.data}
             path={filePath}
             backHref={fileBackHref}
+            rootHref={fileBasePath}
             version={version.data}
             onChanged={() => navigate(fileBackHref)}
           />
@@ -426,10 +428,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
   const filesContent =
     section === 'files' ? (
       <div className={styles.filesLayout}>
-        <div className={styles.filesMain}>
-          {view !== 'version' && view !== 'file' && <FilesContextControls projectId={projectId} />}
-          {content}
-        </div>
+        <div className={styles.filesMain}>{content}</div>
         <ProjectAbout project={project.data} projectId={projectId} />
       </div>
     ) : (
