@@ -44,9 +44,9 @@ success、warning、danger 或其他界面语义色；这些职责继续由 Prim
 `#000000` 填充；透明负空间在当前浅色画布上呈现为白色。灰色不直接绘入 SVG，由 Primer
 neutral 与 state tokens 负责。
 
-页面 `BrandMark.tsx` 与 `frontend/public/favicon.svg` 复用同一份 final 几何和黑色静态填充；
-新 Mark 使用原始 `viewBox="0 0 140.9 141"`，不使用旧 Mark 的 optical padding，
-也不保留运行时 Mark 切换或 fallback。原始 `107pig.svg` 保留在
+页面 `BrandMark.tsx` 与 `frontend/public/favicon.svg` 复用同一份 final 几何和黑色静态填充；为让图形在 16 / 24 / 32 px
+容器内占满接近 GitHub 常见产品 Mark 的可视面积，使用紧凑 `viewBox="20 20 101 101"`，不改变宽高比。
+不再使用旧 Mark 的 optical padding，也不保留运行时 Mark 切换或 fallback。原始 `107pig.svg` 保留在
 `docs/archive/brand/107pig.svg`，仅用于来源追溯，不属于当前 active brand。
 
 当前界面颜色职责直接复用 Primer neutral tokens：
