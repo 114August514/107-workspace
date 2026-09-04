@@ -25,6 +25,7 @@ import {
   userGroupGovernanceCopy as copy,
 } from './memberCopy'
 import { AsyncState } from '../common/AsyncState'
+import { parseMemberImportFile } from './parseMemberImport'
 import styles from './MemberPanel.module.css'
 
 interface Props {
@@ -198,8 +199,22 @@ export function MemberPanel({ userGroup, onUserGroupChanged }: Props) {
         <InviteMemberDialog
           userGroup={userGroup}
           onClose={() => setInviteOpen(false)}
-          onInvited={(username) => {
-            setFeedback({ variant: 'success', title: copy.invite.success(username) })
+          onInvited={({ invited, failed }) => {
+            if (failed.length === 0) {
+              setFeedback({
+                variant: 'success',
+                title:
+                  invited.length === 1
+                    ? copy.invite.success(invited[0]!)
+                    : copy.invite.successMany(invited.length),
+              })
+            } else {
+              setFeedback({
+                variant: 'critical',
+                title: copy.invite.partial(invited.length, failed.length),
+                description: failed.join('、'),
+              })
+            }
             members.reload()
           }}
         />
@@ -238,16 +253,42 @@ function InviteMemberDialog({
 }: {
   userGroup: UserGroup
   onClose: () => void
-  onInvited: (username: string) => void
+  onInvited: (result: { invited: string[]; failed: string[] }) => void
 }) {
   const usernameRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const [username, setUsername] = useState('')
   const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [importedUsernames, setImportedUsernames] = useState<string[]>([])
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitFailed, setSubmitFailed] = useState(false)
+  const namesToInvite =
+    importedUsernames.length > 0 ? importedUsernames : username.trim() ? [username.trim()] : []
+
+  const loadFile = async (file: File) => {
+    setImportError(null)
+    setUsernameError(null)
+    setImporting(true)
+    try {
+      const names = await parseMemberImportFile(file)
+      if (names.length === 0) {
+        setImportedUsernames([])
+        setImportError(copy.invite.importEmpty)
+        return
+      }
+      setImportedUsernames(names)
+    } catch {
+      setImportedUsernames([])
+      setImportError(copy.invite.importError)
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const submit = async () => {
-    const trimmed = username.trim()
-    if (!trimmed) {
+    if (namesToInvite.length === 0) {
       setUsernameError(copy.invite.usernameRequired)
       usernameRef.current?.focus()
       return
@@ -255,12 +296,23 @@ function InviteMemberDialog({
     setUsernameError(null)
     setSubmitFailed(false)
     setSubmitting(true)
+    const invited: string[] = []
+    const failed: string[] = []
     try {
-      await api.inviteMember(userGroup.id, trimmed)
-      onInvited(trimmed)
+      for (const name of namesToInvite) {
+        try {
+          await api.inviteMember(userGroup.id, name)
+          invited.push(name)
+        } catch {
+          failed.push(name)
+        }
+      }
+      if (invited.length === 0) {
+        setSubmitFailed(true)
+        return
+      }
+      onInvited({ invited, failed })
       onClose()
-    } catch {
-      setSubmitFailed(true)
     } finally {
       setSubmitting(false)
     }
@@ -277,10 +329,13 @@ function InviteMemberDialog({
       footerButtons={[
         { content: copy.invite.cancel, disabled: submitting, onClick: onClose },
         {
-          content: copy.invite.submit,
+          content:
+            namesToInvite.length > 1
+              ? copy.invite.submitMany(namesToInvite.length)
+              : copy.invite.submit,
           buttonType: 'primary',
           loading: submitting,
-          disabled: submitting,
+          disabled: submitting || importing,
           onClick: () => void submit(),
         },
       ]}
@@ -289,7 +344,7 @@ function InviteMemberDialog({
         autoComplete="off"
         onSubmit={(event) => {
           event.preventDefault()
-          if (!submitting) void submit()
+          if (!submitting && !importing) void submit()
         }}
       >
         <Stack gap="normal">
@@ -299,7 +354,11 @@ function InviteMemberDialog({
               <Banner.Description>{copy.invite.failureNext}</Banner.Description>
             </Banner>
           ) : null}
-          <FormControl required disabled={submitting} id="invite-member-username">
+          <FormControl
+            required={importedUsernames.length === 0}
+            disabled={submitting}
+            id="invite-member-username"
+          >
             <FormControl.Label>{copy.invite.usernameLabel}</FormControl.Label>
             <TextInput
               ref={usernameRef}
@@ -314,6 +373,35 @@ function InviteMemberDialog({
               <FormControl.Validation variant="error">{usernameError}</FormControl.Validation>
             ) : null}
           </FormControl>
+          <FormControl disabled={submitting || importing}>
+            <FormControl.Label htmlFor="invite-member-file">
+              {copy.invite.importLabel}
+            </FormControl.Label>
+            <input
+              ref={fileRef}
+              className={styles.fileInput}
+              id="invite-member-file"
+              aria-label={copy.invite.importLabel}
+              type="file"
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) void loadFile(file)
+              }}
+            />
+            <FormControl.Caption>{copy.invite.importCaption}</FormControl.Caption>
+            {importError ? (
+              <FormControl.Validation variant="error">{importError}</FormControl.Validation>
+            ) : null}
+          </FormControl>
+          {importedUsernames.length > 0 ? (
+            <p className={styles.importSummary}>
+              {copy.invite.importCount(importedUsernames.length)}
+              {importedUsernames.slice(0, 8).join('、')}
+              {importedUsernames.length > 8 ? '…' : ''}
+            </p>
+          ) : null}
         </Stack>
       </form>
     </Dialog>

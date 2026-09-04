@@ -1,4 +1,4 @@
-import { CalendarIcon, ChevronRightIcon, FileIcon, PeopleIcon } from '@primer/octicons-react'
+import { CalendarIcon, ChevronRightIcon, PeopleIcon, ProjectIcon } from '@primer/octicons-react'
 import { Link as RouterLink, useOutletContext } from 'react-router-dom'
 
 import { api } from '../../api/client'
@@ -48,7 +48,7 @@ export function OverviewSection() {
                 <li key={project.id} className={styles.row}>
                   <RouterLink className={styles.rowLink} to={`/projects/${project.id}`}>
                     <span className={styles.rowIcon} aria-hidden="true">
-                      <FileIcon size={16} />
+                      <ProjectIcon size={16} />
                     </span>
                     <span className={styles.rowBody}>
                       <span className={styles.rowName}>{project.name}</span>

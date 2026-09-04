@@ -4,8 +4,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../src/api/client'
-import type { Member, UserGroup } from '../../src/api/types'
-import { MembersSection } from '../../src/components/usergroup/MembersSection'
+import type { UserGroup } from '../../src/api/types'
+import { SettingsSection } from '../../src/components/usergroup/SettingsSection'
 import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
 
@@ -25,35 +25,17 @@ const memberGroup: UserGroup = {
   capabilities: ['user_group.view', 'member.view'],
 }
 
-const members: Member[] = [
-  {
-    user_id: 'usr_alice',
-    username: 'alice',
-    display_name: 'Alice',
-    role: 'owner',
-    status: 'active',
-  },
-  {
-    user_id: 'usr_bob',
-    username: 'bob',
-    display_name: 'Bob',
-    role: 'member',
-    status: 'active',
-  },
-]
-
-function renderMembers(groupFixture: UserGroup, onMembershipChanged = vi.fn()) {
+function renderSettings(groupFixture: UserGroup, onMembershipChanged = vi.fn()) {
   vi.spyOn(api, 'getUserGroup').mockResolvedValue(groupFixture)
-  vi.spyOn(api, 'listMembers').mockResolvedValue(members)
   return render(
-    <MemoryRouter initialEntries={['/user-groups/grp_lab/members']}>
+    <MemoryRouter initialEntries={['/user-groups/grp_lab/settings']}>
       <UserGroupProvider>
         <Routes>
           <Route
             path="/user-groups/:userGroupId"
             element={<UserGroupPage onMembershipChanged={onMembershipChanged} />}
           >
-            <Route path="members" element={<MembersSection />} />
+            <Route path="settings" element={<SettingsSection />} />
           </Route>
         </Routes>
       </UserGroupProvider>
@@ -72,9 +54,9 @@ describe('成员退出 User Group', () => {
   })
 
   it('REQ-21-20 Owner 不显示退出入口', async () => {
-    renderMembers(ownerGroup)
+    renderSettings(ownerGroup)
 
-    await screen.findByRole('region', { name: '成员' })
+    await screen.findByRole('heading', { name: '设置' })
     expect(screen.queryByRole('heading', { name: '退出 User Group' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退出 User Group' })).not.toBeInTheDocument()
   })
@@ -82,7 +64,7 @@ describe('成员退出 User Group', () => {
   it('REQ-21-21 Member 在确认前不调用退出接口，确认后退出并通知成员变化', async () => {
     const leave = vi.spyOn(api, 'leaveUserGroup').mockResolvedValue(undefined)
     const onMembershipChanged = vi.fn()
-    renderMembers(memberGroup, onMembershipChanged)
+    renderSettings(memberGroup, onMembershipChanged)
 
     const leaveButton = await screen.findByRole('button', { name: '退出 User Group' })
     fireEvent.click(leaveButton)
@@ -103,7 +85,7 @@ describe('成员退出 User Group', () => {
       .spyOn(api, 'leaveUserGroup')
       .mockRejectedValueOnce(new Error('forbidden'))
       .mockResolvedValueOnce(undefined)
-    renderMembers(memberGroup)
+    renderSettings(memberGroup)
 
     const dialogConfirm = () =>
       screen

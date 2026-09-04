@@ -141,15 +141,17 @@ describe('UserGroupPage 分区导航信息架构', () => {
     expect(within(nav).getByRole('link', { name: 'Members' })).not.toHaveAttribute('aria-current')
   })
 
-  it('REQ-21-03 Member 角色不显示设置分区', async () => {
+  it('REQ-21-03 Member 角色显示设置分区以便退出', async () => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(memberGroup)
     renderUserGroupRoute('/user-groups/grp_lab')
 
     await screen.findByRole('heading', { name: 'Research Lab' })
     const nav = screen.getByRole('navigation', { name: 'User Group 分区导航' })
-    expect(within(nav).queryByText('Settings')).not.toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'href',
+      '/user-groups/grp_lab/settings',
+    )
     expect(within(nav).getByText('Overview')).toBeInTheDocument()
-    expect(within(nav).getByText('Project')).toBeInTheDocument()
     expect(within(nav).getByText('Members')).toBeInTheDocument()
   })
 

@@ -19,7 +19,6 @@ import { Link as RouterLink, matchPath, useLocation } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import type { UserGroup } from '../../api/types'
-import { can } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import shellStyles from '../layout/AppShell.module.css'
 import { appShellCopy } from '../layout/copy'
@@ -105,16 +104,12 @@ export function UserGroupHeaderNav() {
       icon: <ServerIcon />,
     },
     { key: 'members', label: copy.nav.members, to: `${basePath}/members`, icon: <PeopleIcon /> },
-    ...(can(userGroup, 'user_group.update')
-      ? [
-          {
-            key: 'settings',
-            label: copy.nav.settings,
-            to: `${basePath}/settings`,
-            icon: <GearIcon />,
-          },
-        ]
-      : []),
+    {
+      key: 'settings',
+      label: copy.nav.settings,
+      to: `${basePath}/settings`,
+      icon: <GearIcon />,
+    },
   ]
 
   return (

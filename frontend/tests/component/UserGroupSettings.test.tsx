@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../src/api/client'
 import type { UserGroup } from '../../src/api/types'
-import { OverviewSection } from '../../src/components/usergroup/OverviewSection'
 import { SettingsSection } from '../../src/components/usergroup/SettingsSection'
 import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
@@ -103,35 +102,16 @@ describe('User Group 设置分区', () => {
     expect(update).toHaveBeenCalledTimes(2)
   })
 
-  it('REQ-21-20 Member 直达设置 URL 被重定向回概览且不渲染表单', async () => {
+  it('REQ-21-20 Member 直达设置 URL 只看到退出入口，不渲染改名表单', async () => {
     const memberGroup: UserGroup = {
       ...group,
       role: 'member',
       capabilities: ['user_group.view', 'member.view'],
     }
-    vi.spyOn(api, 'getUserGroup').mockResolvedValue(memberGroup)
-    vi.spyOn(api, 'listMembers').mockResolvedValue([])
-    vi.spyOn(api, 'listProjects').mockResolvedValue({
-      items: [],
-      page: 1,
-      page_size: 200,
-      total: 0,
-      has_more: false,
-    })
-    render(
-      <MemoryRouter initialEntries={['/user-groups/grp_lab/settings']}>
-        <UserGroupProvider>
-          <Routes>
-            <Route path="/user-groups/:userGroupId" element={<UserGroupPage />}>
-              <Route index element={<OverviewSection />} />
-              <Route path="settings" element={<SettingsSection />} />
-            </Route>
-          </Routes>
-        </UserGroupProvider>
-      </MemoryRouter>,
-    )
+    renderSettings(memberGroup)
 
-    expect(await screen.findByRole('heading', { name: 'Research Lab' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '退出 User Group' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '退出 User Group' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/名称/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '保存设置' })).not.toBeInTheDocument()
   })
