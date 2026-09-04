@@ -82,6 +82,8 @@ primary 可作为浅色画布上的 focus outline，border 可作为相邻白色
 `BrandMark.tsx` 与 `frontend/public/favicon.svg` 复用同一份几何和静态 hex 填充；新 Mark
 使用原始 `viewBox="0 0 140.9 141"`，不再使用旧 Mark 的 optical padding 或候选 fallback。
 原始 `107pig.svg` 保留在 `docs/archive/brand/107pig.svg`，仅用于来源追溯，不属于当前 active brand。
+`frontend/public/favicon-monochrome.svg` 保留旧黑白配色作为手动备用，只在小尺寸视觉验收或品牌蓝白
+效果不理想时切换；默认标签栏仍使用 `favicon.svg`，不做运行时自动 fallback。
 
 ## 当前吸收边界
 
