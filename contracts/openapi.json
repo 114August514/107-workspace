@@ -3986,6 +3986,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4099,6 +4109,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4202,6 +4222,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4311,6 +4341,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4418,6 +4458,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4527,6 +4577,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4630,6 +4690,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4738,6 +4808,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4850,6 +4930,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4969,6 +5059,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5086,6 +5186,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -5263,6 +5373,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5371,6 +5491,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5473,6 +5603,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5554,6 +5694,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -5659,6 +5809,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5758,6 +5918,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -5862,6 +6032,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6002,6 +6182,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6104,6 +6294,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6222,6 +6422,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6322,6 +6532,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6421,6 +6641,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6524,6 +6754,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6624,6 +6864,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6807,6 +7057,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6913,6 +7173,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7022,6 +7292,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7139,6 +7419,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7276,6 +7566,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7388,6 +7688,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7507,6 +7817,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7631,6 +7951,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7742,6 +8072,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7855,6 +8195,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7965,6 +8315,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8082,6 +8442,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8216,6 +8586,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -8334,6 +8714,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8458,6 +8848,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -8578,6 +8978,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -8696,6 +9106,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8819,6 +9239,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8953,6 +9383,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9070,6 +9510,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9182,6 +9632,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9299,6 +9759,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9435,6 +9905,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9579,6 +10059,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9698,6 +10188,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9810,6 +10310,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9918,6 +10428,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10028,6 +10548,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10140,6 +10670,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10257,6 +10797,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10366,6 +10916,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10503,6 +11063,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10620,6 +11190,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10701,6 +11281,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10813,6 +11403,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10931,6 +11531,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11012,6 +11622,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11122,6 +11742,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11230,6 +11860,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11343,6 +11983,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11464,6 +12114,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11599,6 +12259,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11745,6 +12415,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11854,6 +12534,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11962,6 +12652,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12083,6 +12783,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "text/plain": {
@@ -12202,6 +12912,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -12305,6 +13025,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12414,6 +13144,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -12522,6 +13262,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12639,6 +13389,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12769,6 +13529,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -12871,6 +13641,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12979,6 +13759,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13086,6 +13876,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13202,6 +14002,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13338,6 +14148,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13449,6 +14269,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13549,6 +14379,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13661,6 +14501,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13778,6 +14628,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13887,6 +14747,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14013,6 +14883,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14125,6 +15005,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14233,6 +15123,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14344,6 +15244,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14453,6 +15363,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14565,6 +15485,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14682,6 +15612,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14791,6 +15731,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14904,6 +15854,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15012,6 +15972,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15122,6 +16092,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15234,6 +16214,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15351,6 +16341,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15461,6 +16461,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15569,6 +16579,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15693,6 +16713,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15811,6 +16841,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15931,6 +16971,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -16043,6 +17093,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {

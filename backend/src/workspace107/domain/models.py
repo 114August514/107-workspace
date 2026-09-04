@@ -58,6 +58,28 @@ class User:
         return OwnerReference(kind=OwnerKind.USER, id=self.id)
 
 
+@dataclass(frozen=True, slots=True)
+class ExternalIdentityProfile:
+    """Identity attributes asserted by one trusted external provider."""
+
+    provider: str
+    provider_user_id: str
+    username: str
+    display_name: str
+    email: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalIdentity:
+    """Stable mapping from an external account to an internal User."""
+
+    id: str
+    provider: str
+    provider_user_id: str
+    user_id: str
+    created_at: datetime | None = None
+
+
 @dataclass(slots=True)
 class UserGroup:
     """An independent collaboration organization."""

@@ -60,7 +60,7 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 | `WORKSPACE107_SLURM_API_BASE_URL` | slurmrestd 地址 |
 | `WORKSPACE107_SLURM_API_USER` | Slurm API 用户 |
 | `WORKSPACE107_SLURM_JWT` | 等价于密码，只能从环境注入 |
-| `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；真实部署必须替换 |
+| `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；`ustc` 的代理字段与信任边界见 [`authentication.md`](authentication.md) |
 | `WORKSPACE107_SEED_DEMO` | 仅本地/受信任演示；`true` 时载入演示资产与 Project |
 | `WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME` | 平台演示资产组首次 bootstrap Owner；组已存在时忽略 |
 | `WORKSPACE107_SHARED_RESOURCE_PUBLICATION_INTERVAL_SECONDS` | API 内 publication loop 的扫描间隔（秒），默认 `1.0`；设为 `0` 会停用自动处理，已持久化 attempt 不会丢失 |
