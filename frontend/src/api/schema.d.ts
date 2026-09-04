@@ -2005,8 +2005,13 @@ export interface components {
             expires_at: string | null;
             /** Id */
             id: string;
-            /** Max Concurrent Runs */
-            max_concurrent_runs: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "expired";
+            /** Status Reason */
+            status_reason: string | null;
         };
         /**
          * EnvironmentAvailability
@@ -2879,7 +2884,7 @@ export interface components {
             id: string;
             /**
              * Initiated By User Id
-             * @description 发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。
+             * @description 发起本次 Run 的 User（GR-307）：执行身份与通知接收方。
              */
             initiated_by_user_id: string;
             /**

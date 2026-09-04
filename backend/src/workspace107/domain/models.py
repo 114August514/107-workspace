@@ -348,7 +348,7 @@ class Run:
     project_id: str
     snapshot_id: str
     compute_plan_id: str
-    """本次运行占用的算力方案。并发额度按「Initiated By User × 方案」计算（GR-307）。"""
+    """创建 Run 时固定的 Compute Plan identity，用于历史展示与重跑 preflight。"""
     project_version_id: str
     """本次运行基于的 Project 版本。冗余自快照，用于 Run History 展示。"""
     project_version_label: str
@@ -363,7 +363,7 @@ class Run:
     exit_code: int | None = None
     failure_reason: str = ""
     initiated_by_user_id: str = ""
-    """发起本次 Run 的 User（GR-307）。执行身份、并发额度、通知接收方都以它为准。"""
+    """发起本次 Run 的 User（GR-307）。执行身份和通知接收方都以它为准。"""
     created_at: datetime | None = None
     submitted_at: datetime | None = None
     started_at: datetime | None = None

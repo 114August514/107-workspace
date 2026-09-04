@@ -133,8 +133,9 @@ class EntitlementOut(Model):
     id: str
     compute_plan_id: str
     compute_plan_name: str
-    max_concurrent_runs: int
     expires_at: str | None
+    status: Literal["active", "expired"]
+    status_reason: str | None
 
 
 # -- Project ----------------------------------------------------------------
@@ -594,7 +595,7 @@ class RunOut(Model):
     exit_code: int | None
     failure_reason: str
     initiated_by_user_id: str
-    """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
+    """发起本次 Run 的 User（GR-307）：执行身份与通知接收方。"""
     initiated_by_username: str | None
     """当前权威 User.username；User 记录无法解析时为 null。"""
     created_at: datetime | None

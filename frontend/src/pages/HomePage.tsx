@@ -91,22 +91,16 @@ export function HomePage({ username, home }: Props) {
               >
                 <h2 className={styles.cardTitle}>个人执行上下文</h2>
                 <p className={styles.cardDescription}>
-                  Owner：{home.data.personal_execution_context.owner.display_name}
+                  {home.data.personal_execution_context.owner.display_name} 的 User 配置与算力权益
                 </p>
-                {home.data.personal_execution_context.entitlements.length === 0 ? (
-                  <p className={styles.cardDescription}>当前没有可用的 Resource Entitlement。</p>
-                ) : (
-                  <ul className={styles.list}>
-                    {home.data.personal_execution_context.entitlements.map((entitlement) => (
-                      <li key={entitlement.id} className={styles.item}>
-                        <span className={styles.itemTitle}>{entitlement.compute_plan_name}</span>
-                        <span className={styles.itemDesc}>
-                          最多 {entitlement.max_concurrent_runs} 个并发 Run
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <p className={styles.cardDescription}>
+                  {home.data.personal_execution_context.entitlements.length === 0
+                    ? '当前没有 Resource Entitlement'
+                    : `${home.data.personal_execution_context.entitlements.length} 项 Resource Entitlement`}
+                </p>
+                <Link as={RouterLink} to="/execution-context">
+                  管理个人执行上下文
+                </Link>
               </Card>
               <ComputePlanCatalog />
               <p className={styles.clusterNote}>{homeCopy.compute.realtimeUnavailable}</p>

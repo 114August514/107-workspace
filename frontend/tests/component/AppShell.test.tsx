@@ -93,6 +93,10 @@ function readyProject(data: Project | undefined = projectData): AsyncState<Proje
 const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
   [
+    '/execution-context',
+    '这里管理发起 Run 的个人身份、算力权益与 User 配置；已有 Run Snapshot 不会被后续修改回写。',
+  ],
+  [
     '/user-groups/grp-1',
     '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
   ],
