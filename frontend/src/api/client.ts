@@ -388,10 +388,7 @@ export const api = {
       }),
     ),
 
-  setUserSecret: async (
-    userId: string,
-    secret: { name: string; value: string },
-  ): Promise<void> => {
+  setUserSecret: async (userId: string, secret: { name: string; value: string }): Promise<void> => {
     unwrap(
       await http.PUT('/api/v1/users/{user_id}/secrets', {
         params: { path: { user_id: userId } },

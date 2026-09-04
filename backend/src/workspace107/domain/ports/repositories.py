@@ -211,7 +211,6 @@ class RunRepository(Protocol):
         ...
 
 
-
 class IdempotencyRepository(Protocol):
     """幂等登记。
 

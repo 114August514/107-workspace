@@ -91,8 +91,11 @@ describe('PersonalExecutionContextPage #49', () => {
   })
 
   it('无权益时给出明确原因，配置列表有独立 loading 和 error', async () => {
-    const { promise, resolve } = Promise.withResolvers<[]>()
-    vi.spyOn(api, 'listUserVariables').mockReturnValue(promise)
+    let resolveVariables!: (value: []) => void
+    const pendingVariables = new Promise<[]>((resolve) => {
+      resolveVariables = resolve
+    })
+    vi.spyOn(api, 'listUserVariables').mockReturnValue(pendingVariables)
     vi.spyOn(api, 'listUserSecrets').mockRejectedValue(
       new ApiError(500, 'internal_error', 'Secret 加载失败。', []),
     )
@@ -107,7 +110,7 @@ describe('PersonalExecutionContextPage #49', () => {
     expect(screen.getByText(/无法选择 Compute Plan 提交 Run/)).toBeVisible()
     expect(screen.getByText('正在加载 User Variables…')).toBeVisible()
     expect(await screen.findByText('Secret 加载失败。')).toBeVisible()
-    resolve([])
+    resolveVariables([])
   })
 
   it('完成 Variable 新建、更新与删除', async () => {
@@ -135,10 +138,12 @@ describe('PersonalExecutionContextPage #49', () => {
     fireEvent.click(screen.getByRole('button', { name: '编辑 THREADS' }))
     fireEvent.change(screen.getByLabelText('Variable 值'), { target: { value: '16' } })
     fireEvent.click(screen.getByRole('button', { name: '保存 Variable' }))
-    await waitFor(() => expect(setVariable).toHaveBeenLastCalledWith('usr_alice', {
-      name: 'THREADS',
-      value: '16',
-    }))
+    await waitFor(() =>
+      expect(setVariable).toHaveBeenLastCalledWith('usr_alice', {
+        name: 'THREADS',
+        value: '16',
+      }),
+    )
 
     fireEvent.click(screen.getByRole('button', { name: '删除 THREADS Variable' }))
     await waitFor(() => expect(deleteVariable).toHaveBeenCalledWith('usr_alice', 'THREADS'))
@@ -147,9 +152,7 @@ describe('PersonalExecutionContextPage #49', () => {
 
   it('Secret 只展示名称，替换成功后从 DOM 和输入状态移除明文', async () => {
     vi.spyOn(api, 'listUserVariables').mockResolvedValue([])
-    vi.spyOn(api, 'listUserSecrets')
-      .mockResolvedValueOnce(['TOKEN'])
-      .mockResolvedValue(['TOKEN'])
+    vi.spyOn(api, 'listUserSecrets').mockResolvedValueOnce(['TOKEN']).mockResolvedValue(['TOKEN'])
     const setSecret = vi.spyOn(api, 'setUserSecret').mockResolvedValue()
     const deleteSecret = vi.spyOn(api, 'deleteUserSecret').mockResolvedValue()
     renderPage()
@@ -161,10 +164,12 @@ describe('PersonalExecutionContextPage #49', () => {
     fireEvent.change(valueInput, { target: { value: 'plaintext-never-render' } })
     fireEvent.click(screen.getByRole('button', { name: '替换 / 轮换 Secret' }))
 
-    await waitFor(() => expect(setSecret).toHaveBeenCalledWith('usr_alice', {
-      name: 'TOKEN',
-      value: 'plaintext-never-render',
-    }))
+    await waitFor(() =>
+      expect(setSecret).toHaveBeenCalledWith('usr_alice', {
+        name: 'TOKEN',
+        value: 'plaintext-never-render',
+      }),
+    )
     await waitFor(() => expect(valueInput.value).toBe(''))
     expect(document.body).not.toHaveTextContent('plaintext-never-render')
 

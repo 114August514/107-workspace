@@ -54,7 +54,12 @@ function ExecutionContext({ username, home }: { username: string; home: Home }) 
         </p>
       </section>
 
-      <Card as="section" padding="normal" className={styles.card} aria-label="Resource Entitlements">
+      <Card
+        as="section"
+        padding="normal"
+        className={styles.card}
+        aria-label="Resource Entitlements"
+      >
         <h2 className={styles.sectionTitle}>Resource Entitlements</h2>
         {home.personal_execution_context.entitlements.length === 0 ? (
           <div className={styles.empty}>
@@ -379,11 +384,7 @@ function SecretSection({ userId, state }: { userId: string; state: AsyncResource
   )
 }
 
-function MutationFeedback({
-  feedback,
-}: {
-  feedback: { error: boolean; message: string } | null
-}) {
+function MutationFeedback({ feedback }: { feedback: { error: boolean; message: string } | null }) {
   if (!feedback) return null
   return (
     <Banner variant={feedback.error ? 'critical' : 'success'}>

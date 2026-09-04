@@ -92,9 +92,7 @@ async def test_过期权益阻止提交(client: httpx.AsyncClient, session: Asyn
 
 
 @pytest.mark.asyncio
-async def test_权益不施加产品侧并发限制(
-    client: httpx.AsyncClient, session: AsyncSession
-) -> None:
+async def test_权益不施加产品侧并发限制(client: httpx.AsyncClient, session: AsyncSession) -> None:
     alice_project, alice_config = await _prepare_submission(session, client, ALICE)
     await grant_test_entitlement(session, "alice")
 
