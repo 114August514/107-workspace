@@ -17,6 +17,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
@@ -112,7 +113,7 @@ class ProjectRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(32))
     visibility: Mapped[str] = mapped_column(String(32), default="owner_scope")
-    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True)
+    environment_version_id: Mapped[str | None] = mapped_column(ID, nullable=True, index=True)
     default_run_configuration_id: Mapped[str | None] = mapped_column(ID, nullable=True)
     created_by: Mapped[str] = mapped_column(ID)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -310,7 +311,7 @@ class RunConfigurationRow(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     working_directory: Mapped[str] = mapped_column(String(1024), default=".")
     command: Mapped[str] = mapped_column(Text)
-    environment_version_id: Mapped[str] = mapped_column(ID)
+    environment_version_id: Mapped[str] = mapped_column(ID, index=True)
     environment_variables: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     input_bindings: Mapped[list[Any]] = mapped_column(JSON, default=list)
     compute_plan_id: Mapped[str] = mapped_column(ID)
@@ -468,6 +469,18 @@ class NotificationRow(Base):
     mandatory: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NotificationPreferenceRow(Base):
+    """Explicit overrides for optional notification categories; absent means enabled."""
+
+    __tablename__ = "notification_preferences"
+
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"))
+    notification_type: Mapped[str] = mapped_column(String(64))
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    __table_args__ = (PrimaryKeyConstraint("user_id", "notification_type"),)
 
 
 class ForkRelationRow(Base):

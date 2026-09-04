@@ -240,4 +240,46 @@ describe('NotificationBell 通知浮层', () => {
 
     expect(await screen.findByText('批量标记失败。')).toBeVisible()
   })
+  it('通知设置使用类别标签并标明重要通知不可关闭', async () => {
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([]))
+    const setPreference = vi.spyOn(api, 'setNotificationPreference').mockResolvedValue({
+      type: 'run_succeeded',
+      enabled: false,
+      mandatory: false,
+    })
+    vi.spyOn(api, 'listNotificationPreferences').mockResolvedValue([
+      { type: 'run_succeeded', enabled: true, mandatory: false },
+      { type: 'member_removed', enabled: true, mandatory: true },
+    ])
+
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知' }))
+    fireEvent.click(await screen.findByRole('button', { name: '通知设置' }))
+
+    expect(await screen.findByText('Run 成功')).toBeVisible()
+    expect(screen.getByText('成员变动')).toBeVisible()
+    expect(screen.getByText('始终开启')).toBeVisible()
+    expect(screen.getByRole('checkbox', { name: '成员变动（始终开启）' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Run 成功' }))
+    await waitFor(() => expect(setPreference).toHaveBeenCalledWith('run_succeeded', false))
+  })
+})
+
+describe('NotificationBell read state toggle', () => {
+  it('lets a previously read notification become unread', async () => {
+    const notification = makeNotification({ read_at: '2026-08-15T09:00:00Z' })
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([notification]))
+    const markUnread = vi.spyOn(api, 'markNotificationUnread').mockResolvedValue(undefined)
+
+    renderBell()
+    fireEvent.click(await screen.findByRole('button', { name: '通知' }))
+    const button = await screen.findByRole('button', {
+      name: '将「Run「首次运行」已成功」标为未读',
+    })
+    fireEvent.click(button)
+    await waitFor(() => expect(markUnread).toHaveBeenCalledWith('n-1'))
+  })
 })
