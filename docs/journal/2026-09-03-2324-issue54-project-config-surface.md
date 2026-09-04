@@ -57,3 +57,9 @@ git revert <commit>
 - 2026-09-04：窄屏（≤544px）操作列两枚图标按钮放不下，媒体查询把
   操作列放宽到 28% 并收紧 actions 单元格内边距；覆盖规则必须放在
   .td 简写之后才生效。
+- 2026-09-04：评审反馈两处——描述里「按 Project → Project Owner 顺序
+  解析」一句删掉（解析语义由后端 contract 决定，前端文案不该复述实现）；
+  两个弹窗整体对齐 CreateUserGroupDialog 规范（Banner critical +
+  toAsyncError、submitting 态控制 footer 按钮与 onClose、form onSubmit、
+  显式 FormControl id、initialFocusRef、maxLength=128），错误展示不再
+  用 Flash。

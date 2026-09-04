@@ -1,9 +1,9 @@
 import { LockIcon, PencilIcon, PlusIcon, TrashIcon } from '@primer/octicons-react'
 import {
+  Banner,
   Button,
   ConfirmationDialog,
   Dialog,
-  Flash,
   FormControl,
   IconButton,
   RelativeTime,
@@ -11,9 +11,11 @@ import {
   TextInput,
   VisuallyHidden,
 } from '@primer/react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { api } from '../../api/client'
+import { toAsyncError } from '../../api/errors'
+import type { AsyncErrorView } from '../../api/errors'
 import { can } from '../../api/types'
 import type { Project, Secret } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
@@ -33,6 +35,7 @@ type SecretDialog = { mode: 'create' } | { mode: 'replace'; name: string } | nul
  *
  * Secret 只能写入和轮换，不能回读：列表只展示名字与更新时间，
  * 表单值输入后即提交，不在前端保存或回显明文。
+ * 弹窗结构与 CreateUserGroupDialog 一致。
  */
 export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
   const canManage = can(access, 'config.manage')
@@ -42,9 +45,12 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
   const [value, setValue] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
   const [valueError, setValueError] = useState<string | null>(null)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [listError, setListError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<AsyncErrorView | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [listError, setListError] = useState<AsyncErrorView | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const valueInputRef = useRef<HTMLInputElement>(null)
 
   const openCreate = () => {
     setName('')
@@ -62,14 +68,15 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
     setDialog(null)
     setNameError(null)
     setValueError(null)
-    setApiError(null)
+    setSubmitError(null)
   }
 
   const submit = async () => {
+    const trimmed = name.trim()
     let nextNameError: string | null = null
-    if (!name) {
+    if (!trimmed) {
       nextNameError = '请输入名称'
-    } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
       nextNameError = '只能包含字母、数字和下划线，且不能以数字开头'
     }
     const nextValueError = value ? null : '请输入值；保存后不能回读'
@@ -77,14 +84,17 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
     setValueError(nextValueError)
     if (nextNameError || nextValueError) return
 
+    setSubmitting(true)
+    setSubmitError(null)
     try {
-      await api.putProjectSecret(projectId, { name, value })
-      setApiError(null)
+      await api.putProjectSecret(projectId, { name: trimmed, value })
       setDialog(null)
       secrets.reload()
       onChanged?.()
     } catch (error) {
-      setApiError((error as Error).message)
+      setSubmitError(toAsyncError(error as Error) ?? null)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -95,7 +105,7 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
       secrets.reload()
       onChanged?.()
     } catch (error) {
-      setListError((error as Error).message)
+      setListError(toAsyncError(error as Error) ?? null)
     }
   }
 
@@ -116,7 +126,11 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
         引用；值只在写入时可见，保存后不能回读，列表只展示名字。
       </p>
 
-      {listError && <Flash variant="danger">{listError}</Flash>}
+      {listError && (
+        <Banner variant="critical">
+          <Banner.Title>{listError.message}</Banner.Title>
+        </Banner>
+      )}
 
       <AsyncSection loading={secrets.loading} error={secrets.error} errorTitle="Secret 加载失败">
         {rows.length === 0 ? (
@@ -180,49 +194,81 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
 
       {dialog && (
         <Dialog
-          onClose={closeDialog}
+          onClose={() => {
+            if (!submitting) closeDialog()
+          }}
+          initialFocusRef={dialog.mode === 'replace' ? valueInputRef : nameInputRef}
           title={dialog.mode === 'replace' ? `替换 Secret「${dialog.name}」的值` : '新建 Secret'}
           width="medium"
           footerButtons={[
-            { content: '取消', onClick: closeDialog, buttonType: 'default' },
-            { content: '保存', onClick: () => void submit(), buttonType: 'primary' },
+            { content: '取消', disabled: submitting, onClick: closeDialog },
+            {
+              content: '保存',
+              buttonType: 'primary',
+              loading: submitting,
+              disabled: submitting,
+              onClick: () => void submit(),
+            },
           ]}
         >
-          <Stack direction="vertical" gap="normal">
-            {apiError && <Flash variant="danger">{apiError}</Flash>}
-            <FormControl required disabled={dialog.mode === 'replace'}>
-              <FormControl.Label>名称</FormControl.Label>
-              <TextInput
-                block
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="例如 HF_TOKEN"
-              />
-              {nameError ? (
-                <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
-              ) : (
-                <FormControl.Caption>字母、数字和下划线，不能以数字开头。</FormControl.Caption>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!submitting) void submit()
+            }}
+          >
+            <Stack gap="normal">
+              {submitError && (
+                <Banner variant="critical">
+                  <Banner.Title>{submitError.message}</Banner.Title>
+                  {submitError.problems && submitError.problems.length > 0 && (
+                    <Banner.Description>
+                      <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                        {submitError.problems.map((problem) => (
+                          <li key={problem}>{problem}</li>
+                        ))}
+                      </ul>
+                    </Banner.Description>
+                  )}
+                </Banner>
               )}
-            </FormControl>
-            <FormControl required>
-              <FormControl.Label>{dialog.mode === 'replace' ? '新值' : '值'}</FormControl.Label>
-              <TextInput
-                block
-                type="password"
-                autoComplete="new-password"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder={dialog.mode === 'replace' ? '输入替换后的值' : 'Secret 的值'}
-              />
-              {valueError ? (
-                <FormControl.Validation variant="error">{valueError}</FormControl.Validation>
-              ) : (
-                <FormControl.Caption>
-                  值只在写入时可见；引用它的 Run 在 Preflight 中明确失败，不会被替换为空值。
-                </FormControl.Caption>
-              )}
-            </FormControl>
-          </Stack>
+              <FormControl required disabled={dialog.mode === 'replace'} id="project-secret-name">
+                <FormControl.Label>名称</FormControl.Label>
+                <TextInput
+                  ref={nameInputRef}
+                  block
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="例如 HF_TOKEN"
+                  maxLength={128}
+                />
+                {nameError ? (
+                  <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
+                ) : (
+                  <FormControl.Caption>字母、数字和下划线，不能以数字开头。</FormControl.Caption>
+                )}
+              </FormControl>
+              <FormControl required disabled={submitting} id="project-secret-value">
+                <FormControl.Label>{dialog.mode === 'replace' ? '新值' : '值'}</FormControl.Label>
+                <TextInput
+                  ref={valueInputRef}
+                  block
+                  type="password"
+                  autoComplete="new-password"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  placeholder={dialog.mode === 'replace' ? '输入替换后的值' : 'Secret 的值'}
+                />
+                {valueError ? (
+                  <FormControl.Validation variant="error">{valueError}</FormControl.Validation>
+                ) : (
+                  <FormControl.Caption>
+                    值只在写入时可见；引用它的 Run 在 Preflight 中明确失败，不会被替换为空值。
+                  </FormControl.Caption>
+                )}
+              </FormControl>
+            </Stack>
+          </form>
         </Dialog>
       )}
 

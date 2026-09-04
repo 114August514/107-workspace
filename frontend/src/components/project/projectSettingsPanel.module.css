@@ -150,17 +150,6 @@
   border-radius: var(--borderRadius-small);
 }
 
-.textarea {
-  width: 100%;
-  padding: var(--base-size-8);
-  font-family: var(--fontStack-monospace);
-  font-size: var(--text-body-size-medium);
-  border: var(--borderWidth-thin) solid var(--borderColor-default);
-  border-radius: var(--borderRadius-medium);
-  background: var(--bgColor-default);
-  color: var(--fgColor-default);
-}
-
 /* 窄屏：操作列两枚图标按钮放不下，压缩值列/名称列腾出宽度。
  * 放在文件末尾，覆盖 .td 的 padding 简写。 */
 @media (max-width: 544px) {

@@ -1,9 +1,9 @@
 import { CopyIcon, PencilIcon, PlusIcon, TrashIcon } from '@primer/octicons-react'
 import {
+  Banner,
   Button,
   ConfirmationDialog,
   Dialog,
-  Flash,
   FormControl,
   IconButton,
   RelativeTime,
@@ -12,9 +12,11 @@ import {
   TextInput,
   VisuallyHidden,
 } from '@primer/react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { api } from '../../api/client'
+import { toAsyncError } from '../../api/errors'
+import type { AsyncErrorView } from '../../api/errors'
 import { can } from '../../api/types'
 import type { Project, Variable } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
@@ -34,7 +36,7 @@ type VariableDialog = { mode: 'create' } | { mode: 'edit'; name: string; value: 
  *
  * 自包含面板：只依赖 projectId 与 access，Settings 表面直接挂载。
  * 列表与弹窗样式对齐 #94 Project 页；解析语义由后端 contract 决定，
- * 前端只做 CRUD 入口。
+ * 前端只做 CRUD 入口。弹窗结构与 CreateUserGroupDialog 一致。
  */
 export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
   const canManage = can(access, 'config.manage')
@@ -44,9 +46,12 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
   const [value, setValue] = useState('')
   const [nameError, setNameError] = useState<string | null>(null)
   const [valueError, setValueError] = useState<string | null>(null)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [listError, setListError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<AsyncErrorView | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [listError, setListError] = useState<AsyncErrorView | null>(null)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const valueInputRef = useRef<HTMLTextAreaElement>(null)
 
   const openCreate = () => {
     setName('')
@@ -64,14 +69,15 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
     setDialog(null)
     setNameError(null)
     setValueError(null)
-    setApiError(null)
+    setSubmitError(null)
   }
 
   const submit = async () => {
+    const trimmed = name.trim()
     let nextNameError: string | null = null
-    if (!name) {
+    if (!trimmed) {
       nextNameError = '请输入名称'
-    } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
       nextNameError = '只能包含字母、数字和下划线，且不能以数字开头'
     }
     const nextValueError = value ? null : '请输入值'
@@ -79,14 +85,17 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
     setValueError(nextValueError)
     if (nextNameError || nextValueError) return
 
+    setSubmitting(true)
+    setSubmitError(null)
     try {
-      await api.putProjectVariable(projectId, { name, value })
-      setApiError(null)
+      await api.putProjectVariable(projectId, { name: trimmed, value })
       setDialog(null)
       variables.reload()
       onChanged?.()
     } catch (error) {
-      setApiError((error as Error).message)
+      setSubmitError(toAsyncError(error as Error) ?? null)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -97,7 +106,7 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
       variables.reload()
       onChanged?.()
     } catch (error) {
-      setListError((error as Error).message)
+      setListError(toAsyncError(error as Error) ?? null)
     }
   }
 
@@ -115,10 +124,14 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
       </div>
       <p className={styles.sectionDescription}>
         在运行方案的环境变量里用 <code className={styles.reference}>{'${{ vars.NAME }}'}</code>{' '}
-        引用；引用按 Project → Project Owner 顺序解析，结果由后端确认。
+        引用。
       </p>
 
-      {listError && <Flash variant="danger">{listError}</Flash>}
+      {listError && (
+        <Banner variant="critical">
+          <Banner.Title>{listError.message}</Banner.Title>
+        </Banner>
+      )}
 
       <AsyncSection
         loading={variables.loading}
@@ -199,47 +212,79 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
 
       {dialog && (
         <Dialog
-          onClose={closeDialog}
+          onClose={() => {
+            if (!submitting) closeDialog()
+          }}
+          initialFocusRef={dialog.mode === 'edit' ? valueInputRef : nameInputRef}
           title={dialog.mode === 'edit' ? `编辑 Variable「${dialog.name}」` : '新建 Variable'}
           width="medium"
           footerButtons={[
-            { content: '取消', onClick: closeDialog, buttonType: 'default' },
-            { content: '保存', onClick: () => void submit(), buttonType: 'primary' },
+            { content: '取消', disabled: submitting, onClick: closeDialog },
+            {
+              content: '保存',
+              buttonType: 'primary',
+              loading: submitting,
+              disabled: submitting,
+              onClick: () => void submit(),
+            },
           ]}
         >
-          <Stack direction="vertical" gap="normal">
-            {apiError && <Flash variant="danger">{apiError}</Flash>}
-            <FormControl required disabled={dialog.mode === 'edit'}>
-              <FormControl.Label>名称</FormControl.Label>
-              <TextInput
-                block
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="例如 DATASET_URL"
-              />
-              {nameError ? (
-                <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
-              ) : (
-                <FormControl.Caption>
-                  字母、数字和下划线，不能以数字开头；保存后名称不可修改。
-                </FormControl.Caption>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!submitting) void submit()
+            }}
+          >
+            <Stack gap="normal">
+              {submitError && (
+                <Banner variant="critical">
+                  <Banner.Title>{submitError.message}</Banner.Title>
+                  {submitError.problems && submitError.problems.length > 0 && (
+                    <Banner.Description>
+                      <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                        {submitError.problems.map((problem) => (
+                          <li key={problem}>{problem}</li>
+                        ))}
+                      </ul>
+                    </Banner.Description>
+                  )}
+                </Banner>
               )}
-            </FormControl>
-            <FormControl required>
-              <FormControl.Label>值</FormControl.Label>
-              <Textarea
-                block
-                className={styles.textarea}
-                rows={3}
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder="可以是字面量"
-              />
-              {valueError && (
-                <FormControl.Validation variant="error">{valueError}</FormControl.Validation>
-              )}
-            </FormControl>
-          </Stack>
+              <FormControl required disabled={dialog.mode === 'edit'} id="project-variable-name">
+                <FormControl.Label>名称</FormControl.Label>
+                <TextInput
+                  ref={nameInputRef}
+                  block
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="例如 DATASET_URL"
+                  maxLength={128}
+                />
+                {nameError ? (
+                  <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
+                ) : (
+                  <FormControl.Caption>
+                    字母、数字和下划线，不能以数字开头；保存后名称不可修改。
+                  </FormControl.Caption>
+                )}
+              </FormControl>
+              <FormControl required disabled={submitting} id="project-variable-value">
+                <FormControl.Label>值</FormControl.Label>
+                <Textarea
+                  ref={valueInputRef}
+                  block
+                  rows={4}
+                  resize="vertical"
+                  value={value}
+                  onChange={(event) => setValue(event.target.value)}
+                  placeholder="可以是字面量"
+                />
+                {valueError && (
+                  <FormControl.Validation variant="error">{valueError}</FormControl.Validation>
+                )}
+              </FormControl>
+            </Stack>
+          </form>
         </Dialog>
       )}
 
