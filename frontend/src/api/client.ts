@@ -32,8 +32,9 @@ import type {
   LogChunk,
   Member,
   MembershipRole,
+  Notification,
   NotificationPage,
-  PreflightResult,
+  NotificationPreference,
   PageQuery,
   ForkSource,
   OwnerReference,
@@ -54,6 +55,7 @@ import type {
   SharedResourceDetail,
   SharedResourcePublicationAttempt,
   SharedResourceUpdate,
+  PreflightResult,
   SharedResourceVersionDetail,
   VersionDiff,
   WorkingChange,
@@ -920,7 +922,29 @@ export const api = {
     )
   },
 
+  markNotificationUnread: async (id: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/notifications/{notification_id}/unread', {
+        params: { path: { notification_id: id } },
+      }),
+    )
+  },
+
   markAllNotificationsRead: async (): Promise<void> => {
     unwrap(await http.POST('/api/v1/notifications/read-all'))
   },
+
+  listNotificationPreferences: async (): Promise<NotificationPreference[]> =>
+    unwrap(await http.GET('/api/v1/notifications/preferences')),
+
+  setNotificationPreference: async (
+    type: Notification['type'],
+    enabled: boolean,
+  ): Promise<NotificationPreference> =>
+    unwrap(
+      await http.PUT('/api/v1/notifications/preferences/{notification_type}', {
+        params: { path: { notification_type: type } },
+        body: { enabled },
+      }),
+    ),
 }

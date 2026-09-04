@@ -29,7 +29,7 @@ import zipfile
 from pathlib import Path
 
 from ...domain.enums import InputSourceType, LogStream
-from ...domain.errors import ObjectNotFound, ValidationFailed
+from ...domain.errors import ObjectNotFound, SharedResourceUnavailable, ValidationFailed
 from ...domain.ports.storage import ArtifactContent, ArtifactEntry, RunInput, RunPaths
 
 READONLY_DIR = 0o555
@@ -156,7 +156,19 @@ class LocalStorage:
                         stripped = relative_path
                     file_target = target / stripped
                     file_target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(self._blob_path(content_hash), file_target)
+                    source = self._blob_path(content_hash)
+                    if not source.is_file():
+                        raise SharedResourceUnavailable(
+                            entry.source_id,
+                            f"输入 {entry.access_path} 引用的 Shared Resource Version 内容不可用",
+                        )
+                    try:
+                        shutil.copyfile(source, file_target)
+                    except FileNotFoundError as exc:
+                        raise SharedResourceUnavailable(
+                            entry.source_id,
+                            f"输入 {entry.access_path} 引用的 Shared Resource Version 内容不可用",
+                        ) from exc
             else:  # pragma: no cover - 枚举封闭，未来加新来源类型时这里会显式失败
                 raise FileNotFoundError(f"未知输入来源类型 {entry.source_type!r}")
 

@@ -40,6 +40,7 @@ from ..domain.errors import (
     PermissionDenied,
     PreflightRejected,
     SchedulerError,
+    SharedResourceUnavailable,
     ValidationFailed,
 )
 from ..domain.models import (
@@ -52,7 +53,7 @@ from ..domain.models import (
     RunEvent,
     RunLogChunk,
 )
-from ..domain.ownership import OwnerReference
+from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
@@ -777,6 +778,7 @@ class RunService:
                     binding.access_path,
                     binding.source_subpath,
                     access.project.owner,
+                    raise_unavailable=True,
                 )
             if problem is not None:
                 problems.append(problem)
@@ -799,6 +801,7 @@ class RunService:
     ) -> None:
         # 执行身份以持久化的 Run 记录为准（GR-307），不从调用参数传递——
         # 快照校验、Secret 解析和通知收件人都读同一个字段。
+        scheduler_submit_attempted = False
         try:
             _, values = await self.validate_execution_context(run, snapshot)
             if values:
@@ -827,6 +830,7 @@ class RunService:
                     raise ValidationFailed("Apptainer execution spec 缺少 CAS locator")
                 execution_spec["locator"] = str(await self._storage.resolve_blob_path(locator))
 
+            scheduler_submit_attempted = True
             job_id = await self._scheduler.submit(
                 SchedulerSubmission(
                     run_id=run.id,
@@ -840,7 +844,13 @@ class RunService:
                     environment=environment,
                 )
             )
-        except (SchedulerError, OSError, ObjectNotFound, ValidationFailed) as exc:
+        except (
+            SharedResourceUnavailable,
+            SchedulerError,
+            OSError,
+            ObjectNotFound,
+            ValidationFailed,
+        ) as exc:
             run.status = RunStatus.SUBMIT_FAILED
             run.failure_reason = str(exc)
             run.finished_at = self._clock.now()
@@ -854,6 +864,14 @@ class RunService:
                 run_name=run.name,
                 reason=str(exc),
             )
+            if isinstance(exc, SchedulerError) and scheduler_submit_attempted:
+                await self._notifier.platform_incident(
+                    recipient_id=run.initiated_by_user_id,
+                    title="平台调度服务异常",
+                    body="本次 Run 未能提交到调度系统，请稍后重试。",
+                )
+            if isinstance(exc, SharedResourceUnavailable):
+                await self._notify_shared_resource_consumers(run, exc.version_id, str(exc))
             return
 
         run.scheduler_job_id = job_id
@@ -895,6 +913,35 @@ class RunService:
                 created_at=self._clock.now(),
             )
         )
+
+    async def _notify_shared_resource_consumers(
+        self, run: Run, version_id: str, detail: str
+    ) -> None:
+        """通知使用了当前不可用精确版本的 Project。
+
+        Shared Resource Version 没有独立的 availability 状态；Core 触发契约是：
+        Run 提交或物化阶段发现精确版本/内容不可用时，通知该 Project 的当前成员。
+        ``version_id`` 来自实际失败的 binding，不从整个 Snapshot 猜测。
+        """
+        project = await self._repos.projects.get(run.project_id)
+        if project is None:
+            return
+        if project.owner.kind is OwnerKind.USER:
+            recipients = [project.owner.id]
+        else:
+            recipients = [
+                member.user_id
+                for member in await self._repos.memberships.list_for_user_group(project.owner.id)
+                if member.is_active
+            ]
+        for recipient_id in recipients:
+            await self._notifier.shared_resource_unavailable(
+                recipient_id=recipient_id,
+                project_id=project.id,
+                project_name=project.name,
+                asset_label=version_id,
+                detail=detail,
+            )
 
     async def _resolve_project_version(
         self, project_id: str, version_id: str | None
@@ -1075,13 +1122,24 @@ class RunService:
         access_path: str,
         subpath: str,
         project_owner: OwnerReference,
+        *,
+        raise_unavailable: bool = False,
     ) -> str | None:
         """Validate actor discovery and exact Project-owner asset use."""
         version = await shared_resource_version_for_owner_use(
             self._repos, user_id, version_id, project_owner
         )
         if version is None:
-            return f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
+            message = f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
+            trusted_version = await self._repos.shared_resources.get_version_by_id(version_id)
+            resource_exists = (
+                trusted_version is not None
+                and await self._repos.shared_resources.get_by_id(trusted_version.shared_resource_id)
+                is not None
+            )
+            if raise_unavailable and not resource_exists:
+                raise SharedResourceUnavailable(version_id, message)
+            return message
         if subpath and not version.contains_subpath(subpath):
             return f"输入 {access_path} 引用的子路径 {subpath!r} 不存在"
         return None
@@ -1107,8 +1165,9 @@ class RunService:
             elif binding.source_type is InputSourceType.SHARED_RESOURCE_VERSION:
                 version = await self._repos.shared_resources.get_version_by_id(binding.source_id)
                 if version is None:  # pragma: no cover - 提交前检查已校验过
-                    raise SchedulerError(
-                        f"输入 {binding.access_path} 引用的 Shared Resource Version 不存在"
+                    raise SharedResourceUnavailable(
+                        binding.source_id,
+                        f"输入 {binding.access_path} 引用的 Shared Resource Version 不存在",
                     )
                 inputs.append(
                     RunInput(
