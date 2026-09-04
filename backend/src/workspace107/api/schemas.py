@@ -739,9 +739,19 @@ class NotificationOut(Model):
     target_type: TargetType | None
     target_id: str | None
     mandatory: bool
-    """不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。"""
+    """不可关闭的重要通知；通知偏好接口会将其标记为 mandatory。"""
     created_at: datetime
     read_at: datetime | None
+
+
+class NotificationPreferenceOut(Model):
+    type: NotificationType
+    enabled: bool
+    mandatory: bool
+
+
+class NotificationPreferenceUpdateIn(Model):
+    enabled: bool
 
 
 class UnreadCountOut(Model):
