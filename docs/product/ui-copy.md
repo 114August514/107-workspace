@@ -159,20 +159,20 @@ User Group 和 Project 默认分别显示前 5 个，保持后端返回顺序；
 一个 Header 容器，之间不设 border / divider，层级只靠间距与 active 下划线表达；
 第二行紧贴 Header 左缘（水平内边距与第一行一致，不再使用居中定宽列）；离开
 `/user-groups/:id/**` 范围后 Header 恢复单行。页面内容区保留 GitHub-org 式组身份
-（`/user-groups/:id`）、`Project`、`共享资源`、`运行环境`、`成员`、`设置`。设置分区入口由
-`user_group.update` capability 决定（Owner / Admin 可见），其余分区对有效成员无条件可见；
+（`/user-groups/:id`）、`Project`、`Shared Resource`、`Environment`、`Members`、`Settings`。
+分区导航对有效成员无条件可见；设置表单由 `user_group.update` 守卫（Owner / Admin）；
 未知分区重定向回基础路由。
 
 各分区标题与说明使用以下稳定文案：
 
 | 分区     | 标题       | 说明                                                               |
 | :------- | :--------- | :----------------------------------------------------------------- |
-| 概览     | `基本信息` | 卡片汇总创建者、创建时间、我的角色、成员数与组拥有资产计数、近期活动。 |
-| Project  | `Project`  | `这个 User Group 拥有的 Project；详情与管理在 Project 页面打开。`  |
-| 共享资源 | `共享资源` | `这个 User Group 拥有的共享资源；详情与版本在各自页面打开。`       |
-| 运行环境 | `运行环境` | `这个 User Group 拥有的运行环境；详情与版本在各自页面打开。`       |
-| 成员     | `成员`     | 见 4.7 成员治理文案；非 Owner 成员额外显示退出入口。                |
-| 设置     | `设置`     | `修改 User Group 的名称与说明。`                                   |
+| 概览     | `Overview`        | Project 预览 + About；展示 User Group 身份与主要协作入口。     |
+| Project  | `Project`         | `这个 User Group 拥有的 Project；详情与管理在 Project 页面打开。` |
+| 共享资源 | `Shared Resource` | `这个 User Group 拥有的共享资源；详情与版本在各自页面打开。`     |
+| 运行环境 | `Environment`     | `这个 User Group 拥有的运行环境；详情与版本在各自页面打开。`     |
+| 成员     | `Members`         | 见 4.7 成员治理文案。                                          |
+| 设置     | `Settings`        | 有管理权限时可改名称与说明；非 Owner 在此退出 User Group。       |
 
 资产分区为列表表面：行链接到资源详情页，不提供组内创建入口（capability 契约未暴露
 组级创建信号）；Project 分区显示归档标记与相对更新时间，运行环境分区显示
@@ -309,7 +309,7 @@ User Group 身份与 Membership 治理使用以下稳定文案。Role 和 Status
 | Change Role | 菜单使用`设为管理员`或`设为成员`；成功使用`已将 {username} 设为管理员/成员`                             |
 | Remove      | 菜单使用`移除成员`；确认后果为`移除后，该成员会立刻失去这个 User Group 的访问权。`                      |
 | Transfer    | 菜单使用`转让所有权`；确认后果为`转让后，你将变为管理员，新 Owner 将获得转让所有权与全部成员治理权限。` |
-| Leave       | 非 Owner 成员显示`退出 User Group`；确认后果为`退出后，你将立刻失去这个 User Group 及组内资源的访问权，需要重新受邀才能加入。` |
+| Leave       | 非 Owner 成员在 Settings 显示`退出 User Group`；确认后果为`退出后，你将立刻失去这个 User Group 及组内资源的访问权，需要重新受邀才能加入。` |
 
 失败反馈不直接显示后端 `message`，主标题和下一步固定为：
 
@@ -321,9 +321,9 @@ User Group 身份与 Membership 治理使用以下稳定文案。Role 和 Status
 | Transfer    | `所有权转让失败。` | `请确认目标仍是已加入成员，并确认你仍是当前 Owner 后重试。` |
 | Leave       | `退出失败。`       | `请确认你仍是该组成员后重试。`                              |
 
-设置分区（`user_group.update` 可见）提供名称（必填）与说明编辑：保存按钮为`保存设置`，
-成功反馈`User Group 设置已保存。`并刷新页面头部；失败标题`保存失败。`、下一步
-`请确认你仍有管理权限后重试。`；名称为空时校验文案`名称不能为空`。
+Settings 对有效成员可见：有 `user_group.update` 时提供名称（必填）与说明编辑；非 Owner
+另有退出入口。保存按钮为`保存设置`，成功反馈`User Group 设置已保存。`并刷新页面头部；
+失败标题`保存失败。`、下一步`请确认你仍有管理权限后重试。`；名称为空时校验文案`名称不能为空`。
 
 对应稳定文案集中在 `frontend/src/components/workspace/memberCopy.ts` 与
 `frontend/src/components/usergroup/userGroupCopy.ts`。动态用户名和 User Group
