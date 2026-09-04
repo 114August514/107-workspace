@@ -1,7 +1,7 @@
 """Remove the product-side Resource Entitlement concurrency quota.
 
 Revision ID: e8a1c4d2f6b9
-Revises: b3d8e2a64c19
+Revises: d71f3a9c2b4e
 Create Date: 2026-09-04
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e8a1c4d2f6b9"
-down_revision: str | None = "b3d8e2a64c19"
+down_revision: str | None = "d71f3a9c2b4e"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

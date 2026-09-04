@@ -117,12 +117,12 @@ describe('PersonalExecutionContextPage #49', () => {
     const list = vi
       .spyOn(api, 'listUserVariables')
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ name: 'THREADS', value: '8', updated_at: '2026-09-01T10:00:00Z' }])
-      .mockResolvedValue([{ name: 'THREADS', value: '16', updated_at: '2026-09-01T10:00:00Z' }])
+      .mockResolvedValueOnce([{ name: 'THREADS', updated_at: '2026-09-04T10:00:00Z', value: '8' }])
+      .mockResolvedValue([{ name: 'THREADS', updated_at: '2026-09-04T10:01:00Z', value: '16' }])
     const setVariable = vi
       .spyOn(api, 'setUserVariable')
-      .mockResolvedValueOnce({ name: 'THREADS', value: '8', updated_at: '2026-09-01T10:00:00Z' })
-      .mockResolvedValueOnce({ name: 'THREADS', value: '16', updated_at: '2026-09-01T10:00:00Z' })
+      .mockResolvedValueOnce({ name: 'THREADS', updated_at: '2026-09-04T10:00:00Z', value: '8' })
+      .mockResolvedValueOnce({ name: 'THREADS', updated_at: '2026-09-04T10:01:00Z', value: '16' })
     const deleteVariable = vi.spyOn(api, 'deleteUserVariable').mockResolvedValue()
     vi.spyOn(api, 'listUserSecrets').mockResolvedValue([])
     renderPage()
@@ -153,8 +153,8 @@ describe('PersonalExecutionContextPage #49', () => {
   it('Secret 只展示名称，替换成功后从 DOM 和输入状态移除明文', async () => {
     vi.spyOn(api, 'listUserVariables').mockResolvedValue([])
     vi.spyOn(api, 'listUserSecrets')
-      .mockResolvedValueOnce([{ name: 'TOKEN', updated_at: '2026-09-01T10:00:00Z' }])
-      .mockResolvedValue([{ name: 'TOKEN', updated_at: '2026-09-01T10:00:00Z' }])
+      .mockResolvedValueOnce([{ name: 'TOKEN', updated_at: '2026-09-04T10:00:00Z' }])
+      .mockResolvedValue([{ name: 'TOKEN', updated_at: '2026-09-04T10:01:00Z' }])
     const setSecret = vi.spyOn(api, 'setUserSecret').mockResolvedValue()
     const deleteSecret = vi.spyOn(api, 'deleteUserSecret').mockResolvedValue()
     renderPage()
