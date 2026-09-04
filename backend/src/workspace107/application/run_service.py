@@ -938,7 +938,13 @@ class RunService:
         )
         if version is None:
             message = f"输入 {access_path} 引用的 Shared Resource Version 不存在或无权访问"
-            if raise_unavailable:
+            trusted_version = await self._repos.shared_resources.get_version_by_id(version_id)
+            resource_exists = (
+                trusted_version is not None
+                and await self._repos.shared_resources.get_by_id(trusted_version.shared_resource_id)
+                is not None
+            )
+            if raise_unavailable and not resource_exists:
                 raise SharedResourceUnavailable(version_id, message)
             return message
         if subpath and not version.contains_subpath(subpath):

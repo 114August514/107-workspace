@@ -62,12 +62,6 @@ class Notifier:
         if actor_id is not None and recipient_id == actor_id:
             return
         mandatory = mandatory or type in MANDATORY_NOTIFICATION_TYPES
-        if (
-            not mandatory
-            and self._preferences is not None
-            and not await self._preferences.is_enabled(recipient_id, type)
-        ):
-            return
         notification = Notification(
             id=new_id(NOTIFICATION),
             recipient_id=recipient_id,
@@ -81,6 +75,12 @@ class Notifier:
         )
         try:
             async with self._session.begin_nested():
+                if (
+                    not mandatory
+                    and self._preferences is not None
+                    and not await self._preferences.is_enabled(recipient_id, type)
+                ):
+                    return
                 await self._publisher.publish(notification)
         except Exception:
             logger.warning(
