@@ -21,7 +21,6 @@ from ..domain.capabilities import Capability
 from ..domain.compute import (
     ComputePlan,
     ComputeRequest,
-    ResourceEntitlement,
     SchedulerMapping,
     check_request_against_plan,
     resolve_scheduler_configuration,
@@ -386,8 +385,6 @@ class RunService:
                 problems.append(f"你没有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
-            else:
-                problems.extend(await self._check_concurrency(user_id, entitlement))
 
             slurm_projection = None
             if self._scheduler.name == "slurm":
@@ -465,13 +462,6 @@ class RunService:
         configuration = await self._repos.run_configurations.get(draft.run_configuration_id)
         if configuration is None or configuration.project_id != project_id:
             raise ObjectNotFound("Run Configuration", draft.run_configuration_id)
-
-        # 先独占发起 User 在该算力方案上的权益行，再做提交前检查。
-        #
-        # 并发上限是「数一数还有几个名额 -> 创建 Run」，这两步之间不能被别的请求
-        # 插进来，否则两个请求会同时读到「还没到上限」，然后都创建成功——
-        # 上限就形同虚设。锁一直持有到本次请求的事务结束。
-        await self._repos.entitlements.lock_for_plan(user_id, configuration.compute_plan_id)
 
         result = await self.preflight(user_id, project_id, draft)
         if not result.ok:
@@ -556,9 +546,6 @@ class RunService:
         source_snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
         if source_snapshot is None:  # pragma: no cover
             raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
-
-        # 和 create 一样要先独占权益行——重跑同样占用并发名额。
-        await self._repos.entitlements.lock_for_plan(user_id, source_snapshot.compute_plan_id)
 
         problems = await self._revalidate_snapshot(source_snapshot, access, user_id)
         if problems:
@@ -645,7 +632,6 @@ class RunService:
         source = await self._repos.run_snapshots.get(access.run.snapshot_id)
         if source is None:  # pragma: no cover - 数据损坏才会发生
             raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
-        await self._repos.entitlements.lock_for_plan(user_id, source.compute_plan_id)
 
         project_version = await self._repos.project_versions.get(draft.project_version_id or "")
         environment_version = await environment_version_for_owner_use(
@@ -1070,27 +1056,6 @@ class RunService:
         if key:
             await self._repos.idempotency.attach_run(user_id, key, run_id)
 
-    async def _check_concurrency(self, user_id: str, entitlement: ResourceEntitlement) -> list[str]:
-        """检查并发上限。
-
-        **数的范围必须和锁的范围一致**：额度按「User × 算力方案」授予，
-        锁的是那个 User 的那一条权益行，所以数的也只能是该 User 在那个方案上
-        发起的 Run。数到别人的 Run 会互相挤占名额；数到别的方案则会串味：
-        CPU 作业占掉 GPU 的名额。
-
-        调用方必须已经通过 ``entitlements.lock_for_plan`` 独占了权益行，
-        否则这里数出来的结果在返回之前就可能过期。
-        """
-        active = await self._repos.runs.count_unfinished_for_plan(
-            user_id, entitlement.compute_plan_id
-        )
-        if active < entitlement.max_concurrent_runs:
-            return []
-        return [
-            f"你在这个算力方案上已有 {active} 个未结束的 Run，"
-            f"达到并发上限 {entitlement.max_concurrent_runs}"
-        ]
-
     async def _check_inputs(
         self,
         user_id: str,
@@ -1236,10 +1201,6 @@ class RunService:
                 problems.append(f"你已不再拥有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
-            else:
-                # 重跑同样要占并发名额。漏掉这一条，用户就能靠反复点「重新运行」
-                # 绕过上限——权益检查在最容易被反复触发的路径上失效。
-                problems.extend(await self._check_concurrency(user_id, entitlement))
 
             if self._scheduler.name == "slurm":
                 assert self._slurm_projection is not None

@@ -62,6 +62,7 @@ import type {
   WorkingChange,
   WorkingChangeDetail,
   UserGroup,
+  Variable,
 } from './types'
 
 /** 后端统一的错误响应结构。 */
@@ -352,6 +353,60 @@ export const api = {
 
   listEntitlements: async (): Promise<Entitlement[]> =>
     unwrap(await http.GET('/api/v1/me/entitlements')),
+
+  // -- Personal execution context -------------------------------------
+  listUserVariables: async (userId: string): Promise<Variable[]> =>
+    unwrap(
+      await http.GET('/api/v1/users/{user_id}/variables', {
+        params: { path: { user_id: userId } },
+      }),
+    ),
+
+  setUserVariable: async (
+    userId: string,
+    variable: { name: string; value: string },
+  ): Promise<Variable> =>
+    unwrap(
+      await http.PUT('/api/v1/users/{user_id}/variables', {
+        params: { path: { user_id: userId } },
+        body: variable,
+      }),
+    ),
+
+  deleteUserVariable: async (userId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/users/{user_id}/variables/{name}', {
+        params: { path: { user_id: userId, name } },
+      }),
+    )
+  },
+
+  listUserSecrets: async (userId: string): Promise<string[]> =>
+    unwrap(
+      await http.GET('/api/v1/users/{user_id}/secrets', {
+        params: { path: { user_id: userId } },
+      }),
+    ),
+
+  setUserSecret: async (
+    userId: string,
+    secret: { name: string; value: string },
+  ): Promise<void> => {
+    unwrap(
+      await http.PUT('/api/v1/users/{user_id}/secrets', {
+        params: { path: { user_id: userId } },
+        body: secret,
+      }),
+    )
+  },
+
+  deleteUserSecret: async (userId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/users/{user_id}/secrets/{name}', {
+        params: { path: { user_id: userId, name } },
+      }),
+    )
+  },
 
   // -- Project -----------------------------------------------------------
   listOwnerProjects: async (

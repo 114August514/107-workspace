@@ -113,7 +113,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         identity=IdentityService(repos, context.clock, session),
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
         configuration=ConfigurationService(repos, guard, vault),
-        entitlements=EntitlementService(repos),
+        entitlements=EntitlementService(repos, context.clock),
         projects=ProjectService(
             repos,
             guard,
