@@ -92,7 +92,7 @@ export function BrandMarkSpecimen() {
   return (
     <article className={styles.specimenCard} aria-label="107 Brand Mark 最终规格">
       <div className={styles.topbarSpecimen} aria-label="107 Brand Mark TopBar 示例">
-        <BrandMark size={24} decorative />
+        <BrandMark size={32} decorative />
         <span className={styles.wordmark}>107 Workspace</span>
         <span className={styles.topbarMeta}>neutral TopBar</span>
       </div>
@@ -114,13 +114,33 @@ export function BrandMarkSpecimen() {
 export function ColorOwnership() {
   return (
     <div className={styles.colorLayout}>
-      <div className={styles.paletteGrid} aria-label="107 web color samples">
-        <ColorSwatch name="primary" value="#0455B6" className={styles.primarySwatch} />
-        <ColorSwatch name="primary hover" value="#00458F" className={styles.hoverSwatch} />
-        <ColorSwatch name="on primary" value="#FFFFFF" className={styles.onPrimarySwatch} />
-        <ColorSwatch name="subtle" value="#DDEBFF" className={styles.subtleSwatch} />
-        <ColorSwatch name="foreground" value="#003B78" className={styles.foregroundSwatch} />
-        <ColorSwatch name="border" value="#4F83BE" className={styles.borderSwatch} />
+      <div className={styles.paletteGrid} aria-label="107 current monochrome color roles">
+        <ColorSwatch
+          name="primary"
+          value="var(--fgColor-default)"
+          className={styles.primarySwatch}
+        />
+        <ColorSwatch
+          name="primary hover"
+          value="var(--fgColor-muted)"
+          className={styles.hoverSwatch}
+        />
+        <ColorSwatch
+          name="on primary"
+          value="var(--bgColor-default)"
+          className={styles.onPrimarySwatch}
+        />
+        <ColorSwatch name="subtle" value="var(--bgColor-muted)" className={styles.subtleSwatch} />
+        <ColorSwatch
+          name="foreground"
+          value="var(--fgColor-default)"
+          className={styles.foregroundSwatch}
+        />
+        <ColorSwatch
+          name="border"
+          value="var(--borderColor-default)"
+          className={styles.borderSwatch}
+        />
       </div>
 
       <Card padding="normal">
@@ -129,8 +149,9 @@ export function ColorOwnership() {
             色彩职责
           </Heading>
           <Text as="p" className={styles.mutedText}>
-            官方标准色的权威输入是 CMYK C100 M80 Y0 K0；上方 HEX 是 107 Workspace
-            为屏幕与可访问性选择的 web adaptation，不是官方 USTC HEX。
+            官方标准色的权威输入仍为 CMYK C100 M80 Y0 K0；当前 Brand Mark 与 active UI
+            采用黑白灰：图形本身只使用 黑色填充与透明负空间；灰色由 Primer neutral 与 state tokens
+            负责。蓝白配色保留在品牌参考文档中，作为后续 调研候选，不进入当前 UI。
           </Text>
           <div className={styles.semanticRow} aria-label="Primer semantic colors remain distinct">
             <Label variant="success">成功</Label>

@@ -92,7 +92,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                 onClick={() => setNavigationOpen(true)}
               />
               <RouterLink to="/" className={styles.brand}>
-                <BrandMark size={24} decorative />
+                <BrandMark size={32} decorative />
                 {appShellCopy.brand}
               </RouterLink>
               {projectId ? (

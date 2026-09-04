@@ -12,7 +12,7 @@ describe('BrandMark', () => {
     render(<BrandMark size={24} label="107 Brand Mark" />)
 
     const mark = screen.getByRole('img', { name: '107 Brand Mark' })
-    expect(mark).toHaveAttribute('src', expect.stringContaining('0455B6'))
+    expect(mark).toHaveAttribute('src', expect.stringContaining('000000'))
     expect(mark).toHaveAttribute('width', '24')
     expect(mark).toHaveAttribute('height', '24')
   })

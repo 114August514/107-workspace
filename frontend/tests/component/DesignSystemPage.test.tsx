@@ -76,6 +76,9 @@ describe('DesignSystemPage', () => {
       )
     }
     expect(screen.getByText('16px')).toBeInTheDocument()
+    const monochromeRoles = screen.getByLabelText('107 current monochrome color roles')
+    expect(monochromeRoles).toHaveTextContent('var(--fgColor-default)')
+    expect(monochromeRoles).toHaveTextContent('var(--fgColor-muted)')
 
     expect(screen.getByText(/C100 M80 Y0 K0/)).toBeInTheDocument()
     expect(screen.getByLabelText('Primer semantic colors remain distinct')).toHaveTextContent(

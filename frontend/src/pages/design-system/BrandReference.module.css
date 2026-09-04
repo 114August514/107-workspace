@@ -100,27 +100,27 @@
 }
 
 .primarySwatch {
-  background: var(--brandColor-primary);
+  background: var(--fgColor-default);
 }
 
 .hoverSwatch {
-  background: var(--brandColor-primary-hover);
+  background: var(--fgColor-muted);
 }
 
 .onPrimarySwatch {
-  background: var(--brandColor-on-primary);
+  background: var(--bgColor-default);
 }
 
 .subtleSwatch {
-  background: var(--brandColor-subtle);
+  background: var(--bgColor-muted);
 }
 
 .foregroundSwatch {
-  background: var(--brandColor-foreground);
+  background: var(--fgColor-default);
 }
 
 .borderSwatch {
-  background: var(--brandColor-border);
+  background: var(--borderColor-default);
 }
 
 .swatchName,
@@ -156,20 +156,20 @@
 }
 
 .brandLink {
-  color: var(--brandColor-primary);
+  color: var(--fgColor-default);
   font-weight: var(--base-text-weight-semibold);
   text-underline-offset: 0.2em;
 }
 
 .brandLink:hover {
-  color: var(--brandColor-primary-hover);
+  color: var(--fgColor-muted);
 }
 
 .selectedNavigation {
   padding: var(--base-size-6) var(--base-size-8);
-  border-left: var(--borderWidth-thick) solid var(--brandColor-primary);
-  background: var(--brandColor-subtle);
-  color: var(--brandColor-foreground);
+  border-left: var(--borderWidth-thick) solid var(--fgColor-default);
+  background: var(--bgColor-muted);
+  color: var(--fgColor-default);
   font-weight: var(--base-text-weight-semibold);
   text-decoration: none;
 }
@@ -187,18 +187,18 @@
 .selectedNavigation:focus-visible,
 .focusSpecimen:focus-visible,
 .brandPrimaryButton:focus-visible {
-  outline: var(--borderWidth-thick) solid var(--brandColor-primary);
+  outline: var(--borderWidth-thick) solid var(--fgColor-default);
   outline-offset: 2px;
 }
 
 .brandPrimaryButton {
-  color: var(--brandColor-on-primary) !important;
-  background: var(--brandColor-primary) !important;
-  box-shadow: inset 0 0 0 var(--borderWidth-thin) var(--brandColor-primary-hover) !important;
+  color: var(--bgColor-default) !important;
+  background: var(--fgColor-default) !important;
+  box-shadow: inset 0 0 0 var(--borderWidth-thin) var(--fgColor-muted) !important;
 }
 
 .brandPrimaryButton:hover {
-  background: var(--brandColor-primary-hover) !important;
+  background: var(--fgColor-muted) !important;
 }
 
 .iconGrid {

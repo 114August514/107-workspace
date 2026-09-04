@@ -77,11 +77,14 @@ Primer 迁移由 [GitHub Issue #16](https://github.com/114August514/107-workspac
 
 ### 107 / USTC 品牌边界
 
-- `src/primer/setup.tsx` 仍是唯一 Primer runtime；`src/primer/brand.css` 只提供一层薄的
-  107 品牌变量，不新增 Provider、主题切换器或第二套 semantic token；
+- `src/primer/setup.tsx` 仍是唯一 Primer runtime；当前 Brand Mark 资源位于
+  `src/assets/brand/107_pig_final.svg`，使用黑色静态填充与透明负空间；不新增 Provider、主题切换器或
+  第二套 semantic token；
 - USTC 校徽、校名与标准色属于学校 affiliation，来源与使用约束记录在
   [`docs/references/brand/ustc-vis.md`](../docs/references/brand/ustc-vis.md)；
-- 任何 HEX 都只能称为 107 Workspace 的网页适配，不能称为 USTC 官方色值；
+- 当前产品身份采用黑白灰：Brand Mark / favicon 使用 final 几何和黑白单色逻辑，灰色由 Primer
+  neutral 与 state tokens 负责；
+- 蓝白配色仍是后续调研候选，不属于当前 active UI；任何 HEX 都只能称为 107 Workspace 的候选网页适配，不能称为 USTC 官方色值；
 - 产品与状态图标优先使用 Primer Octicons；自定义 SVG 只用于经过人工选择的 Brand Mark；
 - `/design-system` 可以在人工视觉门阶段并列少量候选，但必须使用相同上下文；选择后删除
   未采用候选，不保留运行时 mark/theme playground。

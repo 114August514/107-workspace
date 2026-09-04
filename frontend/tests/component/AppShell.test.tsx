@@ -146,7 +146,10 @@ describe('AppShell 壳层', () => {
     renderShell('student')
 
     const brand = screen.getByRole('link', { name: '107 Workspace' })
-    expect(brand.querySelector('img')).not.toBeNull()
+    const mark = brand.querySelector('img')
+    expect(mark).not.toBeNull()
+    expect(mark).toHaveAttribute('width', '32')
+    expect(mark).toHaveAttribute('height', '32')
   })
 
   it.each(contextGuideCases)('路由 %s 显示对应的页面引导', (pathname, message) => {
@@ -179,7 +182,10 @@ describe('AppShell 壳层', () => {
     const header = screen.getByRole('banner')
     const brand = within(header).getByRole('link', { name: '107 Workspace' })
     expect(brand).toHaveAttribute('href', '/')
-    expect(brand.querySelector('img')).not.toBeNull()
+    const mark = brand.querySelector('img')
+    expect(mark).not.toBeNull()
+    expect(mark).toHaveAttribute('width', '32')
+    expect(mark).toHaveAttribute('height', '32')
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 

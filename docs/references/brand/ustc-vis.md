@@ -37,9 +37,32 @@ C100 M80 Y0 K0
 success、warning、danger 或其他界面语义色；这些职责继续由 Primer semantic tokens
 承担。
 
-## 107 Workspace 网页品牌色
+## 当前 107 Workspace 单色品牌
 
-以下 sRGB 值是 107 Workspace 的网页品牌色：
+当前产品身份采用黑白灰体系。active Brand Mark 使用
+`frontend/src/assets/brand/107_pig_final.svg`，由 3 条 path 构成，path 使用静态
+`#000000` 填充；透明负空间在当前浅色画布上呈现为白色。灰色不直接绘入 SVG，由 Primer
+neutral 与 state tokens 负责。
+
+页面 `BrandMark.tsx` 与 `frontend/public/favicon.svg` 复用同一份 final 几何和黑色静态填充；
+新 Mark 使用原始 `viewBox="0 0 140.9 141"`，不使用旧 Mark 的 optical padding，
+也不保留运行时 Mark 切换或 fallback。原始 `107pig.svg` 保留在
+`docs/archive/brand/107pig.svg`，仅用于来源追溯，不属于当前 active brand。
+
+当前界面颜色职责直接复用 Primer neutral tokens：
+
+```text
+primary        var(--fgColor-default)
+primary hover  var(--fgColor-muted)
+on primary     var(--bgColor-default)
+subtle         var(--bgColor-muted)
+foreground     var(--fgColor-default)
+border         var(--borderColor-default)
+```
+
+## 后续调研候选：蓝白 web adaptation
+
+蓝白配色暂不进入当前 UI，仅作为后续单独调查的候选记录：
 
 ```text
 primary        #0455B6
@@ -50,17 +73,11 @@ foreground     #003B78
 border         #4F83BE
 ```
 
-这些值是 **107 Workspace web adaptation**，不是官方 USTC RGB/HEX，也不是
-从官方手册 JPG 或学校网页截图采样得到。选择方法是：
+这些 sRGB 值是 107 Workspace 的 web adaptation，不是官方 USTC RGB/HEX，也不是从官方
+手册 JPG 或学校网页截图采样得到。选择方法是：仅把官方 `C100 M80 Y0 K0` 作为深蓝输入，
+再以 WCAG 对比度和明确界面职责评估候选值。
 
-1. 仅把官方 `C100 M80 Y0 K0` 作为“深蓝、以蓝为主”的品牌输入，不假装设备相关 CMYK
-   可以无配置文件地唯一换算为 sRGB；
-2. 在 sRGB 中选择克制的产品蓝 `#0455B6`，再分别为 hover、浅底前景、浅底和边界选择
-   有明确界面职责的值；
-3. 使用 WCAG 2.x 相对亮度公式检查真实组合，并把可访问性优先于与印刷色样的肉眼接近；
-4. 人工视觉门已完成：owner 确认最终 Mark（107 猪形图形）与 primary #0455B6。
-
-当前计算结果（对比度，前景 / 背景）：
+当前候选测量结果（不代表 active UI）：
 
 | 组合                                            | 对比度 |
 | :---------------------------------------------- | -----: |
@@ -71,23 +88,11 @@ border         #4F83BE
 | `#4F83BE` / `#FFFFFF`                           | 3.95:1 |
 | `#4F83BE` / `#DDEBFF`                           | 3.27:1 |
 
-因此 primary/on-primary 可承载普通文字，foreground/subtle 可承载 selected text，
-primary 可作为浅色画布上的 focus outline，border 可作为相邻白色或 subtle 背景的
-非文字边界。
-
-## Mark 来源与尺寸规则
-
-最终 Mark 使用 `frontend/src/assets/brand/107_pig_final.svg`，由 3 条 path 构成，使用静态
-`#0455B6` 填充，是独立的产品资产，不引用或复刻 USTC 校徽、校名等官方资产。页面
-`BrandMark.tsx` 与 `frontend/public/favicon.svg` 复用同一份几何和静态 hex 填充；新 Mark
-使用原始 `viewBox="0 0 140.9 141"`，不再使用旧 Mark 的 optical padding 或候选 fallback。
-原始 `107pig.svg` 保留在 `docs/archive/brand/107pig.svg`，仅用于来源追溯，不属于当前 active brand。
-`frontend/public/favicon-monochrome.svg` 保留旧黑白配色作为手动备用，只在小尺寸视觉验收或品牌蓝白
-效果不理想时切换；默认标签栏仍使用 `favicon.svg`，不做运行时自动 fallback。
+蓝白候选保留用于后续视觉与可访问性调查；在明确调查结论前，禁止将其称为当前品牌色。
 
 ## 当前吸收边界
 
 - Primer 继续负责 neutral canvas、正文、边框、间距、排版、控件交互与 semantic status；
 - 107 brand layer 只负责产品 Mark、wordmark 和少量 link、selected、focus、primary affordance；
-- 最终 Mark 已接入真实 AppShell（TopBar 24 px）并生成 favicon；
-- 人工视觉门已完成，Mark 与 primary 色已定稿。
+- 最终 Mark 已接入真实 AppShell（TopBar 32 px）并生成 favicon；
+- 当前人工确认覆盖 final 几何与黑白 active 方案；蓝白配色仍是后续调查候选，尚未定稿。

@@ -219,7 +219,7 @@ export function DesignSystemPage() {
           <SectionHeading
             id="brand-colors-heading"
             title="Colors"
-            description="官方 CMYK 输入、107 web adaptation 与 Primer semantic colors 的职责边界。"
+            description="当前 Brand Mark 与 active UI 采用黑白灰；蓝白配色仅作为后续调研候选记录。"
           />
           <ColorOwnership />
         </section>
