@@ -2913,6 +2913,19 @@ export interface components {
             /** Value */
             value: string;
         };
+        /**
+         * SecretOut
+         * @description Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。
+         */
+        SecretOut: {
+            /** Name */
+            name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** SharedResourceDetailOut */
         SharedResourceDetailOut: {
             /** Capabilities */
@@ -3187,6 +3200,11 @@ export interface components {
         VariableOut: {
             /** Name */
             name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Value */
             value: string;
         };
@@ -7004,7 +7022,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["SecretOut"][];
                 };
             };
             /** @description 请求不合法 */
@@ -10044,7 +10062,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["SecretOut"][];
                 };
             };
             /** @description 请求不合法 */
@@ -10593,7 +10611,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["SecretOut"][];
                 };
             };
             /** @description 请求不合法 */

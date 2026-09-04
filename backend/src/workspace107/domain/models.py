@@ -96,6 +96,7 @@ class Variable:
     scope: ConfigScope
     name: str
     value: str
+    updated_at: datetime | None = None
 
 
 @dataclass(slots=True)

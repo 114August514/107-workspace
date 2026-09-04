@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Project, RunConfiguration } from '../../src/api/types'
 import { ProjectSecretsPanel } from '../../src/components/project/ProjectSecretsPanel'
+import { ProjectSettingsPanel } from '../../src/components/project/ProjectSettingsPanel'
 import { ProjectVariablesPanel } from '../../src/components/project/ProjectVariablesPanel'
 import { RunConfigurationPanel } from '../../src/components/runconfig/RunConfigurationPanel'
 
@@ -15,9 +16,10 @@ import { RunConfigurationPanel } from '../../src/components/runconfig/RunConfigu
  * 守的是用户可观察行为：
  * - Variable 列表可读，编辑入口由 config.manage 决定；
  * - Secret 只展示名字，写入/轮换走密码框，不回读明文；
- * - 「设为默认运行方案」由 project.update 决定，PATCH 后刷新 Project。
+ * - 删除走确认弹窗；「设为默认运行方案」由 project.update 决定。
  *
- * 断言用角色和可见文案，不绑定 antd/Primer 私有 DOM。
+ * 断言用角色和可见文案，不绑定 Primer 私有 DOM；
+ * <relative-time> 在 jsdom 不产出文本，只断言 datetime 属性。
  */
 
 const mockListProjectVariables = vi.hoisted(() => vi.fn())
@@ -67,8 +69,13 @@ const manager = makeProject(['project.view', 'config.view', 'config.manage'])
 const viewer = makeProject(['project.view', 'config.view'])
 
 beforeEach(() => {
-  mockListProjectVariables.mockResolvedValue([{ name: 'EPOCHS', value: '5' }])
-  mockListProjectSecrets.mockResolvedValue(['HF_TOKEN', 'AWS_KEY'])
+  mockListProjectVariables.mockResolvedValue([
+    { name: 'EPOCHS', value: '5', updated_at: '2026-09-01T10:00:00Z' },
+  ])
+  mockListProjectSecrets.mockResolvedValue([
+    { name: 'HF_TOKEN', updated_at: '2026-09-01T10:00:00Z' },
+    { name: 'AWS_KEY', updated_at: '2026-08-20T10:00:00Z' },
+  ])
   mockListRunConfigurations.mockResolvedValue([])
   mockComputePlans.mockResolvedValue([])
   mockEnvironmentsForProject.mockResolvedValue([])
@@ -81,7 +88,7 @@ afterEach(() => {
 
 describe('ProjectVariablesPanel', () => {
   it('列出 Variable 与值，config.manage 用户可以新建', async () => {
-    render(
+    const { container } = render(
       <MemoryRouter>
         <ProjectVariablesPanel projectId="proj-1" access={manager} />
       </MemoryRouter>,
@@ -89,12 +96,19 @@ describe('ProjectVariablesPanel', () => {
 
     expect(await screen.findByText('EPOCHS')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
-    // PlusOutlined 的 aria-label 会进 accessible name，所以用正则匹配。
     expect(screen.getByRole('button', { name: /新建 Variable/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '复制 EPOCHS 的值' })).toBeInTheDocument()
+    const time = container.querySelector('relative-time')
+    expect(time).not.toBeNull()
+    expect(time!.getAttribute('datetime')).toMatch(/^2026-09-01T10:00:00/)
   })
 
   it('新建 Variable 提交 PUT 并刷新列表', async () => {
-    mockPutProjectVariable.mockResolvedValue({ name: 'DATASET_URL', value: 'http://x' })
+    mockPutProjectVariable.mockResolvedValue({
+      name: 'DATASET_URL',
+      value: 'http://x',
+      updated_at: '2026-09-02T10:00:00Z',
+    })
     render(
       <MemoryRouter>
         <ProjectVariablesPanel projectId="proj-1" access={manager} />
@@ -102,9 +116,9 @@ describe('ProjectVariablesPanel', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /新建 Variable/ }))
-    fireEvent.change(await screen.findByLabelText('名称'), { target: { value: 'DATASET_URL' } })
-    fireEvent.change(screen.getByLabelText('值'), { target: { value: 'http://x' } })
-    fireEvent.click(screen.getByRole('button', { name: '保 存' }))
+    fireEvent.change(await screen.findByLabelText(/^名称/), { target: { value: 'DATASET_URL' } })
+    fireEvent.change(screen.getByLabelText(/^值/), { target: { value: 'http://x' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => {
       expect(mockPutProjectVariable).toHaveBeenCalledWith('proj-1', {
@@ -117,23 +131,74 @@ describe('ProjectVariablesPanel', () => {
     })
   })
 
-  it('没有 config.manage 时只读，不出现编辑入口', async () => {
+  it('名称不合法时提交前拦截', async () => {
     render(
+      <MemoryRouter>
+        <ProjectVariablesPanel projectId="proj-1" access={manager} />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /新建 Variable/ }))
+    fireEvent.change(await screen.findByLabelText(/^名称/), { target: { value: '1ABC' } })
+    fireEvent.change(screen.getByLabelText(/^值/), { target: { value: 'x' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(
+      await screen.findByText('只能包含字母、数字和下划线，且不能以数字开头'),
+    ).toBeInTheDocument()
+    expect(mockPutProjectVariable).not.toHaveBeenCalled()
+  })
+
+  it('删除 Variable 先确认再调 DELETE', async () => {
+    mockDeleteProjectVariable.mockResolvedValue(undefined)
+    render(
+      <MemoryRouter>
+        <ProjectVariablesPanel projectId="proj-1" access={manager} />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '删除 EPOCHS' }))
+    expect(await screen.findByText('删除 Variable「EPOCHS」？')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+
+    await waitFor(() => {
+      expect(mockDeleteProjectVariable).toHaveBeenCalledWith('proj-1', 'EPOCHS')
+    })
+  })
+
+  it('列表为空时展示引导文案', async () => {
+    mockListProjectVariables.mockResolvedValue([])
+    render(
+      <MemoryRouter>
+        <ProjectVariablesPanel projectId="proj-1" access={manager} />
+      </MemoryRouter>,
+    )
+
+    expect(
+      await screen.findByText('还没有 Project Variable。创建后可以在运行方案环境变量中引用。'),
+    ).toBeInTheDocument()
+  })
+
+  it('没有 config.manage 时只读，不出现编辑入口', async () => {
+    // 断言收敛到容器内：前一个用例的 ConfirmationDialog portal 可能还挂在 body 上。
+    const { container } = render(
       <MemoryRouter>
         <ProjectVariablesPanel projectId="proj-1" access={viewer} />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('EPOCHS')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /新建 Variable/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '编辑' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '删除' })).not.toBeInTheDocument()
+    expect(await within(container).findByText('EPOCHS')).toBeInTheDocument()
+    expect(
+      within(container).queryByRole('button', { name: /新建 Variable/ }),
+    ).not.toBeInTheDocument()
+    expect(within(container).queryByRole('button', { name: /编辑/ })).not.toBeInTheDocument()
+    expect(within(container).queryByRole('button', { name: /删除/ })).not.toBeInTheDocument()
   })
 })
 
 describe('ProjectSecretsPanel', () => {
-  it('列表只展示 Secret 名字，不展示值', async () => {
-    render(
+  it('列表只展示 Secret 名字与更新时间，不展示值', async () => {
+    const { container } = render(
       <MemoryRouter>
         <ProjectSecretsPanel projectId="proj-1" access={manager} />
       </MemoryRouter>,
@@ -141,6 +206,9 @@ describe('ProjectSecretsPanel', () => {
 
     expect(await screen.findByText('HF_TOKEN')).toBeInTheDocument()
     expect(screen.getByText('AWS_KEY')).toBeInTheDocument()
+    const time = container.querySelector('relative-time')
+    expect(time).not.toBeNull()
+    expect(time!.getAttribute('datetime')).toMatch(/^2026-09-01T10:00:00/)
   })
 
   it('新建 Secret 的值输入框是密码框，提交后不回显', async () => {
@@ -152,11 +220,11 @@ describe('ProjectSecretsPanel', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /新建 Secret/ }))
-    const valueInput = screen.getByLabelText('值')
+    const valueInput = screen.getByLabelText(/^值/)
     expect(valueInput).toHaveAttribute('type', 'password')
-    fireEvent.change(screen.getByLabelText('名称'), { target: { value: 'HF_TOKEN' } })
+    fireEvent.change(screen.getByLabelText(/^名称/), { target: { value: 'HF_TOKEN' } })
     fireEvent.change(valueInput, { target: { value: 'hf_super_secret' } })
-    fireEvent.click(screen.getByRole('button', { name: '保 存' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => {
       expect(mockPutProjectSecret).toHaveBeenCalledWith('proj-1', {
@@ -174,12 +242,46 @@ describe('ProjectSecretsPanel', () => {
       </MemoryRouter>,
     )
 
-    const replaceButtons = await screen.findAllByRole('button', { name: /替换值/ })
-    fireEvent.click(replaceButtons[0]!)
-    const nameInput = await screen.findByLabelText('名称')
+    fireEvent.click(await screen.findByRole('button', { name: '替换 HF_TOKEN 的值' }))
+    const nameInput = await screen.findByLabelText(/^名称/)
     expect(nameInput).toBeDisabled()
     expect(nameInput).toHaveValue('HF_TOKEN')
     expect(screen.getByText('替换 Secret「HF_TOKEN」的值')).toBeInTheDocument()
+    expect(screen.getByLabelText(/^新值/)).toHaveAttribute('type', 'password')
+  })
+
+  it('删除 Secret 先确认再调 DELETE', async () => {
+    mockDeleteProjectSecret.mockResolvedValue(undefined)
+    render(
+      <MemoryRouter>
+        <ProjectSecretsPanel projectId="proj-1" access={manager} />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: '删除 HF_TOKEN' }))
+    expect(await screen.findByText('删除 Secret「HF_TOKEN」？')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+
+    await waitFor(() => {
+      expect(mockDeleteProjectSecret).toHaveBeenCalledWith('proj-1', 'HF_TOKEN')
+    })
+  })
+})
+
+describe('ProjectSettingsPanel', () => {
+  it('SegmentedControl 在 Variables 和 Secrets 分区之间切换', async () => {
+    render(
+      <MemoryRouter>
+        <ProjectSettingsPanel projectId="proj-1" access={manager} />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('EPOCHS')).toBeInTheDocument()
+    expect(screen.queryByText('HF_TOKEN')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Secrets' }))
+    expect(await screen.findByText('HF_TOKEN')).toBeInTheDocument()
+    expect(screen.queryByText('EPOCHS')).not.toBeInTheDocument()
   })
 })
 

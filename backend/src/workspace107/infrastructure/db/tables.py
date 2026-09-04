@@ -83,6 +83,7 @@ class VariableRow(Base):
     scope_id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class SecretRow(Base):

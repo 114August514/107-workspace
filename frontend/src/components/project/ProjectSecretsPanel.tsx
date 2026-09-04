@@ -1,13 +1,24 @@
-import { PlusOutlined } from '@ant-design/icons'
-import { Button, Form, Input, Modal, Popconfirm, Space, Table, Typography, message } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
+import { LockIcon, PencilIcon, PlusIcon, TrashIcon } from '@primer/octicons-react'
+import {
+  Button,
+  ConfirmationDialog,
+  Dialog,
+  Flash,
+  FormControl,
+  IconButton,
+  RelativeTime,
+  Stack,
+  TextInput,
+  VisuallyHidden,
+} from '@primer/react'
 import { useState } from 'react'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
-import type { Project } from '../../api/types'
+import type { Project, Secret } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { AsyncSection } from '../common/AsyncSection'
+import styles from './projectSettingsPanel.module.css'
 
 interface Props {
   projectId: string
@@ -15,160 +26,221 @@ interface Props {
   onChanged?: () => void
 }
 
-interface SecretFormValues {
-  name: string
-  value: string
-}
+type SecretDialog = { mode: 'create' } | { mode: 'replace'; name: string } | null
 
 /**
  * Project Secret 管理（Issue #54）。
  *
- * Secret 只能写入和轮换，不能回读：列表只展示名字，表单值输入后即提交，
- * 不在前端保存或回显明文。
+ * Secret 只能写入和轮换，不能回读：列表只展示名字与更新时间，
+ * 表单值输入后即提交，不在前端保存或回显明文。
  */
 export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
   const canManage = can(access, 'config.manage')
-  const secrets = useAsync<string[]>(() => api.listProjectSecrets(projectId), [projectId])
-  const [modalOpen, setModalOpen] = useState(false)
-  const [replacing, setReplacing] = useState<string | null>(null)
-  const [form] = Form.useForm<SecretFormValues>()
+  const secrets = useAsync<Secret[]>(() => api.listProjectSecrets(projectId), [projectId])
+  const [dialog, setDialog] = useState<SecretDialog>(null)
+  const [name, setName] = useState('')
+  const [value, setValue] = useState('')
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [valueError, setValueError] = useState<string | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [listError, setListError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
 
   const openCreate = () => {
-    setReplacing(null)
-    form.resetFields()
-    setModalOpen(true)
+    setName('')
+    setValue('')
+    setDialog({ mode: 'create' })
   }
 
-  const openReplace = (name: string) => {
-    setReplacing(name)
-    form.setFieldsValue({ name, value: '' })
-    setModalOpen(true)
+  const openReplace = (target: string) => {
+    setName(target)
+    setValue('')
+    setDialog({ mode: 'replace', name: target })
+  }
+
+  const closeDialog = () => {
+    setDialog(null)
+    setNameError(null)
+    setValueError(null)
+    setApiError(null)
   }
 
   const submit = async () => {
-    const values = await form.validateFields()
+    let nextNameError: string | null = null
+    if (!name) {
+      nextNameError = '请输入名称'
+    } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      nextNameError = '只能包含字母、数字和下划线，且不能以数字开头'
+    }
+    const nextValueError = value ? null : '请输入值；保存后不能回读'
+    setNameError(nextNameError)
+    setValueError(nextValueError)
+    if (nextNameError || nextValueError) return
+
     try {
-      await api.putProjectSecret(projectId, values)
-      message.success(replacing ? `已替换 Secret「${values.name}」的值` : '已创建 Secret')
-      setModalOpen(false)
+      await api.putProjectSecret(projectId, { name, value })
+      setApiError(null)
+      setDialog(null)
       secrets.reload()
       onChanged?.()
     } catch (error) {
-      message.error((error as Error).message)
+      setApiError((error as Error).message)
     }
   }
 
-  const remove = async (name: string) => {
+  const remove = async (target: string) => {
     try {
-      await api.deleteProjectSecret(projectId, name)
-      message.success('已删除 Secret')
+      await api.deleteProjectSecret(projectId, target)
+      setListError(null)
       secrets.reload()
       onChanged?.()
     } catch (error) {
-      message.error((error as Error).message)
+      setListError((error as Error).message)
     }
   }
 
-  const columns: ColumnsType<string> = [
-    {
-      title: '名称',
-      dataIndex: '',
-      render: (name: string) => <Typography.Text code>{name}</Typography.Text>,
-    },
-    ...(canManage
-      ? [
-          {
-            title: '操作',
-            key: 'actions',
-            width: 160,
-            render: (_: unknown, name: string) => (
-              <Space size={4}>
-                <Button type="link" size="small" onClick={() => openReplace(name)}>
-                  替换值
-                </Button>
-                <Popconfirm
-                  title={`删除 Secret「${name}」？`}
-                  description="引用它的 Run 会在 Preflight 中明确失败，不会被替换为空值；已有 Run 不受影响。"
-                  okText="删除"
-                  cancelText="取消"
-                  onConfirm={() => remove(name)}
-                >
-                  <Button type="link" size="small" danger>
-                    删除
-                  </Button>
-                </Popconfirm>
-              </Space>
-            ),
-          } satisfies ColumnsType<string>[number],
-        ]
-      : []),
-  ]
+  const rows = secrets.data ?? []
 
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        在运行方案环境变量里用 <Typography.Text code>{'${{ secrets.NAME }}'}</Typography.Text>{' '}
-        引用；值只在写入时可见，保存后不能回读，列表只展示名字。
-      </Typography.Paragraph>
-
-      {canManage && (
-        <div>
-          <Button icon={<PlusOutlined />} onClick={openCreate}>
+    <section id="settings-pane" className={styles.section} aria-label="Project secrets">
+      <div className={styles.paneHeader}>
+        <h2 className={styles.paneTitle}>Project secrets</h2>
+        {canManage && (
+          <Button variant="primary" leadingVisual={PlusIcon} onClick={openCreate}>
             新建 Secret
           </Button>
-        </div>
-      )}
+        )}
+      </div>
+      <p className={styles.sectionDescription}>
+        在运行方案环境变量里用 <code className={styles.reference}>{'${{ secrets.NAME }}'}</code>{' '}
+        引用；值只在写入时可见，保存后不能回读，列表只展示名字。
+      </p>
 
-      <AsyncSection
-        loading={secrets.loading}
-        error={secrets.error}
-        empty={(secrets.data ?? []).length === 0}
-        emptyText="还没有 Project Secret。创建后可以在运行方案环境变量中引用。"
-      >
-        <Table
-          rowKey={(name) => name}
-          size="small"
-          dataSource={secrets.data ?? []}
-          columns={columns}
-          pagination={false}
-        />
+      {listError && <Flash variant="danger">{listError}</Flash>}
+
+      <AsyncSection loading={secrets.loading} error={secrets.error} errorTitle="Secret 加载失败">
+        {rows.length === 0 ? (
+          <p className={styles.empty}>
+            还没有 Project Secret。创建后可以在运行方案环境变量中引用。
+          </p>
+        ) : (
+          <table className={styles.list}>
+            <colgroup>
+              <col className={styles.colNameWide} />
+              <col className={styles.colUpdated} />
+              {canManage && <col className={styles.colActions} />}
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" className={styles.th}>
+                  名称
+                </th>
+                <th scope="col" className={styles.th}>
+                  最近更新
+                </th>
+                {canManage && (
+                  <th scope="col" className={styles.th}>
+                    <VisuallyHidden>操作</VisuallyHidden>
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((secret) => (
+                <tr key={secret.name} className={styles.row}>
+                  <td className={styles.td}>
+                    <LockIcon size={16} className={styles.lockIcon} />
+                    {secret.name}
+                  </td>
+                  <td className={`${styles.td} ${styles.time}`}>
+                    <RelativeTime datetime={secret.updated_at} />
+                  </td>
+                  {canManage && (
+                    <td className={`${styles.td} ${styles.iconCell}`}>
+                      <IconButton
+                        variant="invisible"
+                        icon={PencilIcon}
+                        aria-label={`替换 ${secret.name} 的值`}
+                        onClick={() => openReplace(secret.name)}
+                      />
+                      <IconButton
+                        variant="invisible"
+                        icon={TrashIcon}
+                        aria-label={`删除 ${secret.name}`}
+                        onClick={() => setPendingDelete(secret.name)}
+                      />
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </AsyncSection>
 
-      <Modal
-        title={replacing ? `替换 Secret「${replacing}」的值` : '新建 Secret'}
-        open={modalOpen}
-        onOk={submit}
-        onCancel={() => setModalOpen(false)}
-        okText="保存"
-        cancelText="取消"
-        destroyOnHidden
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item
-            name="name"
-            label="名称"
-            rules={[
-              { required: true, message: '请输入名称' },
-              {
-                pattern: /^[A-Za-z_][A-Za-z0-9_]*$/,
-                message: '只能包含字母、数字和下划线，且不能以数字开头',
-              },
-            ]}
-          >
-            <Input placeholder="例如 HF_TOKEN" disabled={replacing !== null} />
-          </Form.Item>
-          <Form.Item
-            name="value"
-            label={replacing ? '新值' : '值'}
-            rules={[{ required: true, message: '请输入值；保存后不能回读' }]}
-          >
-            <Input.Password
-              autoComplete="new-password"
-              placeholder={replacing ? '输入替换后的值' : 'Secret 的值'}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </Space>
+      {dialog && (
+        <Dialog
+          onClose={closeDialog}
+          title={dialog.mode === 'replace' ? `替换 Secret「${dialog.name}」的值` : '新建 Secret'}
+          width="medium"
+          footerButtons={[
+            { content: '取消', onClick: closeDialog, buttonType: 'default' },
+            { content: '保存', onClick: () => void submit(), buttonType: 'primary' },
+          ]}
+        >
+          <Stack direction="vertical" gap="normal">
+            {apiError && <Flash variant="danger">{apiError}</Flash>}
+            <FormControl required disabled={dialog.mode === 'replace'}>
+              <FormControl.Label>名称</FormControl.Label>
+              <TextInput
+                block
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="例如 HF_TOKEN"
+              />
+              {nameError ? (
+                <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
+              ) : (
+                <FormControl.Caption>字母、数字和下划线，不能以数字开头。</FormControl.Caption>
+              )}
+            </FormControl>
+            <FormControl required>
+              <FormControl.Label>{dialog.mode === 'replace' ? '新值' : '值'}</FormControl.Label>
+              <TextInput
+                block
+                type="password"
+                autoComplete="new-password"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                placeholder={dialog.mode === 'replace' ? '输入替换后的值' : 'Secret 的值'}
+              />
+              {valueError ? (
+                <FormControl.Validation variant="error">{valueError}</FormControl.Validation>
+              ) : (
+                <FormControl.Caption>
+                  值只在写入时可见；引用它的 Run 在 Preflight 中明确失败，不会被替换为空值。
+                </FormControl.Caption>
+              )}
+            </FormControl>
+          </Stack>
+        </Dialog>
+      )}
+
+      {pendingDelete && (
+        <ConfirmationDialog
+          title={`删除 Secret「${pendingDelete}」？`}
+          cancelButtonContent="取消"
+          confirmButtonContent="删除"
+          confirmButtonType="danger"
+          onClose={(gesture) => {
+            const target = pendingDelete
+            setPendingDelete(null)
+            if (gesture === 'confirm' && target) void remove(target)
+          }}
+        >
+          引用它的 Run 会在 Preflight 中明确失败，不会被替换为空值；已有 Run 不受影响。
+        </ConfirmationDialog>
+      )}
+    </section>
   )
 }

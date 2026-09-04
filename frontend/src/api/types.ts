@@ -42,6 +42,7 @@ export type UserGroup = Schemas['UserGroupOut']
 export type Member = Schemas['MemberOut']
 export type Invitation = Schemas['InvitationOut']
 export type Variable = Schemas['VariableOut']
+export type Secret = Schemas['SecretOut']
 export type Entitlement = Schemas['EntitlementOut']
 
 // -- Project ----------------------------------------------------------------

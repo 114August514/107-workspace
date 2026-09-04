@@ -15,8 +15,7 @@ import { ListCard } from '../components/layout/ListCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { FileBrowser } from '../components/project/FileBrowser'
-import { ProjectSecretsPanel } from '../components/project/ProjectSecretsPanel'
-import { ProjectVariablesPanel } from '../components/project/ProjectVariablesPanel'
+import { ProjectSettingsPanel } from '../components/project/ProjectSettingsPanel'
 import { VersionPanel } from '../components/project/VersionPanel'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
 import { RunTable } from '../components/run/RunTable'
@@ -171,18 +170,11 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             children: (
               <Card>
                 {canViewConfig ? (
-                  <Stack gap="large">
-                    <ProjectVariablesPanel
-                      projectId={projectId}
-                      access={project.data}
-                      onChanged={bump}
-                    />
-                    <ProjectSecretsPanel
-                      projectId={projectId}
-                      access={project.data}
-                      onChanged={bump}
-                    />
-                  </Stack>
+                  <ProjectSettingsPanel
+                    projectId={projectId}
+                    access={project.data}
+                    onChanged={bump}
+                  />
                 ) : project.data ? (
                   <Typography.Text type="secondary">
                     你没有查看这个 Project 配置的权限。

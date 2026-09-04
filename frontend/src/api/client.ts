@@ -49,6 +49,7 @@ import type {
   RunDetail,
   RunDraft,
   RunPage,
+  Secret,
   SharedResource,
   SharedResourceCreate,
   SharedResourceDetail,
@@ -59,6 +60,7 @@ import type {
   WorkingChange,
   WorkingChangeDetail,
   UserGroup,
+  Variable,
 } from './types'
 
 /** 后端统一的错误响应结构。 */
@@ -568,14 +570,14 @@ export const api = {
       }),
     ),
 
-  listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
+  listProjectVariables: async (projectId: string): Promise<Variable[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/variables', {
         params: { path: { project_id: projectId } },
       }),
     ),
 
-  listProjectSecrets: async (projectId: string): Promise<string[]> =>
+  listProjectSecrets: async (projectId: string): Promise<Secret[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/secrets', {
         params: { path: { project_id: projectId } },
@@ -585,7 +587,7 @@ export const api = {
   putProjectVariable: async (
     projectId: string,
     payload: { name: string; value: string },
-  ): Promise<{ name: string; value: string }> =>
+  ): Promise<Variable> =>
     unwrap(
       await http.PUT('/api/v1/projects/{project_id}/variables', {
         params: { path: { project_id: projectId } },

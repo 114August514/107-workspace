@@ -4,13 +4,19 @@ import pytest
 async def _crud(client, base: str, *, secret_value: str) -> None:
     variable = await client.put(f"{base}/variables", json={"name": "SAME", "value": "value"})
     assert variable.status_code == 200
-    assert (await client.get(f"{base}/variables")).json() == [{"name": "SAME", "value": "value"}]
+    assert variable.json()["name"] == "SAME"
+    assert variable.json()["value"] == "value"
+    assert variable.json()["updated_at"]
+    listed_variables = (await client.get(f"{base}/variables")).json()
+    assert [v["name"] for v in listed_variables] == ["SAME"]
+    assert listed_variables[0]["updated_at"]
     assert (await client.delete(f"{base}/variables/SAME")).status_code == 204
     secret = await client.put(f"{base}/secrets", json={"name": "TOKEN", "value": secret_value})
     assert secret.status_code == 204
     listed = await client.get(f"{base}/secrets")
     assert listed.status_code == 200
-    assert listed.json() == ["TOKEN"]
+    assert [s["name"] for s in listed.json()] == ["TOKEN"]
+    assert listed.json()[0]["updated_at"]
     assert "value" not in listed.text
     assert secret_value not in listed.text
     assert (await client.delete(f"{base}/secrets/TOKEN")).status_code == 204
