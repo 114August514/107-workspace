@@ -20,6 +20,7 @@ export const globalNavigationCopy = {
   close: '关闭导航',
   home: '首页',
   environments: '运行环境',
+  executionContext: '个人执行上下文',
   userGroupsGroup: '你的 User Group',
   userGroupsEmpty: '还没有可进入的 User Group',
   recentProjectsGroup: '最近使用的 Project',
@@ -35,6 +36,8 @@ export const globalNavigationCopy = {
 export const contextGuideCopy = {
   ariaLabel: '页面引导',
   home: '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。',
+  executionContext:
+    '这里管理发起 Run 的个人身份、算力权益与 User 配置；已有 Run Snapshot 不会被后续修改回写。',
   userGroup:
     '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
   environment: '运行环境是独立的版本化资产；Run Configuration 保存后固定引用一个确定版本。',

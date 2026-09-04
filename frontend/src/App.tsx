@@ -15,6 +15,7 @@ import { SharedResourcesSection } from './components/usergroup/SharedResourcesSe
 import { AppShell } from './components/layout/AppShell'
 import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
+import { PersonalExecutionContextPage } from './pages/PersonalExecutionContextPage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
@@ -129,6 +130,10 @@ export function ProductRoutes({
   return (
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
+      <Route
+        path="/execution-context"
+        element={<PersonalExecutionContextPage username={username} home={home} />}
+      />
       <Route
         path="/user-groups/:userGroupId"
         element={<UserGroupPage key={username} onMembershipChanged={home.reload} />}

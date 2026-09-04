@@ -46,8 +46,8 @@ class SlurmPartitionFact:
 class SlurmQosLimitsFact:
     """Visible per-job QoS limits in normalized platform units.
 
-    The job-count fields are retained as evidence but intentionally never map to
-    ``ResourceEntitlement.max_concurrent_runs``.
+    The job-count fields are retained only as scheduler evidence and do not define a
+    parallel product-side quota.
     """
 
     cluster: str
