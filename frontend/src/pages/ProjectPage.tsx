@@ -1,4 +1,10 @@
-import { PencilIcon, TriangleDownIcon, VersionsIcon } from '@primer/octicons-react'
+import {
+  DiffIcon,
+  HistoryIcon,
+  PencilIcon,
+  TriangleDownIcon,
+  VersionsIcon,
+} from '@primer/octicons-react'
 import { Button as PrimerButton, SelectPanel, Text } from '@primer/react'
 import type { ActionListItemInput } from '@primer/react/deprecated'
 import { BranchesOutlined } from '@ant-design/icons'
@@ -232,11 +238,11 @@ function FilesContextControls({
       />
       {mode === 'working' ? (
         <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
-          {changes.data?.length ?? '—'} changes
+          <DiffIcon size={16} /> {changes.data?.length ?? '—'} changes
         </Link>
       ) : (
         <Link to={projectViewHref(projectId, 'files', 'versions')} className={styles.contextLink}>
-          {versions.data?.total ?? '—'} Versions
+          <HistoryIcon size={16} /> {versions.data?.total ?? '—'} Versions
         </Link>
       )}
     </div>
