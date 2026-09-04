@@ -3,6 +3,7 @@ import {
   GearIcon,
   PlayIcon,
   PlusIcon,
+  PulseIcon,
   ThreeBarsIcon,
 } from '@primer/octicons-react'
 import {
@@ -188,6 +189,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               <UnderlineNav.Item
                 as={RouterLink}
                 to={`/projects/${projectId}/activity`}
+                leadingVisual={<PulseIcon />}
                 aria-current={projectArea === 'activity' ? 'page' : undefined}
               >
                 {appShellCopy.activity}
