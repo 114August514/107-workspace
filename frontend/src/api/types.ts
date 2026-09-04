@@ -124,6 +124,8 @@ export type ForkSource = Schemas['ForkSourceOut']
 export type Notification = Schemas['NotificationOut']
 export type NotificationPage = Schemas['PageOut_NotificationOut_']
 export type NotificationType = Schemas['NotificationType']
+
+export type NotificationPreference = Schemas['NotificationPreferenceOut']
 export type ApiErrorBody = Schemas['ErrorOut']
 
 // -- 权限 -------------------------------------------------------------------

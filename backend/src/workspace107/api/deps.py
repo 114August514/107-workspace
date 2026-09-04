@@ -107,7 +107,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
     # 通知的出口只有这一个端口。以后增加邮件时换成组合实现（站内 + 邮件），
     # 各个用例里的调用不需要改变；端口就是为了隔离具体送达方式。
     publisher: NotificationPublisher = DatabaseNotificationPublisher(repos.notifications)
-    notifier = Notifier(publisher, context.clock, session)
+    notifier = Notifier(publisher, context.clock, session, repos.notifications)
 
     return Services(
         identity=IdentityService(repos, context.clock, session),
@@ -139,7 +139,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         ),
         catalog=CatalogService(repos, guard),
         environment_publications=EnvironmentPublicationService(
-            repos, guard, context.storage, context.clock
+            repos, guard, context.storage, context.clock, notifier
         ),
         health=HealthService(repos),
         lifecycle=RunLifecycleService(

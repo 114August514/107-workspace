@@ -1,8 +1,17 @@
 export const appShellCopy = {
-  brand: '107 Workspace',
+  homeMark: '107',
+  homeMarkLabel: '107 Workspace 首页',
+  homeContext: '107 Workspace',
   openNavigation: '打开导航',
   createUserGroup: '创建 User Group',
   sidebarLabel: '首页工作入口',
+  projectContextLabel: '当前 Project',
+  projectNavigationLabel: 'Project navigation',
+  projectLoading: '正在加载 Project context…',
+  projectError: 'Project context 加载失败，重试',
+  files: 'Files',
+  runs: 'Runs',
+  settings: 'Settings',
 } as const
 
 export const globalNavigationCopy = {
@@ -31,7 +40,6 @@ export const contextGuideCopy = {
   environment: '运行环境是独立的版本化资产；Run Configuration 保存后固定引用一个确定版本。',
   project: '当前工作区文件是 Working State；创建 Project 版本后形成不可变快照，并可据此发起 Run。',
   version: '这是不可变的 Project 版本；可以比较、派生 Project，或基于它发起 Run。',
-  run: '这里展示当前 Run 的状态、日志和产物；后续修改不会回写其运行快照。',
 } as const
 
 export const workNavigationCopy = {

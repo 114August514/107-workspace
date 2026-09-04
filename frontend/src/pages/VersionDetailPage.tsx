@@ -143,7 +143,7 @@ export function VersionDetailPage() {
             projectId={version.data.project_id}
             defaultRunConfigurationId={project.data?.default_run_configuration_id ?? null}
             onClose={() => setRunning(false)}
-            onSubmitted={(run) => navigate(`/runs/${run.id}`)}
+            onSubmitted={(run) => navigate(`/projects/${run.project_id}/runs/${run.id}`)}
           />
           <ForkModal
             open={forking}

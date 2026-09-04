@@ -810,6 +810,7 @@ async def test_rerun_creates_new_run_for_current_user_without_drift(
     assert body["id"] != run_id
     assert body["source_run_id"] == run_id
     assert body["initiated_by_user_id"] == bob_id
+    assert body["name"] == original.json()["name"]
 
     rerun_detail = await client.get(f"/api/v1/runs/{body['id']}", headers=BOB)
     rerun_detail.raise_for_status()

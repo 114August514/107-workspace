@@ -66,6 +66,16 @@ class PreflightRejected(DomainError):
         self.problems = problems
 
 
+class SharedResourceUnavailable(DomainError):
+    """一个确定的 Shared Resource Version 在提交或物化时不可用。"""
+
+    code = "shared_resource_unavailable"
+
+    def __init__(self, version_id: str, message: str) -> None:
+        super().__init__(message)
+        self.version_id = version_id
+
+
 class SchedulerError(DomainError):
     """底层调度系统返回错误。"""
 

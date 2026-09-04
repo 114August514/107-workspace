@@ -528,18 +528,16 @@ class RunConfigurationOut(Model):
 
 
 class RunDraftIn(Model):
-    """一次提交意图。
-
-    除 run_configuration_id 外都可以不传——不传就用运行方案里的值。
-    这些字段用 ``| None`` 而不是空字符串默认值，是为了让契约如实表达
-    「可以不传」，生成的前端类型才不会要求调用方硬塞一个空串。
-    """
+    """一次提交意图。"""
 
     run_configuration_id: str
     project_version_id: str | None = None
+    """None 表示使用 Project 的最新版本。"""
     name: str | None = None
     command_override: str | None = None
     working_directory_override: str | None = None
+    environment_version_id_override: str | None = None
+    input_bindings_override: list[InputBindingModel] | None = None
     compute_request_override: ComputeRequestModel | None = None
 
 
@@ -547,6 +545,18 @@ class SlurmProjectionOut(Model):
     availability: SlurmProjectionAvailability
     reason: str
     detail: str
+
+
+class AdjustedRerunIn(Model):
+    """从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。"""
+
+    name: str = Field(min_length=1, max_length=255)
+    project_version_id: str = Field(min_length=1)
+    environment_version_id: str = Field(min_length=1)
+    working_directory: str = "."
+    command: str = Field(min_length=1)
+    input_bindings: list[InputBindingModel] = Field(default_factory=list)
+    compute_request: ComputeRequestModel
 
 
 class PreflightOut(Model):
@@ -737,9 +747,19 @@ class NotificationOut(Model):
     target_type: TargetType | None
     target_id: str | None
     mandatory: bool
-    """不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。"""
+    """不可关闭的重要通知；通知偏好接口会将其标记为 mandatory。"""
     created_at: datetime
     read_at: datetime | None
+
+
+class NotificationPreferenceOut(Model):
+    type: NotificationType
+    enabled: bool
+    mandatory: bool
+
+
+class NotificationPreferenceUpdateIn(Model):
+    enabled: bool
 
 
 class UnreadCountOut(Model):

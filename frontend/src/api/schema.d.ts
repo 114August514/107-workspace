@@ -12,8 +12,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 下载 Artifact 文件
-         * @description 仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。
+         * 下载 Artifact 文件或完整归档
+         * @description 下载单文件，或省略 path 下载保持原结构的完整 ZIP 归档。
          */
         get: operations["download_artifact_file_api_v1_artifacts__artifact_id__download_get"];
         put?: never;
@@ -357,6 +357,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 通知偏好 */
+        get: operations["list_notification_preferences_api_v1_notifications_preferences_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/preferences/{notification_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新通知偏好 */
+        put: operations["update_notification_preference_api_v1_notifications_preferences__notification_type__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/read-all": {
         parameters: {
             query?: never;
@@ -411,6 +445,23 @@ export interface paths {
          * @description 仅处理当前用户的通知；不存在、已读或不属于当前用户时同样返回成功。
          */
         post: operations["mark_read_api_v1_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{notification_id}/unread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 将通知标记为未读 */
+        post: operations["mark_unread_api_v1_notifications__notification_id__unread_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1019,7 +1070,7 @@ export interface paths {
         };
         /**
          * 获取 Run 详情
-         * @description Return a Run only when the current User has owner-scope Project authority.
+         * @description 仅在当前 User 具有所属 Project owner-scope authority 时，返回 Run 详情与操作 capability。
          */
         get: operations["get_run_api_v1_runs__run_id__get"];
         put?: never;
@@ -1073,6 +1124,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/logs/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 下载 Run 日志
+         * @description 下载完整 stdout、stderr 或合并日志，不受页面尾部预览上限影响。
+         */
+        get: operations["download_logs_api_v1_runs__run_id__logs_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/rerun": {
         parameters: {
             query?: never;
@@ -1084,12 +1155,29 @@ export interface paths {
         put?: never;
         /**
          * 重新运行 Run
-         * @description 需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。
-         *
-         *     重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带
-         *     ``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。
+         * @description 基于历史 Snapshot 精确重跑，来源 Run 不变。
          */
         post: operations["rerun_api_v1_runs__run_id__rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run_id}/rerun/adjusted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 调整后重新运行 Run
+         * @description 以历史 Snapshot 为初始值，调整后创建新的 Run；来源 Run 不变。
+         */
+        post: operations["adjusted_rerun_api_v1_runs__run_id__rerun_adjusted_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1692,6 +1780,28 @@ export interface components {
             /** Target Name */
             target_name: string;
             target_type: components["schemas"]["TargetType"];
+        };
+        /**
+         * AdjustedRerunIn
+         * @description 从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。
+         */
+        AdjustedRerunIn: {
+            /** Command */
+            command: string;
+            compute_request: components["schemas"]["ComputeRequestModel"];
+            /** Environment Version Id */
+            environment_version_id: string;
+            /** Input Bindings */
+            input_bindings?: components["schemas"]["InputBindingModel"][];
+            /** Name */
+            name: string;
+            /** Project Version Id */
+            project_version_id: string;
+            /**
+             * Working Directory
+             * @default .
+             */
+            working_directory: string;
         };
         /** ArtifactEntryOut */
         ArtifactEntryOut: {
@@ -2305,7 +2415,7 @@ export interface components {
             id: string;
             /**
              * Mandatory
-             * @description 不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。
+             * @description 不可关闭的重要通知；通知偏好接口会将其标记为 mandatory。
              */
             mandatory: boolean;
             /** Read At */
@@ -2317,6 +2427,19 @@ export interface components {
             title: string;
             type: components["schemas"]["NotificationType"];
         };
+        /** NotificationPreferenceOut */
+        NotificationPreferenceOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Mandatory */
+            mandatory: boolean;
+            type: components["schemas"]["NotificationType"];
+        };
+        /** NotificationPreferenceUpdateIn */
+        NotificationPreferenceUpdateIn: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /**
          * NotificationType
          * @description 通知的种类。前端据此选图标，V1 加偏好设置时也按它分组。
@@ -2326,7 +2449,7 @@ export interface components {
          *     也可能产生一条活动和多条通知。硬凑成一个枚举会逼着两边互相迁就。
          * @enum {string}
          */
-        NotificationType: "user_group_invited" | "member_removed" | "role_changed" | "ownership_received" | "run_succeeded" | "run_failed" | "run_submit_failed";
+        NotificationType: "user_group_invited" | "member_removed" | "role_changed" | "ownership_received" | "run_succeeded" | "run_failed" | "run_submit_failed" | "environment_unavailable" | "shared_resource_unavailable" | "platform_incident";
         /**
          * OwnerKind
          * @enum {string}
@@ -2700,18 +2823,21 @@ export interface components {
         /**
          * RunDraftIn
          * @description 一次提交意图。
-         *
-         *     除 run_configuration_id 外都可以不传——不传就用运行方案里的值。
-         *     这些字段用 ``| None`` 而不是空字符串默认值，是为了让契约如实表达
-         *     「可以不传」，生成的前端类型才不会要求调用方硬塞一个空串。
          */
         RunDraftIn: {
             /** Command Override */
             command_override?: string | null;
             compute_request_override?: components["schemas"]["ComputeRequestModel"] | null;
+            /** Environment Version Id Override */
+            environment_version_id_override?: string | null;
+            /** Input Bindings Override */
+            input_bindings_override?: components["schemas"]["InputBindingModel"][] | null;
             /** Name */
             name?: string | null;
-            /** Project Version Id */
+            /**
+             * Project Version Id
+             * @description None 表示使用 Project 的最新版本。
+             */
             project_version_id?: string | null;
             /** Run Configuration Id */
             run_configuration_id: string;
@@ -3186,8 +3312,8 @@ export type $defs = Record<string, never>;
 export interface operations {
     download_artifact_file_api_v1_artifacts__artifact_id__download_get: {
         parameters: {
-            query: {
-                path: string;
+            query?: {
+                path?: string | null;
             };
             header?: {
                 "X-User"?: string | null;
@@ -3199,7 +3325,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 产物文件内容 */
+            /** @description 产物文件或 ZIP 归档 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4674,6 +4800,164 @@ export interface operations {
             };
         };
     };
+    list_notification_preferences_api_v1_notifications_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferenceOut"][];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    update_notification_preference_api_v1_notifications_preferences__notification_type__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                notification_type: components["schemas"]["NotificationType"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferenceUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferenceOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     mark_all_read_api_v1_notifications_read_all_post: {
         parameters: {
             query?: never;
@@ -4902,9 +5186,91 @@ export interface operations {
             };
         };
     };
+    mark_unread_api_v1_notifications__notification_id__unread_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     list_discoverable_projects_api_v1_projects_get: {
         parameters: {
             query?: {
+                /** @description 按 Owner 种类过滤 */
+                owner_kind?: components["schemas"]["OwnerKind"] | null;
+                /** @description 按 Owner ID 过滤 */
+                owner_id?: string | null;
+                /** @description 按 Project 名称搜索 */
+                query?: string | null;
                 /** @description 页码，从 1 开始 */
                 page?: number;
                 /** @description 每页条数 */
@@ -8117,6 +8483,86 @@ export interface operations {
             };
         };
     };
+    download_logs_api_v1_runs__run_id__logs_download_get: {
+        parameters: {
+            query?: {
+                stream?: string;
+            };
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 完整 Run 日志 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
     rerun_api_v1_runs__run_id__rerun_post: {
         parameters: {
             query?: never;
@@ -8131,7 +8577,99 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 幂等重放，返回上一次重跑的 Run */
+            /** @description 幂等重放 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    adjusted_rerun_api_v1_runs__run_id__rerun_adjusted_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+                "X-User"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdjustedRerunIn"];
+            };
+        };
+        responses: {
+            /** @description 幂等重放 */
             200: {
                 headers: {
                     [name: string]: unknown;

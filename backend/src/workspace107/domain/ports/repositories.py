@@ -13,7 +13,7 @@ from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
 from ..config_scope import ConfigScope
-from ..enums import EnvironmentAvailability
+from ..enums import EnvironmentAvailability, NotificationType
 from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
@@ -25,6 +25,7 @@ from ..models import (
     IdempotencyRecord,
     Membership,
     Notification,
+    NotificationPreference,
     Project,
     ProjectFile,
     ProjectVersion,
@@ -84,9 +85,18 @@ class ProjectRepository(Protocol):
         """按最近更新时间列出用户可见的 Project，用于个人首页。"""
         ...
 
-    async def list_discoverable_for_user(self, user_id: str, page: PageRequest) -> Page[Project]:
-        """列出用户可发现的 Project：Owner scope + PUBLIC。"""
+    async def list_discoverable_for_user(
+        self,
+        user_id: str,
+        page: PageRequest,
+        *,
+        owner: OwnerReference | None = None,
+        query: str | None = None,
+    ) -> Page[Project]:
+        """列出用户可发现的 Project，可按 Owner 与名称过滤。"""
         ...
+
+    async def list_using_environment_version(self, version_id: str) -> list[Project]: ...
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool: ...
 
@@ -255,7 +265,13 @@ class NotificationRepository(Protocol):
         """标记已读。返回 False 表示这条通知不属于这个人或不存在。"""
         ...
 
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool: ...
     async def mark_all_read(self, user_id: str, at: datetime) -> int: ...
+    async def is_enabled(self, user_id: str, type: NotificationType) -> bool: ...
+    async def list_preferences(self, user_id: str) -> list[NotificationPreference]: ...
+    async def set_preference(
+        self, user_id: str, type: NotificationType, enabled: bool
+    ) -> NotificationPreference: ...
 
 
 class ForkRelationRepository(Protocol):

@@ -1,32 +1,14 @@
-import { Alert, Empty, Tabs, Typography } from 'antd'
+import { DownloadIcon } from '@primer/octicons-react'
+import { Banner, Button, SegmentedControl, Text } from '@primer/react'
+import { useEffect, useRef, useState } from 'react'
 
-import type { LogChunk } from '../../api/types'
-import { colors, fontFamilyCode } from '../../theme'
+import { api } from '../../api/client'
+import type { LogChunk, LogStream } from '../../api/types'
+import { CodeViewer } from '../common/CodeViewer'
+import styles from './run.module.css'
 
-const LOG_STYLE: React.CSSProperties = {
-  background: colors.terminalBg,
-  color: colors.terminalText,
-  padding: 16,
-  borderRadius: 6,
-  maxHeight: 480,
-  overflow: 'auto',
-  fontFamily: fontFamilyCode,
-  fontSize: 13,
-  lineHeight: 1.6,
-  whiteSpace: 'pre-wrap',
-  margin: 0,
-}
-
-/**
- * 打开时默认停在哪一路输出。
- *
- * 默认停在 stdout 的话，失败的 Run 打开是一片空白——报错在 stderr，
- * 用户得自己发现旁边还有一个标签页。**出问题的时候最不该让人多找一步。**
- *
- * 规则：失败的 Run 优先看 stderr；否则停在第一个有内容的。
- */
-function defaultStream(chunks: LogChunk[], failed: boolean): string | undefined {
-  const hasContent = (stream: string) =>
+function defaultStream(chunks: LogChunk[], failed: boolean): LogStream | undefined {
+  const hasContent = (stream: LogStream) =>
     chunks.find((chunk) => chunk.stream === stream && chunk.content.trim())
 
   if (failed && hasContent('stderr')) return 'stderr'
@@ -34,46 +16,118 @@ function defaultStream(chunks: LogChunk[], failed: boolean): string | undefined 
 }
 
 interface Props {
+  runId?: string
   chunks: LogChunk[]
-  /** Run 是不是失败了。失败时默认展示 stderr。 */
+  /** Run 失败时优先打开 stderr，直接把诊断入口放在用户眼前。 */
   failed?: boolean
 }
 
-/**
- * 标准输出与标准错误。
- *
- * 后端在返回之前会把已知的 Secret 明文替换成 ***，即使用户程序自己
- * 把 Token 打到了 stdout。
- */
-export function RunLogPanel({ chunks, failed = false }: Props) {
-  const items = chunks.map((chunk) => ({
-    key: chunk.stream,
-    label: chunk.stream === 'stdout' ? '标准输出' : '标准错误',
-    children: (
-      <>
-        {chunk.truncated && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            message="日志过长，这里只显示尾部内容"
-          />
-        )}
-        {chunk.content.trim() ? (
-          <pre style={LOG_STYLE}>{chunk.content}</pre>
-        ) : (
-          <Empty description="这一路输出目前是空的" />
-        )}
-      </>
-    ),
-  }))
+/** 标准输出与标准错误；后端返回前已完成已知 Secret 明文抹除。 */
+export function RunLogPanel({ runId, chunks, failed = false }: Props) {
+  const [stream, setStream] = useState<LogStream | undefined>(() => defaultStream(chunks, failed))
+  const [downloading, setDownloading] = useState<'stdout' | 'stderr' | 'combined' | null>(null)
+  const [downloadError, setDownloadError] = useState(false)
+  const failureStreamSelected = useRef(false)
+  const active = chunks.find((chunk) => chunk.stream === stream) ?? chunks[0]
+
+  const download = async (selected: 'stdout' | 'stderr' | 'combined') => {
+    if (!runId) return
+    setDownloading(selected)
+    setDownloadError(false)
+    try {
+      await api.downloadLogs(runId, selected)
+    } catch {
+      setDownloadError(true)
+    } finally {
+      setDownloading(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!failed) {
+      failureStreamSelected.current = false
+      return
+    }
+    if (
+      failureStreamSelected.current ||
+      !chunks.some((chunk) => chunk.stream === 'stderr' && chunk.content.trim())
+    ) {
+      return
+    }
+    failureStreamSelected.current = true
+    setStream('stderr')
+  }, [chunks, failed])
+
+  if (!active) {
+    return <Text className={styles.muted}>这个 Run 还没有日志输出。</Text>
+  }
 
   return (
-    <>
-      <Tabs defaultActiveKey={defaultStream(chunks, failed)} items={items} />
-      <Typography.Text type="secondary">
-        日志中的 Secret 明文会被替换成 ***，这是防止密钥泄露的最后一道防线。
-      </Typography.Text>
-    </>
+    <div className={styles.logPanel}>
+      <div className={styles.logToolbar}>
+        <SegmentedControl
+          aria-label="Run 日志输出"
+          size="small"
+          onChange={(index) => setStream(chunks[index]?.stream)}
+        >
+          {chunks.map((chunk) => (
+            <SegmentedControl.Button
+              key={chunk.stream}
+              selected={active.stream === chunk.stream}
+              aria-controls="run-log-console"
+            >
+              {chunk.stream === 'stdout' ? '标准输出' : '标准错误'}
+            </SegmentedControl.Button>
+          ))}
+        </SegmentedControl>
+        <Button
+          leadingVisual={DownloadIcon}
+          size="small"
+          loading={downloading === 'stdout'}
+          disabled={downloading !== null}
+          onClick={() => void download('stdout')}
+        >
+          下载标准输出
+        </Button>
+        <Button
+          leadingVisual={DownloadIcon}
+          size="small"
+          loading={downloading === 'stderr'}
+          disabled={downloading !== null}
+          onClick={() => void download('stderr')}
+        >
+          下载标准错误
+        </Button>
+        <Button
+          leadingVisual={DownloadIcon}
+          size="small"
+          loading={downloading === 'combined'}
+          disabled={downloading !== null}
+          onClick={() => void download('combined')}
+        >
+          下载完整日志
+        </Button>
+      </div>
+      {downloadError ? (
+        <Banner variant="critical">
+          <Banner.Title>日志下载失败</Banner.Title>
+        </Banner>
+      ) : null}
+      {active.truncated ? (
+        <Banner variant="warning">
+          <Banner.Title>日志内容不完整</Banner.Title>
+          <Banner.Description>日志过长，这里只显示尾部内容。</Banner.Description>
+        </Banner>
+      ) : null}
+      {active.content.trim() ? (
+        <CodeViewer
+          id="run-log-console"
+          content={active.content}
+          ariaLabel={`${active.stream} 日志`}
+        />
+      ) : (
+        <div className={styles.emptyInline}>这一路输出目前是空的。</div>
+      )}
+    </div>
   )
 }

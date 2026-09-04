@@ -175,6 +175,48 @@ async def test_discovery_lists_public_projects_but_home_feed_does_not(client) ->
 
 
 @pytest.mark.asyncio
+async def test_project_discovery_filters_by_owner_and_name(client) -> None:
+    owner_id = await ensure_user_group(client, headers=ALICE)
+    other_owner = await client.post(
+        "/api/v1/user-groups",
+        json={"name": "Other Owner", "description": ""},
+        headers=ALICE,
+    )
+    assert other_owner.status_code == 201, other_owner.text
+    other_owner_id = other_owner.json()["id"]
+    for group_id, name in (
+        (owner_id, "Target Training"),
+        (owner_id, "Other Work"),
+        (other_owner_id, "Target Elsewhere"),
+    ):
+        created = await client.post(
+            "/api/v1/projects",
+            json={"owner": {"kind": "user_group", "id": group_id}, "name": name},
+            headers=ALICE,
+        )
+        assert created.status_code == 201, created.text
+
+    response = await client.get(
+        "/api/v1/projects",
+        params={
+            "owner_kind": "user_group",
+            "owner_id": owner_id,
+            "query": "training",
+        },
+        headers=ALICE,
+    )
+    assert response.status_code == 200, response.text
+    assert [item["name"] for item in response.json()["items"]] == ["Target Training"]
+
+    incomplete = await client.get(
+        "/api/v1/projects",
+        params={"owner_kind": "user_group"},
+        headers=ALICE,
+    )
+    assert incomplete.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_public_version_can_be_forked_to_requesting_user_owner(client, session) -> None:
     group_id = await ensure_user_group(client, headers=ALICE)
     env_version_id = await _group_environment_version(session, group_id)

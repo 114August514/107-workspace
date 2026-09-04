@@ -6,8 +6,10 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, Header, Query, Response, status
+from fastapi.responses import StreamingResponse
 
 from ...application.run_service import RunDraft
+from ...domain.models import InputBinding
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, PageDep, ServicesDep
@@ -100,7 +102,7 @@ async def create_run(
 
 @router.get("/runs/{run_id}", response_model=s.RunDetailOut, summary="获取 Run 详情")
 async def get_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunDetailOut:
-    """Return a Run only when the current User has owner-scope Project authority."""
+    """仅在当前 User 具有所属 Project owner-scope authority 时，返回 Run 详情与操作 capability。"""
     detail = await services.runs.get_detail(user.id, run_id)
     project_access = await services.projects.get(user.id, detail.run.run.project_id)
     return s.RunDetailOut(
@@ -125,6 +127,33 @@ async def read_logs(run_id: str, user: CurrentUser, services: ServicesDep) -> li
     ]
 
 
+@router.get(
+    "/runs/{run_id}/logs/download",
+    summary="下载 Run 日志",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "完整 Run 日志",
+            "content": {"text/plain": {"schema": {"type": "string", "format": "binary"}}},
+        }
+    },
+)
+async def download_logs(
+    run_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    stream: str = Query(default="combined", pattern="^(stdout|stderr|combined)$"),
+) -> StreamingResponse:
+    """下载完整 stdout、stderr 或合并日志，不受页面尾部预览上限影响。"""
+    body = await services.runs.stream_logs(user.id, run_id, stream)
+    filename = f"{stream}.log"
+    return StreamingResponse(
+        body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": _content_disposition(filename)},
+    )
+
+
 @router.post("/runs/{run_id}/cancel", response_model=s.RunOut, summary="取消 Run")
 async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s.RunOut:
     """需要取消 Run 权限，且 Run 尚未进入终态。
@@ -141,7 +170,7 @@ async def cancel_run(run_id: str, user: CurrentUser, services: ServicesDep) -> s
     response_model=s.RunOut,
     status_code=status.HTTP_201_CREATED,
     summary="重新运行 Run",
-    responses={200: {"model": s.RunOut, "description": "幂等重放，返回上一次重跑的 Run"}},
+    responses={200: {"model": s.RunOut, "description": "幂等重放"}},
 )
 async def rerun(
     run_id: str,
@@ -150,12 +179,46 @@ async def rerun(
     response: Response,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> s.RunOut:
-    """需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。
-
-    重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带
-    ``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。
-    """
+    """基于历史 Snapshot 精确重跑，来源 Run 不变。"""
     submission = await services.runs.rerun(user.id, run_id, idempotency_key=idempotency_key)
+    if not submission.created:
+        response.status_code = status.HTTP_200_OK
+    return p.run_out(await services.runs.view(submission.run))
+
+
+@router.post(
+    "/runs/{run_id}/rerun/adjusted",
+    response_model=s.RunOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="调整后重新运行 Run",
+    responses={200: {"model": s.RunOut, "description": "幂等重放"}},
+)
+async def adjusted_rerun(
+    run_id: str,
+    payload: s.AdjustedRerunIn,
+    user: CurrentUser,
+    services: ServicesDep,
+    response: Response,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> s.RunOut:
+    """以历史 Snapshot 为初始值，调整后创建新的 Run；来源 Run 不变。"""
+    submission = await services.runs.adjusted_rerun(
+        user.id,
+        run_id,
+        RunDraft(
+            run_configuration_id="",
+            project_version_id=payload.project_version_id,
+            name=payload.name,
+            command_override=payload.command,
+            working_directory_override=payload.working_directory,
+            environment_version_id_override=payload.environment_version_id,
+            input_bindings_override=tuple(
+                _to_input_binding(item) for item in payload.input_bindings
+            ),
+            compute_request_override=payload.compute_request.model_dump(),
+        ),
+        idempotency_key=idempotency_key,
+    )
     if not submission.created:
         response.status_code = status.HTTP_200_OK
     return p.run_out(await services.runs.view(submission.run))
@@ -192,14 +255,11 @@ async def list_artifact_files(
 # 生成的前端类型会跟着错，调用方只能靠强制转换绕过去。
 @router.get(
     "/artifacts/{artifact_id}/download",
-    summary="下载 Artifact 文件",
-    # response_class 决定契约里默认写哪种 media type。不写的话默认是
-    # JSONResponse，即使这里又声明了 octet-stream，契约也会同时留着
-    # application/json——等于告诉调用方「可能返回 JSON」，而它从来不会。
-    response_class=Response,
+    summary="下载 Artifact 文件或完整归档",
+    response_class=StreamingResponse,
     responses={
         200: {
-            "description": "产物文件内容",
+            "description": "产物文件或 ZIP 归档",
             "content": {
                 "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
             },
@@ -210,12 +270,12 @@ async def download_artifact_file(
     artifact_id: str,
     user: CurrentUser,
     services: ServicesDep,
-    path: str = Query(min_length=1),
-) -> Response:
-    """仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。"""
-    data, filename = await services.runs.read_artifact_file(user.id, artifact_id, path)
-    return Response(
-        content=data,
+    path: str | None = Query(default=None, min_length=1),
+) -> StreamingResponse:
+    """下载单文件，或省略 path 下载保持原结构的完整 ZIP 归档。"""
+    body, filename = await services.runs.stream_artifact(user.id, artifact_id, path)
+    return StreamingResponse(
+        body,
         media_type="application/octet-stream",
         headers={"Content-Disposition": _content_disposition(filename)},
     )
@@ -236,6 +296,15 @@ def _content_disposition(filename: str) -> str:
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quoted}"
 
 
+def _to_input_binding(payload: s.InputBindingModel) -> InputBinding:
+    return InputBinding(
+        source_type=payload.source_type,
+        source_id=payload.source_id,
+        access_path=payload.access_path,
+        source_subpath=payload.source_subpath,
+    )
+
+
 def _to_draft(payload: s.RunDraftIn) -> RunDraft:
     return RunDraft(
         run_configuration_id=payload.run_configuration_id,
@@ -243,6 +312,12 @@ def _to_draft(payload: s.RunDraftIn) -> RunDraft:
         name=payload.name or "",
         command_override=payload.command_override or "",
         working_directory_override=payload.working_directory_override or "",
+        environment_version_id_override=payload.environment_version_id_override or "",
+        input_bindings_override=(
+            tuple(_to_input_binding(item) for item in payload.input_bindings_override)
+            if payload.input_bindings_override is not None
+            else None
+        ),
         compute_request_override=(
             payload.compute_request_override.model_dump()
             if payload.compute_request_override
