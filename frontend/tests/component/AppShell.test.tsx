@@ -94,7 +94,11 @@ const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
   [
     '/user-groups/grp-1',
-    '这里管理 User Group 的成员与协作关系。Project、资源和运行配置在各自页面中管理。',
+    '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
+  ],
+  [
+    '/user-groups/grp-1/members',
+    '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
   ],
   [
     '/projects/p-1',
@@ -546,5 +550,52 @@ describe('AppShell 身份切换的乱序防护', () => {
       resolveFirst(3)
     })
     expect(screen.getByRole('button', { name: '通知，7 条未读' })).toBeTruthy()
+  })
+})
+
+describe('AppShell Header 的 User Group 分区导航', () => {
+  const group: Home['user_groups'][number] = {
+    ...homeData.user_groups[0]!,
+    capabilities: ['user_group.view', 'user_group.update'],
+  }
+
+  it('User Group 路由下分区导航渲染在 Header 第二行', async () => {
+    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    renderShell('student', readyHome(), '/user-groups/grp-1/settings')
+
+    const nav = await screen.findByRole('navigation', { name: 'User Group 分区导航' })
+    expect(screen.getByRole('banner')).toContainElement(nav)
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
+  it('User Group 路由下 Header 第一行显示组名并可返回组概览', async () => {
+    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    renderShell('student', readyHome(), '/user-groups/grp-1/members')
+
+    const context = await screen.findByRole('group', { name: '当前 User Group' })
+    expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
+      'href',
+      '/user-groups/grp-1',
+    )
+  })
+
+  it('离开 User Group 路由后 Header 恢复单行，不再渲染分区导航', async () => {
+    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
+    renderShell('student', readyHome(), '/user-groups/grp-1')
+
+    await screen.findByRole('navigation', { name: 'User Group 分区导航' })
+    fireEvent.click(screen.getByRole('link', { name: '107 Workspace 首页' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('navigation', { name: 'User Group 分区导航' })).toBeNull()
+    })
   })
 })

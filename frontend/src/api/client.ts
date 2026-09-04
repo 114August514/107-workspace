@@ -37,6 +37,7 @@ import type {
   NotificationPreference,
   PageQuery,
   ForkSource,
+  Grant,
   OwnerReference,
   Project,
   ProjectPage,
@@ -328,6 +329,15 @@ export const api = {
     )
   },
 
+  /** 主动退出 User Group。Owner 需先转让所有权，后端会拒绝。 */
+  leaveUserGroup: async (id: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/user-groups/{user_group_id}/leave', {
+        params: { path: { user_group_id: id } },
+      }),
+    )
+  },
+
   /** 我收到的、还没处理的邀请。 */
   listInvitations: async (): Promise<Invitation[]> => unwrap(await http.GET('/api/v1/invitations')),
 
@@ -359,6 +369,10 @@ export const api = {
         },
       }),
     ),
+
+  /** 当前 User 可见的 Project：自有、有效 User Group 拥有的与 PUBLIC。分页。 */
+  listProjects: async (query: PageQuery = {}): Promise<ProjectPage> =>
+    unwrap(await http.GET('/api/v1/projects', { params: { query } })),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
@@ -889,6 +903,13 @@ export const api = {
         params: { path: { project_id: projectId } },
       }),
     ) ?? null,
+
+  listGrants: async (query: {
+    target_kind?: 'environment' | 'shared_resource' | 'all' | null
+    target_id?: string | null
+    grantor_kind?: 'user' | 'user_group' | null
+    grantor_id?: string | null
+  }): Promise<Grant[]> => unwrap(await http.GET('/api/v1/grants', { params: { query } })),
 
   // -- 活动流 ------------------------------------------------------------
   listUserGroupActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
