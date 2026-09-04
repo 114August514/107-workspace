@@ -7,11 +7,13 @@ import { api, getCurrentUser, setCurrentUser } from './api/client'
 import type { Home, Project } from './api/types'
 import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
 import { AppShell } from './components/layout/AppShell'
+import { CreateProjectPage } from './pages/CreateProjectPage'
+import { CreateUserGroupPage } from './pages/CreateUserGroupPage'
 import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
-import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
+import { EnvironmentPage } from './pages/EnvironmentPage'
 import { ProjectPage } from './pages/ProjectPage'
 import { RunPage } from './pages/RunPage'
 import { RunLocatorPage } from './pages/RunLocatorPage'
@@ -89,7 +91,10 @@ function ProductSession({
     return request
   }
   const home = useAsync<Home>(loadHome, [username])
-  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const projectId =
+    location.pathname === '/projects/new'
+      ? undefined
+      : matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const project = useAsync<Project | undefined>(
     () => (projectId ? api.getProject(projectId) : Promise.resolve(undefined)),
     [username, projectId],
@@ -123,6 +128,8 @@ export function ProductRoutes({
   return (
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
+      <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
+      <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
       <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
       <Route path="/environments" element={<EnvironmentListPage key={username} />} />
       <Route path="/environments/:environmentId" element={<EnvironmentPage key={username} />} />

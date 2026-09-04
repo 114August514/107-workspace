@@ -1,4 +1,4 @@
-import { Banner, Dialog, FormControl, Stack, Textarea, TextInput } from '@primer/react'
+import { Banner, Button, Dialog, FormControl, Stack, Textarea, TextInput } from '@primer/react'
 import { useRef, useState } from 'react'
 
 import { api } from '../../api/client'
@@ -19,7 +19,11 @@ export function CreateUserGroupDialog({ open, onClose, onCreated }: Props) {
   return <CreateUserGroupForm onClose={onClose} onCreated={onCreated} />
 }
 
-function CreateUserGroupForm({ onClose, onCreated }: Omit<Props, 'open'>) {
+export function CreateUserGroupForm({
+  onClose,
+  onCreated,
+  page = false,
+}: Omit<Props, 'open'> & { page?: boolean }) {
   const nameInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -48,6 +52,81 @@ function CreateUserGroupForm({ onClose, onCreated }: Omit<Props, 'open'>) {
     }
   }
 
+  const form = (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!submitting) void submit()
+      }}
+    >
+      <Stack gap="normal">
+        {submitError && (
+          <Banner variant="critical" data-testid="create-user-group-error">
+            <Banner.Title>{submitError.message}</Banner.Title>
+            {submitError.problems && submitError.problems.length > 0 && (
+              <Banner.Description>
+                <ul style={{ margin: 0, paddingInlineStart: 20 }}>
+                  {submitError.problems.map((problem) => (
+                    <li key={problem}>{problem}</li>
+                  ))}
+                </ul>
+              </Banner.Description>
+            )}
+          </Banner>
+        )}
+        <FormControl required disabled={submitting} id="create-user-group-name">
+          <FormControl.Label>名称</FormControl.Label>
+          <TextInput
+            ref={nameInputRef}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="例如：计算物理课题组"
+            maxLength={128}
+            block
+          />
+          {nameError && (
+            <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
+          )}
+        </FormControl>
+        <FormControl disabled={submitting} id="create-user-group-description">
+          <FormControl.Label>说明（可选）</FormControl.Label>
+          <Textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder="例如：用于计算物理课题组的课程项目"
+            maxLength={500}
+            rows={4}
+            block
+            resize="vertical"
+          />
+          <FormControl.Caption>
+            简要写明这个 User Group 用于哪些 Project 或协作任务。
+          </FormControl.Caption>
+        </FormControl>
+      </Stack>
+    </form>
+  )
+
+  if (page) {
+    return (
+      <Stack gap="spacious">
+        <div>
+          <h1>创建 User Group</h1>
+          <p>创建一个协作组织，用于管理成员、Project 与共享资源。</p>
+        </div>
+        {form}
+        <Stack direction="horizontal" gap="normal">
+          <Button onClick={onClose} disabled={submitting}>
+            取消
+          </Button>
+          <Button variant="primary" onClick={() => void submit()} loading={submitting}>
+            创建 User Group
+          </Button>
+        </Stack>
+      </Stack>
+    )
+  }
+
   return (
     <Dialog
       title="创建 User Group"
@@ -67,58 +146,7 @@ function CreateUserGroupForm({ onClose, onCreated }: Omit<Props, 'open'>) {
         },
       ]}
     >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (!submitting) void submit()
-        }}
-      >
-        <Stack gap="normal">
-          {submitError && (
-            <Banner variant="critical" data-testid="create-user-group-error">
-              <Banner.Title>{submitError.message}</Banner.Title>
-              {submitError.problems && submitError.problems.length > 0 && (
-                <Banner.Description>
-                  <ul style={{ margin: 0, paddingInlineStart: 20 }}>
-                    {submitError.problems.map((problem) => (
-                      <li key={problem}>{problem}</li>
-                    ))}
-                  </ul>
-                </Banner.Description>
-              )}
-            </Banner>
-          )}
-          <FormControl required disabled={submitting} id="create-user-group-name">
-            <FormControl.Label>名称</FormControl.Label>
-            <TextInput
-              ref={nameInputRef}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="例如：计算物理课题组"
-              maxLength={128}
-              block
-            />
-            {nameError && (
-              <FormControl.Validation variant="error">{nameError}</FormControl.Validation>
-            )}
-          </FormControl>
-          <FormControl disabled={submitting} id="create-user-group-description">
-            <FormControl.Label>说明（可选）</FormControl.Label>
-            <Textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="例如：用于计算物理课题组的课程项目"
-              maxLength={500}
-              rows={4}
-              block
-              resize="vertical"
-            />
-            <FormControl.Caption>
-              简要写明这个 User Group 用于哪些 Project 或协作任务。
-            </FormControl.Caption>
-          </FormControl>
-        </Stack>
-      </form>
+      {form}
     </Dialog>
   )
 }

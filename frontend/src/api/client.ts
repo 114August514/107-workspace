@@ -356,6 +356,14 @@ export const api = {
       }),
     ),
 
+  createProject: async (
+    payload: { owner: OwnerReference; name: string; description: string },
+  ): Promise<Project> =>
+    unwrap(
+      await http.POST('/api/v1/projects', {
+        body: { ...payload, visibility: 'owner_scope' },
+      }),
+    ),
   getProject: async (id: string): Promise<Project> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),

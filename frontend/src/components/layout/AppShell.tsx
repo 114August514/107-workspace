@@ -7,6 +7,8 @@ import {
   ThreeBarsIcon,
 } from '@primer/octicons-react'
 import {
+  ActionList,
+  ActionMenu,
   Button,
   ButtonGroup,
   defaultPaneWidth,
@@ -14,14 +16,13 @@ import {
   PageLayout,
   UnderlineNav,
 } from '@primer/react'
+import { NotificationBell } from '../notification/NotificationBell'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link as RouterLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, matchPath, useLocation } from 'react-router-dom'
 
 import type { Home, Project } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
-import { NotificationBell } from '../notification/NotificationBell'
-import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { ContextGuide } from './ContextGuide'
 import { appShellCopy } from './copy'
 import { ProjectSwitcher } from './ProjectSwitcher'
@@ -52,13 +53,14 @@ const appShellStyle: AppShellStyle = {
 }
 
 export function AppShell({ username, onUsernameChange, home, project, children }: Props) {
-  const navigate = useNavigate()
   const location = useLocation()
   const navigationId = useId()
   const navigationButtonRef = useRef<HTMLButtonElement>(null)
-  const [createOpen, setCreateOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
-  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const projectId =
+    location.pathname === '/projects/new'
+      ? undefined
+      : matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const currentProject = project.data?.id === projectId ? project.data : undefined
   const projectPath = projectId ? `/projects/${projectId}` : ''
   const projectSubpath = projectPath ? location.pathname.slice(projectPath.length) : ''
@@ -151,14 +153,23 @@ export function AppShell({ username, onUsernameChange, home, project, children }
             ) : null}
           </div>
           <div className={styles.actions}>
-            <IconButton
-              icon={PlusIcon}
-              variant="default"
-              aria-label={appShellCopy.createUserGroup}
-              onClick={() => setCreateOpen(true)}
-            />
-            {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
-                避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
+            <ActionMenu>
+              <ActionMenu.Anchor>
+                <IconButton
+                  icon={PlusIcon}
+                  variant="default"
+                  aria-label="创建"
+                  aria-haspopup="menu"
+                />
+              </ActionMenu.Anchor>
+              <ActionMenu.Overlay align="end" width="auto">
+                <ActionList>
+                  <ActionList.LinkItem href="/projects/new">创建 Project</ActionList.LinkItem>
+                  <ActionList.LinkItem href="/user-groups/new">创建 User Group</ActionList.LinkItem>
+                </ActionList>
+              </ActionMenu.Overlay>
+            </ActionMenu>
+            {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，避免旧身份响应覆盖新身份。 */}
             <NotificationBell key={username} username={username} />
             <UserSwitcher value={username} onChange={onUsernameChange} />
           </div>
@@ -232,15 +243,6 @@ export function AppShell({ username, onUsernameChange, home, project, children }
           onClose={() => setNavigationOpen(false)}
         />
       ) : null}
-
-      <CreateUserGroupDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(userGroup) => {
-          home.reload()
-          navigate(`/user-groups/${userGroup.id}`)
-        }}
-      />
     </div>
   )
 }
