@@ -20,6 +20,7 @@ interface Props {
   rootHref?: string
   version?: ProjectVersionDetail
   onChanged?: () => void
+  workingHref?: string
 }
 function languageForPath(path: string): string {
   const extension = path.split('.').at(-1)?.toLowerCase()
@@ -37,7 +38,6 @@ function languageForPath(path: string): string {
   }
   return languages[extension ?? ''] ?? 'text'
 }
-
 export function FileViewer({
   projectId,
   access,
@@ -46,6 +46,7 @@ export function FileViewer({
   rootHref = backHref,
   version,
   onChanged,
+  workingHref,
 }: Props) {
   const navigate = useNavigate()
   const readOnly = version !== undefined
@@ -105,6 +106,9 @@ export function FileViewer({
           {version && <Tag color="blue">{version.label} · 只读</Tag>}
         </div>
         <div className={styles.headerActions}>
+          {version && workingHref && (
+            <Button onClick={() => navigate(workingHref)}>编辑 Working State</Button>
+          )}
           {!version && (
             <Button icon={<DownloadIcon />} onClick={() => void api.downloadFile(projectId, path)}>
               下载文件

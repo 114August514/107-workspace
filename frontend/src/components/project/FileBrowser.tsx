@@ -263,13 +263,14 @@ export function FileBrowser({
       <td className={styles.metaCell}>{node.file ? formatRelative(node.file.updated_at) : '—'}</td>
     </tr>
   ))
-  const fileContext = version ? (
-    <div className={styles.fileContext}>
-      <Link to={directoryHref('')} className={styles.refControl}>
-        {version.label} · 只读
-      </Link>
-    </div>
-  ) : null
+  const fileContext =
+    version && !contextControls ? (
+      <div className={styles.fileContext}>
+        <Link to={directoryHref('')} className={styles.refControl}>
+          {version.label} · 只读
+        </Link>
+      </div>
+    ) : null
   const uploadMenu = canWrite ? (
     <ActionMenu>
       <ActionMenu.Button leadingVisual={PlusIcon}>添加文件</ActionMenu.Button>

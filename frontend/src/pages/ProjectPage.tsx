@@ -1,5 +1,12 @@
 import { TriangleDownIcon } from '@primer/octicons-react'
-import { Button as PrimerButton, SelectPanel, Text } from '@primer/react'
+import {
+  Button as PrimerButton,
+  Dialog,
+  FormControl,
+  SelectPanel,
+  Text,
+  TextInput,
+} from '@primer/react'
 import type { ActionListItemInput } from '@primer/react/deprecated'
 import { BranchesOutlined } from '@ant-design/icons'
 import { Card, Empty, Tag } from 'antd'
@@ -42,6 +49,7 @@ type FilesView = 'working' | 'changes' | 'versions'
 type RunsView = 'history' | 'configurations'
 
 const PAGE_TITLES = {
+  latest: 'Files',
   working: 'Working State',
   changes: 'Changes',
   versions: 'Versions',
@@ -52,7 +60,7 @@ const PAGE_TITLES = {
   version: 'Version',
   file: 'File',
 } as const
-type ProjectView = FilesView | RunsView | 'activity' | 'settings' | 'version' | 'file'
+type ProjectView = 'latest' | FilesView | RunsView | 'activity' | 'settings' | 'version' | 'file'
 
 interface ProjectLocation {
   section: ProjectSection
@@ -77,6 +85,22 @@ function resolveProjectPath(pathname: string, projectId: string): ProjectLocatio
       currentPath: '',
     }
   }
+  if (section !== 'files') return { section: 'files', view: 'latest', currentPath: '' }
+  if (segments[1] === 'working') {
+    if (segments[2] === 'file' && segments[3]) {
+      return {
+        section: 'files',
+        view: 'file',
+        currentPath: segments.slice(2, -1).join('/'),
+        filePath: segments.slice(2).join('/'),
+      }
+    }
+    return {
+      section: 'files',
+      view: 'working',
+      currentPath: segments[2] === 'tree' ? segments.slice(3).join('/') : '',
+    }
+  }
   if (segments[1] === 'file' && segments[2]) {
     return {
       section: 'files',
@@ -96,21 +120,16 @@ function resolveProjectPath(pathname: string, projectId: string): ProjectLocatio
         filePath: segments.slice(4).join('/'),
       }
     }
-    if (segments[2]) {
+    if (segments[2])
       return {
         section: 'files',
         view: 'version',
         versionId: segments[2],
         currentPath: segments[3] === 'tree' ? segments.slice(4).join('/') : '',
       }
-    }
     return { section: 'files', view: 'versions', currentPath: '' }
   }
-  return {
-    section: 'files',
-    view: 'working',
-    currentPath: segments[1] === 'tree' ? segments.slice(2).join('/') : '',
-  }
+  return { section: 'files', view: 'latest', currentPath: '' }
 }
 
 function projectViewHref(projectId: string, section: ProjectSection, view?: FilesView | RunsView) {
@@ -125,22 +144,29 @@ function projectViewHref(projectId: string, section: ProjectSection, view?: File
     : `/projects/${projectId}/runs`
 }
 
-function FilesContextControls({ projectId }: { projectId: string }) {
+function FilesContextControls({
+  projectId,
+  mode,
+  selectedVersion,
+}: {
+  projectId: string
+  mode: 'working' | 'version'
+  selectedVersion?: ProjectVersionDetail
+}) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const changes = useAsync<WorkingChange[]>(() => api.workingChanges(projectId), [projectId])
+  const [saveOpen, setSaveOpen] = useState(false)
   const versions = useAsync<ProjectVersionPage>(
     () => api.listVersions(projectId, { page: 1, page_size: 50 }),
     [projectId],
   )
-  const options: ActionListItemInput[] = [
-    { id: 'working-state', text: 'Working State' },
-    ...(versions.data?.items ?? []).map((version) => ({
-      id: version.id,
-      text: version.label,
-    })),
-  ]
+  const changes = useAsync<WorkingChange[]>(() => api.workingChanges(projectId), [projectId])
+  const options: ActionListItemInput[] = (versions.data?.items ?? []).map((version) => ({
+    id: version.id,
+    text: version.label,
+  }))
+  const selected = options.find((option) => option.id === selectedVersion?.id)
   const error = toAsyncError(versions.error)
   const close = () => {
     setOpen(false)
@@ -148,73 +174,144 @@ function FilesContextControls({ projectId }: { projectId: string }) {
   }
   return (
     <div className={styles.fileContextControls} aria-label="Files context">
-      <SelectPanel
-        open={open}
-        onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
-        renderAnchor={({ children: _children, ...anchorProps }) => (
-          <PrimerButton
-            {...anchorProps}
-            trailingVisual={TriangleDownIcon}
-            aria-label="选择 Files 状态"
-            aria-haspopup="dialog"
-          >
-            Working State
-          </PrimerButton>
-        )}
-        title="选择 Files 状态"
-        placeholder="Working State"
-        placeholderText="搜索状态或 Version"
-        inputLabel="搜索状态或 Version"
-        filterValue={query}
-        onFilterChange={setQuery}
-        items={options}
-        selected={options[0]}
-        onSelectedChange={(item: ActionListItemInput | undefined) => {
-          if (!item) return
-          close()
-          navigate(
-            item.id === 'working-state'
-              ? projectViewHref(projectId, 'files')
-              : `/projects/${projectId}/files/versions/${item.id}`,
-          )
-        }}
-        loading={versions.loading}
-        initialLoadingType="spinner"
-        message={
-          error
-            ? {
-                variant: 'error' as const,
-                title: '无法加载 Project Versions。',
-                body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
-                action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
-              }
-            : !versions.loading && options.length === 1
+      {mode === 'working' ? (
+        <span className={styles.refControl}>Working State</span>
+      ) : (
+        <SelectPanel
+          open={open}
+          onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
+          renderAnchor={({ children: _children, ...anchorProps }) => (
+            <PrimerButton
+              {...anchorProps}
+              trailingVisual={TriangleDownIcon}
+              aria-label="选择 Project Version"
+              aria-haspopup="dialog"
+            >
+              {selectedVersion?.label ?? 'Project Version'}
+            </PrimerButton>
+          )}
+          title="选择 Project Version"
+          placeholder={selectedVersion?.label ?? 'Project Version'}
+          placeholderText="搜索 Project Version"
+          inputLabel="搜索 Project Version"
+          filterValue={query}
+          onFilterChange={setQuery}
+          items={options}
+          selected={selected}
+          onSelectedChange={(item: ActionListItemInput | undefined) => {
+            if (!item) return
+            close()
+            navigate(`/projects/${projectId}/files/versions/${item.id}`)
+          }}
+          loading={versions.loading}
+          initialLoadingType="spinner"
+          message={
+            error
               ? {
-                  variant: 'empty' as const,
-                  title: '还没有保存的 Version。',
-                  body: '保存 Version 后，可以从这里切换到只读文件内容。',
+                  variant: 'error' as const,
+                  title: '无法加载 Project Versions。',
+                  body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
+                  action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
                 }
-              : undefined
-        }
-        notice={
-          versions.data?.has_more
-            ? { text: '仅显示最近 50 个 Version，请使用 Versions 查看全部。', variant: 'info' }
-            : undefined
-        }
-        width="auto"
-        height="auto"
-        overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
-        align="start"
-        disableFullscreenOnNarrow
-        aria-label="Files 状态"
-      />
-      <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
-        {changes.data?.length ?? '—'} changes
-      </Link>
+              : !versions.loading && options.length === 0
+                ? {
+                    variant: 'empty' as const,
+                    title: '还没有保存的 Version。',
+                    body: '进入 Working State 保存第一个 Version。',
+                  }
+                : undefined
+          }
+          width="auto"
+          height="auto"
+          overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
+          align="start"
+          disableFullscreenOnNarrow
+          aria-label="Project Versions"
+        />
+      )}
+      {mode === 'version' && (
+        <Link to={`/projects/${projectId}/files/working`} className={styles.contextLink}>
+          Working State
+        </Link>
+      )}
+      {mode === 'working' && (
+        <>
+          <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
+            {changes.data?.length ?? '—'} changes
+          </Link>
+          {(changes.data?.length ?? 0) > 0 && (
+            <PrimerButton size="small" onClick={() => setSaveOpen(true)}>
+              保存 Version
+            </PrimerButton>
+          )}
+        </>
+      )}
       <Link to={projectViewHref(projectId, 'files', 'versions')} className={styles.contextLink}>
         Versions {versions.data?.total ?? '—'}
       </Link>
+      {mode === 'working' && saveOpen && (
+        <SaveVersionDialog
+          projectId={projectId}
+          onClose={() => setSaveOpen(false)}
+          onSaved={(versionId) => navigate(`/projects/${projectId}/files/versions/${versionId}`)}
+        />
+      )}
     </div>
+  )
+}
+function SaveVersionDialog({
+  projectId,
+  onClose,
+  onSaved,
+}: {
+  projectId: string
+  onClose: () => void
+  onSaved: (versionId: string) => void
+}) {
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const version = await api.saveVersion(projectId, message.trim())
+      onSaved(version.id)
+    } catch (cause) {
+      setError(toAsyncError(cause as Error)?.problems?.join(' ') ?? '无法保存 Version。')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <Dialog
+      title="保存 Project Version"
+      onClose={() => {
+        if (!saving) onClose()
+      }}
+      footerButtons={[
+        { content: '取消', onClick: onClose, disabled: saving },
+        {
+          content: '保存 Version',
+          buttonType: 'primary',
+          onClick: () => void save(),
+          loading: saving,
+        },
+      ]}
+    >
+      <Stack gap="large">
+        {error && <Text color="danger">{error}</Text>}
+        <FormControl>
+          <FormControl.Label>说明（可选）</FormControl.Label>
+          <TextInput
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="例如：完成数据预处理"
+            block
+          />
+        </FormControl>
+      </Stack>
+    </Dialog>
   )
 }
 
@@ -292,6 +389,13 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
     () => (versionId ? api.getVersion(versionId) : Promise.resolve(undefined)),
     [versionId],
   )
+  const latestVersion = useAsync<ProjectVersionDetail | undefined>(async () => {
+    if (view !== 'latest') return undefined
+    const page = await api.listVersions(projectId, { page: 1, page_size: 1 })
+    const latest = page.items[0]
+    return latest ? api.getVersion(latest.id) : undefined
+  }, [projectId, view])
+  const selectedVersion = version.data ?? latestVersion.data
   const [token, setToken] = useState(0)
   const bump = () => {
     setToken((value) => value + 1)
@@ -311,22 +415,53 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
     () => api.listProjectActivities(projectId, { page_size: 20 }),
     [projectId, token],
   )
-  const fileBasePath = versionId
-    ? `/projects/${projectId}/files/versions/${versionId}`
-    : `/projects/${projectId}/files`
+  const fileBasePath = selectedVersion
+    ? `/projects/${projectId}/files/versions/${selectedVersion.id}`
+    : view === 'working' || (view === 'file' && !versionId)
+      ? `/projects/${projectId}/files/working`
+      : `/projects/${projectId}/files`
   const fileBackHref = currentPath
     ? `${fileBasePath}/tree/${currentPath.split('/').map(encodeURIComponent).join('/')}`
     : fileBasePath
+  const workingFileHref = filePath
+    ? `/projects/${projectId}/files/working/file/${filePath.split('/').map(encodeURIComponent).join('/')}`
+    : undefined
 
   const content =
-    view === 'working' ? (
+    view === 'latest' ? (
+      <AsyncSection loading={latestVersion.loading} error={latestVersion.error}>
+        {latestVersion.data ? (
+          <FileBrowser
+            projectId={projectId}
+            access={project.data}
+            onChanged={() => undefined}
+            currentPath={currentPath}
+            basePath={fileBasePath}
+            version={latestVersion.data}
+            contextControls={
+              <FilesContextControls
+                projectId={projectId}
+                mode="version"
+                selectedVersion={latestVersion.data}
+              />
+            }
+          />
+        ) : (
+          <div className={styles.noVersion}>
+            <h2>尚未保存 Project Version</h2>
+            <p>进入 Working State 保存第一个 Version。</p>
+            <Link to={`/projects/${projectId}/files/working`}>进入 Working State</Link>
+          </div>
+        )}
+      </AsyncSection>
+    ) : view === 'working' ? (
       <FileBrowser
         projectId={projectId}
         access={project.data}
         onChanged={bump}
         currentPath={currentPath}
-        basePath={`/projects/${projectId}/files`}
-        contextControls={<FilesContextControls projectId={projectId} />}
+        basePath={`/projects/${projectId}/files/working`}
+        contextControls={<FilesContextControls projectId={projectId} mode="working" />}
       />
     ) : view === 'changes' ? (
       <Card>
@@ -363,23 +498,28 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             backHref={fileBackHref}
             rootHref={fileBasePath}
             version={version.data}
-            onChanged={() => navigate(fileBackHref)}
+            workingHref={versionId ? workingFileHref : undefined}
           />
         )}
       </AsyncSection>
     ) : view === 'version' ? (
       <AsyncSection loading={version.loading} error={version.error}>
         {version.data && (
-          <Card>
-            <FileBrowser
-              projectId={projectId}
-              access={project.data}
-              onChanged={() => undefined}
-              currentPath={currentPath}
-              basePath={`/projects/${projectId}/files/versions/${version.data.id}`}
-              version={version.data}
-            />
-          </Card>
+          <FileBrowser
+            projectId={projectId}
+            access={project.data}
+            onChanged={() => undefined}
+            currentPath={currentPath}
+            basePath={fileBasePath}
+            version={version.data}
+            contextControls={
+              <FilesContextControls
+                projectId={projectId}
+                mode="version"
+                selectedVersion={version.data}
+              />
+            }
+          />
         )}
       </AsyncSection>
     ) : view === 'history' ? (
@@ -437,7 +577,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
 
   return (
     <Stack gap="large">
-      {section === 'files' && view === 'working' ? null : (
+      {section === 'files' && (view === 'working' || view === 'latest') ? null : (
         <AsyncSection loading={project.loading} error={project.error}>
           {project.data && (
             <PageHeader
