@@ -24,6 +24,8 @@ import contextlib
 import hashlib
 import os
 import shutil
+import tempfile
+import zipfile
 from pathlib import Path
 
 from ...domain.enums import InputSourceType, LogStream
@@ -182,6 +184,12 @@ class LocalStorage:
         target = paths.stdout if stream is LogStream.STDOUT else paths.stderr
         return await asyncio.to_thread(_read_tail, target, max_bytes)
 
+    async def iter_log(self, run_id: str, stream: LogStream, *, chunk_size: int):
+        paths = self.run_paths(run_id)
+        target = paths.stdout if stream is LogStream.STDOUT else paths.stderr
+        async for chunk in _read_chunks(target, chunk_size):
+            yield chunk
+
     async def cleanup_run_directory(self, run_id: str) -> None:
         await asyncio.to_thread(_force_rmtree, self.run_paths(run_id).root)
 
@@ -237,9 +245,29 @@ class LocalStorage:
     async def read_artifact_file(self, artifact_id: str, path: str) -> bytes:
         root = (self._artifacts / artifact_id).resolve()
         target = (root / path).resolve()
-        if not str(target).startswith(str(root)) or not target.is_file():
+        if root not in target.parents or not target.is_file():
             raise ObjectNotFound("Artifact 文件", path)
         return await asyncio.to_thread(target.read_bytes)
+
+    async def iter_artifact_file(self, artifact_id: str, path: str, *, chunk_size: int):
+        root = (self._artifacts / artifact_id).resolve()
+        target = (root / path).resolve()
+        if root not in target.parents or not target.is_file():
+            raise ObjectNotFound("Artifact 文件", path)
+        async for chunk in _read_chunks(target, chunk_size):
+            yield chunk
+
+    async def iter_artifact_archive(self, artifact_id: str, *, chunk_size: int):
+        root = (self._artifacts / artifact_id).resolve()
+        if not root.is_dir():
+            raise ObjectNotFound("Artifact 内容", artifact_id)
+        temporary = await asyncio.to_thread(_create_archive, root)
+        try:
+            async for chunk in _read_chunks(temporary, chunk_size):
+                yield chunk
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                await asyncio.to_thread(temporary.unlink)
 
     async def delete_artifact_content(self, artifact_id: str) -> None:
         await asyncio.to_thread(_force_rmtree, self._artifacts / artifact_id)
@@ -263,6 +291,36 @@ def _file_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+async def _read_chunks(path: Path, chunk_size: int):
+    if not await asyncio.to_thread(path.is_file):
+        return
+    handle = await asyncio.to_thread(path.open, "rb")
+    try:
+        while True:
+            chunk = await asyncio.to_thread(handle.read, chunk_size)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        await asyncio.to_thread(handle.close)
+
+
+def _create_archive(root: Path) -> Path:
+    with tempfile.NamedTemporaryFile(
+        prefix="workspace107-artifact-", suffix=".zip", delete=False
+    ) as handle:
+        archive = Path(handle.name)
+    try:
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            for path in sorted(root.rglob("*")):
+                if path.is_file() and not path.is_symlink():
+                    bundle.write(path, path.relative_to(root).as_posix())
+    except Exception:
+        archive.unlink(missing_ok=True)
+        raise
+    return archive
 
 
 def _read_tail(path: Path, max_bytes: int) -> tuple[str, bool]:
