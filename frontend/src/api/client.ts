@@ -20,6 +20,8 @@ import type {
   ApiErrorBody,
   ArtifactEntry,
   ComputePlan,
+  ComputeRequest,
+  InputBinding,
   Entitlement,
   Environment,
   EnvironmentPublicationAttempt,
@@ -30,10 +32,12 @@ import type {
   LogChunk,
   Member,
   MembershipRole,
+  Notification,
   NotificationPage,
-  PreflightResult,
+  NotificationPreference,
   PageQuery,
   ForkSource,
+  Grant,
   OwnerReference,
   Project,
   ProjectPage,
@@ -52,6 +56,7 @@ import type {
   SharedResourceDetail,
   SharedResourcePublicationAttempt,
   SharedResourceUpdate,
+  PreflightResult,
   SharedResourceVersionDetail,
   VersionDiff,
   WorkingChange,
@@ -324,6 +329,15 @@ export const api = {
     )
   },
 
+  /** 主动退出 User Group。Owner 需先转让所有权，后端会拒绝。 */
+  leaveUserGroup: async (id: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/user-groups/{user_group_id}/leave', {
+        params: { path: { user_group_id: id } },
+      }),
+    )
+  },
+
   /** 我收到的、还没处理的邀请。 */
   listInvitations: async (): Promise<Invitation[]> => unwrap(await http.GET('/api/v1/invitations')),
 
@@ -356,14 +370,20 @@ export const api = {
       }),
     ),
 
-  createProject: async (
-    payload: { owner: OwnerReference; name: string; description: string },
-  ): Promise<Project> =>
+  /** 当前 User 可见的 Project：自有、有效 User Group 拥有的与 PUBLIC。分页。 */
+  listProjects: async (query: PageQuery = {}): Promise<ProjectPage> =>
+    unwrap(await http.GET('/api/v1/projects', { params: { query } })),
+  createProject: async (payload: {
+    owner: OwnerReference
+    name: string
+    description: string
+  }): Promise<Project> =>
     unwrap(
       await http.POST('/api/v1/projects', {
         body: { ...payload, visibility: 'owner_scope' },
       }),
     ),
+
   getProject: async (id: string): Promise<Project> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),
@@ -678,6 +698,45 @@ export const api = {
         },
       }),
     ),
+  adjustedRerun: async (
+    id: string,
+    payload: {
+      name: string
+      project_version_id: string
+      environment_version_id: string
+      working_directory: string
+      command: string
+      input_bindings: InputBinding[]
+      compute_request: ComputeRequest
+    },
+    idempotencyKey?: string,
+  ): Promise<Run> =>
+    unwrap(
+      await http.POST('/api/v1/runs/{run_id}/rerun/adjusted', {
+        params: {
+          path: { run_id: id },
+          header: { 'Idempotency-Key': idempotencyKey ?? null },
+        },
+        body: payload,
+      }),
+    ),
+
+  downloadLogs: async (id: string, stream: 'stdout' | 'stderr' | 'combined'): Promise<void> => {
+    const result = unwrap(
+      await http.GET('/api/v1/runs/{run_id}/logs/download', {
+        params: { path: { run_id: id }, query: { stream } },
+        parseAs: 'blob',
+      }),
+    )
+    const url = URL.createObjectURL(result)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${stream}.log`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  },
 
   syncRuns: async (): Promise<{ changed: number }> => unwrap(await http.POST('/api/v1/runs/sync')),
 
@@ -697,23 +756,18 @@ export const api = {
       }),
     ),
 
-  /**
-   * 下载 Artifact 文件。
-   *
-   * 走 fetch 而不是直接给 `<a href>`，因为下载同样需要带上身份请求头——
-   * 否则浏览器会用默认身份去取，拿到 404。
-   */
-  downloadArtifactFile: async (id: string, path: string): Promise<void> => {
+  /** 下载 Artifact 文件；省略 path 时由后端返回完整 ZIP。 */
+  downloadArtifactFile: async (id: string, path?: string): Promise<void> => {
     const blob = unwrap(
       await http.GET('/api/v1/artifacts/{artifact_id}/download', {
-        params: { path: { artifact_id: id }, query: { path } },
+        params: { path: { artifact_id: id }, query: path ? { path } : {} },
         parseAs: 'blob',
       }),
     )
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = path.split('/').pop() ?? 'artifact'
+    link.download = path?.split('/').pop() ?? 'artifact.zip'
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -860,6 +914,13 @@ export const api = {
       }),
     ) ?? null,
 
+  listGrants: async (query: {
+    target_kind?: 'environment' | 'shared_resource' | 'all' | null
+    target_id?: string | null
+    grantor_kind?: 'user' | 'user_group' | null
+    grantor_id?: string | null
+  }): Promise<Grant[]> => unwrap(await http.GET('/api/v1/grants', { params: { query } })),
+
   // -- 活动流 ------------------------------------------------------------
   listUserGroupActivities: async (id: string, query: PageQuery = {}): Promise<ActivityPage> =>
     unwrap(
@@ -892,7 +953,29 @@ export const api = {
     )
   },
 
+  markNotificationUnread: async (id: string): Promise<void> => {
+    unwrap(
+      await http.POST('/api/v1/notifications/{notification_id}/unread', {
+        params: { path: { notification_id: id } },
+      }),
+    )
+  },
+
   markAllNotificationsRead: async (): Promise<void> => {
     unwrap(await http.POST('/api/v1/notifications/read-all'))
   },
+
+  listNotificationPreferences: async (): Promise<NotificationPreference[]> =>
+    unwrap(await http.GET('/api/v1/notifications/preferences')),
+
+  setNotificationPreference: async (
+    type: Notification['type'],
+    enabled: boolean,
+  ): Promise<NotificationPreference> =>
+    unwrap(
+      await http.PUT('/api/v1/notifications/preferences/{notification_type}', {
+        params: { path: { notification_type: type } },
+        body: { enabled },
+      }),
+    ),
 }

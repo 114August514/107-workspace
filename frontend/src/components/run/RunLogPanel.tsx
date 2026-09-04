@@ -1,6 +1,8 @@
-import { Banner, SegmentedControl, Text } from '@primer/react'
+import { DownloadIcon } from '@primer/octicons-react'
+import { Banner, Button, SegmentedControl, Text } from '@primer/react'
 import { useEffect, useRef, useState } from 'react'
 
+import { api } from '../../api/client'
 import type { LogChunk, LogStream } from '../../api/types'
 import { CodeViewer } from '../common/CodeViewer'
 import styles from './run.module.css'
@@ -14,16 +16,32 @@ function defaultStream(chunks: LogChunk[], failed: boolean): LogStream | undefin
 }
 
 interface Props {
+  runId?: string
   chunks: LogChunk[]
   /** Run 失败时优先打开 stderr，直接把诊断入口放在用户眼前。 */
   failed?: boolean
 }
 
 /** 标准输出与标准错误；后端返回前已完成已知 Secret 明文抹除。 */
-export function RunLogPanel({ chunks, failed = false }: Props) {
+export function RunLogPanel({ runId, chunks, failed = false }: Props) {
   const [stream, setStream] = useState<LogStream | undefined>(() => defaultStream(chunks, failed))
+  const [downloading, setDownloading] = useState<'stdout' | 'stderr' | 'combined' | null>(null)
+  const [downloadError, setDownloadError] = useState(false)
   const failureStreamSelected = useRef(false)
   const active = chunks.find((chunk) => chunk.stream === stream) ?? chunks[0]
+
+  const download = async (selected: 'stdout' | 'stderr' | 'combined') => {
+    if (!runId) return
+    setDownloading(selected)
+    setDownloadError(false)
+    try {
+      await api.downloadLogs(runId, selected)
+    } catch {
+      setDownloadError(true)
+    } finally {
+      setDownloading(null)
+    }
+  }
 
   useEffect(() => {
     if (!failed) {
@@ -62,7 +80,39 @@ export function RunLogPanel({ chunks, failed = false }: Props) {
             </SegmentedControl.Button>
           ))}
         </SegmentedControl>
+        <Button
+          leadingVisual={DownloadIcon}
+          size="small"
+          loading={downloading === 'stdout'}
+          disabled={downloading !== null}
+          onClick={() => void download('stdout')}
+        >
+          下载标准输出
+        </Button>
+        <Button
+          leadingVisual={DownloadIcon}
+          size="small"
+          loading={downloading === 'stderr'}
+          disabled={downloading !== null}
+          onClick={() => void download('stderr')}
+        >
+          下载标准错误
+        </Button>
+        <Button
+          leadingVisual={DownloadIcon}
+          size="small"
+          loading={downloading === 'combined'}
+          disabled={downloading !== null}
+          onClick={() => void download('combined')}
+        >
+          下载完整日志
+        </Button>
       </div>
+      {downloadError ? (
+        <Banner variant="critical">
+          <Banner.Title>日志下载失败</Banner.Title>
+        </Banner>
+      ) : null}
       {active.truncated ? (
         <Banner variant="warning">
           <Banner.Title>日志内容不完整</Banner.Title>

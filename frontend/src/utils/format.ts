@@ -49,6 +49,11 @@ export function formatRelative(value: string | null | undefined): string {
   return then.format('YYYY-MM-DD')
 }
 
+export function formatDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  return dayjs(value).format('YYYY-MM-DD')
+}
+
 export function formatMemory(megabytes: number): string {
   return megabytes >= 1024 ? `${(megabytes / 1024).toFixed(0)} GB` : `${megabytes} MB`
 }

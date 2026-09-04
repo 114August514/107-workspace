@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, api } from '../../src/api/client'
 import type { Member, UserGroup } from '../../src/api/types'
 import { MemberPanel } from '../../src/components/workspace/MemberPanel'
+import { parseMemberImportFile } from '../../src/components/workspace/parseMemberImport'
 
 const ownerGroup: UserGroup = {
   id: 'ugrp_lab',
@@ -91,6 +92,28 @@ describe('MemberPanel governance', () => {
     expect(await screen.findByText('已向 dave 发送邀请')).toBeInTheDocument()
     expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'dave')
     expect(api.listMembers).toHaveBeenCalledTimes(2)
+  })
+
+  it('parses CSV usernames from a headered first column', async () => {
+    const file = new File(['username\neve\nfrank\n'], 'members.csv', { type: 'text/csv' })
+    await expect(parseMemberImportFile(file)).resolves.toEqual(['eve', 'frank'])
+  })
+
+  it('从 CSV 批量导入用户名并逐个发送邀请', async () => {
+    render(<MemberPanel userGroup={ownerGroup} />)
+    await screen.findByText('Alice')
+    fireEvent.click(screen.getByRole('button', { name: '邀请成员' }))
+
+    const file = new File(['username\neve\nfrank\n'], 'members.csv', { type: 'text/csv' })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+
+    expect(await screen.findByText(/将邀请 2 人/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '发送 2 个邀请' }))
+
+    expect(await screen.findByText('已向 2 人发送邀请')).toBeInTheDocument()
+    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'eve')
+    expect(api.inviteMember).toHaveBeenCalledWith('ugrp_lab', 'frank')
   })
 
   it('REQ-66-02 renders roles as static identity and projects target capabilities into actions', async () => {

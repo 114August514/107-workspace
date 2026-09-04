@@ -32,10 +32,11 @@ import { can, isTerminal } from '../api/types'
 import { useAsync, usePolling } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { RunStatusTag } from '../components/common/RunStatusTag'
-import { RunDiagnostics } from '../components/run/RunDiagnostics'
+import { AdjustedRerunModal } from '../components/run/AdjustedRerunModal'
 import { ArtifactPanel } from '../components/run/ArtifactPanel'
-import { RunLogPanel } from '../components/run/RunLogPanel'
+import { RunDiagnostics } from '../components/run/RunDiagnostics'
 import { RunSummary } from '../components/run/RunSummary'
+import { RunLogPanel } from '../components/run/RunLogPanel'
 import styles from '../components/run/run.module.css'
 
 const POLL_INTERVAL_MS = 2000
@@ -61,6 +62,7 @@ export function RunPage() {
   const location = useLocation()
   const [rerunKey, setRerunKey] = useState(newIdempotencyKey)
   const [rerunning, setRerunning] = useState(false)
+  const [adjustedRerunOpen, setAdjustedRerunOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -216,14 +218,23 @@ export function RunPage() {
                   ) : (
                     <>
                       {can(detail.data.run, 'run.submit') ? (
-                        <Button
-                          variant="default"
-                          leadingVisual={SyncIcon}
-                          loading={rerunning}
-                          onClick={() => void rerun()}
-                        >
-                          重新运行
-                        </Button>
+                        <>
+                          <Button
+                            variant="default"
+                            leadingVisual={SyncIcon}
+                            onClick={() => setAdjustedRerunOpen(true)}
+                          >
+                            调整后重跑
+                          </Button>
+                          <Button
+                            variant="default"
+                            leadingVisual={SyncIcon}
+                            loading={rerunning}
+                            onClick={() => void rerun()}
+                          >
+                            重新运行
+                          </Button>
+                        </>
                       ) : null}
                       <ActionMenu>
                         <ActionMenu.Anchor>
@@ -305,6 +316,7 @@ export function RunPage() {
                   >
                     <RunLogPanel
                       key={run.id}
+                      runId={run.id}
                       chunks={logs.data ?? []}
                       failed={run.status === 'failed'}
                     />
@@ -352,6 +364,17 @@ export function RunPage() {
             >
               取消会终止这次逻辑执行，但会保留 Run、运行快照以及已经产生的日志和运行产物。
             </ConfirmationDialog>
+          ) : null}
+          {adjustedRerunOpen && detail.data ? (
+            <AdjustedRerunModal
+              open
+              detail={detail.data}
+              onClose={() => setAdjustedRerunOpen(false)}
+              onSubmitted={(created) => {
+                setAdjustedRerunOpen(false)
+                navigate(`/projects/${created.project_id}/runs/${created.id}`)
+              }}
+            />
           ) : null}
         </div>
       ) : null}

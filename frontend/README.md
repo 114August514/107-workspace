@@ -27,13 +27,15 @@ src/
 │   ├── client.ts       基于 openapi-fetch 的类型安全调用
 │   └── useAsync.ts     加载与轮询钩子
 ├── components/
-│   ├── common/         AsyncSection、RunStatusTag 等跨页面复用组件
+│   ├── common/         AsyncState、RunStatusTag 等跨页面复用组件
 │   ├── layout/         AppShell、开发身份切换
-│   ├── workspace/      成员、变量与 Secret、资源权益、默认环境
+│   ├── usergroup/      User Group 分区（概览/Project/共享资源/运行环境/成员/设置）
+│   ├── workspace/      成员治理面板
+│   ├── activity/       活动列表（Primer）与动作文案
 │   ├── project/        文件浏览与编辑、版本历史
 │   ├── runconfig/      运行方案列表与表单
 │   └── run/            提交弹窗、Run 列表、事件时间线、日志、产物、复现快照
-├── pages/              HomePage / UserGroupPage / ProjectPage / RunPage
+├── pages/              HomePage / UserGroupPage / ProjectPage / RunPage / Environment
 └── utils/format.ts     展示格式化
 
 tests/

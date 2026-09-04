@@ -488,16 +488,21 @@ class Notification:
     target_type: TargetType | None = None
     target_id: str | None = None
     mandatory: bool = False
-    """不可关闭的重要通知（设计稿 §2.10 C）。
-
-    当前迁移实现还没有偏好设置，但标记要先带上——否则后续增加偏好时，
-    历史数据分不出哪些是当初就不允许屏蔽的。
-    """
+    """不可关闭的重要通知；偏好设置不会影响它的产生。"""
     read_at: datetime | None = None
 
     @property
     def is_read(self) -> bool:
         return self.read_at is not None
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationPreference:
+    """A user's opt-in state for one non-mandatory notification category."""
+
+    user_id: str
+    type: NotificationType
+    enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
