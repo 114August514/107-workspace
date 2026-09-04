@@ -3052,6 +3052,26 @@
         "title": "SecretIn",
         "type": "object"
       },
+      "SecretOut": {
+        "description": "Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "updated_at"
+        ],
+        "title": "SecretOut",
+        "type": "object"
+      },
       "SharedResourceDetailOut": {
         "properties": {
           "capabilities": {
@@ -3810,6 +3830,11 @@
             "title": "Name",
             "type": "string"
           },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -3817,7 +3842,8 @@
         },
         "required": [
           "name",
-          "value"
+          "value",
+          "updated_at"
         ],
         "title": "VariableOut",
         "type": "object"
@@ -9791,7 +9817,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List Project Secrets Api V1 Projects  Project Id  Secrets Get",
                   "type": "array"
@@ -14106,7 +14132,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List Group Secrets Api V1 User Groups  User Group Id  Secrets Get",
                   "type": "array"
@@ -14885,7 +14911,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List User Secrets Api V1 Users  User Id  Secrets Get",
                   "type": "array"

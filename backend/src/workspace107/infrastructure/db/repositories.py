@@ -345,11 +345,23 @@ class VariableRepositoryImpl:
             .order_by(t.VariableRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [Variable(scope=scope, name=r.name, value=r.value) for r in rows]
+        return [
+            Variable(
+                scope=scope,
+                name=r.name,
+                value=r.value,
+                updated_at=_required(r.updated_at),
+            )
+            for r in rows
+        ]
 
     async def get(self, scope: ConfigScope, name: str) -> Variable | None:
         row = await self._session.get(t.VariableRow, (scope.kind.value, scope.id, name))
-        return Variable(scope=scope, name=row.name, value=row.value) if row else None
+        if row is None:
+            return None
+        return Variable(
+            scope=scope, name=row.name, value=row.value, updated_at=_required(row.updated_at)
+        )
 
     async def upsert(self, variable: Variable) -> None:
         key = (variable.scope.kind.value, variable.scope.id, variable.name)
@@ -361,10 +373,12 @@ class VariableRepositoryImpl:
                     scope_id=variable.scope.id,
                     name=variable.name,
                     value=variable.value,
+                    updated_at=variable.updated_at or datetime.now(UTC),
                 )
             )
         else:
             row.value = variable.value
+            row.updated_at = variable.updated_at or datetime.now(UTC)
         await _flush(self._session)
 
     async def delete(self, scope: ConfigScope, name: str) -> None:

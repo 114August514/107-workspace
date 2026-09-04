@@ -51,6 +51,7 @@ import type {
   RunDetail,
   RunDraft,
   RunPage,
+  Secret,
   SharedResource,
   SharedResourceCreate,
   SharedResourceDetail,
@@ -62,6 +63,7 @@ import type {
   WorkingChange,
   WorkingChangeDetail,
   UserGroup,
+  Variable,
 } from './types'
 
 /** 后端统一的错误响应结构。 */
@@ -385,7 +387,7 @@ export const api = {
       name?: string
       description?: string
       environment_version_id?: string | null
-      default_run_configuration_id?: string
+      default_run_configuration_id?: string | null
     },
   ): Promise<Project> =>
     unwrap(
@@ -584,19 +586,58 @@ export const api = {
       }),
     ),
 
-  listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
+  listProjectVariables: async (projectId: string): Promise<Variable[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/variables', {
         params: { path: { project_id: projectId } },
       }),
     ),
 
-  listProjectSecrets: async (projectId: string): Promise<string[]> =>
+  listProjectSecrets: async (projectId: string): Promise<Secret[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/secrets', {
         params: { path: { project_id: projectId } },
       }),
     ),
+
+  putProjectVariable: async (
+    projectId: string,
+    payload: { name: string; value: string },
+  ): Promise<Variable> =>
+    unwrap(
+      await http.PUT('/api/v1/projects/{project_id}/variables', {
+        params: { path: { project_id: projectId } },
+        body: payload,
+      }),
+    ),
+
+  deleteProjectVariable: async (projectId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/projects/{project_id}/variables/{name}', {
+        params: { path: { project_id: projectId, name } },
+      }),
+    )
+  },
+
+  putProjectSecret: async (
+    projectId: string,
+    payload: { name: string; value: string },
+  ): Promise<void> => {
+    unwrap(
+      await http.PUT('/api/v1/projects/{project_id}/secrets', {
+        params: { path: { project_id: projectId } },
+        body: payload,
+      }),
+    )
+  },
+
+  deleteProjectSecret: async (projectId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/projects/{project_id}/secrets/{name}', {
+        params: { path: { project_id: projectId, name } },
+      }),
+    )
+  },
 
   // -- 运行方案 ----------------------------------------------------------
   listRunConfigurations: async (projectId: string): Promise<RunConfiguration[]> =>

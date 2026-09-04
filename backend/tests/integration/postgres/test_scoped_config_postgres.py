@@ -42,7 +42,9 @@ async def test_postgresql_scoped_config_structural_roundtrip() -> None:
             await connection.execute(
                 text(
                     "INSERT INTO variables VALUES "
-                    "('user','u','A','1'), ('user_group','g','A','2'), ('project','p','A','3')"
+                    "('user','u','A','1',CURRENT_TIMESTAMP), "
+                    "('user_group','g','A','2',CURRENT_TIMESTAMP), "
+                    "('project','p','A','3',CURRENT_TIMESTAMP)"
                 )
             )
             await connection.execute(

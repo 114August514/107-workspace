@@ -29,6 +29,8 @@ export function RunConfigurationPanel({
 }: Props) {
   const canManage = can(access, 'run_configuration.manage')
   const canSubmit = can(access, 'run.submit')
+  // 默认运行方案属于 Project 设置，跟运行方案的编辑权限分开。
+  const canUpdateProject = can(access, 'project.update')
   const configurations = useAsync<RunConfiguration[]>(
     () => api.listRunConfigurations(projectId),
     [projectId],
@@ -51,6 +53,26 @@ export function RunConfigurationPanel({
       await api.deleteRunConfiguration(configuration.id)
       message.success('已删除运行方案')
       configurations.reload()
+      onChanged()
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const setDefault = async (configuration: RunConfiguration) => {
+    try {
+      await api.updateProject(projectId, { default_run_configuration_id: configuration.id })
+      message.success(`已把「${configuration.name}」设为默认运行方案`)
+      onChanged()
+    } catch (error) {
+      message.error((error as Error).message)
+    }
+  }
+
+  const clearDefault = async (configuration: RunConfiguration) => {
+    try {
+      await api.updateProject(projectId, { default_run_configuration_id: null })
+      message.success(`已取消「${configuration.name}」的默认运行方案`)
       onChanged()
     } catch (error) {
       message.error((error as Error).message)
@@ -130,6 +152,20 @@ export function RunConfigurationPanel({
         ),
     },
     {
+      title: '算力方案',
+      key: 'compute',
+      width: 150,
+      render: (_, configuration) => {
+        const plan = (plans.data ?? []).find((item) => item.id === configuration.compute_plan_id)
+        if (plan) return <Typography.Text>{plan.name}</Typography.Text>
+        if (configuration.compute_request) return <Typography.Text code>自定义资源</Typography.Text>
+        if (configuration.compute_plan_id) {
+          return <Typography.Text code>{configuration.compute_plan_id}</Typography.Text>
+        }
+        return '—'
+      },
+    },
+    {
       title: '环境变量',
       key: 'env',
       width: 120,
@@ -144,7 +180,7 @@ export function RunConfigurationPanel({
     {
       title: '操作',
       key: 'actions',
-      width: 210,
+      width: 280,
       render: (_, configuration) => (
         <Space size={4}>
           {canSubmit && (
@@ -169,6 +205,16 @@ export function RunConfigurationPanel({
               编辑
             </Button>
           )}
+          {canUpdateProject &&
+            (configuration.id === defaultConfigurationId ? (
+              <Button type="link" size="small" onClick={() => clearDefault(configuration)}>
+                取消默认
+              </Button>
+            ) : (
+              <Button type="link" size="small" onClick={() => setDefault(configuration)}>
+                设为默认
+              </Button>
+            ))}
           {canManage && (
             <Popconfirm
               title={`删除「${configuration.name}」？`}

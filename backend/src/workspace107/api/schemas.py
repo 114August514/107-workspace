@@ -109,6 +109,7 @@ class InvitationResponseIn(Model):
 class VariableOut(Model):
     name: str
     value: str
+    updated_at: datetime
 
 
 class VariableIn(Model):
@@ -119,6 +120,13 @@ class VariableIn(Model):
 class SecretIn(Model):
     name: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     value: str = Field(min_length=1)
+
+
+class SecretOut(Model):
+    """Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。"""
+
+    name: str
+    updated_at: datetime
 
 
 class EntitlementOut(Model):
