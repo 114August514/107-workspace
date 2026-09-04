@@ -1,4 +1,4 @@
-import { TriangleDownIcon } from '@primer/octicons-react'
+import { HistoryIcon, PencilIcon, TriangleDownIcon, VersionsIcon } from '@primer/octicons-react'
 import {
   Button as PrimerButton,
   Dialog,
@@ -175,7 +175,9 @@ function FilesContextControls({
   return (
     <div className={styles.fileContextControls} aria-label="Files context">
       {mode === 'working' ? (
-        <span className={styles.refControl}>Working State</span>
+        <span className={styles.refControl}>
+          <PencilIcon size={16} /> Working State
+        </span>
       ) : (
         <SelectPanel
           open={open}
@@ -183,6 +185,7 @@ function FilesContextControls({
           renderAnchor={({ children: _children, ...anchorProps }) => (
             <PrimerButton
               {...anchorProps}
+              leadingVisual={VersionsIcon}
               trailingVisual={TriangleDownIcon}
               aria-label="选择 Project Version"
               aria-haspopup="dialog"
@@ -231,7 +234,7 @@ function FilesContextControls({
       )}
       {mode === 'version' && (
         <Link to={`/projects/${projectId}/files/working`} className={styles.contextLink}>
-          Working State
+          <PencilIcon size={16} /> Working State
         </Link>
       )}
       {mode === 'working' && (
@@ -247,7 +250,7 @@ function FilesContextControls({
         </>
       )}
       <Link to={projectViewHref(projectId, 'files', 'versions')} className={styles.contextLink}>
-        Versions {versions.data?.total ?? '—'}
+        <HistoryIcon size={16} /> Versions {versions.data?.total ?? '—'}
       </Link>
       {mode === 'working' && saveOpen && (
         <SaveVersionDialog

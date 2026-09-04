@@ -21,14 +21,12 @@
 
 .refControl,
 .contextLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-4);
   color: var(--fgColor-accent);
   font-weight: var(--base-text-weight-semibold);
   text-decoration: none;
-}
-
-.refControl:hover,
-.contextLink:hover {
-  text-decoration: underline;
 }
 
 .aboutRail {
