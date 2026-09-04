@@ -28,17 +28,9 @@ export function membershipStatusLabel(status: MembershipStatus): string {
 }
 
 export const userGroupGovernanceCopy = {
-  page: {
-    loading: '正在加载 User Group…',
-    fallbackDescription: '这个 User Group 还没有填写说明。',
-    kind: 'User Group',
-    breadcrumbLabel: '面包屑',
-    identityLabel: 'User Group 身份',
-    home: '首页',
-    membersTitle: '成员',
-    membersDescription: '管理成员及其在这个 User Group 中的权限。',
-  },
   members: {
+    title: '成员',
+    description: '管理成员及其在这个 User Group 中的权限。',
     listLabel: '成员列表',
     loading: '正在加载成员…',
     summary: (count: number) => `${count} 位成员`,
@@ -55,6 +47,15 @@ export const userGroupGovernanceCopy = {
     cancel: '取消',
     submit: '发送邀请',
     success: (username: string) => `已向 ${username} 发送邀请`,
+    successMany: (count: number) => `已向 ${count} 人发送邀请`,
+    partial: (ok: number, fail: number) => `已向 ${ok} 人发送邀请，${fail} 人失败。`,
+    importLabel: '从文件导入',
+    importCaption:
+      '每行一个用户名。首行可以是「用户名」或 username。支持 CSV 与 Excel（.csv / .xlsx）。',
+    importEmpty: '文件里没有读到用户名',
+    importError: '无法读取这个文件，请改用 CSV 或 Excel。',
+    importCount: (count: number) => `将邀请 ${count} 人：`,
+    submitMany: (count: number) => `发送 ${count} 个邀请`,
     failureTitle: '邀请发送失败。',
     failureNext: '请确认用户名后重试。',
   },

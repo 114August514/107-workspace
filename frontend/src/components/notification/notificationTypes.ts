@@ -24,6 +24,9 @@ const NOTIFICATION_STYLE: Record<NotificationType, Style> = {
   run_succeeded: { variant: 'success', label: 'Run 成功' },
   run_failed: { variant: 'danger', label: 'Run 失败' },
   run_submit_failed: { variant: 'danger', label: '提交失败' },
+  environment_unavailable: { variant: 'danger', label: 'Environment 不可用' },
+  shared_resource_unavailable: { variant: 'danger', label: 'Shared Resource 不可用' },
+  platform_incident: { variant: 'danger', label: '平台事件' },
 }
 
 export function notificationLabel(type: NotificationType): string {

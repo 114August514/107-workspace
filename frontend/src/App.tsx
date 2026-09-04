@@ -6,9 +6,16 @@ import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router-do
 import { api, getCurrentUser, setCurrentUser } from './api/client'
 import type { Home, Project } from './api/types'
 import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
+import { EnvironmentsSection } from './components/usergroup/EnvironmentsSection'
+import { MembersSection } from './components/usergroup/MembersSection'
+import { OverviewSection } from './components/usergroup/OverviewSection'
+import { ProjectsSection } from './components/usergroup/ProjectsSection'
+import { SettingsSection } from './components/usergroup/SettingsSection'
+import { SharedResourcesSection } from './components/usergroup/SharedResourcesSection'
 import { AppShell } from './components/layout/AppShell'
 import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
+import { PersonalExecutionContextPage } from './pages/PersonalExecutionContextPage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
@@ -123,7 +130,22 @@ export function ProductRoutes({
   return (
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
-      <Route path="/user-groups/:userGroupId" element={<UserGroupPage key={username} />} />
+      <Route
+        path="/execution-context"
+        element={<PersonalExecutionContextPage username={username} home={home} />}
+      />
+      <Route
+        path="/user-groups/:userGroupId"
+        element={<UserGroupPage key={username} onMembershipChanged={home.reload} />}
+      >
+        <Route index element={<OverviewSection />} />
+        <Route path="members" element={<MembersSection />} />
+        <Route path="projects" element={<ProjectsSection />} />
+        <Route path="shared-resources" element={<SharedResourcesSection />} />
+        <Route path="environments" element={<EnvironmentsSection />} />
+        <Route path="settings" element={<SettingsSection />} />
+        <Route path="*" element={<Navigate to=".." replace />} />
+      </Route>
       <Route path="/environments" element={<EnvironmentListPage key={username} />} />
       <Route path="/environments/:environmentId" element={<EnvironmentPage key={username} />} />
       <Route

@@ -98,6 +98,56 @@
         "title": "ActivityOut",
         "type": "object"
       },
+      "AdjustedRerunIn": {
+        "description": "从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。",
+        "properties": {
+          "command": {
+            "minLength": 1,
+            "title": "Command",
+            "type": "string"
+          },
+          "compute_request": {
+            "$ref": "#/components/schemas/ComputeRequestModel"
+          },
+          "environment_version_id": {
+            "minLength": 1,
+            "title": "Environment Version Id",
+            "type": "string"
+          },
+          "input_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/InputBindingModel"
+            },
+            "title": "Input Bindings",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "project_version_id": {
+            "minLength": 1,
+            "title": "Project Version Id",
+            "type": "string"
+          },
+          "working_directory": {
+            "default": ".",
+            "title": "Working Directory",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "project_version_id",
+          "environment_version_id",
+          "command",
+          "compute_request"
+        ],
+        "title": "AdjustedRerunIn",
+        "type": "object"
+      },
       "ArtifactEntryOut": {
         "properties": {
           "path": {
@@ -584,17 +634,33 @@
             "title": "Id",
             "type": "string"
           },
-          "max_concurrent_runs": {
-            "title": "Max Concurrent Runs",
-            "type": "integer"
+          "status": {
+            "enum": [
+              "active",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
           }
         },
         "required": [
           "id",
           "compute_plan_id",
           "compute_plan_name",
-          "max_concurrent_runs",
-          "expires_at"
+          "expires_at",
+          "status",
+          "status_reason"
         ],
         "title": "EntitlementOut",
         "type": "object"
@@ -1470,7 +1536,7 @@
             "type": "string"
           },
           "mandatory": {
-            "description": "不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。",
+            "description": "不可关闭的重要通知；通知偏好接口会将其标记为 mandatory。",
             "title": "Mandatory",
             "type": "boolean"
           },
@@ -1529,6 +1595,41 @@
         "title": "NotificationOut",
         "type": "object"
       },
+      "NotificationPreferenceOut": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "mandatory": {
+            "title": "Mandatory",
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/NotificationType"
+          }
+        },
+        "required": [
+          "type",
+          "enabled",
+          "mandatory"
+        ],
+        "title": "NotificationPreferenceOut",
+        "type": "object"
+      },
+      "NotificationPreferenceUpdateIn": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "NotificationPreferenceUpdateIn",
+        "type": "object"
+      },
       "NotificationType": {
         "description": "通知的种类。前端据此选图标，V1 加偏好设置时也按它分组。\n\n和 :class:`ActivityAction` 刻意分开：**不是一一对应的**。\n一次操作可能产生一条活动和零条通知（比如自己改自己的空间设置），\n也可能产生一条活动和多条通知。硬凑成一个枚举会逼着两边互相迁就。",
         "enum": [
@@ -1538,7 +1639,10 @@
           "ownership_received",
           "run_succeeded",
           "run_failed",
-          "run_submit_failed"
+          "run_submit_failed",
+          "environment_unavailable",
+          "shared_resource_unavailable",
+          "platform_incident"
         ],
         "title": "NotificationType",
         "type": "string"
@@ -1862,6 +1966,16 @@
             "description": "环境变量名 -> Secret 名称。永远只有名称，没有值。",
             "title": "Secret References",
             "type": "object"
+          },
+          "slurm_projection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlurmProjectionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1871,6 +1985,7 @@
           "environment_version",
           "compute_plan_id",
           "compute_request",
+          "slurm_projection",
           "resolved_environment_variables",
           "secret_references"
         ],
@@ -2536,7 +2651,7 @@
         "type": "object"
       },
       "RunDraftIn": {
-        "description": "一次提交意图。\n\n除 run_configuration_id 外都可以不传——不传就用运行方案里的值。\n这些字段用 ``| None`` 而不是空字符串默认值，是为了让契约如实表达\n「可以不传」，生成的前端类型才不会要求调用方硬塞一个空串。",
+        "description": "一次提交意图。",
         "properties": {
           "command_override": {
             "anyOf": [
@@ -2559,6 +2674,31 @@
               }
             ]
           },
+          "environment_version_id_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment Version Id Override"
+          },
+          "input_bindings_override": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/InputBindingModel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Bindings Override"
+          },
           "name": {
             "anyOf": [
               {
@@ -2579,6 +2719,7 @@
                 "type": "null"
               }
             ],
+            "description": "None 表示使用 Project 的最新版本。",
             "title": "Project Version Id"
           },
           "run_configuration_id": {
@@ -2701,7 +2842,7 @@
             "type": "string"
           },
           "initiated_by_user_id": {
-            "description": "发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。",
+            "description": "发起本次 Run 的 User（GR-307）：执行身份与通知接收方。",
             "title": "Initiated By User Id",
             "type": "string"
           },
@@ -2994,6 +3135,26 @@
           "value"
         ],
         "title": "SecretIn",
+        "type": "object"
+      },
+      "SecretOut": {
+        "description": "Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "updated_at"
+        ],
+        "title": "SecretOut",
         "type": "object"
       },
       "SharedResourceDetailOut": {
@@ -3474,6 +3635,37 @@
         "title": "SharedResourceVersionOut",
         "type": "object"
       },
+      "SlurmProjectionAvailability": {
+        "enum": [
+          "available",
+          "unavailable",
+          "unknown"
+        ],
+        "title": "SlurmProjectionAvailability",
+        "type": "string"
+      },
+      "SlurmProjectionOut": {
+        "properties": {
+          "availability": {
+            "$ref": "#/components/schemas/SlurmProjectionAvailability"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "availability",
+          "reason",
+          "detail"
+        ],
+        "title": "SlurmProjectionOut",
+        "type": "object"
+      },
       "SyncOut": {
         "properties": {
           "changed": {
@@ -3724,6 +3916,11 @@
             "title": "Name",
             "type": "string"
           },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -3731,7 +3928,8 @@
         },
         "required": [
           "name",
-          "value"
+          "value",
+          "updated_at"
         ],
         "title": "VariableOut",
         "type": "object"
@@ -3832,7 +4030,7 @@
   "paths": {
     "/api/v1/artifacts/{artifact_id}/download": {
       "get": {
-        "description": "仅对可访问所属 Run 的用户，将 ``path`` 指定的已收集文件作为二进制附件返回。",
+        "description": "下载单文件，或省略 path 下载保持原结构的完整 ZIP 归档。",
         "operationId": "download_artifact_file_api_v1_artifacts__artifact_id__download_get",
         "parameters": [
           {
@@ -3847,11 +4045,18 @@
           {
             "in": "query",
             "name": "path",
-            "required": true,
+            "required": false,
             "schema": {
-              "minLength": 1,
-              "title": "Path",
-              "type": "string"
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Path"
             }
           },
           {
@@ -3881,7 +4086,7 @@
                 }
               }
             },
-            "description": "产物文件内容"
+            "description": "产物文件或 ZIP 归档"
           },
           "400": {
             "content": {
@@ -3944,7 +4149,7 @@
             "description": "底层调度系统返回错误"
           }
         },
-        "summary": "下载 Artifact 文件",
+        "summary": "下载 Artifact 文件或完整归档",
         "tags": [
           "run"
         ]
@@ -5966,6 +6171,226 @@
         ]
       }
     },
+    "/api/v1/notifications/preferences": {
+      "get": {
+        "operationId": "list_notification_preferences_api_v1_notifications_preferences_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationPreferenceOut"
+                  },
+                  "title": "Response List Notification Preferences Api V1 Notifications Preferences Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "通知偏好",
+        "tags": [
+          "notification"
+        ]
+      }
+    },
+    "/api/v1/notifications/preferences/{notification_type}": {
+      "put": {
+        "operationId": "update_notification_preference_api_v1_notifications_preferences__notification_type__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NotificationType"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferenceUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferenceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "更新通知偏好",
+        "tags": [
+          "notification"
+        ]
+      }
+    },
     "/api/v1/notifications/read-all": {
       "post": {
         "description": "将当前用户的全部未读通知标记为已读，并返回归零后的未读数。",
@@ -6263,6 +6688,107 @@
           }
         },
         "summary": "将通知标记为已读",
+        "tags": [
+          "notification"
+        ]
+      }
+    },
+    "/api/v1/notifications/{notification_id}/unread": {
+      "post": {
+        "operationId": "mark_unread_api_v1_notifications__notification_id__unread_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "title": "Notification Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "将通知标记为未读",
         "tags": [
           "notification"
         ]
@@ -9596,7 +10122,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List Project Secrets Api V1 Projects  Project Id  Secrets Get",
                   "type": "array"
@@ -11206,9 +11732,130 @@
         ]
       }
     },
+    "/api/v1/runs/{run_id}/logs/download": {
+      "get": {
+        "description": "下载完整 stdout、stderr 或合并日志，不受页面尾部预览上限影响。",
+        "operationId": "download_logs_api_v1_runs__run_id__logs_download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "required": false,
+            "schema": {
+              "default": "combined",
+              "pattern": "^(stdout|stderr|combined)$",
+              "title": "Stream",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "完整 Run 日志"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "下载 Run 日志",
+        "tags": [
+          "run"
+        ]
+      }
+    },
     "/api/v1/runs/{run_id}/rerun": {
       "post": {
-        "description": "需要提交 Run 权限；基于来源快照创建新的 Run 与不可变快照。\n\n重跑不会修改或重启原 Run，并会按当前权限和资源权益重新校验。带\n``Idempotency-Key`` 时，同一个键的重复请求不会产生第二次计算。",
+        "description": "基于历史 Snapshot 精确重跑，来源 Run 不变。",
         "operationId": "rerun_api_v1_runs__run_id__rerun_post",
         "parameters": [
           {
@@ -11262,7 +11909,7 @@
                 }
               }
             },
-            "description": "幂等重放，返回上一次重跑的 Run"
+            "description": "幂等重放"
           },
           "201": {
             "content": {
@@ -11336,6 +11983,151 @@
           }
         },
         "summary": "重新运行 Run",
+        "tags": [
+          "run"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/rerun/adjusted": {
+      "post": {
+        "description": "以历史 Snapshot 为初始值，调整后创建新的 Run；来源 Run 不变。",
+        "operationId": "adjusted_rerun_api_v1_runs__run_id__rerun_adjusted_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustedRerunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "幂等重放"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "调整后重新运行 Run",
         "tags": [
           "run"
         ]
@@ -13864,7 +14656,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List Group Secrets Api V1 User Groups  User Group Id  Secrets Get",
                   "type": "array"
@@ -14643,7 +15435,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List User Secrets Api V1 Users  User Id  Secrets Get",
                   "type": "array"

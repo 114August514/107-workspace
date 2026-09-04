@@ -43,6 +43,7 @@ export type Member = Schemas['MemberOut']
 export type Invitation = Schemas['InvitationOut']
 export type DeletionImpact = Schemas['DeletionImpactOut']
 export type Variable = Schemas['VariableOut']
+export type Secret = Schemas['SecretOut']
 export type Entitlement = Schemas['EntitlementOut']
 
 // -- Project ----------------------------------------------------------------
@@ -82,6 +83,7 @@ export type SharedResourceVersionFile = Schemas['SharedResourceVersionFileOut']
 export type SharedResourceCreate = Schemas['CanonicalSharedResourceCreateIn']
 export type SharedResourceUpdate = Schemas['SharedResourceUpdateIn']
 export type UseGrantSummary = Schemas['UseGrantSummaryOut']
+export type Grant = Schemas['GrantOut']
 export type SharedResourceUseQualification = SharedResource['use_qualifications'][number]
 
 // -- 运行方案 ---------------------------------------------------------------
@@ -125,6 +127,8 @@ export type ForkSource = Schemas['ForkSourceOut']
 export type Notification = Schemas['NotificationOut']
 export type NotificationPage = Schemas['PageOut_NotificationOut_']
 export type NotificationType = Schemas['NotificationType']
+
+export type NotificationPreference = Schemas['NotificationPreferenceOut']
 export type ApiErrorBody = Schemas['ErrorOut']
 
 // -- 权限 -------------------------------------------------------------------

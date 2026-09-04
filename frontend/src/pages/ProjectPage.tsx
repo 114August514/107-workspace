@@ -1,5 +1,6 @@
-import { Alert, Button, Card, Modal, Tabs, Tag } from 'antd'
+import { Alert, Button, Card, Modal, Tabs, Tag, Typography } from 'antd'
 import { BranchesOutlined } from '@ant-design/icons'
+
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
@@ -22,6 +23,7 @@ import { ListCard } from '../components/layout/ListCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { FileBrowser } from '../components/project/FileBrowser'
+import { ProjectSettingsPanel } from '../components/project/ProjectSettingsPanel'
 import { VersionPanel } from '../components/project/VersionPanel'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
 import { RunTable } from '../components/run/RunTable'
@@ -35,6 +37,7 @@ const PAGE_TITLES: Record<string, string> = {
   configurations: 'Run configurations',
   runs: 'Run history',
   activities: 'Project activity',
+  settings: 'Settings',
 }
 
 /**
@@ -49,7 +52,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
   const requestedTab = searchParams.get('tab')
   const activeTab =
     requestedTab &&
-    ['files', 'versions', 'configurations', 'runs', 'activities'].includes(requestedTab)
+    ['files', 'versions', 'configurations', 'runs', 'activities', 'settings'].includes(requestedTab)
       ? requestedTab
       : 'files'
   const [token, setToken] = useState(0)
@@ -72,6 +75,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
     () => api.listProjectActivities(projectId, { page_size: 20 }),
     [projectId, token],
   )
+  const canViewConfig = can(project.data, 'config.view')
 
   return (
     <Stack gap="large">
@@ -174,6 +178,25 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
                   emptyText="这个 Project 还没有活动记录"
                 />
               </ListCard>
+            ),
+          },
+          {
+            key: 'settings',
+            label: '⑥ 设置',
+            children: (
+              <Card>
+                {canViewConfig ? (
+                  <ProjectSettingsPanel
+                    projectId={projectId}
+                    access={project.data}
+                    onChanged={bump}
+                  />
+                ) : project.data ? (
+                  <Typography.Text type="secondary">
+                    你没有查看这个 Project 配置的权限。
+                  </Typography.Text>
+                ) : null}
+              </Card>
             ),
           },
         ]}

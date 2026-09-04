@@ -14,7 +14,7 @@ from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
 from ..config_scope import ConfigScope
-from ..enums import EnvironmentAvailability
+from ..enums import EnvironmentAvailability, NotificationType
 from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
@@ -26,6 +26,7 @@ from ..models import (
     IdempotencyRecord,
     Membership,
     Notification,
+    NotificationPreference,
     Project,
     ProjectFile,
     ProjectVersion,
@@ -135,6 +136,8 @@ class ProjectRepository(Protocol):
         """列出用户可发现的 Project，可按 Owner 与名称过滤。"""
         ...
 
+    async def list_using_environment_version(self, version_id: str) -> list[Project]: ...
+
     async def name_exists(self, owner: OwnerReference, name: str) -> bool: ...
 
 
@@ -217,15 +220,6 @@ class EntitlementRepository(Protocol):
     ) -> ResourceEntitlement | None: ...
     async def add(self, entitlement: ResourceEntitlement) -> None: ...
 
-    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
-        """取权益并在当前事务内独占它，直到事务结束。
-
-        用于把「数一数还剩几个并发名额，然后创建 Run」这一段串行化。
-        不加锁的话两个请求会同时读到「还没到上限」，然后都创建成功——
-        并发上限就形同虚设了。
-        """
-        ...
-
 
 class RunConfigurationRepository(Protocol):
     async def add(self, configuration: RunConfiguration) -> None: ...
@@ -255,8 +249,6 @@ class RunRepository(Protocol):
     async def claim_terminal(self, run: Run) -> bool:
         """条件更新把 Run 推进到终态。抢到返回 True，别人已推进过返回 False。"""
         ...
-
-    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int: ...
 
 
 class IdempotencyRepository(Protocol):
@@ -302,7 +294,13 @@ class NotificationRepository(Protocol):
         """标记已读。返回 False 表示这条通知不属于这个人或不存在。"""
         ...
 
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool: ...
     async def mark_all_read(self, user_id: str, at: datetime) -> int: ...
+    async def is_enabled(self, user_id: str, type: NotificationType) -> bool: ...
+    async def list_preferences(self, user_id: str) -> list[NotificationPreference]: ...
+    async def set_preference(
+        self, user_id: str, type: NotificationType, enabled: bool
+    ) -> NotificationPreference: ...
 
 
 class ForkRelationRepository(Protocol):

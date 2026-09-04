@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -13,7 +14,14 @@ from tests.helpers import (
     use_default_environment,
     wait_for_run,
 )
+from workspace107.application.run_service import RunDraft
+from workspace107.domain import ids
 from workspace107.domain.errors import SchedulerError
+from workspace107.infrastructure.db.tables import (
+    SharedResourceRow,
+    SharedResourceVersionFileRow,
+    SharedResourceVersionRow,
+)
 from workspace107.infrastructure.scheduler import MockScheduler
 
 
@@ -94,6 +102,13 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
     )
     assert run.status_code == 201
     detail = await wait_for_run(client, run.json()["id"])
+    notifications = await client.get("/api/v1/notifications")
+    assert notifications.status_code == 200
+    assert any(
+        item["type"] == "run_succeeded" and item["target_id"] == run.json()["id"]
+        for item in notifications.json()["items"]
+    )
+
     snapshot = detail["snapshot"]
     assert snapshot["environment_variables"] == {
         "LEVEL": "project-level",
@@ -164,7 +179,7 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
 
 
 @pytest.mark.asyncio
-async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> None:
+async def test_rerun_rechecks_plan_limits(client, session) -> None:
     await client.get("/api/v1/me")
     _, env_version_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="rerun-guards")
@@ -192,22 +207,6 @@ async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> No
     assert run.status_code == 201
     await wait_for_run(client, run.json()["id"])
     before = (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"]
-    await session.execute(
-        text(
-            "UPDATE resource_entitlements SET max_concurrent_runs=1 "
-            "WHERE user_id=(SELECT id FROM users WHERE username='student')"
-        )
-    )
-    await session.execute(
-        text("UPDATE runs SET status='running' WHERE id=:id"), {"id": run.json()["id"]}
-    )
-    await session.commit()
-    blocked = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
-    assert blocked.status_code == 422
-    assert (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"] == before
-    await session.execute(
-        text("UPDATE runs SET status='succeeded' WHERE id=:id"), {"id": run.json()["id"]}
-    )
     await session.execute(text("UPDATE compute_plans SET max_cpus=1 WHERE id='plan_cpu_quick'"))
     await session.commit()
     blocked_plan = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
@@ -256,3 +255,110 @@ async def test_scheduler_submit_failure_persists_run_and_notification(
     notification = next(item for item in items if item["type"] == "run_submit_failed")
     assert notification["target_type"] == "run"
     assert notification["target_id"] == run["id"]
+    incident = next(item for item in items if item["type"] == "platform_incident")
+    assert incident["mandatory"] is True
+    assert incident["target_type"] is None
+
+
+@pytest.mark.asyncio
+async def test_missing_shared_resource_during_submission_notifies_failed_binding_only(
+    client, session, services
+) -> None:
+    alice = await client.get("/api/v1/me", headers={"X-User": "alice"})
+    alice.raise_for_status()
+    alice_id = alice.json()["user"]["id"]
+    group_id, env_version_id = await use_default_environment(
+        session, client, headers={"X-User": "alice"}
+    )
+    project = await create_project_with_version(
+        client, name="missing-resource", headers={"X-User": "alice"}
+    )
+    await grant_test_entitlement(session, "alice")
+
+    resource_id = ids.new_id(ids.SHARED_RESOURCE)
+    healthy_version_id = ids.new_id(ids.SHARED_RESOURCE_VERSION)
+    missing_version_id = ids.new_id(ids.SHARED_RESOURCE_VERSION)
+    now = datetime.now(UTC)
+    session.add(
+        SharedResourceRow(
+            id=resource_id,
+            name="mixed resource",
+            description="",
+            owner_user_group_id=group_id,
+            created_at=now,
+        )
+    )
+    await session.flush()
+    session.add_all(
+        [
+            SharedResourceVersionRow(
+                id=healthy_version_id,
+                shared_resource_id=resource_id,
+                sequence=1,
+                description="healthy",
+                manifest_hash="healthy-manifest",
+                validation_summary="valid",
+                created_by=alice_id,
+                created_at=now,
+            ),
+            SharedResourceVersionRow(
+                id=missing_version_id,
+                shared_resource_id=resource_id,
+                sequence=2,
+                description="missing",
+                manifest_hash="missing-manifest",
+                validation_summary="valid",
+                created_by=alice_id,
+                created_at=now,
+            ),
+        ]
+    )
+    await session.flush()
+    session.add(
+        SharedResourceVersionFileRow(
+            version_id=missing_version_id,
+            path="missing.txt",
+            size=1,
+            content_hash="missing-content-hash",
+        )
+    )
+    await session.commit()
+
+    configuration = await client.post(
+        f"/api/v1/projects/{project['id']}/run-configurations",
+        json={
+            "name": "mixed resource",
+            "command": "echo ok",
+            "compute_plan_id": "plan_cpu_quick",
+            "environment_version_id": env_version_id,
+            "input_bindings": [
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": healthy_version_id,
+                    "access_path": "/inputs/healthy",
+                },
+                {
+                    "source_type": "shared_resource_version",
+                    "source_id": missing_version_id,
+                    "access_path": "/inputs/missing",
+                },
+            ],
+        },
+        headers={"X-User": "alice"},
+    )
+    assert configuration.status_code == 201, configuration.text
+
+    submission = await services.runs.create(
+        alice_id,
+        project["id"],
+        RunDraft(run_configuration_id=configuration.json()["id"]),
+    )
+    await session.commit()
+
+    assert submission.run.status.value == "submit_failed"
+    items = (await client.get("/api/v1/notifications", headers={"X-User": "alice"})).json()["items"]
+    unavailable = [item for item in items if item["type"] == "shared_resource_unavailable"]
+    assert len(unavailable) == 1
+    assert missing_version_id in unavailable[0]["title"]
+    assert healthy_version_id not in unavailable[0]["title"]
+    assert all(item["type"] != "platform_incident" for item in items)

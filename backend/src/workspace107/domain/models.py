@@ -96,6 +96,7 @@ class Variable:
     scope: ConfigScope
     name: str
     value: str
+    updated_at: datetime | None = None
 
 
 @dataclass(slots=True)
@@ -347,7 +348,7 @@ class Run:
     project_id: str
     snapshot_id: str
     compute_plan_id: str
-    """本次运行占用的算力方案。并发额度按「Initiated By User × 方案」计算（GR-307）。"""
+    """创建 Run 时固定的 Compute Plan identity，用于历史展示与重跑 preflight。"""
     project_version_id: str
     """本次运行基于的 Project 版本。冗余自快照，用于 Run History 展示。"""
     project_version_label: str
@@ -362,7 +363,7 @@ class Run:
     exit_code: int | None = None
     failure_reason: str = ""
     initiated_by_user_id: str = ""
-    """发起本次 Run 的 User（GR-307）。执行身份、并发额度、通知接收方都以它为准。"""
+    """发起本次 Run 的 User（GR-307）。执行身份和通知接收方都以它为准。"""
     created_at: datetime | None = None
     submitted_at: datetime | None = None
     started_at: datetime | None = None
@@ -488,16 +489,21 @@ class Notification:
     target_type: TargetType | None = None
     target_id: str | None = None
     mandatory: bool = False
-    """不可关闭的重要通知（设计稿 §2.10 C）。
-
-    当前迁移实现还没有偏好设置，但标记要先带上——否则后续增加偏好时，
-    历史数据分不出哪些是当初就不允许屏蔽的。
-    """
+    """不可关闭的重要通知；偏好设置不会影响它的产生。"""
     read_at: datetime | None = None
 
     @property
     def is_read(self) -> bool:
         return self.read_at is not None
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationPreference:
+    """A user's opt-in state for one non-mandatory notification category."""
+
+    user_id: str
+    type: NotificationType
+    enabled: bool
 
 
 @dataclass(frozen=True, slots=True)

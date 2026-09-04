@@ -334,6 +334,15 @@ async def test_validated_sif_run_resolves_real_cas_path_before_scheduler_submiss
     assert refreshed_body["availability"] == "unavailable"
     assert refreshed_body["definition"] == frozen_definition
     assert refreshed_body["validation_evidence"] == frozen_evidence
+    notifications = await client.get("/api/v1/notifications", headers=ALICE)
+    assert notifications.status_code == 200
+    environment_notice = next(
+        item
+        for item in notifications.json()["items"]
+        if item["type"] == "environment_unavailable" and item["target_id"] == project_id
+    )
+    assert environment_notice["mandatory"] is True
+
     preflight = await client.post(
         f"/api/v1/projects/{project_id}/runs/preflight",
         json={"run_configuration_id": configuration.json()["id"]},

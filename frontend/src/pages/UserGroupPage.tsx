@@ -1,81 +1,84 @@
-import { Button, Dialog, Banner, Label, Link, Stack, Text } from '@primer/react'
-import { HomeIcon, OrganizationIcon } from '@primer/octicons-react'
+import { OrganizationIcon } from '@primer/octicons-react'
+import { Banner, Button, Dialog, Label, Stack, Text } from '@primer/react'
 import { useState } from 'react'
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import { Outlet, matchPath, useLocation, useNavigate } from 'react-router-dom'
 
 import { api } from '../api/client'
 import { toAsyncError } from '../api/errors'
 import { can, type DeletionImpact, type UserGroup } from '../api/types'
 import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
-import { MemberPanel } from '../components/workspace/MemberPanel'
+import { userGroupGovernanceCopy as governanceCopy } from '../components/workspace/memberCopy'
+import { useCurrentUserGroup } from '../components/usergroup/userGroupContext'
 import {
-  membershipRoleLabel,
-  userGroupGovernanceCopy as copy,
-} from '../components/workspace/memberCopy'
+  userGroupPageCopy as pageCopy,
+  userGroupRoleLabel,
+} from '../components/usergroup/userGroupCopy'
 import styles from './UserGroupPage.module.css'
 
-/** User Group identity and Membership governance only. */
-export function UserGroupPage() {
-  const { userGroupId = '' } = useParams()
+export interface UserGroupOutletContext {
+  userGroup: UserGroup
+  reload: () => void
+  onMembershipChanged?: () => void
+}
+
+export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: () => void }) {
+  const group = useCurrentUserGroup()
+  const { pathname } = useLocation()
   const navigate = useNavigate()
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const userGroup = useAsync<UserGroup>(() => api.getUserGroup(userGroupId), [userGroupId])
+  const isOverview = matchPath('/user-groups/:userGroupId', pathname) !== null
 
   return (
     <div className={styles.page}>
       <AsyncState
-        loading={userGroup.loading && !userGroup.data}
-        loadingText={copy.page.loading}
-        error={toAsyncError(userGroup.error)}
-        onRetry={userGroup.reload}
+        loading={group.loading && !group.userGroup}
+        loadingText={pageCopy.page.loading}
+        error={toAsyncError(group.error)}
+        onRetry={group.reload}
       >
-        {userGroup.data ? (
-          <>
-            <nav className={styles.breadcrumb} aria-label={copy.page.breadcrumbLabel}>
-              <HomeIcon aria-hidden="true" />
-              <Link as={RouterLink} to="/">
-                {copy.page.home}
-              </Link>
-              <span aria-hidden="true">/</span>
-              <span>{userGroup.data.name}</span>
-            </nav>
-
-            <div className={styles.contextLayout}>
-              <aside className={styles.identityRail} aria-label={copy.page.identityLabel}>
-                <header className={styles.identityHeader}>
-                  <OrganizationIcon className={styles.titleIcon} size={24} aria-hidden="true" />
-                  <h1 className={styles.title}>{userGroup.data.name}</h1>
-                </header>
-                <div className={styles.identityLabels}>
-                  <Label variant="accent">{copy.page.kind}</Label>
-                  <Label variant={userGroup.data.role === 'owner' ? 'attention' : 'default'}>
-                    {membershipRoleLabel(userGroup.data.role)}
-                  </Label>
+        {group.userGroup ? (
+          <div className={isOverview ? styles.overviewInner : undefined}>
+            {isOverview ? (
+              <header className={styles.header}>
+                <span className={styles.avatar} aria-hidden="true">
+                  <OrganizationIcon size={32} />
+                </span>
+                <div className={styles.identity}>
+                  <div className={styles.titleRow}>
+                    <h1 className={styles.title}>{group.userGroup.name}</h1>
+                    <Label variant={group.userGroup.role === 'owner' ? 'attention' : 'default'}>
+                      {userGroupRoleLabel(group.userGroup.role)}
+                    </Label>
+                  </div>
                 </div>
-                <Text as="p" className={styles.description}>
-                  {userGroup.data.description || copy.page.fallbackDescription}
-                </Text>
-                {can(userGroup.data, 'user_group.delete') ? (
+                {can(group.userGroup, 'user_group.delete') ? (
                   <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-                    {copy.delete.action}
+                    {governanceCopy.delete.action}
                   </Button>
                 ) : null}
-                <div className={styles.sectionIndicator}>
-                  <span className={styles.currentSection}>{copy.page.membersTitle}</span>
-                </div>
-              </aside>
+              </header>
+            ) : null}
 
-              <MemberPanel userGroup={userGroup.data} onUserGroupChanged={userGroup.reload} />
+            <div className={styles.sectionContent}>
+              <Outlet
+                context={
+                  {
+                    userGroup: group.userGroup,
+                    reload: group.reload,
+                    onMembershipChanged,
+                  } satisfies UserGroupOutletContext
+                }
+              />
             </div>
             {deleteOpen ? (
               <DeleteUserGroupDialog
-                userGroup={userGroup.data}
+                userGroup={group.userGroup}
                 onClose={() => setDeleteOpen(false)}
                 onDeleted={() => navigate('/')}
               />
             ) : null}
-          </>
+          </div>
         ) : null}
       </AsyncState>
     </div>
@@ -117,15 +120,19 @@ function DeleteUserGroupDialog({
 
   return (
     <Dialog
-      title={copy.delete.title(userGroup.name)}
+      title={governanceCopy.delete.title(userGroup.name)}
       width="large"
       onClose={() => {
         if (!submitting) onClose()
       }}
       footerButtons={[
-        { content: copy.delete.cancel, disabled: submitting, onClick: onClose },
         {
-          content: copy.delete.confirm,
+          content: governanceCopy.delete.cancel,
+          disabled: submitting,
+          onClick: onClose,
+        },
+        {
+          content: governanceCopy.delete.confirm,
           buttonType: 'danger',
           loading: submitting,
           disabled: !canConfirm,
@@ -134,24 +141,26 @@ function DeleteUserGroupDialog({
       ]}
     >
       <Stack gap="normal">
-        <Text as="p">{copy.delete.description}</Text>
-        {impact.loading ? <Text>{copy.delete.loading}</Text> : null}
+        <Text as="p">{governanceCopy.delete.description}</Text>
+        {impact.loading ? <Text>{governanceCopy.delete.loading}</Text> : null}
         {impact.data ? (
           <>
-            <Text as="h3">{copy.delete.impactTitle}</Text>
+            <Text as="h3">{governanceCopy.delete.impactTitle}</Text>
             <ul>
               {items
                 .filter((item) => item.count > 0)
                 .map((item) => (
                   <li key={item.kind}>
-                    {copy.delete.itemLabels[item.kind] ?? item.kind}：{item.count}
+                    {governanceCopy.delete.itemLabels[item.kind] ?? item.kind}：{item.count}
                   </li>
                 ))}
             </ul>
-            {items.every((item) => item.count === 0) ? <Text>{copy.delete.empty}</Text> : null}
+            {items.every((item) => item.count === 0) ? (
+              <Text>{governanceCopy.delete.empty}</Text>
+            ) : null}
             {problems.length > 0 ? (
               <Banner variant="critical">
-                <Banner.Title>{copy.delete.blockedTitle}</Banner.Title>
+                <Banner.Title>{governanceCopy.delete.blockedTitle}</Banner.Title>
                 <Banner.Description>
                   <ul>
                     {problems.map((problem) => (

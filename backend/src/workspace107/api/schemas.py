@@ -32,6 +32,7 @@ from ..domain.enums import (
 )
 from ..domain.grant import UseQualificationScope
 from ..domain.ownership import OwnerKind
+from ..domain.slurm_projection import SlurmProjectionAvailability
 
 
 class Model(BaseModel):
@@ -108,6 +109,7 @@ class InvitationResponseIn(Model):
 class VariableOut(Model):
     name: str
     value: str
+    updated_at: datetime
 
 
 class VariableIn(Model):
@@ -120,12 +122,20 @@ class SecretIn(Model):
     value: str = Field(min_length=1)
 
 
+class SecretOut(Model):
+    """Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。"""
+
+    name: str
+    updated_at: datetime
+
+
 class EntitlementOut(Model):
     id: str
     compute_plan_id: str
     compute_plan_name: str
-    max_concurrent_runs: int
     expires_at: str | None
+    status: Literal["active", "expired"]
+    status_reason: str | None
 
 
 # -- Project ----------------------------------------------------------------
@@ -545,19 +555,35 @@ class RunConfigurationOut(Model):
 
 
 class RunDraftIn(Model):
-    """一次提交意图。
-
-    除 run_configuration_id 外都可以不传——不传就用运行方案里的值。
-    这些字段用 ``| None`` 而不是空字符串默认值，是为了让契约如实表达
-    「可以不传」，生成的前端类型才不会要求调用方硬塞一个空串。
-    """
+    """一次提交意图。"""
 
     run_configuration_id: str
     project_version_id: str | None = None
+    """None 表示使用 Project 的最新版本。"""
     name: str | None = None
     command_override: str | None = None
     working_directory_override: str | None = None
+    environment_version_id_override: str | None = None
+    input_bindings_override: list[InputBindingModel] | None = None
     compute_request_override: ComputeRequestModel | None = None
+
+
+class SlurmProjectionOut(Model):
+    availability: SlurmProjectionAvailability
+    reason: str
+    detail: str
+
+
+class AdjustedRerunIn(Model):
+    """从历史 Run Snapshot 调整后创建新 Run 的完整提交事实。"""
+
+    name: str = Field(min_length=1, max_length=255)
+    project_version_id: str = Field(min_length=1)
+    environment_version_id: str = Field(min_length=1)
+    working_directory: str = "."
+    command: str = Field(min_length=1)
+    input_bindings: list[InputBindingModel] = Field(default_factory=list)
+    compute_request: ComputeRequestModel
 
 
 class PreflightOut(Model):
@@ -567,6 +593,7 @@ class PreflightOut(Model):
     environment_version: EnvironmentVersionOut | None
     compute_plan_id: str | None
     compute_request: ComputeRequestModel | None
+    slurm_projection: SlurmProjectionOut | None
     resolved_environment_variables: dict[str, str]
     secret_references: dict[str, str]
     """环境变量名 -> Secret 名称。永远只有名称，没有值。"""
@@ -586,7 +613,7 @@ class RunOut(Model):
     exit_code: int | None
     failure_reason: str
     initiated_by_user_id: str
-    """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
+    """发起本次 Run 的 User（GR-307）：执行身份与通知接收方。"""
     initiated_by_username: str | None
     """当前权威 User.username；User 记录无法解析时为 null。"""
     created_at: datetime | None
@@ -747,9 +774,19 @@ class NotificationOut(Model):
     target_type: TargetType | None
     target_id: str | None
     mandatory: bool
-    """不可关闭的重要通知。当前迁移实现尚未提供偏好设置，标记先带上。"""
+    """不可关闭的重要通知；通知偏好接口会将其标记为 mandatory。"""
     created_at: datetime
     read_at: datetime | None
+
+
+class NotificationPreferenceOut(Model):
+    type: NotificationType
+    enabled: bool
+    mandatory: bool
+
+
+class NotificationPreferenceUpdateIn(Model):
+    enabled: bool
 
 
 class UnreadCountOut(Model):

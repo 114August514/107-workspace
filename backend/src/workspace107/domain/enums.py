@@ -227,3 +227,6 @@ class NotificationType(StrEnum):
     RUN_SUCCEEDED = "run_succeeded"
     RUN_FAILED = "run_failed"
     RUN_SUBMIT_FAILED = "run_submit_failed"
+    ENVIRONMENT_UNAVAILABLE = "environment_unavailable"
+    SHARED_RESOURCE_UNAVAILABLE = "shared_resource_unavailable"
+    PLATFORM_INCIDENT = "platform_incident"
