@@ -61,12 +61,12 @@ jobs:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
       - run: uv run --no-project python scripts/workspace.py setup backend
-      - name: Upgrade, downgrade one revision, and upgrade again
+      - name: Upgrade, downgrade to common parent, and upgrade again
         env:
           WORKSPACE107_DATABASE_URL: sqlite+aiosqlite:///./var/ci-migration.db
         run: |
           uv run --no-project python scripts/workspace.py migrate
-          uv run --no-project python scripts/workspace.py migrate-down
+          (cd backend && uv run alembic downgrade d71f3a9c2b4e)
           uv run --no-project python scripts/workspace.py migrate
 
   postgres-behavior:
