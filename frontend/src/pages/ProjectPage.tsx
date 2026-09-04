@@ -1,12 +1,5 @@
-import { HistoryIcon, PencilIcon, TriangleDownIcon, VersionsIcon } from '@primer/octicons-react'
-import {
-  Button as PrimerButton,
-  Dialog,
-  FormControl,
-  SelectPanel,
-  Text,
-  TextInput,
-} from '@primer/react'
+import { PencilIcon, TriangleDownIcon, VersionsIcon } from '@primer/octicons-react'
+import { Button as PrimerButton, SelectPanel, Text } from '@primer/react'
 import type { ActionListItemInput } from '@primer/react/deprecated'
 import { BranchesOutlined } from '@ant-design/icons'
 import { Card, Empty, Tag } from 'antd'
@@ -156,17 +149,20 @@ function FilesContextControls({
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [saveOpen, setSaveOpen] = useState(false)
   const versions = useAsync<ProjectVersionPage>(
     () => api.listVersions(projectId, { page: 1, page_size: 50 }),
     [projectId],
   )
-  const changes = useAsync<WorkingChange[]>(() => api.workingChanges(projectId), [projectId])
-  const options: ActionListItemInput[] = (versions.data?.items ?? []).map((version) => ({
-    id: version.id,
-    text: version.label,
-  }))
-  const selected = options.find((option) => option.id === selectedVersion?.id)
+  const changes = useAsync<WorkingChange[]>(
+    () => (mode === 'working' ? api.workingChanges(projectId) : Promise.resolve([])),
+    [projectId, mode],
+  )
+  const options: ActionListItemInput[] = [
+    { id: 'working', text: 'Working State' },
+    ...(versions.data?.items ?? []).map((version) => ({ id: version.id, text: version.label })),
+  ]
+  const selected =
+    mode === 'working' ? options[0] : options.find((option) => option.id === selectedVersion?.id)
   const error = toAsyncError(versions.error)
   const close = () => {
     setOpen(false)
@@ -174,147 +170,76 @@ function FilesContextControls({
   }
   return (
     <div className={styles.fileContextControls} aria-label="Files context">
-      {mode === 'working' ? (
-        <span className={styles.refControl}>
-          <PencilIcon size={16} /> Working State
-        </span>
-      ) : (
-        <SelectPanel
-          open={open}
-          onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
-          renderAnchor={({ children: _children, ...anchorProps }) => (
-            <PrimerButton
-              {...anchorProps}
-              leadingVisual={VersionsIcon}
-              trailingVisual={TriangleDownIcon}
-              aria-label="选择 Project Version"
-              aria-haspopup="dialog"
-            >
-              {selectedVersion?.label ?? 'Project Version'}
-            </PrimerButton>
-          )}
-          title="选择 Project Version"
-          placeholder={selectedVersion?.label ?? 'Project Version'}
-          placeholderText="搜索 Project Version"
-          inputLabel="搜索 Project Version"
-          filterValue={query}
-          onFilterChange={setQuery}
-          items={options}
-          selected={selected}
-          onSelectedChange={(item: ActionListItemInput | undefined) => {
-            if (!item) return
-            close()
-            navigate(`/projects/${projectId}/files/versions/${item.id}`)
-          }}
-          loading={versions.loading}
-          initialLoadingType="spinner"
-          message={
-            error
+      <SelectPanel
+        open={open}
+        onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
+        renderAnchor={({ children: _children, ...anchorProps }) => (
+          <PrimerButton
+            {...anchorProps}
+            leadingVisual={mode === 'working' ? PencilIcon : VersionsIcon}
+            trailingVisual={TriangleDownIcon}
+            aria-label={
+              mode === 'working' ? '选择 Files 引用，当前 Working State' : '选择 Project Version'
+            }
+            aria-haspopup="dialog"
+          >
+            {mode === 'working' ? 'Working State' : (selectedVersion?.label ?? 'Project Version')}
+          </PrimerButton>
+        )}
+        title="选择 Files 引用"
+        placeholder={
+          mode === 'working' ? 'Working State' : (selectedVersion?.label ?? 'Project Version')
+        }
+        placeholderText="搜索 Files 引用"
+        inputLabel="搜索 Files 引用"
+        filterValue={query}
+        onFilterChange={setQuery}
+        items={options}
+        selected={selected}
+        onSelectedChange={(item: ActionListItemInput | undefined) => {
+          if (!item) return
+          close()
+          navigate(
+            item.id === 'working'
+              ? `/projects/${projectId}/files/working`
+              : `/projects/${projectId}/files/versions/${item.id}`,
+          )
+        }}
+        loading={versions.loading}
+        initialLoadingType="spinner"
+        message={
+          error
+            ? {
+                variant: 'error' as const,
+                title: '无法加载 Project Versions。',
+                body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
+                action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
+              }
+            : !versions.loading && versions.data?.items.length === 0
               ? {
-                  variant: 'error' as const,
-                  title: '无法加载 Project Versions。',
-                  body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
-                  action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
+                  variant: 'empty' as const,
+                  title: '还没有保存的 Version。',
+                  body: '当前仍可进入 Working State 编辑文件。',
                 }
-              : !versions.loading && options.length === 0
-                ? {
-                    variant: 'empty' as const,
-                    title: '还没有保存的 Version。',
-                    body: '进入 Working State 保存第一个 Version。',
-                  }
-                : undefined
-          }
-          width="auto"
-          height="auto"
-          overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
-          align="start"
-          disableFullscreenOnNarrow
-          aria-label="Project Versions"
-        />
-      )}
-      {mode === 'version' && (
-        <Link to={`/projects/${projectId}/files/working`} className={styles.contextLink}>
-          <PencilIcon size={16} /> Working State
+              : undefined
+        }
+        width="auto"
+        height="auto"
+        overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
+        align="start"
+        disableFullscreenOnNarrow
+        aria-label="Files references"
+      />
+      {mode === 'working' ? (
+        <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
+          {changes.data?.length ?? '—'} changes
+        </Link>
+      ) : (
+        <Link to={projectViewHref(projectId, 'files', 'versions')} className={styles.contextLink}>
+          {versions.data?.total ?? '—'} Versions
         </Link>
       )}
-      {mode === 'working' && (
-        <>
-          <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
-            {changes.data?.length ?? '—'} changes
-          </Link>
-          {(changes.data?.length ?? 0) > 0 && (
-            <PrimerButton size="small" onClick={() => setSaveOpen(true)}>
-              保存 Version
-            </PrimerButton>
-          )}
-        </>
-      )}
-      <Link to={projectViewHref(projectId, 'files', 'versions')} className={styles.contextLink}>
-        <HistoryIcon size={16} /> Versions {versions.data?.total ?? '—'}
-      </Link>
-      {mode === 'working' && saveOpen && (
-        <SaveVersionDialog
-          projectId={projectId}
-          onClose={() => setSaveOpen(false)}
-          onSaved={(versionId) => navigate(`/projects/${projectId}/files/versions/${versionId}`)}
-        />
-      )}
     </div>
-  )
-}
-function SaveVersionDialog({
-  projectId,
-  onClose,
-  onSaved,
-}: {
-  projectId: string
-  onClose: () => void
-  onSaved: (versionId: string) => void
-}) {
-  const [message, setMessage] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const save = async () => {
-    setSaving(true)
-    setError(null)
-    try {
-      const version = await api.saveVersion(projectId, message.trim())
-      onSaved(version.id)
-    } catch (cause) {
-      setError(toAsyncError(cause as Error)?.problems?.join(' ') ?? '无法保存 Version。')
-    } finally {
-      setSaving(false)
-    }
-  }
-  return (
-    <Dialog
-      title="保存 Project Version"
-      onClose={() => {
-        if (!saving) onClose()
-      }}
-      footerButtons={[
-        { content: '取消', onClick: onClose, disabled: saving },
-        {
-          content: '保存 Version',
-          buttonType: 'primary',
-          onClick: () => void save(),
-          loading: saving,
-        },
-      ]}
-    >
-      <Stack gap="large">
-        {error && <Text color="danger">{error}</Text>}
-        <FormControl>
-          <FormControl.Label>说明（可选）</FormControl.Label>
-          <TextInput
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-            placeholder="例如：完成数据预处理"
-            block
-          />
-        </FormControl>
-      </Stack>
-    </Dialog>
   )
 }
 
