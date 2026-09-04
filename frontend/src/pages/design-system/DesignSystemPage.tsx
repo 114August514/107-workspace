@@ -210,7 +210,7 @@ export function DesignSystemPage() {
           <SectionHeading
             id="brand-marks-heading"
             title="Marks"
-            description="最终 107 Brand Mark 在 neutral TopBar 与 16 / 24 / 32 px 样本中的呈现；16 px 使用 optical padding。"
+            description="最终 107 Brand Mark 在 neutral TopBar 与 16 / 24 / 32 px 样本中的呈现；所有尺寸复用同一份 SVG 资源。"
           />
           <BrandMarkSpecimen />
         </section>

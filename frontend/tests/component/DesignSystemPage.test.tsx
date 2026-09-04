@@ -75,7 +75,7 @@ describe('DesignSystemPage', () => {
         String(size),
       )
     }
-    expect(screen.getByText('16px（optical padding）')).toBeInTheDocument()
+    expect(screen.getByText('16px')).toBeInTheDocument()
 
     expect(screen.getByText(/C100 M80 Y0 K0/)).toBeInTheDocument()
     expect(screen.getByLabelText('Primer semantic colors remain distinct')).toHaveTextContent(

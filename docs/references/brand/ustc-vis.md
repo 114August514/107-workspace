@@ -42,7 +42,7 @@ success、warning、danger 或其他界面语义色；这些职责继续由 Prim
 以下 sRGB 值是 107 Workspace 的网页品牌色：
 
 ```text
-primary        #0057B8
+primary        #0455B6
 primary hover  #00458F
 on primary     #FFFFFF
 subtle         #DDEBFF
@@ -55,19 +55,19 @@ border         #4F83BE
 
 1. 仅把官方 `C100 M80 Y0 K0` 作为“深蓝、以蓝为主”的品牌输入，不假装设备相关 CMYK
    可以无配置文件地唯一换算为 sRGB；
-2. 在 sRGB 中选择克制的产品蓝 `#0057B8`，再分别为 hover、浅底前景、浅底和边界选择
+2. 在 sRGB 中选择克制的产品蓝 `#0455B6`，再分别为 hover、浅底前景、浅底和边界选择
    有明确界面职责的值；
 3. 使用 WCAG 2.x 相对亮度公式检查真实组合，并把可访问性优先于与印刷色样的肉眼接近；
-4. 人工视觉门已完成：owner 确认最终 Mark（107 猪形图形）与 primary #0057B8。
+4. 人工视觉门已完成：owner 确认最终 Mark（107 猪形图形）与 primary #0455B6。
 
 当前计算结果（对比度，前景 / 背景）：
 
 | 组合                                            | 对比度 |
 | :---------------------------------------------- | -----: |
-| `#0057B8` / `#FFFFFF`                           | 6.87:1 |
+| `#0455B6` / `#FFFFFF`                           | 7.05:1 |
 | `#00458F` / `#FFFFFF`                           | 9.34:1 |
 | `#003B78` / `#DDEBFF`                           | 9.17:1 |
-| `#0057B8` / Primer light muted canvas `#F6F8FA` | 6.46:1 |
+| `#0455B6` / Primer light muted canvas `#F6F8FA` | 6.62:1 |
 | `#4F83BE` / `#FFFFFF`                           | 3.95:1 |
 | `#4F83BE` / `#DDEBFF`                           | 3.27:1 |
 
@@ -75,13 +75,13 @@ border         #4F83BE
 primary 可作为浅色画布上的 focus outline，border 可作为相邻白色或 subtle 背景的
 非文字边界。
 
-## Mark 来源与 16 px 规则
+## Mark 来源与尺寸规则
 
-最终 Mark 为 owner 提供的 107 猪形图形（107pig.svg，7 条 path），是独立的产品资产，
-不引用或复刻 USTC 校徽、校名等官方资产。各尺寸使用相同 path，16 px 与 favicon 使用
-optical padding `viewBox="-6 -6 112 112"`。favicon 已生成于 `frontend/public/favicon.svg`
-并经 `frontend/index.html` 接入。降级规则：若真实渲染中 16 px 白色细节糊化，保留
-3 条蓝色路径、去掉 4 条白色细节路径；永不引入第二套 Logo。
+最终 Mark 使用 `frontend/src/assets/brand/107_pig_final.svg`，由 3 条 path 构成，使用静态
+`#0455B6` 填充，是独立的产品资产，不引用或复刻 USTC 校徽、校名等官方资产。页面
+`BrandMark.tsx` 与 `frontend/public/favicon.svg` 复用同一份几何和静态 hex 填充；新 Mark
+使用原始 `viewBox="0 0 140.9 141"`，不再使用旧 Mark 的 optical padding 或候选 fallback。
+原始 `107pig.svg` 保留在 `docs/archive/brand/107pig.svg`，仅用于来源追溯，不属于当前 active brand。
 
 ## 当前吸收边界
 

@@ -15,7 +15,7 @@ import { BrandMark } from '../../brand/BrandMark'
 import styles from './BrandReference.module.css'
 
 const markSpecimenSizes: Array<{ size: 16 | 24 | 32; caption: string }> = [
-  { size: 16, caption: '16px（optical padding）' },
+  { size: 16, caption: '16px' },
   { size: 24, caption: '24px' },
   { size: 32, caption: '32px' },
 ]

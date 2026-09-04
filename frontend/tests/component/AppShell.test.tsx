@@ -142,7 +142,7 @@ describe('AppShell 壳层', () => {
     renderShell('student')
 
     const brand = screen.getByRole('link', { name: '107 Workspace' })
-    expect(brand.querySelector('svg')).not.toBeNull()
+    expect(brand.querySelector('img')).not.toBeNull()
   })
 
   it.each(contextGuideCases)('路由 %s 显示对应的页面引导', (pathname, message) => {
@@ -175,7 +175,7 @@ describe('AppShell 壳层', () => {
     const header = screen.getByRole('banner')
     const brand = within(header).getByRole('link', { name: '107 Workspace' })
     expect(brand).toHaveAttribute('href', '/')
-    expect(brand.querySelector('svg')).not.toBeNull()
+    expect(brand.querySelector('img')).not.toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
