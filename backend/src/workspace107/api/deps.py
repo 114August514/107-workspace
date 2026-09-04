@@ -58,7 +58,7 @@ class AppContext:
     session_factory: async_sessionmaker[AsyncSession]
     storage: StoragePort
     scheduler: SchedulerPort
-    slurm_projection: SlurmProjection
+    slurm_projection: SlurmProjection | None
     clock: Clock
 
 

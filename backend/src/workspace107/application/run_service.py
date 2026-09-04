@@ -139,7 +139,7 @@ class RunService:
         clock: Clock,
         storage: StoragePort,
         scheduler: SchedulerPort,
-        slurm_projection: SlurmProjection,
+        slurm_projection: SlurmProjection | None,
         secrets: SecretVault,
         activity: ActivityRecorder,
         notifier: Notifier,
@@ -309,18 +309,21 @@ class RunService:
             else:
                 problems.extend(await self._check_concurrency(user_id, entitlement))
 
-            user = await self._repos.users.get(user_id)
-            slurm_projection = self._slurm_projection.project(
-                plan, username=user.username if user is not None else None
-            )
-            if not slurm_projection.ok:
-                problems.append(
-                    f"算力方案「{plan.name}」当前不可用："
-                    f"{slurm_projection.detail}（{slurm_projection.reason}）"
+            slurm_projection = None
+            if self._scheduler.name == "slurm":
+                assert self._slurm_projection is not None
+                user = await self._repos.users.get(user_id)
+                slurm_projection = self._slurm_projection.project(
+                    plan, username=user.username if user is not None else None
                 )
-            else:
-                assert slurm_projection.plan is not None
-                plan = slurm_projection.plan
+                if not slurm_projection.ok:
+                    problems.append(
+                        f"算力方案「{plan.name}」当前不可用："
+                        f"{slurm_projection.detail}（{slurm_projection.reason}）"
+                    )
+                else:
+                    assert slurm_projection.plan is not None
+                    plan = slurm_projection.plan
 
             request = self._resolve_compute_request(plan, configuration, draft)
             problems.extend(check_request_against_plan(plan, request))
@@ -987,26 +990,32 @@ class RunService:
                 # 绕过上限——权益检查在最容易被反复触发的路径上失效。
                 problems.extend(await self._check_concurrency(user_id, entitlement))
 
-            user = await self._repos.users.get(user_id)
-            historical_mapping = SchedulerMapping(
-                cluster=snapshot.scheduler.cluster,
-                account=snapshot.scheduler.account,
-                partition=snapshot.scheduler.partition,
-                qos=snapshot.scheduler.qos,
-            )
-            projection_plan = replace(plan, mapping=historical_mapping)
-            projection = self._slurm_projection.project(
-                projection_plan, username=user.username if user is not None else None
-            )
-            if not projection.ok:
-                problems.append(
-                    f"算力方案「{plan.name}」当前不可用：{projection.detail}（{projection.reason}）"
+            if self._scheduler.name == "slurm":
+                assert self._slurm_projection is not None
+                user = await self._repos.users.get(user_id)
+                historical_mapping = SchedulerMapping(
+                    cluster=snapshot.scheduler.cluster,
+                    account=snapshot.scheduler.account,
+                    partition=snapshot.scheduler.partition,
+                    qos=snapshot.scheduler.qos,
                 )
-                projected_plan = plan
+                projection_plan = replace(plan, mapping=historical_mapping)
+                projection = self._slurm_projection.project(
+                    projection_plan, username=user.username if user is not None else None
+                )
+                if not projection.ok:
+                    problems.append(
+                        f"算力方案「{plan.name}」当前不可用：{projection.detail}（{projection.reason}）"
+                    )
+                    projected_plan = plan
+                else:
+                    assert projection.plan is not None
+                    projected_plan = projection.plan
+                problems.extend(
+                    check_request_against_plan(projected_plan, snapshot.compute_request)
+                )
             else:
-                assert projection.plan is not None
-                projected_plan = projection.plan
-            problems.extend(check_request_against_plan(projected_plan, snapshot.compute_request))
+                problems.extend(check_request_against_plan(plan, snapshot.compute_request))
 
         _, secret_problems = await self._config_resolver.validate_and_resolve(
             access, initiated_by_user_id, snapshot.env_secret_refs

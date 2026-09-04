@@ -53,7 +53,7 @@ def build_context(settings: Settings) -> AppContext:
         session_factory=create_session_factory(engine),
         storage=LocalStorage(settings.storage_root),
         scheduler=build_scheduler(settings),
-        slurm_projection=SlurmProjection(SlurmFacts()),
+        slurm_projection=(SlurmProjection(SlurmFacts()) if settings.scheduler == "slurm" else None),
         clock=SystemClock(),
     )
 

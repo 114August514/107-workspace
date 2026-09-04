@@ -17,13 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from workspace107.api.deps import AppContext, build_services
 from workspace107.application.access import AccessGuard
 from workspace107.config import Settings
-from workspace107.domain.slurm_projection import (
-    SlurmAssociationFact,
-    SlurmFacts,
-    SlurmPartitionFact,
-    SlurmProjection,
-    SlurmQosLimitsFact,
-)
 from workspace107.infrastructure.db.repositories import SqlRepositories
 from workspace107.infrastructure.db.tables import Base
 from workspace107.main import build_context, create_app
@@ -67,29 +60,6 @@ async def context(settings: Settings) -> AsyncIterator[AppContext]:
     try:
         await seed_catalog(session)
         await session.commit()
-        ctx.slurm_projection = SlurmProjection(
-            SlurmFacts(
-                associations=tuple(
-                    SlurmAssociationFact("107", "undergraduate", partition, "*")
-                    for partition in ("debug", "cpu", "gpu")
-                ),
-                partitions=tuple(
-                    SlurmPartitionFact("107", partition, ("normal",))
-                    for partition in ("debug", "cpu", "gpu")
-                ),
-                qos_limits=(
-                    SlurmQosLimitsFact(
-                        "107",
-                        "normal",
-                        max_nodes=2,
-                        max_cpus=32,
-                        max_memory_mb=131072,
-                        max_gpus=2,
-                        max_time_limit_minutes=1440,
-                    ),
-                ),
-            )
-        )
     finally:
         await session.close()
 
