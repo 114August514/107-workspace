@@ -21,7 +21,6 @@ export const globalNavigationCopy = {
   heading: '全局导航',
   close: '关闭导航',
   home: '首页',
-  executionContext: '个人执行上下文',
   userGroupsGroup: '你的 User Group',
   userGroupsEmpty: '还没有可进入的 User Group',
   recentProjectsGroup: '最近使用的 Project',

@@ -1,7 +1,6 @@
 import {
   HomeIcon,
   OrganizationIcon,
-  PersonIcon,
   ProjectIcon,
   XIcon,
 } from '@primer/octicons-react'
@@ -71,19 +70,6 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
                   <HomeIcon />
                 </NavList.LeadingVisual>
                 <span className={styles.itemText}>{globalNavigationCopy.home}</span>
-              </NavList.Item>
-
-              <NavList.Item
-                className={styles.item}
-                as={RouterLink}
-                to="/execution-context"
-                aria-current={location.pathname === '/execution-context' ? 'page' : undefined}
-                onClick={onClose}
-              >
-                <NavList.LeadingVisual>
-                  <PersonIcon />
-                </NavList.LeadingVisual>
-                <span className={styles.itemText}>{globalNavigationCopy.executionContext}</span>
               </NavList.Item>
 
               <NavList.Group title={globalNavigationCopy.userGroupsGroup}>
