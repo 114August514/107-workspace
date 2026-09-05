@@ -174,3 +174,6 @@ export const TERMINAL_STATUSES = [
 export function isTerminal(status: RunStatus): boolean {
   return (TERMINAL_STATUSES as readonly RunStatus[]).includes(status)
 }
+
+export type EnvironmentPublicationOptions = Schemas['EnvironmentPublicationOptionsOut']
+export type ImportEnvironmentPublicationInput = Schemas['ImportEnvironmentPublicationIn']

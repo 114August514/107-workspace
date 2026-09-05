@@ -317,6 +317,19 @@ Project 派生、模板发布与复用
 Environment Version 当前只支持 `modules` 与 `apptainer_sif` 两种显式 runtime；发布必须通过对应类型校验，失败不得形成可用 Version。
 Run Configuration 与 Run Snapshot 使用确定的 Environment Version；版本不可用或不兼容时明确失败，不自动回退或替换为其他版本。
 
+环境展示沿用 User Group 的导航、标题和左列表右 About 布局。版本详情优先展示说明、
+有序模块或 SIF 文件大小／架构／摘要、当前可用性；原始定义和校验证据按需展开。
+发布操作通过独立弹窗进入，依据后端返回的当前 capability 显示，不从组角色推断权限。
+
+发布 `modules` 时填写平台允许的有序模块；发布 `apptainer_sif` 时选择上传已有 SIF，
+或填写公开 HTTPS、`docker://`、`oras://`、`library://` 地址。Docker 来源先转换为 SIF，
+其他来源下载已有 SIF。校验后的最终文件保存在平台内容寻址存储中，Run 复用这份文件，
+不重新解析来源标签。版本名称和说明直接可见，来源摘要等可选参数折叠到高级设置。
+
+发布记录显示持久化的真实处理阶段、结果和失败原因，失败可重新提交，不生成可用版本。
+公开导入不包含私有仓库凭据、在线 Dockerfile 构建或镜像内部文件浏览；网络、文件和
+转换限制见 [部署说明](../operations/deployment.md#环境文件上传与远程导入)。
+
 ```text
 运行环境
 │

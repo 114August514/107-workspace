@@ -26,6 +26,8 @@ import type {
   DeletionImpact,
   Environment,
   EnvironmentPublicationAttempt,
+  EnvironmentPublicationOptions,
+  ImportEnvironmentPublicationInput,
   EnvironmentVersion,
   FileContent,
   Home,
@@ -208,6 +210,18 @@ export const api = {
         params: { path: { version_id: id } },
       }),
     ),
+  environmentPublicationOptions: async (): Promise<EnvironmentPublicationOptions> =>
+    unwrap(await http.GET('/api/v1/catalog/environment-publication-options')),
+  importEnvironment: async (
+    id: string,
+    body: ImportEnvironmentPublicationInput,
+  ): Promise<EnvironmentPublicationAttempt> =>
+    unwrap(
+      await http.POST('/api/v1/catalog/environments/{environment_id}/publication-attempts/import', {
+        params: { path: { environment_id: id } },
+        body,
+      }),
+    ),
   publishModulesEnvironment: async (
     id: string,
     body: { version: string; description: string; modules: string[] },
@@ -223,6 +237,7 @@ export const api = {
     payload: {
       version: string
       sif: File
+      description?: string
       source_uri: string
       source_digest: string
       architecture: 'x86_64'
@@ -234,7 +249,7 @@ export const api = {
     form.append('source_uri', payload.source_uri)
     form.append('source_digest', payload.source_digest)
     form.append('architecture', payload.architecture)
-    form.append('description', '')
+    form.append('description', payload.description ?? '')
     return unwrap(
       await http.POST(
         '/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif',

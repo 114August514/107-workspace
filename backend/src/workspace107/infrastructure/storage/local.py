@@ -57,6 +57,25 @@ class LocalStorage:
             await asyncio.to_thread(_write_atomic, target, data)
         return content_hash
 
+    async def write_blob_file(self, path: Path) -> str:
+        return await asyncio.to_thread(self._write_blob_file, path)
+
+    def _write_blob_file(self, path: Path) -> str:
+        digest = _file_sha256(path)
+        target = self._blob_path(digest)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(dir=target.parent)
+        try:
+            with os.fdopen(fd, "wb") as output, path.open("rb") as source:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+            if _file_sha256(Path(temporary)) != digest:
+                raise ValidationFailed("环境文件在保存时发生变化")
+            os.replace(temporary, target)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary)
+        return digest
+
     async def read_blob(self, content_hash: str) -> bytes:
         target = self._blob_path(content_hash)
         if not target.exists():

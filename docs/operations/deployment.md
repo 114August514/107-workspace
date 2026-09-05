@@ -139,6 +139,37 @@ Environment 与 Shared Resource publication processor 当前都是 API 进程内
 它不覆盖 live 107。Workspace 身份、共享挂载、独立 Worker、Slurm 凭据和执行接缝的 107
 平台端到端验收仍属于 #7。
 
+### 环境文件上传与远程导入
+
+Environment 页面通过独立发布弹窗提交 Modules、SIF 文件或公开镜像地址。
+HTTPS、ORAS、Library 获取已有 SIF；Docker 镜像由 API 主机上的 Apptainer 拉取并转换。
+校验通过后，最终 SIF 字节写入 `WORKSPACE107_STORAGE_ROOT/blobs/<sha256前两位>/<sha256>`；
+运行使用这份 CAS 文件，不重新拉取来源标签。页面中的来源地址仅用于追溯，不能用来替代固定版本。
+
+默认上传上限是 `max_request_bytes` 减去 64 KiB multipart 开销，并受导入大小上限约束。
+远程导入默认最多 4 GiB、15 分钟，可通过以下应用配置调整：
+
+```dotenv
+WORKSPACE107_ENVIRONMENT_IMPORT_MAX_BYTES=4294967296
+WORKSPACE107_ENVIRONMENT_IMPORT_TIMEOUT_SECONDS=900
+```
+
+发布选项 API 返回实际限制与平台模块清单，前端不另设一套上限。调整上传限制时，
+还需要同步入口反向代理的请求体限制；远程导入不经过浏览器上传请求体。
+
+API 主机需安装 Apptainer、`prlimit` 和 `unshare`，并允许非特权 user/network namespace。
+CLI 拉取在独立网络命名空间运行，仅通过 Unix socket 转接到公网 HTTPS CONNECT 代理；
+代理检查每次连接的全部 DNS 结果并连接已校验的数字 IP，覆盖重定向、Registry 鉴权和 blob 请求。
+不支持内部地址、私有仓库凭据、带查询参数的初始链接或非标准 HTTPS 端口。
+容器部署如果禁止 user namespace，拉取会失败，不能关闭隔离来降级运行；需先验证部署环境的
+namespace 能力。HTTPS 文件下载不需要 namespace，但最终 SIF 校验仍需要 Apptainer。
+
+处理器持久化等待、下载／拉取转换、校验、发布和最终结果；失败不生成版本，可重新发布。
+单 API 进程重启后重新认领 `processing` 记录，已入库的镜像复用其 CAS 字节。
+单次导入限制最终文件大小、网络流量（文件上限的三倍）、临时文件总量（三倍）、单文件大小、
+CPU 时间及总耗时。正常完成、失败或取消会删除该次临时目录；宿主机强制终止后的临时残留
+由主机临时目录清理策略回收。此流程不引入多副本任务租约，也不替代共享存储的容量监控。
+
 ## 探针和排障
 
 ```text

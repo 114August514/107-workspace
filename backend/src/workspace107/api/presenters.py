@@ -173,6 +173,7 @@ def environment_out(
         description=view.environment.description,
         owner=owner_summary_out(view.owner),
         versions=[environment_version_out(v) for v in view.versions],
+        capabilities=sorted(view.capabilities),
     )
 
 
@@ -205,6 +206,18 @@ def environment_publication_attempt_out(
         version=attempt.version,
         description=attempt.description,
         runtime_kind=attempt.runtime_kind,
+        source_kind=(
+            "modules"
+            if attempt.runtime_kind.value == "modules"
+            else "import"
+            if attempt.candidate_definition.get("import_source")
+            else "upload"
+        ),
+        source_uri=str(attempt.candidate_definition.get("source_uri", "")),
+        source_digest=str(attempt.candidate_definition.get("source_digest", "")),
+        expected_sha256=str(attempt.candidate_definition.get("expected_sha256", "")),
+        modules=list(attempt.candidate_definition.get("modules", [])),
+        stage=str(attempt.validation_evidence.get("stage", "")),
         validation_summary=attempt.validation_summary,
         validation_evidence=attempt.validation_evidence,
         failure_code=attempt.failure_code,
