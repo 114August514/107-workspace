@@ -62,7 +62,7 @@ export function UserGroupHeaderContext() {
         as={RouterLink}
         to={`/user-groups/${userGroupId}`}
         variant="invisible"
-        className={`${shellStyles.projectContextItem} ${shellStyles.projectName}`}
+        className={`${shellStyles.projectContextItem} ${shellStyles.projectOwner}`}
       >
         <span className={shellStyles.projectContextLabel}>{userGroup.name}</span>
       </Button>

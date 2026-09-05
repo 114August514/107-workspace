@@ -20,6 +20,7 @@ import type { Home, Project, User } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { startLogin } from '../../auth/AuthProvider'
 import { authCopy } from '../../auth/authCopy'
+import { BrandMark } from '../../brand/BrandMark'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
@@ -40,14 +41,6 @@ interface Props {
   home: AsyncResource<Home>
   project: AsyncResource<Project | undefined>
   children: ReactNode
-}
-
-function HomeMarkVisual() {
-  return (
-    <span className={styles.homeMarkVisual} aria-hidden>
-      {appShellCopy.homeMark}
-    </span>
-  )
 }
 
 type AppShellStyle = CSSProperties & { '--app-shell-sidebar-width': string }
@@ -103,13 +96,19 @@ export function AppShell({ user, home, project, children }: Props) {
                   onClick={() => setNavigationOpen(true)}
                 />
               ) : null}
-              <IconButton
-                as={RouterLink}
-                to="/"
-                icon={HomeMarkVisual}
-                variant="default"
-                aria-label={appShellCopy.homeMarkLabel}
-              />
+              <RouterLink to="/" className={styles.brand} aria-label={appShellCopy.homeMarkLabel}>
+                <BrandMark size={32} decorative />
+              </RouterLink>
+              {!projectId && !location.pathname.startsWith('/user-groups/') ? (
+                <Button
+                  as={RouterLink}
+                  to="/"
+                  variant="invisible"
+                  className={`${styles.projectContextItem} ${styles.projectOwner}`}
+                >
+                  <span className={styles.projectContextLabel}>{appShellCopy.brand}</span>
+                </Button>
+              ) : null}
               {projectId ? (
                 <div
                   className={styles.projectContext}
@@ -161,9 +160,7 @@ export function AppShell({ user, home, project, children }: Props) {
                     </span>
                   )}
                 </div>
-              ) : location.pathname === '/' || !signedIn ? (
-                <span className={styles.homeContext}>{appShellCopy.homeContext}</span>
-              ) : (
+              ) : location.pathname === '/' ? null : (
                 <UserGroupHeaderContext />
               )}
             </div>
