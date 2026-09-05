@@ -40,7 +40,13 @@ make dev
 ```
 
 后端接口文档默认位于 <http://127.0.0.1:8000/docs>，前端默认位于
-<http://127.0.0.1:5174>。
+<http://127.0.0.1:5174>。这条路径使用 `WORKSPACE107_AUTH_MODE=dev`：后端把缺省身份当成
+`student`，**不会出现登录页**。日常改业务页面用这条。
+
+要看公开登录页（账密 + 统一身份认证），不能用 `make dev`，也不能用下面 Compose 默认栈。
+那是另一套入口，见 [`deploy/cas-revproxy/README.md`](deploy/cas-revproxy/README.md)：
+Nginx 监听 `127.0.0.1:8107`，认证服务 `8108`，后端必须 `WORKSPACE107_AUTH_MODE=ustc`。
+它和 Compose 默认的 `:8107` **端口相同、拓扑不同**，不要同时占用。
 
 提交前运行统一检查：
 
@@ -76,5 +82,8 @@ cp .env.example .env
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
-浏览器访问 <http://127.0.0.1:8107>。部署和共享存储约束见
+浏览器访问 <http://127.0.0.1:8107>。Compose 默认仍是 `AUTH_MODE=dev`，打开即已登录为
+开发用户，**没有登录页**。带登录页的 `:8107` 是
+[`deploy/cas-revproxy/`](deploy/cas-revproxy/README.md) 那套 Nginx（`auth_request` +
+`/login` / `/login/password`），不是这个 `web` 容器。部署和共享存储约束见
 [`docs/operations/deployment.md`](docs/operations/deployment.md)。

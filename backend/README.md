@@ -95,7 +95,7 @@ cp ../.env.example .env
 | `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
 | `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
 | `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
-| `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |
+| `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户，缺省 `student`，没有登录页；`ustc` 只接受反向代理注入的身份，见 [`docs/operations/authentication.md`](../docs/operations/authentication.md) |
 
 ## 开发模式下的身份
 
@@ -109,7 +109,7 @@ curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
   http://127.0.0.1:8000/api/v1/user-groups
 ```
 
-接入学校统一身份认证后只需替换 `api/deps.py` 中的 `get_current_user`。
+公开登录页不走这条 `dev` 路径，见 [`deploy/cas-revproxy/README.md`](../deploy/cas-revproxy/README.md)。
 
 ## 调度适配器
 

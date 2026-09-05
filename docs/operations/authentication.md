@@ -19,6 +19,16 @@ WORKSPACE107_AUTH_MODE=dev uv run uvicorn workspace107.main:create_app --factory
 curl -H 'X-User: alice' http://127.0.0.1:8000/api/v1/me
 ```
 
+`make dev` 和 Compose 默认走这条 `dev` 模式，前端一打开就会拿到当前用户，因此看不到
+公开登录页。要在浏览器里看到账密 / 统一身份认证入口，必须同时满足：
+
+1. 后端 `WORKSPACE107_AUTH_MODE=ustc`（没有代理注入的身份时 `/api/v1/me` 返回 401）；
+2. 用 [`deploy/cas-revproxy/`](../../deploy/cas-revproxy/README.md) 的 Nginx 做入口
+   （`/login`、`POST /login/password`、`POST /logout` 和 `/api/` 的 `auth_request`）。
+
+只改 `AUTH_MODE=ustc`、仍用 Vite `:5174` 或 Compose `web` 容器，登录按钮没有对应代理路由，
+不能当成登录演示。
+
 ## revproxy 与 Backend 的字段约定
 
 `ustc` 模式使用以下请求头：
