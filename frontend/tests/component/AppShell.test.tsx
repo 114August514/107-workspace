@@ -142,6 +142,16 @@ afterEach(() => {
 })
 
 describe('AppShell 壳层', () => {
+  it('TopBar 品牌链接包含装饰性 Brand Mark', () => {
+    renderShell('student')
+
+    const brand = screen.getByRole('link', { name: '107 Workspace 首页' })
+    const mark = brand.querySelector('img')
+    expect(mark).not.toBeNull()
+    expect(mark).toHaveAttribute('width', '32')
+    expect(mark).toHaveAttribute('height', '32')
+  })
+
   it.each(contextGuideCases)('路由 %s 显示对应的页面引导', (pathname, message) => {
     renderShell('student', readyHome(), pathname)
 
@@ -166,15 +176,22 @@ describe('AppShell 壳层', () => {
     },
   )
 
-  it('首页在 Home Mark 后显示产品名 context', () => {
+  it('首页显示 107 Workspace 品牌链接', () => {
     renderShell('student')
 
     const header = screen.getByRole('banner')
-    expect(within(header).getByText('107 Workspace')).toBeVisible()
-    expect(within(header).getByRole('link', { name: '107 Workspace 首页' })).toHaveAttribute(
-      'href',
-      '/',
-    )
+    const brand = within(header).getByRole('link', { name: '107 Workspace 首页' })
+    expect(brand).toHaveAttribute('href', '/')
+    const mark = brand.querySelector('img')
+    expect(mark).not.toBeNull()
+    expect(mark).toHaveAttribute('width', '32')
+    expect(mark).toHaveAttribute('height', '32')
+    const workspace = within(header).getByRole('link', { name: '107 Workspace' })
+    expect(workspace).toHaveAttribute('href', '/')
+    expect(within(header).getByText('107 Workspace', { selector: 'span' })).toBeVisible()
+    expect(
+      within(header).queryByRole('link', { name: '107 Workspace 107 Workspace 首页' }),
+    ).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
@@ -186,6 +203,7 @@ describe('AppShell 壳层', () => {
       'href',
       '/',
     )
+    expect(within(header).queryByText('107 Workspace')).toBeNull()
     const context = within(header).getByRole('group', { name: '当前 Project' })
     expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
       'href',
