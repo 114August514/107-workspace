@@ -5,15 +5,12 @@
 
 ## 和 README 默认启动的区别
 
-根目录 `make dev` 打开的是 Vite <http://127.0.0.1:5174>，后端默认
-`WORKSPACE107_AUTH_MODE=dev`，缺省身份是 `student`，**没有登录页**。
+根目录 `make dev` 在 `WORKSPACE107_AUTH_MODE=ustc` 时已经带公开登录页：Vite `:5174`
+加上认证服务，配置全部来自仓库 `.env` / `backend/.env`。本目录是同一套认证服务的
+Nginx 入口，给不能走 Vite 的联调使用。
 
-Compose 默认 `web` 容器也监听 `:8107`，但只反代 `/api`，同样是 `AUTH_MODE=dev`，
-打开即已登录。那不是本目录这套 Nginx。
-
-本目录才是带公开登录页的入口：Nginx `auth_request`、认证服务处理 `/login`、
-`/login/password`、`/logout`，后端必须 `WORKSPACE107_AUTH_MODE=ustc`。两套 `:8107`
-端口相同、拓扑不同，不要同时占用。
+Compose 默认 `web` 容器监听 `:8107`，只反代 `/api`，默认 `AUTH_MODE=dev`，没有登录页。
+两套 `:8107` 不要同时占用。
 
 当前联调拓扑（非 Docker）：
 

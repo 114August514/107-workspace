@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
 from .common import (
     BACKEND_ROOT,
@@ -34,6 +35,7 @@ from .common import (
     resolve_executable,
     run,
 )
+from .dotenv_file import apply_auth_env_aliases, load_local_env_files
 
 TERMINAL_RUN_STATUSES = {"succeeded", "failed", "cancelled", "submit_failed"}
 DEMO_USER_GROUP_ID = "grp_demo"
@@ -76,14 +78,69 @@ def _backend_python_executable() -> str:
     return executable
 
 
+AUTH_ROOT = REPO_ROOT / "deploy" / "cas-revproxy"
+
+
+def _auth_mode() -> str:
+    return os.environ.get("WORKSPACE107_AUTH_MODE", "dev").strip() or "dev"
+
+
+def _backend_port() -> str:
+    origin = os.environ.get("WORKSPACE107_BACKEND_ORIGIN", "http://127.0.0.1:8000")
+    return urlparse(origin).port or 8000
+
+
+def _frontend_port() -> str:
+    origin = os.environ.get("WORKSPACE107_PUBLIC_ORIGIN", "http://127.0.0.1:5174")
+    return str(urlparse(origin).port or 5174)
+
+
+def _auth_port() -> str:
+    configured = os.environ.get("WORKSPACE107_AUTH_PORT", "").strip()
+    if configured:
+        return configured
+    origin = os.environ.get("WORKSPACE107_AUTH_ORIGIN", "http://127.0.0.1:8108")
+    return str(urlparse(origin).port or 8108)
+
+
+def _prepare_dev_environment() -> dict[str, str]:
+    load_local_env_files()
+    environment = apply_auth_env_aliases(os.environ.copy())
+    if _auth_mode() != "ustc":
+        return environment
+    environment.setdefault("WORKSPACE107_PUBLIC_ORIGIN", "http://127.0.0.1:5174")
+    environment.setdefault("PUBLIC_ORIGIN", environment["WORKSPACE107_PUBLIC_ORIGIN"])
+    environment.setdefault("WORKSPACE107_BACKEND_ORIGIN", "http://127.0.0.1:8000")
+    environment.setdefault("BACKEND_ORIGIN", environment["WORKSPACE107_BACKEND_ORIGIN"])
+    environment.setdefault("WORKSPACE107_AUTH_ORIGIN", f"http://127.0.0.1:{_auth_port()}")
+    environment.setdefault("AUTH_ORIGIN", environment["WORKSPACE107_AUTH_ORIGIN"])
+    environment.setdefault("SESSION_COOKIE_SECURE", "0")
+    if not environment.get("SECRET_KEY"):
+        raise TaskError(
+            "WORKSPACE107_AUTH_MODE=ustc requires WORKSPACE107_AUTH_SECRET_KEY "
+            "(copy .env.example to backend/.env and set a random value)"
+        )
+    if not environment.get("LOCAL_ADMIN_PASSWORD") and not environment.get(
+        "LOCAL_ADMIN_PASSWORD_HASH"
+    ):
+        print(
+            "warning: WORKSPACE107_LOCAL_ADMIN_PASSWORD is empty; password login is disabled",
+            flush=True,
+        )
+    os.environ.update(environment)
+    return environment
+
+
 def run_dev(component: str = "all") -> None:
     heading(f"Development server ({component})")
+    environment = _prepare_dev_environment()
+    login_stack = _auth_mode() == "ustc"
     if component in {"all", "backend"}:
         ensure_backend_dependencies(quiet=True)
     if component in {"all", "frontend"}:
         ensure_frontend_dependencies(quiet=True)
 
-    commands: list[tuple[list[str], Path]] = []
+    commands: list[tuple[list[str], Path, dict[str, str] | None]] = []
     if component in {"all", "backend"}:
         commands.append(
             (
@@ -97,24 +154,68 @@ def run_dev(component: str = "all") -> None:
                     "--host",
                     "127.0.0.1",
                     "--port",
-                    "8000",
+                    str(_backend_port()),
                 ],
                 BACKEND_ROOT,
+                environment,
+            )
+        )
+    if login_stack and component in {"all", "frontend"}:
+        auth_env = dict(environment)
+        auth_env["PYTHONPATH"] = str(AUTH_ROOT)
+        commands.append(
+            (
+                [
+                    resolve_executable("uv"),
+                    "run",
+                    "--no-project",
+                    "--with",
+                    "flask>=3,<4",
+                    "flask",
+                    "--app",
+                    "auth.auth_server:create_app",
+                    "run",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    _auth_port(),
+                ],
+                AUTH_ROOT,
+                auth_env,
             )
         )
     if component in {"all", "frontend"}:
         commands.append(
             (
-                [resolve_executable("pnpm"), "run", "dev", "--", "--host", "127.0.0.1"],
+                [
+                    resolve_executable("pnpm"),
+                    "run",
+                    "dev",
+                    "--",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    _frontend_port(),
+                    "--strictPort",
+                ],
                 FRONTEND_ROOT,
+                environment,
             )
         )
 
+    if login_stack:
+        print(
+            f"Login UI: {environment.get('PUBLIC_ORIGIN', 'http://127.0.0.1:5174')}/",
+            flush=True,
+        )
+    else:
+        print("Frontend: http://127.0.0.1:5174/ (AUTH_MODE=dev, no login page)", flush=True)
+
     processes: list[subprocess.Popen[str]] = []
     try:
-        for command, cwd in commands:
+        for command, cwd, env in commands:
             print(f"$ {command_text(command)}", flush=True)
-            processes.append(subprocess.Popen(command, cwd=cwd, text=True))
+            processes.append(subprocess.Popen(command, cwd=cwd, env=env, text=True))
         while processes:
             for process in processes:
                 return_code = process.poll()

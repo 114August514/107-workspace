@@ -19,15 +19,14 @@ WORKSPACE107_AUTH_MODE=dev uv run uvicorn workspace107.main:create_app --factory
 curl -H 'X-User: alice' http://127.0.0.1:8000/api/v1/me
 ```
 
-`make dev` 和 Compose 默认走这条 `dev` 模式，前端一打开就会拿到当前用户，因此看不到
-公开登录页。要在浏览器里看到账密 / 统一身份认证入口，必须同时满足：
+`make dev` 读取仓库根目录 `.env` 和 `backend/.env`。`WORKSPACE107_AUTH_MODE=ustc` 时会
+同时启动认证服务，Vite 对 `/login`、`/login/password`、`/logout` 和 `/api/` 做与 Nginx
+`auth_request` 相同的分流，浏览器打开 <http://127.0.0.1:5174> 就是公开登录页。
+账密、会话密钥、CAS 代理都使用 `.env.example` 里的 `WORKSPACE107_*` 字段。
 
-1. 后端 `WORKSPACE107_AUTH_MODE=ustc`（没有代理注入的身份时 `/api/v1/me` 返回 401）；
-2. 用 [`deploy/cas-revproxy/`](../../deploy/cas-revproxy/README.md) 的 Nginx 做入口
-   （`/login`、`POST /login/password`、`POST /logout` 和 `/api/` 的 `auth_request`）。
-
-只改 `AUTH_MODE=ustc`、仍用 Vite `:5174` 或 Compose `web` 容器，登录按钮没有对应代理路由，
-不能当成登录演示。
+`WORKSPACE107_AUTH_MODE=dev` 时仍直接以 `student` 进入。Compose 默认 `web` 容器没有这些
+路由，应保持 `AUTH_MODE=dev`。独立 Nginx 入口见
+[`deploy/cas-revproxy/`](../../deploy/cas-revproxy/README.md)。
 
 ## revproxy 与 Backend 的字段约定
 

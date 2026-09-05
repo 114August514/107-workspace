@@ -4,11 +4,10 @@
 [`docs/operations/deployment.md`](../docs/operations/deployment.md) 为准。
 
 当前包含 [`compose.yaml`](compose.yaml) 与 [`cas-revproxy/`](cas-revproxy/README.md)。
-Compose 用于本机开发和受信任演示，默认 `AUTH_MODE=dev`，`:8107` 没有登录页。
-CAS 反向代理（[`cas-revproxy/`](cas-revproxy/README.md)）才是带登录页的 `:8107`：
-后端 `AUTH_MODE=ustc`，Nginx `auth_request`，认证服务处理 `/login` 与
-`/login/password`。两套不要同时占用同一端口。它们不提供生产级 Secret 管理、自动备份、
-多副本编排或监控告警，因此不构成生产部署方案。
+Compose 用于本机容器演示，默认 `AUTH_MODE=dev`，`:8107` 没有登录页。
+本地带登录页用根目录 `make dev`（配置在 `.env` / `backend/.env`）。
+CAS 反向代理（[`cas-revproxy/`](cas-revproxy/README.md)）是独立 Nginx 入口。
+它们不提供生产级 Secret 管理、自动备份、多副本编排或监控告警，因此不构成生产部署方案。
 
 ## 目录边界
 
