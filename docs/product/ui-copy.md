@@ -102,6 +102,9 @@ AppShell 的上下文引导在页面底部提供 route-level 的概念提示，�
 - ContextGuide 说明当前页面的对象语义和下一步。
 
 上下文引导不得写成依赖控件位置的点击手册，也不重复页面标题或虚构当前不存在的入口。
+TopBar 的 107 Brand Mark 是独立的首页链接，负责返回 `/`；`107 Workspace` 文字只在当前 AppShell 没有
+Owner、Project 或 User Group context 时作为纯文本占位显示。有上下文时隐藏该文字，避免抢占对象名称空间。
+Brand Mark 的可访问名称为`107 Workspace 首页`；该名称属于图标链接，不代表可见 wordmark。
 第一版只按 ProductRoutes 的五个 route 呈现稳定文案：
 
 | Route                       | 权威文案                                                                                      |

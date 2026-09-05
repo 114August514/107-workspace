@@ -13,6 +13,19 @@ from ..deps import CurrentUser, ServicesDep
 router = APIRouter(tags=["home"])
 
 
+@router.patch("/me", response_model=s.UserOut, summary="更新当前用户资料")
+async def update_me(
+    payload: s.UserProfileUpdateIn, user: CurrentUser, services: ServicesDep
+) -> s.UserOut:
+    """Update the signed-in User's username and display name. Email stays identity-provided."""
+    updated = await services.identity.update_profile(
+        user.id,
+        username=payload.username,
+        display_name=payload.display_name,
+    )
+    return p.user_out(updated)
+
+
 @router.get("/me", response_model=s.HomeOut, summary="获取个人首页")
 async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
     """Return current identity, User Groups, direct execution context, and recent objects."""

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import re
+
 from ..domain import ids
+from ..domain.errors import ConflictError, ObjectNotFound, ValidationFailed
 from ..domain.models import ExternalIdentity, ExternalIdentityProfile, User
 from ..domain.ports.clock import Clock
 from ..domain.ports.repositories import Repositories
 from .activity import SupportsNestedTransaction
+
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9._~-]{1,64}$")
 
 
 class IdentityService:
@@ -74,6 +79,38 @@ class IdentityService:
             if winner is None:  # pragma: no cover - non-identity failure
                 raise
             return await self._linked_user(winner)
+        return user
+
+    async def update_profile(
+        self,
+        user_id: str,
+        *,
+        username: str | None = None,
+        display_name: str | None = None,
+    ) -> User:
+        """Update the current User's visible username and display name."""
+        user = await self._repos.users.get(user_id)
+        if user is None:
+            raise ObjectNotFound("User", user_id)
+        if username is not None:
+            candidate = username.strip()
+            if not candidate:
+                raise ValidationFailed("用户名不能为空")
+            if not _USERNAME_RE.fullmatch(candidate):
+                raise ValidationFailed("用户名只能包含字母、数字、点、下划线、连字符和波浪号")
+            if candidate != user.username:
+                taken = await self._repos.users.get_by_username(candidate)
+                if taken is not None:
+                    raise ConflictError("这个用户名已经被占用")
+                user.username = candidate
+        if display_name is not None:
+            name = display_name.strip()
+            if not name:
+                raise ValidationFailed("显示名称不能为空")
+            if len(name) > 128:
+                raise ValidationFailed("显示名称不能超过 128 个字符")
+            user.display_name = name
+        await self._repos.users.update(user)
         return user
 
     async def _linked_user(self, identity: ExternalIdentity) -> User:

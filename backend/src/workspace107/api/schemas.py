@@ -64,6 +64,11 @@ class UserOut(Model):
     email: str | None = None
 
 
+class UserProfileUpdateIn(Model):
+    username: str | None = Field(default=None, min_length=1, max_length=64)
+    display_name: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 class UserGroupOut(Model):
     id: str
     name: str
