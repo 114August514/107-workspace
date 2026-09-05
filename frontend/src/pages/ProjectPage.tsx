@@ -4,7 +4,7 @@ import { BranchesOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { api } from '../api/client'
+import { api, type DeleteResult } from '../api/client'
 import { toAsyncError } from '../api/errors'
 import {
   can,
@@ -273,6 +273,7 @@ function DeleteProjectModal({
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<Error | undefined>()
+  const [result, setResult] = useState<DeleteResult>()
   const viewError = toAsyncError(submitError ?? impact.error)
   const canConfirm = impact.data?.can_delete === true && !submitting
   const items = impact.data?.items ?? []
@@ -283,8 +284,8 @@ function DeleteProjectModal({
     setSubmitting(true)
     setSubmitError(undefined)
     try {
-      await api.deleteProject(project.id)
-      onDeleted()
+      setResult(await api.deleteProject(project.id))
+      setSubmitting(false)
     } catch (error) {
       setSubmitError(error instanceof Error ? error : new Error('delete failed'))
       setSubmitting(false)
@@ -294,50 +295,93 @@ function DeleteProjectModal({
   return (
     <Modal
       open
-      title={`删除 Project“${project.name}”？`}
+      title={
+        result === 'deleted'
+          ? 'Project 已删除'
+          : result === 'absent'
+            ? 'Project 不存在'
+            : `删除 Project“${project.name}”？`
+      }
       okText="删除 Project"
       cancelText="取消"
       onCancel={() => {
-        if (!submitting) onClose()
+        if (result) onDeleted()
+        else if (!submitting) onClose()
       }}
       onOk={() => void submit()}
       confirmLoading={submitting}
       okButtonProps={{ danger: true, disabled: !canConfirm }}
+      footer={
+        result
+          ? [
+              <Button key="home" type="primary" onClick={onDeleted}>
+                返回首页
+              </Button>,
+            ]
+          : undefined
+      }
     >
-      <p>删除后，其 Working State、Version、Run Configuration、Run 和从属记录将结束生命周期。</p>
-      {impact.loading ? <p>正在读取删除影响…</p> : null}
-      {impact.data ? (
+      {result ? (
+        <p>
+          {result === 'deleted'
+            ? 'Project 已删除。'
+            : 'Project 当前不存在；它可能已被删除，但此结果不能说明由谁删除。'}
+        </p>
+      ) : (
         <>
-          <p>将处理以下记录：</p>
-          <ul>
-            {items
-              .filter((item) => item.count > 0)
-              .map((item) => (
-                <li key={item.kind}>
-                  {PROJECT_DELETION_LABELS[item.kind] ?? item.kind}：{item.count}
-                </li>
-              ))}
-          </ul>
-          {problems.map((problem) => (
-            <Alert key={problem} type="warning" showIcon message={problem} />
-          ))}
+          <p>
+            删除后，其 Working State、Version、Run Configuration、Run 和从属记录将结束生命周期。
+          </p>
+          {impact.loading ? <p>正在读取删除影响…</p> : null}
+          {impact.data ? (
+            <>
+              <p>将处理以下记录：</p>
+              <ul>
+                {items
+                  .filter((item) => item.count > 0)
+                  .map((item) => (
+                    <li key={item.kind}>
+                      {PROJECT_DELETION_LABELS[item.kind] ?? item.kind}：{item.count}
+                    </li>
+                  ))}
+              </ul>
+              {items.every((item) => item.count === 0) ? <p>没有需要额外处理的记录。</p> : null}
+              {problems.length > 0 ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="当前不能删除"
+                  description={
+                    <>
+                      <ul>
+                        {problems.map((problem) => (
+                          <li key={problem}>{problem}</li>
+                        ))}
+                      </ul>
+                      <p>请先处理以上阻塞项，然后重新读取删除影响。</p>
+                    </>
+                  }
+                />
+              ) : null}
+            </>
+          ) : null}
+          {viewError ? (
+            <Alert
+              type="error"
+              showIcon
+              message={viewError.message}
+              description={viewError.problems?.join('；')}
+              action={
+                impact.error && !submitError ? (
+                  <Button type="link" onClick={() => void impact.reload()}>
+                    重试读取影响
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : null}
         </>
-      ) : null}
-      {viewError ? (
-        <Alert
-          type="error"
-          showIcon
-          message={viewError.message}
-          description={viewError.problems?.join('；')}
-          action={
-            impact.error && !submitError ? (
-              <Button type="link" onClick={() => void impact.reload()}>
-                重试读取影响
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : null}
+      )}
     </Modal>
   )
 }

@@ -7492,6 +7492,7 @@
     },
     "/api/v1/projects/{project_id}": {
       "delete": {
+        "description": "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。",
         "operationId": "delete_project_api_v1_projects__project_id__delete",
         "parameters": [
           {
@@ -7534,7 +7535,7 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Project 删除成功。"
           },
           "400": {
             "content": {
@@ -7567,14 +7568,7 @@
             "description": "对象可见，但当前角色无权执行该操作"
           },
           "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象不存在，或当前用户没有发现权限"
+            "description": "Project 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
           },
           "409": {
             "content": {
@@ -14316,6 +14310,7 @@
     },
     "/api/v1/user-groups/{user_group_id}": {
       "delete": {
+        "description": "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。",
         "operationId": "delete_user_group_api_v1_user_groups__user_group_id__delete",
         "parameters": [
           {
@@ -14358,7 +14353,7 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "User Group 删除成功。"
           },
           "400": {
             "content": {
@@ -14391,14 +14386,7 @@
             "description": "对象可见，但当前角色无权执行该操作"
           },
           "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "对象不存在，或当前用户没有发现权限"
+            "description": "User Group 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
           },
           "409": {
             "content": {

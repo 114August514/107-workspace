@@ -8,6 +8,7 @@ application 层通过 :class:`Repositories` 访问持久化，不认识 SQLAlche
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -77,11 +78,7 @@ class ProjectDeletionPlan:
     notifications: int
     fork_relation: int
     fork_dependents: int
-    run_ids: tuple[str, ...]
-    snapshot_ids: tuple[str, ...]
-    version_ids: tuple[str, ...]
-    artifact_ids: tuple[str, ...]
-    unfinished_run_ids: tuple[str, ...]
+    unfinished_runs: int
 
 
 class UserRepository(Protocol):
@@ -388,8 +385,11 @@ class LifecycleRepository(Protocol):
 
     async def user_group_summary(self, user_group_id: str) -> UserGroupDeletionSummary: ...
     async def project_plan(self, project_id: str) -> ProjectDeletionPlan: ...
+    async def unfinished_run_count(self, project_id: str) -> int: ...
+    def iter_project_run_ids(self, project_id: str) -> AsyncIterator[str]: ...
+    def iter_project_artifact_ids(self, project_id: str) -> AsyncIterator[str]: ...
     async def delete_user_group(self, user_group_id: str) -> None: ...
-    async def delete_project(self, plan: ProjectDeletionPlan) -> None: ...
+    async def delete_project(self, project_id: str) -> None: ...
 
 
 class Repositories(Protocol):

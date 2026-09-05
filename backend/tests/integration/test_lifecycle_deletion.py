@@ -219,6 +219,91 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
             cleaned_at=None,
         )
     )
+    for index in range(500):
+        bulk_snapshot_id = f"snap_issue51_bulk_{index:04d}"
+        bulk_run_id = f"run_issue51_bulk_{index:04d}"
+        bulk_artifact_id = f"art_issue51_bulk_{index:04d}"
+        session.add(t.RunSnapshotRow(id=bulk_snapshot_id, payload={"project_id": project_id}))
+        await session.flush()
+        session.add(
+            t.RunRow(
+                id=bulk_run_id,
+                project_id=project_id,
+                snapshot_id=bulk_snapshot_id,
+                compute_plan_id=compute_plan_id,
+                project_version_id=version_id,
+                project_version_label="v1",
+                source_run_configuration_id=None,
+                source_run_id=None,
+                name=f"bulk run {index}",
+                status="succeeded",
+                scheduler_job_id=None,
+                exit_code=0,
+                failure_reason="",
+                initiated_by_user_id=user_id,
+                created_at=now,
+                submitted_at=now,
+                started_at=now,
+                finished_at=now,
+            )
+        )
+        await session.flush()
+        session.add(
+            t.ArtifactRow(
+                id=bulk_artifact_id,
+                run_id=bulk_run_id,
+                project_id=project_id,
+                name="bulk result",
+                source_path="result.txt",
+                size=3,
+                file_count=1,
+                content_hash=f"bulk-digest-{index:04d}",
+                status="available",
+                description="",
+                created_at=now,
+                cleaned_at=None,
+            )
+        )
+    session.add_all(
+        [
+            t.NotificationRow(
+                id="notification_issue51_project",
+                recipient_id=user_id,
+                type="project_deleted",
+                title="Project",
+                body="project",
+                target_type="project",
+                target_id=project_id,
+                mandatory=False,
+                created_at=now,
+                read_at=None,
+            ),
+            t.NotificationRow(
+                id="notification_issue51_version",
+                recipient_id=user_id,
+                type="version_saved",
+                title="Version",
+                body="version",
+                target_type="project_version",
+                target_id=version_id,
+                mandatory=False,
+                created_at=now,
+                read_at=None,
+            ),
+            t.NotificationRow(
+                id="notification_issue51_run",
+                recipient_id=user_id,
+                type="run_finished",
+                title="Run",
+                body="run",
+                target_type="run",
+                target_id=run_id,
+                mandatory=False,
+                created_at=now,
+                read_at=None,
+            ),
+        ]
+    )
     await session.commit()
 
     run_root = context.storage.run_paths(run_id).root
@@ -227,19 +312,23 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
     artifact_root = Path(context.settings.storage_root) / "artifacts" / artifact_id
     artifact_root.mkdir(parents=True)
     (artifact_root / "result.txt").write_text("out", encoding="utf-8")
+    bulk_run_root = context.storage.run_paths("run_issue51_bulk_0499").root
+    bulk_run_root.mkdir(parents=True)
+    bulk_artifact_root = Path(context.settings.storage_root) / "artifacts" / "art_issue51_bulk_0499"
+    bulk_artifact_root.mkdir(parents=True)
 
     cas_hash = await context.storage.write_blob(b"shared-cas-content")
     impact = await client.get(f"/api/v1/projects/{project_id}/deletion-impact", headers=ALICE)
     assert impact.status_code == 200, impact.text
     impact_body = impact.json()
-    assert impact_body["can_delete"] is True
     counts = {item["kind"]: item["count"] for item in impact_body["items"]}
+    assert impact_body["can_delete"] is True
     assert counts["working_state_files"] == 1
     assert counts["versions"] == 1
-    assert counts["runs"] == 1
-    assert counts["snapshots"] == 1
-    assert counts["artifacts"] == 1
-
+    assert counts["runs"] == 501
+    assert counts["snapshots"] == 501
+    assert counts["artifacts"] == 501
+    assert counts["notifications"] == 3
     unconfirmed = await client.delete(f"/api/v1/projects/{project_id}", headers=ALICE)
     assert unconfirmed.status_code == 409
     assert unconfirmed.json()["problems"] == ["请在确认影响范围后重试"]
@@ -263,6 +352,8 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
     ).status_code == 404
     assert not run_root.exists()
     assert not artifact_root.exists()
+    assert not bulk_run_root.exists()
+    assert not bulk_artifact_root.exists()
     assert (
         await session.execute(select(t.RunRow).where(t.RunRow.id == run_id))
     ).scalar_one_or_none() is None
@@ -278,6 +369,30 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
     assert (
         await session.execute(
             select(t.ProjectFileRow).where(t.ProjectFileRow.project_id == project_id)
+        )
+    ).scalars().all() == []
+    assert (
+        await session.execute(select(t.RunRow).where(t.RunRow.project_id == project_id))
+    ).scalars().all() == []
+    assert (
+        await session.execute(select(t.ArtifactRow).where(t.ArtifactRow.project_id == project_id))
+    ).scalars().all() == []
+    assert (
+        await session.execute(
+            select(t.RunSnapshotRow).where(t.RunSnapshotRow.id.like("snap_issue51_%"))
+        )
+    ).scalars().all() == []
+    assert (
+        await session.execute(
+            select(t.NotificationRow).where(
+                t.NotificationRow.id.in_(
+                    [
+                        "notification_issue51_project",
+                        "notification_issue51_version",
+                        "notification_issue51_run",
+                    ]
+                )
+            )
         )
     ).scalars().all() == []
 

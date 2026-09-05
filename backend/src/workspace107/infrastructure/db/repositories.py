@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -69,6 +70,8 @@ from ...domain.ports.repositories import ProjectDeletionPlan, UserGroupDeletionS
 from ...domain.run_snapshot import RunSnapshot
 from ...domain.secrets import parse_env_value
 from . import tables as t
+
+_PROJECT_DELETION_BATCH_SIZE = 500
 
 # 唯一约束冲突 -> 领域冲突错误。
 #
@@ -1972,39 +1975,10 @@ class LifecycleRepositoryImpl:
         )
 
     async def project_plan(self, project_id: str) -> ProjectDeletionPlan:
-        run_rows = (
-            await self._session.execute(
-                select(t.RunRow.id, t.RunRow.snapshot_id, t.RunRow.status).where(
-                    t.RunRow.project_id == project_id
-                )
-            )
-        ).all()
-        run_ids = tuple(row[0] for row in run_rows)
-        snapshot_ids = tuple(row[1] for row in run_rows)
-        unfinished_run_ids = tuple(
-            row[0]
-            for row in run_rows
-            if row[2] in {RunStatus.QUEUED.value, RunStatus.RUNNING.value}
-        )
-        version_ids = tuple(
-            (
-                await self._session.execute(
-                    select(t.ProjectVersionRow.id).where(
-                        t.ProjectVersionRow.project_id == project_id
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        artifact_ids = tuple(
-            (
-                await self._session.execute(
-                    select(t.ArtifactRow.id).where(t.ArtifactRow.project_id == project_id)
-                )
-            )
-            .scalars()
-            .all()
+        run_ids = select(t.RunRow.id).where(t.RunRow.project_id == project_id)
+        snapshot_ids = select(t.RunRow.snapshot_id).where(t.RunRow.project_id == project_id)
+        version_ids = select(t.ProjectVersionRow.id).where(
+            t.ProjectVersionRow.project_id == project_id
         )
         notification_filter = or_(
             and_(
@@ -2025,7 +1999,9 @@ class LifecycleRepositoryImpl:
             working_state_files=await self._count(
                 t.ProjectFileRow, t.ProjectFileRow.project_id == project_id
             ),
-            versions=len(version_ids),
+            versions=await self._count(
+                t.ProjectVersionRow, t.ProjectVersionRow.project_id == project_id
+            ),
             version_files=await self._count(
                 t.ProjectVersionFileRow, t.ProjectVersionFileRow.version_id.in_(version_ids)
             ),
@@ -2045,10 +2021,10 @@ class LifecycleRepositoryImpl:
                 t.SecretRow.scope_kind == "project",
                 t.SecretRow.scope_id == project_id,
             ),
-            runs=len(run_ids),
-            snapshots=len(snapshot_ids),
+            runs=await self._count(t.RunRow, t.RunRow.project_id == project_id),
+            snapshots=await self._count(t.RunSnapshotRow, t.RunSnapshotRow.id.in_(snapshot_ids)),
             run_events=await self._count(t.RunEventRow, t.RunEventRow.run_id.in_(run_ids)),
-            artifacts=len(artifact_ids),
+            artifacts=await self._count(t.ArtifactRow, t.ArtifactRow.project_id == project_id),
             activities=await self._count(t.ActivityRow, t.ActivityRow.project_id == project_id),
             notifications=await self._count(t.NotificationRow, notification_filter),
             fork_relation=await self._count(
@@ -2057,12 +2033,57 @@ class LifecycleRepositoryImpl:
             fork_dependents=await self._count(
                 t.ForkRelationRow, t.ForkRelationRow.source_project_id == project_id
             ),
-            run_ids=run_ids,
-            snapshot_ids=snapshot_ids,
-            version_ids=version_ids,
-            artifact_ids=artifact_ids,
-            unfinished_run_ids=unfinished_run_ids,
+            unfinished_runs=await self.unfinished_run_count(project_id),
         )
+
+    async def unfinished_run_count(self, project_id: str) -> int:
+        return await self._count(
+            t.RunRow,
+            t.RunRow.project_id == project_id,
+            t.RunRow.status.in_({RunStatus.QUEUED.value, RunStatus.RUNNING.value}),
+        )
+
+    async def iter_project_run_ids(self, project_id: str) -> AsyncIterator[str]:
+        last_id: str | None = None
+        while True:
+            stmt = select(t.RunRow.id).where(t.RunRow.project_id == project_id)
+            if last_id is not None:
+                stmt = stmt.where(t.RunRow.id > last_id)
+            batch = (
+                (
+                    await self._session.execute(
+                        stmt.order_by(t.RunRow.id).limit(_PROJECT_DELETION_BATCH_SIZE)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not batch:
+                return
+            for run_id in batch:
+                yield run_id
+            last_id = batch[-1]
+
+    async def iter_project_artifact_ids(self, project_id: str) -> AsyncIterator[str]:
+        last_id: str | None = None
+        while True:
+            stmt = select(t.ArtifactRow.id).where(t.ArtifactRow.project_id == project_id)
+            if last_id is not None:
+                stmt = stmt.where(t.ArtifactRow.id > last_id)
+            batch = (
+                (
+                    await self._session.execute(
+                        stmt.order_by(t.ArtifactRow.id).limit(_PROJECT_DELETION_BATCH_SIZE)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not batch:
+                return
+            for artifact_id in batch:
+                yield artifact_id
+            last_id = batch[-1]
 
     async def delete_user_group(self, user_group_id: str) -> None:
         await self._session.execute(
@@ -2106,78 +2127,100 @@ class LifecycleRepositoryImpl:
         )
         await _flush(self._session)
 
-    async def delete_project(self, plan: ProjectDeletionPlan) -> None:
-        if plan.artifact_ids:
-            await self._session.execute(
-                delete(t.ArtifactRow).where(t.ArtifactRow.project_id == plan.project_id)
-            )
-        if plan.run_ids:
-            await self._session.execute(
-                delete(t.RunSecretRedactionRow).where(
-                    t.RunSecretRedactionRow.run_id.in_(plan.run_ids)
-                )
-            )
-            await self._session.execute(
-                delete(t.RunEventRow).where(t.RunEventRow.run_id.in_(plan.run_ids))
-            )
-            await self._session.execute(
-                delete(t.IdempotencyKeyRow).where(t.IdempotencyKeyRow.run_id.in_(plan.run_ids))
-            )
-            await self._session.execute(delete(t.RunRow).where(t.RunRow.id.in_(plan.run_ids)))
-        if plan.snapshot_ids:
-            await self._session.execute(
-                delete(t.RunSnapshotRow).where(t.RunSnapshotRow.id.in_(plan.snapshot_ids))
-            )
-        if plan.version_ids:
-            await self._session.execute(
-                delete(t.ProjectVersionFileRow).where(
-                    t.ProjectVersionFileRow.version_id.in_(plan.version_ids)
-                )
-            )
-            await self._session.execute(
-                delete(t.ProjectVersionRow).where(t.ProjectVersionRow.id.in_(plan.version_ids))
-            )
-        await self._session.execute(
-            delete(t.ProjectFileRow).where(t.ProjectFileRow.project_id == plan.project_id)
+    async def delete_project(self, project_id: str) -> None:
+        run_ids = select(t.RunRow.id).where(t.RunRow.project_id == project_id)
+        version_ids = select(t.ProjectVersionRow.id).where(
+            t.ProjectVersionRow.project_id == project_id
         )
-        await self._session.execute(
-            delete(t.RunConfigurationRow).where(t.RunConfigurationRow.project_id == plan.project_id)
-        )
-        await self._session.execute(
-            delete(t.VariableRow).where(
-                t.VariableRow.scope_kind == "project", t.VariableRow.scope_id == plan.project_id
-            )
-        )
-        await self._session.execute(
-            delete(t.SecretRow).where(
-                t.SecretRow.scope_kind == "project", t.SecretRow.scope_id == plan.project_id
-            )
-        )
-        await self._session.execute(
-            delete(t.ForkRelationRow).where(t.ForkRelationRow.project_id == plan.project_id)
-        )
-        await self._session.execute(
-            delete(t.ActivityRow).where(t.ActivityRow.project_id == plan.project_id)
-        )
+
+        # Notification target IDs are intentionally soft references. Delete them while
+        # their Run and Version source subqueries still produce rows.
         await self._session.execute(
             delete(t.NotificationRow).where(
                 or_(
                     and_(
                         t.NotificationRow.target_type == TargetType.PROJECT.value,
-                        t.NotificationRow.target_id == plan.project_id,
+                        t.NotificationRow.target_id == project_id,
                     ),
                     and_(
                         t.NotificationRow.target_type == TargetType.PROJECT_VERSION.value,
-                        t.NotificationRow.target_id.in_(plan.version_ids),
+                        t.NotificationRow.target_id.in_(version_ids),
                     ),
                     and_(
                         t.NotificationRow.target_type == TargetType.RUN.value,
-                        t.NotificationRow.target_id.in_(plan.run_ids),
+                        t.NotificationRow.target_id.in_(run_ids),
                     ),
                 )
             )
         )
-        await self._session.execute(delete(t.ProjectRow).where(t.ProjectRow.id == plan.project_id))
+        await self._session.execute(
+            delete(t.ArtifactRow).where(t.ArtifactRow.project_id == project_id)
+        )
+        await self._session.execute(
+            delete(t.RunSecretRedactionRow).where(t.RunSecretRedactionRow.run_id.in_(run_ids))
+        )
+        await self._session.execute(delete(t.RunEventRow).where(t.RunEventRow.run_id.in_(run_ids)))
+        await self._session.execute(
+            delete(t.IdempotencyKeyRow).where(t.IdempotencyKeyRow.run_id.in_(run_ids))
+        )
+
+        # Snapshot IDs must survive the Run delete that releases their FK. Keep only
+        # one bounded batch at a time; snapshots shared by any remaining Run survive.
+        while True:
+            run_batch = (
+                await self._session.execute(
+                    select(t.RunRow.id, t.RunRow.snapshot_id)
+                    .where(t.RunRow.project_id == project_id)
+                    .order_by(t.RunRow.id)
+                    .limit(_PROJECT_DELETION_BATCH_SIZE)
+                )
+            ).all()
+            if not run_batch:
+                break
+            batch_run_ids = [row[0] for row in run_batch]
+            batch_snapshot_ids = [row[1] for row in run_batch]
+            await self._session.execute(delete(t.RunRow).where(t.RunRow.id.in_(batch_run_ids)))
+            remaining_snapshot_reference = (
+                select(t.RunRow.id).where(t.RunRow.snapshot_id == t.RunSnapshotRow.id).exists()
+            )
+            await self._session.execute(
+                delete(t.RunSnapshotRow).where(
+                    t.RunSnapshotRow.id.in_(batch_snapshot_ids),
+                    ~remaining_snapshot_reference,
+                )
+            )
+
+        await self._session.execute(
+            delete(t.ProjectVersionFileRow).where(
+                t.ProjectVersionFileRow.version_id.in_(version_ids)
+            )
+        )
+        await self._session.execute(
+            delete(t.ProjectVersionRow).where(t.ProjectVersionRow.project_id == project_id)
+        )
+        await self._session.execute(
+            delete(t.ProjectFileRow).where(t.ProjectFileRow.project_id == project_id)
+        )
+        await self._session.execute(
+            delete(t.RunConfigurationRow).where(t.RunConfigurationRow.project_id == project_id)
+        )
+        await self._session.execute(
+            delete(t.VariableRow).where(
+                t.VariableRow.scope_kind == "project", t.VariableRow.scope_id == project_id
+            )
+        )
+        await self._session.execute(
+            delete(t.SecretRow).where(
+                t.SecretRow.scope_kind == "project", t.SecretRow.scope_id == project_id
+            )
+        )
+        await self._session.execute(
+            delete(t.ForkRelationRow).where(t.ForkRelationRow.project_id == project_id)
+        )
+        await self._session.execute(
+            delete(t.ActivityRow).where(t.ActivityRow.project_id == project_id)
+        )
+        await self._session.execute(delete(t.ProjectRow).where(t.ProjectRow.id == project_id))
         await _flush(self._session)
 
 

@@ -198,7 +198,7 @@ describe('UserGroupPage 分区导航信息架构', () => {
       ],
     }
     vi.spyOn(api, 'getUserGroupDeletionImpact').mockResolvedValue(impact)
-    const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue()
+    const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue('deleted')
 
     renderUserGroupRoute('/user-groups/grp_lab')
 
@@ -211,5 +211,30 @@ describe('UserGroupPage 分区导航信息架构', () => {
     ).toBeInTheDocument()
     within(dialog).getByRole('button', { name: '删除 User Group' }).click()
     await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('grp_lab'))
+  })
+
+  it('将 404-on-retry 显示为目标已不存在，而不是声称本次删除成功', async () => {
+    vi.mocked(api.getUserGroup).mockResolvedValue(deletableGroup)
+    vi.spyOn(api, 'getUserGroupDeletionImpact').mockResolvedValue({
+      resource_type: 'user_group',
+      resource_id: 'grp_lab',
+      resource_name: 'Research Lab',
+      can_delete: true,
+      problems: [],
+      items: [{ kind: 'memberships', count: 0 }],
+    })
+    const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue('absent')
+
+    renderUserGroupRoute('/user-groups/grp_lab')
+    await screen.findByRole('button', { name: '删除 User Group' })
+    screen.getByRole('button', { name: '删除 User Group' }).click()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('没有需要额外处理的记录。')).toBeInTheDocument()
+    within(dialog).getByRole('button', { name: '删除 User Group' }).click()
+
+    await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('grp_lab'))
+    expect(await within(dialog).findByText(/当前不存在/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/不能说明由谁删除/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '返回首页' })).toBeInTheDocument()
   })
 })

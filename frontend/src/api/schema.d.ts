@@ -523,7 +523,10 @@ export interface paths {
         get: operations["get_project_api_v1_projects__project_id__get"];
         put?: never;
         post?: never;
-        /** 删除 Project */
+        /**
+         * 删除 Project
+         * @description 删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。
+         */
         delete: operations["delete_project_api_v1_projects__project_id__delete"];
         options?: never;
         head?: never;
@@ -1412,7 +1415,10 @@ export interface paths {
         get: operations["get_user_group_api_v1_user_groups__user_group_id__get"];
         put?: never;
         post?: never;
-        /** 删除 User Group */
+        /**
+         * 删除 User Group
+         * @description 删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。
+         */
         delete: operations["delete_user_group_api_v1_user_groups__user_group_id__delete"];
         options?: never;
         head?: never;
@@ -5975,7 +5981,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Project 删除成功。 */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -6009,14 +6015,12 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限 */
+            /** @description Project 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。 */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
+                content?: never;
             };
             /** @description 与现有状态冲突，例如重名或对象不可修改 */
             409: {
@@ -10807,7 +10811,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description User Group 删除成功。 */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -10841,14 +10845,12 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
-            /** @description 对象不存在，或当前用户没有发现权限 */
+            /** @description User Group 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。 */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ErrorOut"];
-                };
+                content?: never;
             };
             /** @description 与现有状态冲突，例如重名或对象不可修改 */
             409: {

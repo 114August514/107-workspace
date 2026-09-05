@@ -146,4 +146,66 @@ describe('fetch transport wrapper', () => {
       return true
     })
   })
+
+  it('将删除端点的 404 解析为目标不存在结果', async () => {
+    const OriginalRequest = globalThis.Request
+    vi.stubGlobal(
+      'Request',
+      class extends OriginalRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')) {
+            super(new URL(input, 'http://localhost:5173'), init)
+          } else {
+            super(input, init)
+          }
+        }
+      },
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 'not_found', message: '不存在', problems: [] }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    vi.resetModules()
+    const { api } = await import('../../../src/api/client')
+    await expect(api.deleteProject('project_missing')).resolves.toBe('absent')
+  })
+
+  it('删除端点的权限错误不会被当作已删除', async () => {
+    const OriginalRequest = globalThis.Request
+    vi.stubGlobal(
+      'Request',
+      class extends OriginalRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')) {
+            super(new URL(input, 'http://localhost:5173'), init)
+          } else {
+            super(input, init)
+          }
+        }
+      },
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ code: 'permission_denied', message: '无权限', problems: [] }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } },
+          ),
+        ),
+    )
+
+    vi.resetModules()
+    const { api, ApiError } = await import('../../../src/api/client')
+    await expect(api.deleteUserGroup('group_forbidden')).rejects.toSatisfy((error: unknown) => {
+      return error instanceof ApiError && error.status === 403
+    })
+  })
 })

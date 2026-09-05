@@ -3,7 +3,7 @@ import { Banner, Button, Dialog, Label, Stack, Text } from '@primer/react'
 import { useState } from 'react'
 import { Outlet, matchPath, useLocation, useNavigate } from 'react-router-dom'
 
-import { api } from '../api/client'
+import { api, type DeleteResult } from '../api/client'
 import { toAsyncError } from '../api/errors'
 import { can, type DeletionImpact, type UserGroup } from '../api/types'
 import { useAsync } from '../api/useAsync'
@@ -100,6 +100,7 @@ function DeleteUserGroupDialog({
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<Error | undefined>()
+  const [result, setResult] = useState<DeleteResult>()
   const viewError = toAsyncError(submitError ?? impact.error)
   const canConfirm = impact.data?.can_delete === true && !submitting
   const items = impact.data?.items ?? []
@@ -110,8 +111,8 @@ function DeleteUserGroupDialog({
     setSubmitting(true)
     setSubmitError(undefined)
     try {
-      await api.deleteUserGroup(userGroup.id)
-      onDeleted()
+      setResult(await api.deleteUserGroup(userGroup.id))
+      setSubmitting(false)
     } catch (error) {
       setSubmitError(error instanceof Error ? error : new Error('delete failed'))
       setSubmitting(false)
@@ -120,72 +121,95 @@ function DeleteUserGroupDialog({
 
   return (
     <Dialog
-      title={governanceCopy.delete.title(userGroup.name)}
+      title={
+        result === 'deleted'
+          ? governanceCopy.delete.success
+          : result === 'absent'
+            ? 'User Group 不存在'
+            : governanceCopy.delete.title(userGroup.name)
+      }
       width="large"
       onClose={() => {
-        if (!submitting) onClose()
+        if (result) onDeleted()
+        else if (!submitting) onClose()
       }}
-      footerButtons={[
-        {
-          content: governanceCopy.delete.cancel,
-          disabled: submitting,
-          onClick: onClose,
-        },
-        {
-          content: governanceCopy.delete.confirm,
-          buttonType: 'danger',
-          loading: submitting,
-          disabled: !canConfirm,
-          onClick: () => void submit(),
-        },
-      ]}
+      footerButtons={
+        result
+          ? [
+              {
+                content: governanceCopy.delete.returnHome,
+                onClick: onDeleted,
+              },
+            ]
+          : [
+              {
+                content: governanceCopy.delete.cancel,
+                disabled: submitting,
+                onClick: onClose,
+              },
+              {
+                content: governanceCopy.delete.confirm,
+                buttonType: 'danger',
+                loading: submitting,
+                disabled: !canConfirm,
+                onClick: () => void submit(),
+              },
+            ]
+      }
     >
-      <Stack gap="normal">
-        <Text as="p">{governanceCopy.delete.description}</Text>
-        {impact.loading ? <Text>{governanceCopy.delete.loading}</Text> : null}
-        {impact.data ? (
-          <>
-            <Text as="h3">{governanceCopy.delete.impactTitle}</Text>
-            <ul>
-              {items
-                .filter((item) => item.count > 0)
-                .map((item) => (
-                  <li key={item.kind}>
-                    {governanceCopy.delete.itemLabels[item.kind] ?? item.kind}：{item.count}
-                  </li>
-                ))}
-            </ul>
-            {items.every((item) => item.count === 0) ? (
-              <Text>{governanceCopy.delete.empty}</Text>
-            ) : null}
-            {problems.length > 0 ? (
-              <Banner variant="critical">
-                <Banner.Title>{governanceCopy.delete.blockedTitle}</Banner.Title>
-                <Banner.Description>
-                  <ul>
-                    {problems.map((problem) => (
-                      <li key={problem}>{problem}</li>
-                    ))}
-                  </ul>
-                </Banner.Description>
-              </Banner>
-            ) : null}
-          </>
-        ) : null}
-        {viewError ? (
-          <Banner variant="critical">
-            <Banner.Title>{viewError.message}</Banner.Title>
-            {viewError.problems?.map((problem) => (
-              <Banner.Description key={problem}>{problem}</Banner.Description>
-            ))}
-            {impact.error && !submitError ? (
-              <Banner.PrimaryAction onClick={() => void impact.reload()}>
-                重试读取影响
-              </Banner.PrimaryAction>
-            ) : null}
-          </Banner>
-        ) : null}
-      </Stack>
+      {result ? (
+        <Text as="p">
+          {result === 'deleted' ? governanceCopy.delete.success : governanceCopy.delete.absent}
+        </Text>
+      ) : (
+        <Stack gap="normal">
+          <Text as="p">{governanceCopy.delete.description}</Text>
+          {impact.loading ? <Text>{governanceCopy.delete.loading}</Text> : null}
+          {impact.data ? (
+            <>
+              <Text as="h3">{governanceCopy.delete.impactTitle}</Text>
+              <ul>
+                {items
+                  .filter((item) => item.count > 0)
+                  .map((item) => (
+                    <li key={item.kind}>
+                      {governanceCopy.delete.itemLabels[item.kind] ?? item.kind}：{item.count}
+                    </li>
+                  ))}
+              </ul>
+              {items.every((item) => item.count === 0) ? (
+                <Text>{governanceCopy.delete.empty}</Text>
+              ) : null}
+              {problems.length > 0 ? (
+                <Banner variant="critical">
+                  <Banner.Title>{governanceCopy.delete.blockedTitle}</Banner.Title>
+                  <Banner.Description>
+                    <ul>
+                      {problems.map((problem) => (
+                        <li key={problem}>{problem}</li>
+                      ))}
+                    </ul>
+                  </Banner.Description>
+                  <Banner.Description>{governanceCopy.delete.blockedNext}</Banner.Description>
+                </Banner>
+              ) : null}
+            </>
+          ) : null}
+          {viewError ? (
+            <Banner variant="critical">
+              <Banner.Title>{viewError.message}</Banner.Title>
+              {viewError.problems?.map((problem) => (
+                <Banner.Description key={problem}>{problem}</Banner.Description>
+              ))}
+              {impact.error && !submitError ? (
+                <Banner.PrimaryAction onClick={() => void impact.reload()}>
+                  重试读取影响
+                </Banner.PrimaryAction>
+              ) : null}
+            </Banner>
+          ) : null}
+        </Stack>
+      )}
     </Dialog>
   )
 }

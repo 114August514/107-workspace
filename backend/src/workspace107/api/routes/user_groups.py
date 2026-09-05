@@ -69,7 +69,21 @@ async def user_group_deletion_impact(
 
 
 @router.delete(
-    "/{user_group_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除 User Group"
+    "/{user_group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除 User Group",
+    description=(
+        "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在"
+        "而返回 404。404 只表示目标当前不存在，不能证明由谁删除。"
+    ),
+    responses={
+        204: {"description": "User Group 删除成功。"},
+        404: {
+            "description": (
+                "User Group 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+            )
+        },
+    },
 )
 async def delete_user_group(
     user_group_id: str,

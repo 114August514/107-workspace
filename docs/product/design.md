@@ -1962,6 +1962,8 @@ Activity 没有未读、完成或送达状态，也不替代 Notification、Audi
 
 删除 User Group 前必须先处理其拥有的资产、Variable 和 Secret；删除不得移除 User 身份，也不得影响 User 在其他 User Group 中的 Membership。
 
+删除请求成功完成时返回 204。若目标当前不存在则返回 404；删除已经成功但响应丢失时，客户端重试也会得到 404。该 404 只说明目标不存在，不能证明由谁删除，因此界面必须将“本次已删除”和“目标已不存在”作为不同结果反馈，并继续呈现其他失败。
+
 ##### 管理 Membership
 
 User Group 可以建立 Membership、变更 Role 和 Status、退出或移除成员；变更仅影响对应 User 在该组中的成员身份和操作权限，不改变组拥有的对象，并须保持唯一有效 Owner。普通邀请只建立 Member；只有 Owner 可以在 Member 与 Admin 之间变更 Role，Admin 只能邀请和移除普通 Member；Owner 不得通过普通 Role 变更产生或取消。
@@ -2031,6 +2033,8 @@ Project Branch 是指向本 Project 某一确定 Project Version 的可变引用
 Project 删除时，其 Working State、Project Version、Project Branch、Run Configuration、Project scoped Variable 与 Secret，以及归属于该 Project 的 Run 和 Run 从属对象随其生命周期结束。
 
 源 Project 删除不影响已经形成独立生命周期的对象。Template Revision 的保留按 GR-206 处理，实时来源导航与读取按 GR-508 处理。
+
+删除请求成功完成时返回 204。若目标当前不存在则返回 404；删除已经成功但响应丢失时，客户端重试也会得到 404。该 404 只说明目标不存在，不能证明由谁删除，因此界面必须将“本次已删除”和“目标已不存在”作为不同结果反馈，并继续呈现其他失败。
 
 #### 3.4.3 Run 生命周期与执行操作
 
