@@ -44,8 +44,7 @@ function languageForPath(path: string): string {
 const editorLanguages = {
   js: langs.js, jsx: langs.jsx, ts: langs.ts, tsx: langs.tsx,
   json: langs.json, md: langs.markdown, py: langs.python, yaml: langs.yaml, yml: langs.yaml,
-  html: langs.html, htm: langs.html, css: langs.css, rs: langs.rs, c: langs.cpp, h: langs.cpp,
-  cpp: langs.cpp, cc: langs.cpp, hpp: langs.cpp, java: langs.java, go: langs.go,
+  cpp: langs.cpp, cc: langs.cpp, hpp: langs.cpp, java: langs.java, go: langs.go, sh: langs.sh, bash: langs.bash,
 }
 function editorLanguage(path: string) {
   const extension = path.split('.').at(-1)?.toLowerCase()
