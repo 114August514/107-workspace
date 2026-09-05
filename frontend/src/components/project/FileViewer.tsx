@@ -1,7 +1,10 @@
+import { EditorView } from '@codemirror/view'
 import { DownloadIcon, HomeIcon } from '@primer/octicons-react'
 import { Button, Card, Tag, Typography } from 'antd'
 import { Highlight, themes } from 'prism-react-renderer'
-import { useEffect, useState } from 'react'
+import { langs } from '@uiw/codemirror-extensions-langs'
+import CodeMirror from '@uiw/react-codemirror'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { api } from '../../api/client'
@@ -38,6 +41,17 @@ function languageForPath(path: string): string {
   }
   return languages[extension ?? ''] ?? 'text'
 }
+const editorLanguages = {
+  js: langs.js, jsx: langs.jsx, ts: langs.ts, tsx: langs.tsx,
+  json: langs.json, md: langs.markdown, py: langs.python, yaml: langs.yaml, yml: langs.yaml,
+  html: langs.html, htm: langs.html, css: langs.css, rs: langs.rs, c: langs.cpp, h: langs.cpp,
+  cpp: langs.cpp, cc: langs.cpp, hpp: langs.cpp, java: langs.java, go: langs.go,
+}
+function editorLanguage(path: string) {
+  const extension = path.split('.').at(-1)?.toLowerCase()
+  const factory = editorLanguages[extension as keyof typeof editorLanguages]
+  return factory ? [factory()] : []
+}
 export function FileViewer({
   projectId,
   access,
@@ -49,6 +63,7 @@ export function FileViewer({
   workingHref,
 }: Props) {
   const navigate = useNavigate()
+  const editorExtensions = useMemo(() => editorLanguage(path), [path])
   const readOnly = version !== undefined
   const canWrite = !readOnly && can(access, 'project.content.write')
   const fileName = path.split('/').at(-1) ?? path
@@ -153,11 +168,12 @@ export function FileViewer({
                 )}
               </Highlight>
             ) : (
-              <textarea
+              <CodeMirror
                 className={styles.editor}
-                readOnly={!canWrite || file.data.truncated}
                 value={content}
-                onChange={(event) => setContent(event.target.value)}
+                height="32rem"
+                readOnly={!canWrite || file.data.truncated}
+                extensions={[...editorExtensions, EditorView.contentAttributes.of({ 'aria-label': `编辑 ${path}` })]}
                 aria-label={`编辑 ${path}`}
               />
             )}
