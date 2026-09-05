@@ -261,7 +261,9 @@ export function VersionPanel({
         <ChangeDetailDrawer
           projectId={projectId}
           change={inspecting}
+          changes={pending}
           canWrite={canWrite}
+          onSelect={setInspecting}
           onClose={() => setInspecting(null)}
           onDiscarded={() => {
             changes.reload()
@@ -277,13 +279,17 @@ export function VersionPanel({
 function ChangeDetailDrawer({
   projectId,
   change,
+  changes,
   canWrite,
+  onSelect,
   onClose,
   onDiscarded,
 }: {
   projectId: string
   change: WorkingChange | null
+  changes: WorkingChange[]
   canWrite: boolean
+  onSelect: (change: WorkingChange) => void
   onClose: () => void
   onDiscarded: () => void
 }) {
@@ -354,6 +360,16 @@ function ChangeDetailDrawer({
         )
       }
     >
+      {changes.length > 0 && (
+        <Space direction="vertical" size={4} style={{ width: '100%', marginBottom: 16 }}>
+          <Typography.Text strong>更改 ({changes.length})</Typography.Text>
+          {changes.map((item) => (
+            <Button key={item.path} type={item.path === change?.path ? 'primary' : 'text'} block onClick={() => onSelect(item)} style={{ textAlign: 'left' }}>
+              <Tag color={CHANGE_LABEL[item.change].color}>{item.change === 'modified' ? 'M' : item.change === 'added' ? 'A' : 'D'}</Tag>{item.path}
+            </Button>
+          ))}
+        </Space>
+      )}
       {loading ? (
         <Spin />
       ) : loadError ? (
