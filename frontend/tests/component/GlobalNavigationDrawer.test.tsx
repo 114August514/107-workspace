@@ -104,10 +104,7 @@ describe('GlobalNavigationDrawer', () => {
     expect(within(dialog).getByRole('navigation', { name: '全局导航' })).toBeVisible()
     expect(within(dialog).getByRole('link', { name: '首页' })).toHaveAttribute('href', '/')
     expect(within(dialog).queryByRole('link', { name: '运行环境' })).toBeNull()
-    expect(within(dialog).getByRole('link', { name: '个人执行上下文' })).toHaveAttribute(
-      'href',
-      '/execution-context',
-    )
+    expect(within(dialog).queryByRole('link', { name: '个人执行上下文' })).toBeNull()
     expect(within(dialog).getByRole('heading', { name: '你的 User Group' })).toBeVisible()
     expect(within(dialog).getByRole('heading', { name: '最近使用的 Project' })).toBeVisible()
     expect(hrefs(dialog, '/user-groups/')).toEqual([
