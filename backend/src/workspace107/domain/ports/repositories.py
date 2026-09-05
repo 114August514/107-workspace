@@ -22,6 +22,7 @@ from ..models import (
     Environment,
     EnvironmentPublicationAttempt,
     EnvironmentVersion,
+    ExternalIdentity,
     ForkRelation,
     IdempotencyRecord,
     Membership,
@@ -88,6 +89,11 @@ class UserRepository(Protocol):
     async def get(self, user_id: str) -> User | None: ...
     async def get_by_username(self, username: str) -> User | None: ...
     async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]: ...
+
+
+class ExternalIdentityRepository(Protocol):
+    async def add(self, identity: ExternalIdentity) -> None: ...
+    async def get(self, provider: str, provider_user_id: str) -> ExternalIdentity | None: ...
 
 
 class UserGroupRepository(Protocol):
@@ -390,6 +396,7 @@ class Repositories(Protocol):
     """一次工作单元内可用的全部仓储。"""
 
     users: UserRepository
+    external_identities: ExternalIdentityRepository
     user_groups: UserGroupRepository
     memberships: MembershipRepository
     variables: VariableRepository

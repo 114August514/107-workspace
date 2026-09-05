@@ -21,6 +21,7 @@ from . import (
 # 错误响应也是契约的一部分。不声明的话 OpenAPI 里就没有它，
 # 前端只能靠猜错误体长什么样——那就又回到「瞎猜接口」了。
 COMMON_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"model": ErrorOut, "description": "请求没有有效的认证身份"},
     400: {"model": ErrorOut, "description": "请求不合法"},
     403: {"model": ErrorOut, "description": "对象可见，但当前角色无权执行该操作"},
     404: {"model": ErrorOut, "description": "对象不存在，或当前用户没有发现权限"},

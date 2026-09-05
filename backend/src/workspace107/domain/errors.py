@@ -20,6 +20,12 @@ class DomainError(Exception):
         self.message = message
 
 
+class AuthenticationRequired(DomainError):
+    """No valid identity assertion was supplied by the trusted authentication boundary."""
+
+    code = "authentication_required"
+
+
 class ObjectNotFound(DomainError):
     """对象不存在，或当前用户没有发现权限。"""
 

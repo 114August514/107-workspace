@@ -43,6 +43,20 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class ExternalIdentityRow(Base):
+    __tablename__ = "external_identities"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(64))
+    provider_user_id: Mapped[str] = mapped_column(String(255))
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_external_identity_provider_user"),
+    )
+
+
 class UserGroupRow(Base):
     __tablename__ = "user_groups"
 

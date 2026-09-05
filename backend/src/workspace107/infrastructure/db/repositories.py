@@ -41,6 +41,7 @@ from ...domain.models import (
     Environment,
     EnvironmentPublicationAttempt,
     EnvironmentVersion,
+    ExternalIdentity,
     ForkRelation,
     IdempotencyRecord,
     InputBinding,
@@ -82,6 +83,10 @@ _CONFLICT_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
         "有其他人同时保存了这个 Project 的版本，请刷新后重试",
     ),
     (("users.username",), "这个用户名已经被占用"),
+    (
+        ("uq_external_identity_provider_user", "external_identities.provider"),
+        "该外部身份已绑定 User",
+    ),
     (
         ("uq_projects_owner_user_name", "uq_projects_owner_user_group_name", "projects.name"),
         "当前 Owner 中已存在同名 Project",
@@ -185,6 +190,31 @@ class UserRepositoryImpl:
         stmt = select(t.UserRow).where(t.UserRow.id.in_(user_ids))
         rows = (await self._session.execute(stmt)).scalars().all()
         return {row.id: _to_user(row) for row in rows}
+
+
+class ExternalIdentityRepositoryImpl:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, identity: ExternalIdentity) -> None:
+        self._session.add(
+            t.ExternalIdentityRow(
+                id=identity.id,
+                provider=identity.provider,
+                provider_user_id=identity.provider_user_id,
+                user_id=identity.user_id,
+                created_at=identity.created_at or datetime.now(UTC),
+            )
+        )
+        await _flush(self._session)
+
+    async def get(self, provider: str, provider_user_id: str) -> ExternalIdentity | None:
+        stmt = select(t.ExternalIdentityRow).where(
+            t.ExternalIdentityRow.provider == provider,
+            t.ExternalIdentityRow.provider_user_id == provider_user_id,
+        )
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
+        return _to_external_identity(row) if row else None
 
 
 class UserGroupRepositoryImpl:
@@ -2157,6 +2187,7 @@ class SqlRepositories:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self.users = UserRepositoryImpl(session)
+        self.external_identities = ExternalIdentityRepositoryImpl(session)
         self.user_groups = UserGroupRepositoryImpl(session)
         self.memberships = MembershipRepositoryImpl(session)
         self.variables = VariableRepositoryImpl(session)
@@ -2264,6 +2295,16 @@ def _to_user(row: t.UserRow) -> User:
         username=row.username,
         display_name=row.display_name,
         email=row.email,
+        created_at=_aware(row.created_at),
+    )
+
+
+def _to_external_identity(row: t.ExternalIdentityRow) -> ExternalIdentity:
+    return ExternalIdentity(
+        id=row.id,
+        provider=row.provider,
+        provider_user_id=row.provider_user_id,
+        user_id=row.user_id,
         created_at=_aware(row.created_at),
     )
 
