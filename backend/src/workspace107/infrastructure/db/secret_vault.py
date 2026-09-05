@@ -13,7 +13,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...domain.config_scope import ConfigScope, SecretReference
+from ...domain.models import Secret
 from . import tables as t
+from .repositories import _required
 
 
 class DatabaseSecretVault:
@@ -53,6 +55,14 @@ class DatabaseSecretVault:
             t.SecretRow.scope_id == scope.id,
         )
         return set((await self._session.execute(stmt)).scalars().all())
+
+    async def list_secrets(self, scope: ConfigScope) -> list[Secret]:
+        stmt = select(t.SecretRow).where(
+            t.SecretRow.scope_kind == scope.kind.value,
+            t.SecretRow.scope_id == scope.id,
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [Secret(scope=scope, name=r.name, updated_at=_required(r.updated_at)) for r in rows]
 
     async def resolve(self, references: list[SecretReference]) -> dict[SecretReference, str]:
         result: dict[SecretReference, str] = {}

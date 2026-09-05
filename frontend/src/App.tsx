@@ -17,6 +17,7 @@ import { CreateProjectPage } from './pages/CreateProjectPage'
 import { CreateUserGroupPage } from './pages/CreateUserGroupPage'
 import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
+import { PersonalExecutionContextPage } from './pages/PersonalExecutionContextPage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
@@ -133,6 +134,10 @@ export function ProductRoutes({
       <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
       <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
+      <Route
+        path="/execution-context"
+        element={<PersonalExecutionContextPage username={username} home={home} />}
+      />
       <Route
         path="/user-groups/:userGroupId"
         element={<UserGroupPage key={username} onMembershipChanged={home.reload} />}

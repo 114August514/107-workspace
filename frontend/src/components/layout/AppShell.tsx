@@ -21,6 +21,7 @@ import { Link as RouterLink, matchPath, useLocation } from 'react-router-dom'
 
 import type { Home, Project } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
+import { BrandMark } from '../../brand/BrandMark'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { ContextGuide } from './ContextGuide'
@@ -41,14 +42,6 @@ interface Props {
   home: AsyncResource<Home>
   project: AsyncResource<Project | undefined>
   children: ReactNode
-}
-
-function HomeMarkVisual() {
-  return (
-    <span className={styles.homeMarkVisual} aria-hidden>
-      {appShellCopy.homeMark}
-    </span>
-  )
 }
 
 type AppShellStyle = CSSProperties & { '--app-shell-sidebar-width': string }
@@ -102,13 +95,19 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                 aria-controls={navigationId}
                 onClick={() => setNavigationOpen(true)}
               />
-              <IconButton
-                as={RouterLink}
-                to="/"
-                icon={HomeMarkVisual}
-                variant="default"
-                aria-label={appShellCopy.homeMarkLabel}
-              />
+              <RouterLink to="/" className={styles.brand} aria-label={appShellCopy.homeMarkLabel}>
+                <BrandMark size={32} decorative />
+              </RouterLink>
+              {!projectId && !location.pathname.startsWith('/user-groups/') ? (
+                <Button
+                  as={RouterLink}
+                  to="/"
+                  variant="invisible"
+                  className={`${styles.projectContextItem} ${styles.projectOwner}`}
+                >
+                  <span className={styles.projectContextLabel}>{appShellCopy.brand}</span>
+                </Button>
+              ) : null}
               {projectId ? (
                 <div
                   className={styles.projectContext}
@@ -160,9 +159,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                     </span>
                   )}
                 </div>
-              ) : location.pathname === '/' ? (
-                <span className={styles.homeContext}>{appShellCopy.homeContext}</span>
-              ) : (
+              ) : location.pathname === '/' ? null : (
                 <UserGroupHeaderContext />
               )}
             </div>

@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ..domain.errors import (
+    AuthenticationRequired,
     ConflictError,
     DomainError,
     ObjectNotFound,
@@ -27,6 +28,7 @@ from ..observability import current_request_id
 HTTP_422 = 422
 
 _STATUS_BY_TYPE: list[tuple[type[DomainError], int]] = [
+    (AuthenticationRequired, status.HTTP_401_UNAUTHORIZED),
     (ObjectNotFound, status.HTTP_404_NOT_FOUND),
     (PermissionDenied, status.HTTP_403_FORBIDDEN),
     # ImmutableObjectError 是 ConflictError 的子类，同样返回 409。

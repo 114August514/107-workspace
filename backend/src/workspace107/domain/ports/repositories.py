@@ -21,6 +21,7 @@ from ..models import (
     Environment,
     EnvironmentPublicationAttempt,
     EnvironmentVersion,
+    ExternalIdentity,
     ForkRelation,
     IdempotencyRecord,
     Membership,
@@ -49,6 +50,11 @@ class UserRepository(Protocol):
     async def get(self, user_id: str) -> User | None: ...
     async def get_by_username(self, username: str) -> User | None: ...
     async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]: ...
+
+
+class ExternalIdentityRepository(Protocol):
+    async def add(self, identity: ExternalIdentity) -> None: ...
+    async def get(self, provider: str, provider_user_id: str) -> ExternalIdentity | None: ...
 
 
 class UserGroupRepository(Protocol):
@@ -180,15 +186,6 @@ class EntitlementRepository(Protocol):
     ) -> ResourceEntitlement | None: ...
     async def add(self, entitlement: ResourceEntitlement) -> None: ...
 
-    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
-        """取权益并在当前事务内独占它，直到事务结束。
-
-        用于把「数一数还剩几个并发名额，然后创建 Run」这一段串行化。
-        不加锁的话两个请求会同时读到「还没到上限」，然后都创建成功——
-        并发上限就形同虚设了。
-        """
-        ...
-
 
 class RunConfigurationRepository(Protocol):
     async def add(self, configuration: RunConfiguration) -> None: ...
@@ -218,8 +215,6 @@ class RunRepository(Protocol):
     async def claim_terminal(self, run: Run) -> bool:
         """条件更新把 Run 推进到终态。抢到返回 True，别人已推进过返回 False。"""
         ...
-
-    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int: ...
 
 
 class IdempotencyRepository(Protocol):
@@ -351,6 +346,7 @@ class Repositories(Protocol):
     """一次工作单元内可用的全部仓储。"""
 
     users: UserRepository
+    external_identities: ExternalIdentityRepository
     user_groups: UserGroupRepository
     memberships: MembershipRepository
     variables: VariableRepository

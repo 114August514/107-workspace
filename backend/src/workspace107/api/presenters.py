@@ -92,8 +92,9 @@ def entitlement_out(view: EntitlementView) -> s.EntitlementOut:
         id=view.entitlement.id,
         compute_plan_id=view.plan.id,
         compute_plan_name=view.plan.name,
-        max_concurrent_runs=view.entitlement.max_concurrent_runs,
         expires_at=view.entitlement.expires_at,
+        status=view.status,
+        status_reason=view.status_reason,
     )
 
 

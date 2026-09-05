@@ -143,11 +143,14 @@
 .name {
   color: var(--fgColor-default);
   text-decoration: none;
+  transition: none;
 }
 
-.name:hover {
+.name.name:hover {
   color: var(--fgColor-accent);
   text-decoration: underline;
+  text-decoration-color: var(--fgColor-accent);
+  transition: none;
 }
 
 .name:focus-visible {

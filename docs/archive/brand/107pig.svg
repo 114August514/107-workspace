@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 100 100"
+   version="1.1"
+   id="svg7"
+   sodipodi:docname="107pig.svg"
+   inkscape:version="1.4.4 (dcaf3e7d9e, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs7">
+    <linearGradient
+       id="swatch14"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop14" />
+    </linearGradient>
+    <linearGradient
+       id="swatch13"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#0455b6;stop-opacity:1;"
+         offset="0"
+         id="stop13" />
+    </linearGradient>
+    <linearGradient
+       id="swatch12"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop12" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#swatch14"
+       id="linearGradient14"
+       x1="1"
+       y1="49.949857"
+       x2="99"
+       y2="49.949857"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="5.7204939"
+     inkscape:cx="1.6606958"
+     inkscape:cy="45.363216"
+     inkscape:window-width="1912"
+     inkscape:window-height="1004"
+     inkscape:window-x="20"
+     inkscape:window-y="20"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg7" />
+  <!-- SVG created with Arrow, by QuiverAI (https://quiver.ai) -->
+  <style
+     type="text/css"
+     id="style1">.cls-0 {fill:#0455B6;}
+.cls-1 {fill:#FFFFFF;}</style>
+  <path
+     style="fill-rule:nonzero;fill:url(#linearGradient14)"
+     d="M 99,51.2 C 99,78 79.6,93 66.9,97.1 74.5,92.5 84.6,84.5 84.6,68.5 84.6,61.6 82.2,54.9 77.5,47.7 82.6,44.6 84.4,39.4 84.3,32 84.2,26.9 84,25.5 82.3,25.2 81.3,25.1 80.2,25 79,25 72.1,24.9 64.6,27.1 61,33.4 58.1,32.1 54.9,30.8 50,30.7 c -3.3,0 -6.9,0.7 -10.8,2.7 -2.9,-5.4 -8.3,-8.5 -17.1,-8.5 -1.2,0 -2.5,0.1 -4,0.2 -1,0.1 -1.7,0.5 -1.9,1.9 -1.3,11.6 1.5,17.4 6.3,20.7 -4.2,5.7 -7,12.9 -7,20.6 0.1,12.8 6.6,22 17.7,28.6 l -0.1,0.2 C 18.5,92.2 1,76.5 1,51.5 1,28.9 19.4,2.7 50,2.8 c 24.3,0 49,19.4 49,48.4 z"
+     id="path1" />
+  <path
+     id="path2"
+     d="M 50,68.599609 C 42.4,68.599609 37.599609,72.3 37.599609,78 37.599609,82.7 42,86.599609 50,86.599609 58,86.599609 62.400391,83.3 62.400391,78 62.400391,73.4 58.6,68.599609 50,68.599609 Z m -4.300781,6.300782 c 1,0 2.101562,0.998828 2.101562,2.798828 0,1.6 -0.901562,2.90039 -2.101562,2.90039 -1.2,0 -2,-1.50039 -2,-2.90039 0,-1.9 1.1,-2.798828 2,-2.798828 z m 8.40039,0 c 1,0 2.201172,0.898828 2.201172,2.798828 0,1.4 -0.90039,2.90039 -2.40039,2.90039 -1,0 -2,-1.098828 -2,-2.798828 0,-1.9 1.199218,-2.90039 2.199218,-2.90039 z" />
+  <path
+     id="path3"
+     d="m 34.400391,50.5 c -5.3,0 -11.09961,4.500391 -11.09961,10.900391 0.1,5.5 4.399219,11.40039 11.199219,11.40039 5.2,0 10.200781,-3.5 10.800781,-10 1.2,-0.7 2.299219,-1.5 4.699219,-1.5 1.9,0 3.499609,0.7 4.599609,1.5 0.6,4.9 4.9,10.09961 11,10.09961 6.3,0 11.09961,-5 11.09961,-11.5 0,-5.9 -4.99961,-10.900391 -11.09961,-10.900391 -4.9,0 -10.1,3.699219 -11,9.199219 -1.1,-0.7 -2.699609,-1.298828 -4.599609,-1.298828 -1.9,0 -3.199219,0.499218 -4.699219,1.199218 -0.8,-4.9 -5.20039,-9.099609 -10.90039,-9.099609 z m 0.09961,3 c 4.3,0 8,3.5 8,8 0,5 -4,8.099609 -8,8.099609 -4.9,0 -8.300781,-3.999218 -8.300781,-8.199218 C 26.199219,57.100391 30.2,53.5 34.500001,53.5 Z m 31.099609,0 c 4.3,0 8.101172,3.400391 8.201172,7.900391 0,5 -3.801172,8.199218 -8.201172,8.199218 -4.5,0 -8.099609,-3.698828 -8.099609,-8.298828 0,-4 3.599609,-7.800781 8.099609,-7.800781 z"
+     style="opacity:1" />
+</svg>
