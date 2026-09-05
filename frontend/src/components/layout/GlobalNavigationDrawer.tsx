@@ -1,5 +1,6 @@
 import {
   ContainerIcon,
+  HomeIcon,
   OrganizationIcon,
   PersonIcon,
   ProjectIcon,
@@ -12,7 +13,6 @@ import { Link as RouterLink, useLocation } from 'react-router-dom'
 import type { Home } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
-import { BrandMark } from '../../brand/BrandMark'
 import { globalNavigationCopy } from './copy'
 import styles from './GlobalNavigationDrawer.module.css'
 
@@ -60,22 +60,19 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
           {home.data ? (
             <NavList aria-label={globalNavigationCopy.ariaLabel} className={styles.navigation}>
               <NavList.Heading visuallyHidden>{globalNavigationCopy.heading}</NavList.Heading>
-              {!location.pathname.startsWith('/projects/') &&
-              !location.pathname.startsWith('/user-groups/') ? (
-                <NavList.Item
-                  className={styles.item}
-                  as={RouterLink}
-                  to="/"
-                  ref={homeLinkRef}
-                  aria-current={location.pathname === '/' ? 'page' : undefined}
-                  onClick={onClose}
-                >
-                  <NavList.LeadingVisual>
-                    <BrandMark size={16} decorative />
-                  </NavList.LeadingVisual>
-                  <span className={styles.itemText}>{globalNavigationCopy.title}</span>
-                </NavList.Item>
-              ) : null}
+              <NavList.Item
+                className={styles.item}
+                as={RouterLink}
+                to="/"
+                ref={homeLinkRef}
+                aria-current={location.pathname === '/' ? 'page' : undefined}
+                onClick={onClose}
+              >
+                <NavList.LeadingVisual>
+                  <HomeIcon />
+                </NavList.LeadingVisual>
+                <span className={styles.itemText}>{globalNavigationCopy.home}</span>
+              </NavList.Item>
 
               <NavList.Item
                 className={styles.item}
