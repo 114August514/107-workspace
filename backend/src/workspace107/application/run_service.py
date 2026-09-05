@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import codecs
+import hashlib
+import json
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
@@ -21,6 +23,7 @@ from ..domain.capabilities import Capability
 from ..domain.compute import (
     ComputePlan,
     ComputeRequest,
+    ResolvedSchedulerConfiguration,
     SchedulerMapping,
     check_request_against_plan,
     resolve_scheduler_configuration,
@@ -39,12 +42,14 @@ from ..domain.errors import (
     ObjectNotFound,
     PermissionDenied,
     PreflightRejected,
+    RunConfirmationChanged,
     SchedulerError,
     SharedResourceUnavailable,
     ValidationFailed,
 )
 from ..domain.models import (
     Artifact,
+    ArtifactCollectionRule,
     EnvironmentVersion,
     InputBinding,
     ProjectVersion,
@@ -88,6 +93,7 @@ class RunDraft:
     environment_version_id_override: str = ""
     input_bindings_override: tuple[InputBinding, ...] | None = None
     compute_request_override: dict[str, int] | None = None
+    confirmation_token: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +108,15 @@ class PreflightResult:
     slurm_projection: SlurmPlanProjection | None = None
     resolved_env_literals: dict[str, str] = field(default_factory=dict)
     resolved_env_secret_refs: dict[str, SecretReference] = field(default_factory=dict)
+
+    configuration_name: str = ""
+    environment_name: str | None = None
+    command: str = ""
+    working_directory: str = "."
+    input_bindings: tuple[InputBinding, ...] = ()
+    artifact_rules: tuple[ArtifactCollectionRule, ...] = ()
+    scheduler: ResolvedSchedulerConfiguration | None = None
+    confirmation_token: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -377,6 +392,7 @@ class RunService:
 
         plan = await self._repos.compute_plans.get(configuration.compute_plan_id)
         request: ComputeRequest | None = None
+        slurm_projection = None
         if plan is None:
             problems.append("运行方案引用的算力方案已不存在")
         else:
@@ -386,7 +402,6 @@ class RunService:
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
 
-            slurm_projection = None
             if self._scheduler.name == "slurm":
                 assert self._slurm_projection is not None
                 user = await self._repos.users.get(user_id)
@@ -424,7 +439,27 @@ class RunService:
             )
         )
 
-        return PreflightResult(
+        environment = (
+            await self._repos.environments.get_by_id(environment_version.environment_id)
+            if environment_version
+            else None
+        )
+        result = PreflightResult(
+            environment_name=environment.name if environment else None,
+            configuration_name=configuration.name,
+            command=command,
+            working_directory=draft.working_directory_override or configuration.working_directory,
+            input_bindings=(
+                draft.input_bindings_override
+                if draft.input_bindings_override is not None
+                else configuration.input_bindings
+            ),
+            artifact_rules=configuration.artifact_rules,
+            scheduler=(
+                resolve_scheduler_configuration(plan, request)
+                if not problems and plan is not None and request is not None
+                else None
+            ),
             problems=problems,
             project_version=version,
             environment_version=environment_version,
@@ -434,6 +469,31 @@ class RunService:
             resolved_env_literals=resolved.literals,
             resolved_env_secret_refs=resolved.secret_refs,
         )
+        if result.ok:
+            assert version is not None and environment_version is not None
+            assert result.scheduler is not None
+            # A change detector, not an authorization token. Never read Secret values here.
+            facts = {
+                "user": user_id,
+                "project": project_id,
+                "configuration": configuration.id,
+                "name": result.configuration_name,
+                "version": version.id,
+                "command": result.command,
+                "working_directory": result.working_directory,
+                "environment": environment_version.id,
+                "environment_hash": environment_version.definition_hash,
+                "runtime": environment_version.execution_spec,
+                "inputs": [b.as_payload() for b in result.input_bindings],
+                "artifacts": [r.as_payload() for r in result.artifact_rules],
+                "plan": plan.id if plan else None,
+                "scheduler": result.scheduler.as_payload(),
+                "variables": result.resolved_env_literals,
+                "secrets": {k: v.as_key() for k, v in result.resolved_env_secret_refs.items()},
+            }
+            token = hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
+            result = replace(result, confirmation_token=token)
+        return result
 
     # -- 创建与提交 -----------------------------------------------------
 
@@ -459,14 +519,16 @@ class RunService:
         if replayed is not None:
             return RunSubmission(run=replayed, created=False)
 
-        configuration = await self._repos.run_configurations.get(draft.run_configuration_id)
-        if configuration is None or configuration.project_id != project_id:
-            raise ObjectNotFound("Run Configuration", draft.run_configuration_id)
-
         result = await self.preflight(user_id, project_id, draft)
         if not result.ok:
             raise PreflightRejected(result.problems)
 
+        if draft.confirmation_token is not None and (
+            draft.confirmation_token != result.confirmation_token
+        ):
+            raise RunConfirmationChanged("运行配置已变化，请刷新摘要后重新提交。")
+
+        assert result.scheduler is not None
         assert result.project_version is not None
         assert result.environment_version is not None
         assert result.compute_plan is not None
@@ -477,24 +539,20 @@ class RunService:
             snapshot_id=ids.new_id(ids.RUN_SNAPSHOT),
             project_id=project_id,
             project_version_id=result.project_version.id,
-            source_run_configuration_id=configuration.id,
-            working_directory=(draft.working_directory_override or configuration.working_directory),
-            command=(draft.command_override or configuration.command).strip(),
+            source_run_configuration_id=draft.run_configuration_id,
+            working_directory=result.working_directory,
+            command=result.command,
             environment_version_id=result.environment_version.id,
             environment_definition_hash=result.environment_version.definition_hash,
             environment_execution_spec=result.environment_version.execution_spec,
             resolved_env=_as_resolved_env(
                 result.resolved_env_literals, result.resolved_env_secret_refs
             ),
-            input_bindings=(
-                draft.input_bindings_override
-                if draft.input_bindings_override is not None
-                else configuration.input_bindings
-            ),
+            input_bindings=result.input_bindings,
             compute_plan_id=result.compute_plan.id,
             compute_request=result.compute_request,
-            scheduler=resolve_scheduler_configuration(result.compute_plan, result.compute_request),
-            artifact_rules=configuration.artifact_rules,
+            scheduler=result.scheduler,
+            artifact_rules=result.artifact_rules,
             initiated_by_user_id=user_id,
             created_at=now,
         )
@@ -506,7 +564,7 @@ class RunService:
             compute_plan_id=snapshot.compute_plan_id,
             project_version_id=snapshot.project_version_id,
             project_version_label=result.project_version.label,
-            source_run_configuration_id=configuration.id,
+            source_run_configuration_id=draft.run_configuration_id,
             source_run_id=None,
             name=draft.name.strip() or f"{access.project.name} · {result.project_version.label}",
             status=RunStatus.QUEUED,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '../../src/api/client'
@@ -142,43 +142,78 @@ function renderModal(editing: RunConfiguration | null = makeConfiguration()) {
   )
 }
 
-async function chooseSelect(label: string, option: string | RegExp) {
-  const select = within(screen.getByRole('dialog')).getByRole('combobox', { name: label })
-  fireEvent.mouseDown(select)
-  fireEvent.click(await screen.findByText(option))
+function expandAdvanced() {
+  fireEvent.click(screen.getByText(/^高级设置/))
+  const details = screen.getByText(/^高级设置/).parentElement! as HTMLDetailsElement
+  details.open = true
+  fireEvent(details, new Event('toggle'))
 }
 
-describe('RunConfigurationModal 运行输入', () => {
+describe('Simple Run configuration', () => {
   beforeEach(() => {
     vi.spyOn(api, 'listSharedResources').mockResolvedValue([resource])
     vi.spyOn(api, 'getSharedResource').mockResolvedValue(resourceDetail)
     vi.spyOn(api, 'updateRunConfiguration').mockResolvedValue(makeConfiguration())
+    vi.spyOn(api, 'createRunConfiguration').mockResolvedValue(makeConfiguration())
   })
-
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
   })
 
-  it('REQ-44 canonical discovery 返回 grant-only 资源时可添加 exact Version', async () => {
-    renderModal()
-
-    const dialog = within(screen.getByRole('dialog'))
-    const addButton = await dialog.findByRole('button', { name: /添加运行输入/ })
-    await waitFor(() => expect(addButton).toBeEnabled())
-    fireEvent.click(addButton)
-    await chooseSelect('共享资源', /训练数据/)
-    await chooseSelect('资源版本', /v2/)
-    fireEvent.change(dialog.getByPlaceholderText('例如：train/'), {
-      target: { value: 'train/' },
+  it('saves a minimal command with the sole exact environment and plan, and a visible optional output', async () => {
+    renderModal(null)
+    expect(screen.getByText(/运行产物 · outputs/)).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /^运行环境/ })).toHaveValue('envv-1')
+    expect(screen.getByRole('combobox', { name: /^算力方案/ })).toHaveValue('plan-1')
+    expect(screen.getByRole('textbox', { name: '方案名称' })).not.toBeVisible()
+    fireEvent.change(screen.getByRole('textbox', { name: /^执行命令/ }), {
+      target: { value: 'python train.py' },
     })
-    fireEvent.change(dialog.getByPlaceholderText('/inputs/train'), {
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
+      expect(api.createRunConfiguration).toHaveBeenCalledWith(
+        'prj-1',
+        expect.objectContaining({
+          command: 'python train.py',
+          environment_version_id: 'envv-1',
+          compute_plan_id: 'plan-1',
+          compute_request: null,
+          artifact_rules: [{ path: 'outputs/', name: '', optional: true }],
+        }),
+      ),
+    )
+  })
+
+  it('does not restore a deleted output rule when editing', async () => {
+    renderModal()
+    expect(screen.getByText('运行产物 · 不收集')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
+      expect(api.updateRunConfiguration).toHaveBeenCalledWith(
+        'rc-1',
+        expect.objectContaining({ artifact_rules: [] }),
+      ),
+    )
+  })
+
+  it('adds a grant-discovered exact resource version in advanced settings', async () => {
+    renderModal()
+    expandAdvanced()
+    const add = await screen.findByRole('button', { name: '添加运行输入' })
+    await waitFor(() => expect(add).toBeEnabled())
+    fireEvent.click(add)
+    fireEvent.change(screen.getByRole('combobox', { name: /^资源版本 1/ }), {
+      target: { value: 'shrv-2' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: /^输入访问路径 1/ }), {
       target: { value: '/inputs/train' },
     })
-
-    fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }))
-
-    await waitFor(() => {
+    fireEvent.change(screen.getByRole('textbox', { name: '来源子路径 1' }), {
+      target: { value: 'train/' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
       expect(api.updateRunConfiguration).toHaveBeenCalledWith(
         'rc-1',
         expect.objectContaining({
@@ -186,16 +221,16 @@ describe('RunConfigurationModal 运行输入', () => {
             {
               source_type: 'shared_resource_version',
               source_id: 'shrv-2',
-              source_subpath: 'train/',
               access_path: '/inputs/train',
+              source_subpath: 'train/',
             },
           ],
         }),
-      )
-    })
+      ),
+    )
   })
 
-  it('REQ-44 重新打开后还原绑定并可更换 exact Version', async () => {
+  it('restores and edits an exact binding without discarding artifact inputs', async () => {
     renderModal(
       makeConfiguration([
         {
@@ -204,34 +239,35 @@ describe('RunConfigurationModal 运行输入', () => {
           source_subpath: 'train',
           access_path: '/inputs/train',
         },
+        {
+          source_type: 'artifact',
+          source_id: 'art-1',
+          source_subpath: '',
+          access_path: '/inputs/model',
+        },
       ]),
     )
-
-    const dialog = within(screen.getByRole('dialog'))
-    expect(await dialog.findByDisplayValue('train')).toBeInTheDocument()
-    expect(dialog.getByDisplayValue('/inputs/train')).toBeInTheDocument()
-    expect(dialog.getByText(/训练数据/)).toBeInTheDocument()
-    expect(dialog.getByText(/v1/)).toBeInTheDocument()
-
-    await chooseSelect('资源版本', /v2/)
-    fireEvent.change(dialog.getByRole('textbox', { name: '输入访问路径' }), {
-      target: { value: '/inputs/training' },
+    expandAdvanced()
+    await screen.findByRole('option', { name: /训练数据 · v2/ })
+    expect(screen.getByRole('combobox', { name: /^资源版本 1/ })).toHaveValue('shrv-1')
+    fireEvent.change(screen.getByRole('combobox', { name: /^资源版本 1/ }), {
+      target: { value: 'shrv-2' },
     })
-    fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }))
-
-    await waitFor(() => {
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
       expect(api.updateRunConfiguration).toHaveBeenCalledWith(
         'rc-1',
         expect.objectContaining({
           input_bindings: [
-            expect.objectContaining({ source_id: 'shrv-2', access_path: '/inputs/training' }),
+            expect.objectContaining({ source_id: 'shrv-2' }),
+            expect.objectContaining({ source_id: 'art-1' }),
           ],
         }),
-      )
-    })
+      ),
+    )
   })
 
-  it('REQ-44 可解除 Shared Resource 绑定且不触碰其他配置字段', async () => {
+  it('removes a binding and preserves the other configuration fields', async () => {
     renderModal(
       makeConfiguration([
         {
@@ -242,24 +278,22 @@ describe('RunConfigurationModal 运行输入', () => {
         },
       ]),
     )
-
-    const dialog = within(screen.getByRole('dialog'))
-    fireEvent.click(await dialog.findByRole('button', { name: '删除运行输入 1' }))
-    fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }))
-
-    await waitFor(() => {
+    expandAdvanced()
+    fireEvent.click(await screen.findByRole('button', { name: '删除运行输入 1' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
       expect(api.updateRunConfiguration).toHaveBeenCalledWith(
         'rc-1',
         expect.objectContaining({
           name: '训练方案',
-          environment_version_id: 'envv-1',
           input_bindings: [],
+          environment_version_id: 'envv-1',
         }),
-      )
-    })
+      ),
+    )
   })
 
-  it('REQ-44 冲突的输入访问路径不能提交', async () => {
+  it('reveals conflicting input paths when saving folded advanced settings', async () => {
     renderModal(
       makeConfiguration([
         {
@@ -276,42 +310,62 @@ describe('RunConfigurationModal 运行输入', () => {
         },
       ]),
     )
-
-    const dialog = within(screen.getByRole('dialog'))
-    await waitFor(() => expect(dialog.getAllByText(/训练数据/)).toHaveLength(2))
-    fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }))
-
-    expect((await dialog.findAllByText('输入访问路径不能重复或互相包含')).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    expect(await screen.findByText('输入访问路径不能重复或互相包含')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /^输入访问路径 1/ })).toBeVisible()
     expect(api.updateRunConfiguration).not.toHaveBeenCalled()
   })
 
-  it('REQ-44 服务端授权或可用性失败时展示问题和请求标识', async () => {
+  it('reports server rejection and keeps the edited configuration', async () => {
     vi.mocked(api.updateRunConfiguration).mockRejectedValue(
-      new ApiError(
-        404,
-        'not_found',
-        '资源版本不存在或当前没有 USE 资格',
-        ['请选择当前可使用的资源版本'],
-        'req-44',
+      new ApiError(404, 'not_found', 'unavailable', ['请选择当前可使用的资源版本'], 'req-81'),
+    )
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    expect(await screen.findByText('无法保存运行方案')).toBeInTheDocument()
+    expect(screen.getByText('请求标识：req-81')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /^执行命令/ })).toHaveValue('python train.py')
+  })
+  it('deleting the suggested output saves an explicit empty list', async () => {
+    renderModal(null)
+    fireEvent.change(screen.getByRole('textbox', { name: /^执行命令/ }), {
+      target: { value: 'echo ok' },
+    })
+    const details = screen.getByText(/^运行产物/).parentElement! as HTMLDetailsElement
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    fireEvent.click(screen.getByRole('button', { name: '删除产物规则 1' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
+      expect(api.createRunConfiguration).toHaveBeenCalledWith(
+        'prj-1',
+        expect.objectContaining({ artifact_rules: [] }),
       ),
     )
-    renderModal(
-      makeConfiguration([
-        {
-          source_type: 'shared_resource_version',
-          source_id: 'shrv-1',
-          source_subpath: '',
-          access_path: '/inputs/data',
-        },
-      ]),
+  })
+
+  it('keeps custom resources when folded and rejects values beyond the plan bounds', async () => {
+    renderModal()
+    const details = screen.getByText(/^调整资源/).parentElement! as HTMLDetailsElement
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'CPU 核数' }), {
+      target: { value: '9' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    expect(await screen.findAllByText('请输入 1 至 8 之间的整数')).not.toHaveLength(0)
+    expect(api.updateRunConfiguration).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'CPU 核数' }), {
+      target: { value: '3' },
+    })
+    details.open = false
+    fireEvent(details, new Event('toggle'))
+    fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
+    await waitFor(() =>
+      expect(api.updateRunConfiguration).toHaveBeenCalledWith(
+        'rc-1',
+        expect.objectContaining({ compute_request: expect.objectContaining({ cpus: 3 }) }),
+      ),
     )
-
-    const dialog = within(screen.getByRole('dialog'))
-    await dialog.findByText(/训练数据/)
-    fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }))
-
-    expect(await dialog.findByText('无法保存运行方案')).toBeInTheDocument()
-    expect(dialog.getByText('请选择当前可使用的资源版本')).toBeInTheDocument()
-    expect(dialog.getByText('请求标识：req-44')).toBeInTheDocument()
   })
 })

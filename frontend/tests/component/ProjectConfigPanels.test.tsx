@@ -33,8 +33,10 @@ const mockComputePlans = vi.hoisted(() => vi.fn())
 const mockEnvironmentsForProject = vi.hoisted(() => vi.fn())
 const mockUpdateProject = vi.hoisted(() => vi.fn())
 
-vi.mock('../../src/api/client', () => ({
+vi.mock('../../src/api/client', async () => ({
+  ...(await vi.importActual<typeof import('../../src/api/client')>('../../src/api/client')),
   api: {
+    listEntitlements: vi.fn().mockResolvedValue([]),
     listProjectVariables: mockListProjectVariables,
     putProjectVariable: mockPutProjectVariable,
     deleteProjectVariable: mockDeleteProjectVariable,
@@ -344,7 +346,7 @@ describe('RunConfigurationPanel 默认运行方案', () => {
     })
     expect(onChanged).toHaveBeenCalled()
     // 算力方案列展示计划名而不是裸 id。
-    expect(screen.getByText('CPU 基础')).toBeInTheDocument()
+    expect(screen.getByText(/CPU 基础/)).toBeInTheDocument()
   })
 
   it('没有 project.update 时不出现默认方案操作', async () => {

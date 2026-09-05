@@ -1,276 +1,114 @@
-import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Col, Form, Input, Row, Select, Space, Typography } from 'antd'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-
+import { Button, Select, TextInput } from '@primer/react'
+import type { InputBinding, SharedResourceDetail } from '../../api/types'
 import { api } from '../../api/client'
-import type { SharedResourceDetail } from '../../api/types'
+import { toAsyncError } from '../../api/errors'
+import { useAsync } from '../../api/useAsync'
+import { AsyncState } from '../common/AsyncState'
+import { RunField } from './RunField'
+import styles from './simpleRun.module.css'
 
-export interface SharedResourceInputRow {
-  resource_id?: string
-  source_id?: string
-  source_subpath?: string
-  access_path?: string
-}
-
-function normalizeAccessPath(value: string): string | null {
-  const candidate = value.trim().replaceAll('\\', '/')
-  if (!candidate.startsWith('/')) return null
-  const parts = candidate.split('/')
-  if (parts.includes('..')) return null
-  const normalized: string[] = []
-  for (const part of parts) {
-    if (!part || part === '.') continue
-    normalized.push(part)
-  }
-  return `/${normalized.join('/')}`
-}
-
-function accessPathsConflict(left: string, right: string): boolean {
-  if (left === right || left === '/' || right === '/') return true
-  return left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
-}
-
-function validateSourceSubpath(value: string): string | null {
-  const candidate = value.trim().replaceAll('\\', '/').replace(/^\/+/, '')
-  if (!candidate) return null
-  const parts: string[] = []
-  for (const part of candidate.split('/')) {
-    if (!part || part === '.') continue
-    if (part === '..') {
-      if (parts.length === 0) return '来源子路径不能越出资源版本根目录'
-      parts.pop()
-    } else {
-      parts.push(part)
-    }
-  }
-  return null
-}
-
-export function SharedResourceInputBindings() {
-  const form = Form.useFormInstance()
-  const rows = (Form.useWatch('inputs', form) ?? []) as SharedResourceInputRow[]
-  const [resources, setResources] = useState<SharedResourceDetail[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const [reloadToken, setReloadToken] = useState(0)
-
-  const loadResources = useCallback(() => setReloadToken((value) => value + 1), [])
-
-  useEffect(() => {
-    let active = true
-    setLoading(true)
-    setError(null)
-    api
-      .listSharedResources()
-      .then((items) => Promise.all(items.map((item) => api.getSharedResource(item.id))))
-      .then((details) => {
-        if (!active) return
-        setResources(details)
-        const resourceByVersion = new Map(
-          details.flatMap((resource) =>
-            resource.versions.map((version) => [version.id, resource.id] as const),
-          ),
-        )
-        const currentRows = (form.getFieldValue('inputs') ?? []) as SharedResourceInputRow[]
-        form.setFieldValue(
-          'inputs',
-          currentRows.map((row) => ({
-            ...row,
-            resource_id: row.resource_id ?? resourceByVersion.get(row.source_id ?? ''),
-          })),
-        )
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason : new Error(String(reason)))
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [form, reloadToken])
-
-  const resourcesById = useMemo(
-    () => new Map(resources.map((resource) => [resource.id, resource])),
-    [resources],
+export function SharedResourceInputBindings({
+  bindings,
+  onChange,
+}: {
+  bindings: InputBinding[]
+  onChange: (bindings: InputBinding[]) => void
+}) {
+  const resources = useAsync<SharedResourceDetail[]>(async () => {
+    const items = await api.listSharedResources()
+    return Promise.all(items.map((item) => api.getSharedResource(item.id)))
+  }, [])
+  const versions = (resources.data ?? []).flatMap((resource) =>
+    resource.versions.map((version) => ({ resource, version })),
   )
-  const availableVersionCount = resources.reduce(
-    (count, resource) => count + resource.versions.length,
-    0,
-  )
-
-  const validateAccessPath = (rowIndex: number, value: string | undefined) => {
-    const normalized = normalizeAccessPath(value ?? '')
-    if (normalized === null) {
-      return Promise.reject(new Error('请输入以 / 开头且不包含 .. 的绝对路径'))
-    }
-    const conflict = rows.some((row, index) => {
-      if (index === rowIndex || !row?.access_path) return false
-      const other = normalizeAccessPath(row.access_path)
-      return other !== null && accessPathsConflict(normalized, other)
-    })
-    return conflict
-      ? Promise.reject(new Error('输入访问路径不能重复或互相包含'))
-      : Promise.resolve()
-  }
-
+  const update = (index: number, patch: Partial<InputBinding>) =>
+    onChange(bindings.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   return (
-    <Space direction="vertical" size="small" style={{ width: '100%' }}>
-      <Typography.Title level={5} style={{ marginBottom: 0 }}>
-        运行输入
-      </Typography.Title>
-      <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-        每项输入固定一个确定的资源版本，并以只读方式暴露到输入访问路径。保存后不会自动切换版本。
-      </Typography.Paragraph>
-
-      {loading ? (
-        <Alert type="info" showIcon message="正在读取当前可使用的共享资源…" />
-      ) : error ? (
-        <Alert
-          type="error"
-          showIcon
-          message="无法读取当前可使用的共享资源"
-          description={
-            <Button size="small" icon={<ReloadOutlined />} onClick={loadResources}>
-              重试
-            </Button>
-          }
-        />
-      ) : availableVersionCount === 0 ? (
-        <Alert
-          type="warning"
-          showIcon
-          message="当前没有可选择的共享资源版本"
-          description="请确认资源已经发布，并且当前账号在此 Project 上下文中具备使用资格。"
-        />
-      ) : null}
-
-      <Form.List name="inputs">
-        {(fields, { add, remove }) => (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-            {fields.length === 0 && !loading && !error && (
-              <Typography.Text type="secondary">这个运行方案还没有运行输入。</Typography.Text>
-            )}
-            {fields.map((field, index) => {
-              const row = rows[index]
-              const resource = resourcesById.get(row?.resource_id ?? '')
-              const versionOptions = (resource?.versions ?? []).map((version) => ({
-                value: version.id,
-                label: `${version.label} · ${version.file_count} 个文件`,
-              }))
-              if (
-                row?.source_id &&
-                !versionOptions.some((option) => option.value === row.source_id)
-              ) {
-                versionOptions.push({
-                  value: row.source_id,
-                  label: `已保存版本 ${row.source_id} · 当前不可用`,
-                })
-              }
-              return (
-                <Card key={field.key} size="small">
-                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                    <Row gutter={12} align="middle">
-                      <Col xs={24} md={11}>
-                        <Form.Item
-                          name={[field.name, 'resource_id']}
-                          label="共享资源"
-                          rules={[{ required: true, message: '请选择共享资源' }]}
-                        >
-                          <Select
-                            placeholder="选择当前可使用的共享资源"
-                            options={resources.map((item) => ({
-                              value: item.id,
-                              label: `${item.name} · ${item.owner.display_name}`,
-                              disabled: item.versions.length === 0,
-                            }))}
-                            onChange={() => {
-                              form.setFieldValue(['inputs', field.name, 'source_id'], undefined)
-                            }}
-                          />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={11}>
-                        <Form.Item
-                          name={[field.name, 'source_id']}
-                          label="资源版本"
-                          rules={[{ required: true, message: '请选择确定的资源版本' }]}
-                        >
-                          <Select
-                            placeholder={resource ? '选择确定的资源版本' : '请先选择共享资源'}
-                            disabled={!resource}
-                            options={versionOptions}
-                          />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={2}>
-                        <Button
-                          type="text"
-                          danger
-                          icon={<DeleteOutlined />}
-                          aria-label={`删除运行输入 ${index + 1}`}
-                          onClick={() => remove(field.name)}
-                        />
-                      </Col>
-                    </Row>
-                    <Row gutter={12}>
-                      <Col xs={24} md={12}>
-                        <Form.Item
-                          name={[field.name, 'source_subpath']}
-                          label="来源子路径"
-                          rules={[
-                            {
-                              validator: (_, value: string | undefined) => {
-                                const problem = validateSourceSubpath(value ?? '')
-                                return problem
-                                  ? Promise.reject(new Error(problem))
-                                  : Promise.resolve()
-                              },
-                            },
-                          ]}
-                        >
-                          <Input placeholder="例如：train/" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={12}>
-                        <Form.Item
-                          name={[field.name, 'access_path']}
-                          label="输入访问路径"
-                          rules={[
-                            { required: true, message: '请填写输入访问路径' },
-                            {
-                              validator: (_, value: string | undefined) =>
-                                validateAccessPath(index, value),
-                            },
-                          ]}
-                        >
-                          <Input placeholder="/inputs/train" />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </Space>
-                </Card>
-              )
-            })}
+    <section className={styles.section} aria-label="运行输入">
+      <h3 className={styles.title}>运行输入</h3>
+      <p className={styles.muted}>选择确定的资源版本，作为只读输入。保存后不会自动切换版本。</p>
+      <AsyncState
+        loading={resources.loading}
+        loadingText="正在加载共享资源…"
+        error={toAsyncError(resources.error)}
+        onRetry={resources.reload}
+      >
+        {versions.length === 0 && <p className={styles.muted}>当前没有可选择的共享资源版本。</p>}
+      </AsyncState>
+      {bindings.map((binding, index) => (
+        <div className={`${styles.item} ${styles.section}`} key={index}>
+          {binding.source_type === 'shared_resource_version' ? (
+            <RunField label={`资源版本 ${index + 1}`} required>
+              <Select
+                block
+                value={binding.source_id}
+                onChange={(e) => update(index, { source_id: e.target.value })}
+              >
+                <Select.Option value="">选择资源版本</Select.Option>
+                {binding.source_id &&
+                  !versions.some(({ version }) => version.id === binding.source_id) && (
+                    <Select.Option value={binding.source_id}>
+                      已保存版本（当前无法确认可用性）
+                    </Select.Option>
+                  )}
+                {versions.map(({ resource, version }) => (
+                  <Select.Option key={version.id} value={version.id}>
+                    {resource.name} · {version.label} · {resource.owner.display_name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </RunField>
+          ) : (
+            <p>
+              运行产物输入：<code>{binding.source_id}</code>
+            </p>
+          )}
+          <div className={styles.grid}>
+            <RunField label={`输入访问路径 ${index + 1}`} required>
+              <TextInput
+                block
+                value={binding.access_path}
+                placeholder="/inputs/data"
+                onChange={(e) => update(index, { access_path: e.target.value })}
+              />
+            </RunField>
+            <RunField label={`来源子路径 ${index + 1}`} caption="留空使用整个版本">
+              <TextInput
+                block
+                value={binding.source_subpath}
+                placeholder="例如：train/"
+                onChange={(e) => update(index, { source_subpath: e.target.value })}
+              />
+            </RunField>
+          </div>
+          <div>
             <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              disabled={loading || Boolean(error) || availableVersionCount === 0}
-              onClick={() =>
-                add({
-                  resource_id: undefined,
-                  source_id: undefined,
-                  source_subpath: '',
-                  access_path: '',
-                })
-              }
+              variant="invisible"
+              onClick={() => onChange(bindings.filter((_, i) => i !== index))}
             >
-              添加运行输入
+              删除运行输入 {index + 1}
             </Button>
-          </Space>
-        )}
-      </Form.List>
-    </Space>
+          </div>
+        </div>
+      ))}
+      <div>
+        <Button
+          disabled={resources.loading || !!resources.error || versions.length === 0}
+          onClick={() =>
+            onChange([
+              ...bindings,
+              {
+                source_type: 'shared_resource_version',
+                source_id: '',
+                access_path: '',
+                source_subpath: '',
+              },
+            ])
+          }
+        >
+          添加运行输入
+        </Button>
+      </div>
+    </section>
   )
 }

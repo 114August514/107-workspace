@@ -540,6 +540,8 @@ class RunDraftIn(Model):
     """一次提交意图。"""
 
     run_configuration_id: str
+    confirmation_token: str | None = None
+    """Preflight 返回的配置变化检测标识；不能替代当前授权校验。"""
     project_version_id: str | None = None
     """None 表示使用 Project 的最新版本。"""
     name: str | None = None
@@ -569,6 +571,15 @@ class AdjustedRerunIn(Model):
 
 
 class PreflightOut(Model):
+    configuration_name: str
+    command: str
+    working_directory: str
+    input_bindings: list[InputBindingModel]
+    artifact_rules: list[ArtifactRuleModel]
+    project_version_label: str | None
+    compute_plan_name: str | None
+    environment_name: str | None
+    confirmation_token: str | None
     ok: bool
     problems: list[str]
     project_version_id: str | None

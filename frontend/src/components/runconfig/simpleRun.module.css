@@ -1,0 +1,113 @@
+.form,
+.section,
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+.section {
+  gap: var(--base-size-12);
+}
+.row,
+.header,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  flex-wrap: wrap;
+}
+.header {
+  justify-content: space-between;
+}
+.title {
+  margin: 0;
+  font-size: var(--text-title-size-small);
+  font-weight: var(--base-text-weight-semibold);
+}
+.muted {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+}
+.code {
+  font-family: var(--fontStack-monospace);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.disclosure {
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+  padding-top: var(--base-size-12);
+}
+.disclosure > summary {
+  cursor: pointer;
+  font-weight: var(--base-text-weight-semibold);
+  padding: var(--base-size-4) 0;
+}
+.disclosure > summary:focus-visible {
+  outline: 2px solid var(--focus-outlineColor);
+  outline-offset: 2px;
+  border-radius: var(--borderRadius-small);
+}
+.disclosure[open] > summary {
+  margin-bottom: var(--base-size-12);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--base-size-12);
+}
+.item {
+  border: var(--borderWidth-thin) solid var(--borderColor-muted);
+  border-radius: var(--borderRadius-medium);
+  padding: var(--base-size-12);
+  min-width: 0;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.list > li {
+  padding: var(--base-size-16) 0;
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+.list > li:last-child {
+  border-bottom: 0;
+}
+.summary {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--base-size-12) var(--base-size-16);
+}
+.summary dt {
+  color: var(--fgColor-muted);
+}
+.summary dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 544px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--base-size-4);
+  }
+  .summary dd {
+    margin-bottom: var(--base-size-8);
+  }
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-16);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+}

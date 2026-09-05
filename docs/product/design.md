@@ -1139,6 +1139,27 @@ Run Configuration
 └── Artifact Collection Rules
 ```
 
+Simple Run 的默认编辑表面只突出 Command、Environment Version 与 Compute Plan。
+Command 是 shell command，不增加语言专用的 entry file 字段。
+有确定的默认环境版本或唯一可用环境版本时可以预选；算力默认选择使用后端返回的当前权益事实。
+用户无需填写底层 cluster、account、partition、QoS、GRES 或原始 SBATCH 参数。
+CPU、Memory、GPU、Time 等数量按需展开调整，并受 Compute Plan 范围约束。
+折叠设置不改变已经填写的值；恢复方案默认资源必须是明确操作。
+Input Bindings、Variable / Secret 引用、Working Directory、方案名称与说明默认放在高级设置。
+高级设置在折叠时提示已有输入、参数和自定义工作目录；字段错误应展开相应设置。
+
+Core Run 是非交互式 batch execution，stdin 固定连接 `/dev/null`，Mock 与 Slurm 保持一致。
+stdout / stderr 由平台自动捕获为日志，用户无需配置其文件名或存储路径。
+新建方案明确预填 `outputs/` 作为可修改、可删除的 optional Artifact Collection Rule；
+路径相对于工作目录，目录不存在不因此使 Run 失败。空规则列表表示不收集产物，
+编辑已有方案不得自动补回默认规则，也不扫描未声明路径。
+
+日常提交以运行方案、确定 Project Version 和已解析执行配置摘要为主，不重复编辑完整方案。
+Preflight 自动执行；本次提交显式携带摘要中的 Project Version。
+确认标识只用于检测执行配置变化，不构成授权或提前创建的 Snapshot。
+创建时重新校验当前资格并解析配置；与已确认事实不一致时拒绝创建并要求刷新摘要。
+Secret 值不参与确认标识，继续按 exact reference 在执行时读取当前有效值。
+
 界面可以在用户编辑 Run Configuration 时，根据默认值、推荐值或别名帮助选择版本；保存 Run Configuration 前，平台必须将这些可变选择解析为具体的 Environment Version 和 Shared Resource Version。Run Configuration 和 Run Snapshot 只保存具体版本的精确引用。创建或执行 Run 时不得再次解析默认值、推荐值或别名，也不得自动切换到其他版本。
 
 创建 Run 时，平台将当前 Project Version 与 Run Configuration 中的配置解析为确定内容，并生成 Run Snapshot：
