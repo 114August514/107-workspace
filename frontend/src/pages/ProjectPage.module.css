@@ -33,17 +33,17 @@
   min-width: 0;
 }
 
-.aboutRail h2 {
-  margin: 0 0 var(--base-size-8);
+.aboutCard {
+  padding: 0;
+}
+
+.aboutCard h2 {
+  margin: 0 0 var(--base-size-16);
   font-size: var(--text-title-size-medium);
 }
 
-.aboutCard {
-  padding: var(--base-size-16);
-}
-
 .aboutCard p {
-  margin-top: 0;
+  margin: 0 0 var(--base-size-16);
   color: var(--fgColor-muted);
   line-height: var(--text-body-lineHeight-medium);
 }
@@ -73,14 +73,23 @@
 .relatedResources {
   display: grid;
   gap: var(--base-size-8);
-  margin-top: var(--base-size-16);
-  padding-top: var(--base-size-16);
+  margin-top: var(--base-size-20);
+  padding-top: var(--base-size-20);
   border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .relatedResources h3 {
-  margin: 0;
+  margin: 0 0 var(--base-size-4);
   font-size: var(--text-title-size-small);
+}
+
+.relatedResources a {
+  color: var(--fgColor-accent);
+  text-decoration: none;
+}
+
+.relatedResources a:hover {
+  text-decoration: underline;
 }
 
 @media not all and (min-width: 48rem) {

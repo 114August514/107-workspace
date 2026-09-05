@@ -263,8 +263,8 @@ function ProjectAbout({ project, projectId }: { project: Project | undefined; pr
     .find(({ version }) => version.id === project.environment_version_id)
   return (
     <aside className={styles.aboutRail} aria-label="About">
-      <h2>About</h2>
-      <Card className={styles.aboutCard}>
+      <div className={styles.aboutCard}>
+        <h2>About</h2>
         <p>{project.description || '这个 Project 还没有填写说明。'}</p>
         <dl className={styles.aboutFacts}>
           <div>
@@ -300,7 +300,7 @@ function ProjectAbout({ project, projectId }: { project: Project | undefined; pr
             ))}
           </section>
         )}
-      </Card>
+      </div>
     </aside>
   )
 }
