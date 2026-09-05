@@ -6,6 +6,7 @@ import { contextGuideCopy } from './copy'
 
 const contextGuides = [
   { pattern: '/', message: contextGuideCopy.home },
+  { pattern: '/profile', message: contextGuideCopy.profile },
   { pattern: '/execution-context', message: contextGuideCopy.executionContext },
   { pattern: '/user-groups/:userGroupId/*', message: contextGuideCopy.userGroup },
   { pattern: '/environments', message: contextGuideCopy.environment },

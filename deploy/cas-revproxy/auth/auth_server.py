@@ -33,6 +33,15 @@ def login_service_url(session_id: str) -> str:
     return f"{current_app.config['PUBLIC_ORIGIN']}/login?{urlencode({'id': session_id})}"
 
 
+def header_safe(value: str) -> bool:
+    """HTTP/1.1 header values are latin-1. Skip names the wire cannot carry."""
+    try:
+        value.encode("latin-1")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def origin_allowed() -> bool:
     expected = current_app.config["PUBLIC_ORIGIN"]
     origin = (request.headers.get("Origin") or "").rstrip("/")
@@ -139,7 +148,7 @@ def create_app() -> Flask:
         if session.get("provider") == "local":
             response.headers["X-User-Provider"] = "local"
             name = session.get("name")
-            if name:
+            if name and header_safe(name):
                 response.headers["X-User-Name"] = name
         return response
 
