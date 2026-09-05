@@ -38,7 +38,7 @@ export function UserMenu({ user }: Props) {
             </ActionList.Item>
             <ActionList.Item
               onSelect={() => {
-                navigate('/execution-context')
+                navigate('/settings')
               }}
             >
               {authCopy.settings}

@@ -21,6 +21,7 @@ import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
 import { PersonalExecutionContextPage } from './pages/PersonalExecutionContextPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { SettingsPage } from './pages/SettingsPage'
 import { EnvironmentListPage } from './pages/EnvironmentListPage'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
@@ -160,6 +161,7 @@ export function ProductRoutes({
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/profile" element={<ProfilePage home={home} />} />
+      <Route path="/settings" element={<SettingsPage home={home} />} />
       <Route
         path="/execution-context"
         element={<PersonalExecutionContextPage username={username} home={home} />}

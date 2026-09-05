@@ -93,6 +93,7 @@ function readyProject(data: Project | undefined = projectData): AsyncState<Proje
 const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
   ['/profile', '这里查看自己的身份信息、所属 User Group，并进入个人执行上下文。'],
+  ['/settings', '这里修改显示名称和用户名；邮箱由登录身份提供。'],
   [
     '/execution-context',
     '这里管理发起 Run 的个人身份、算力权益与 User 配置；已有 Run Snapshot 不会被后续修改回写。',

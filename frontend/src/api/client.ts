@@ -62,6 +62,7 @@ import type {
   VersionDiff,
   WorkingChange,
   WorkingChangeDetail,
+  User,
   UserGroup,
   Variable,
 } from './types'
@@ -184,6 +185,15 @@ export function toApiError(body: unknown, response: Response): ApiError {
 export const api = {
   // -- 首页与目录 --------------------------------------------------------
   home: async (): Promise<Home> => unwrap(await http.GET('/api/v1/me')),
+  updateProfile: async (payload: {
+    username?: string
+    display_name?: string
+  }): Promise<User> =>
+    unwrap(
+      await http.PATCH('/api/v1/me', {
+        body: payload,
+      }),
+    ),
   environments: async (): Promise<Environment[]> =>
     unwrap(await http.GET('/api/v1/catalog/environments')),
   environment: async (id: string): Promise<Environment> =>

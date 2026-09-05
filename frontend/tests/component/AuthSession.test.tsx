@@ -205,16 +205,16 @@ describe('用户菜单与个人资料', () => {
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it('设置进入现有个人执行上下文', async () => {
+  it('设置进入账户设置而不是个人执行上下文', async () => {
     mockSignedInApis()
-    vi.spyOn(api, 'listEntitlements').mockResolvedValue([])
-    vi.spyOn(api, 'listUserVariables').mockResolvedValue([])
-    vi.spyOn(api, 'listUserSecrets').mockResolvedValue([])
     renderApp()
 
     fireEvent.click(await screen.findByRole('button', { name: '当前用户 同学' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: '设置' }))
-    expect(await screen.findByRole('heading', { name: '个人执行上下文' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: '设置' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: /显示名称/ })).toHaveValue('同学')
+    expect(screen.getByRole('textbox', { name: /用户名/ })).toHaveValue('student')
+    expect(screen.queryByRole('heading', { name: '个人执行上下文' })).toBeNull()
   })
 
   it('退出登录以同源 POST 表单提交 /logout', async () => {
