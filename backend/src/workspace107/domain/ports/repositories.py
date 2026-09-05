@@ -8,6 +8,8 @@ application 层通过 :class:`Repositories` 访问持久化，不认识 SQLAlche
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -43,6 +45,40 @@ from ..models import (
 from ..ownership import OwnerReference
 from ..pagination import Page, PageRequest
 from ..run_snapshot import RunSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class UserGroupDeletionSummary:
+    projects: int
+    environments: int
+    shared_resources: int
+    variables: int
+    secrets: int
+    memberships: int
+    grants: int
+    activities: int
+    notifications: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectDeletionPlan:
+    project_id: str
+    working_state_files: int
+    versions: int
+    version_files: int
+    branches: int
+    configurations: int
+    variables: int
+    secrets: int
+    runs: int
+    snapshots: int
+    run_events: int
+    artifacts: int
+    activities: int
+    notifications: int
+    fork_relation: int
+    fork_dependents: int
+    unfinished_runs: int
 
 
 class UserRepository(Protocol):
@@ -88,6 +124,7 @@ class ProjectRepository(Protocol):
     async def add(self, project: Project) -> None: ...
     async def get(self, project_id: str) -> Project | None: ...
     async def update(self, project: Project) -> None: ...
+    async def get_for_update(self, project_id: str) -> Project | None: ...
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
         """按最近更新时间列出用户可见的 Project，用于个人首页。"""
         ...
@@ -303,6 +340,7 @@ class SharedResourceRepository(Protocol):
     async def get_attempt_by_id(
         self, attempt_id: str
     ) -> SharedResourcePublicationAttempt | None: ...
+
     async def add_version(self, version: SharedResourceVersion) -> None: ...
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
@@ -343,6 +381,18 @@ class GrantRepository(Protocol):
         ...
 
 
+class LifecycleRepository(Protocol):
+    """跨聚合生命周期操作的显式持久化边界。"""
+
+    async def user_group_summary(self, user_group_id: str) -> UserGroupDeletionSummary: ...
+    async def project_plan(self, project_id: str) -> ProjectDeletionPlan: ...
+    async def unfinished_run_count(self, project_id: str) -> int: ...
+    def iter_project_run_ids(self, project_id: str) -> AsyncIterator[str]: ...
+    def iter_project_artifact_ids(self, project_id: str) -> AsyncIterator[str]: ...
+    async def delete_user_group(self, user_group_id: str) -> None: ...
+    async def delete_project(self, project_id: str) -> None: ...
+
+
 class Repositories(Protocol):
     """一次工作单元内可用的全部仓储。"""
 
@@ -368,6 +418,7 @@ class Repositories(Protocol):
     fork_relations: ForkRelationRepository
     shared_resources: SharedResourceRepository
     grants: GrantRepository
+    lifecycle: LifecycleRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

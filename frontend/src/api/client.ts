@@ -23,6 +23,7 @@ import type {
   ComputeRequest,
   InputBinding,
   Entitlement,
+  DeletionImpact,
   Environment,
   EnvironmentPublicationAttempt,
   EnvironmentVersion,
@@ -66,6 +67,8 @@ import type {
   UserGroup,
   Variable,
 } from './types'
+
+export type DeleteResult = 'deleted' | 'absent'
 
 /** 后端统一的错误响应结构。 */
 export class ApiError extends Error {
@@ -280,6 +283,27 @@ export const api = {
       }),
     ),
 
+  getUserGroupDeletionImpact: async (id: string): Promise<DeletionImpact> =>
+    unwrap(
+      await http.GET('/api/v1/user-groups/{user_group_id}/deletion-impact', {
+        params: { path: { user_group_id: id } },
+      }),
+    ),
+
+  deleteUserGroup: async (id: string): Promise<DeleteResult> => {
+    try {
+      unwrap(
+        await http.DELETE('/api/v1/user-groups/{user_group_id}', {
+          params: { path: { user_group_id: id }, query: { confirm: true } },
+        }),
+      )
+      return 'deleted'
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return 'absent'
+      throw error
+    }
+  },
+
   createUserGroup: async (name: string, description: string): Promise<UserGroup> =>
     unwrap(await http.POST('/api/v1/user-groups', { body: { name, description } })),
 
@@ -436,6 +460,27 @@ export const api = {
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),
     ),
+
+  getProjectDeletionImpact: async (id: string): Promise<DeletionImpact> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/deletion-impact', {
+        params: { path: { project_id: id } },
+      }),
+    ),
+
+  deleteProject: async (id: string): Promise<DeleteResult> => {
+    try {
+      unwrap(
+        await http.DELETE('/api/v1/projects/{project_id}', {
+          params: { path: { project_id: id }, query: { confirm: true } },
+        }),
+      )
+      return 'deleted'
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return 'absent'
+      throw error
+    }
+  },
 
   updateProject: async (
     id: string,
@@ -1022,6 +1067,9 @@ export const api = {
         params: { path: { project_id: id }, query },
       }),
     ),
+
+  listMyActivities: async (query: PageQuery = {}): Promise<ActivityPage> =>
+    unwrap(await http.GET('/api/v1/me/activities', { params: { query } })),
 
   // -- 通知 ---------------------------------------------------------------
   listNotifications: async (

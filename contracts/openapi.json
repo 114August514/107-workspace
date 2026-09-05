@@ -6,6 +6,7 @@
         "enum": [
           "user_group_created",
           "user_group_updated",
+          "user_group_deleted",
           "member_invited",
           "member_joined",
           "member_left",
@@ -15,6 +16,7 @@
           "project_created",
           "project_updated",
           "project_forked",
+          "project_deleted",
           "version_saved",
           "version_restored",
           "run_submitted",
@@ -389,6 +391,7 @@
           "project.view",
           "project.create",
           "project.update",
+          "project.delete",
           "project.content.write",
           "run_configuration.manage",
           "run.view",
@@ -520,6 +523,72 @@
           }
         },
         "title": "ComputeRequestModel",
+        "type": "object"
+      },
+      "DeletionImpactItemOut": {
+        "description": "删除确认页面展示的一类影响对象数量。",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "DeletionImpactItemOut",
+        "type": "object"
+      },
+      "DeletionImpactOut": {
+        "description": "删除操作的可见影响摘要，不包含 Secret 值或内部内容。",
+        "properties": {
+          "can_delete": {
+            "title": "Can Delete",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeletionImpactItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_name": {
+            "title": "Resource Name",
+            "type": "string"
+          },
+          "resource_type": {
+            "enum": [
+              "user_group",
+              "project"
+            ],
+            "title": "Resource Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "resource_name",
+          "can_delete"
+        ],
+        "title": "DeletionImpactOut",
         "type": "object"
       },
       "DiscardChangesIn": {
@@ -3758,6 +3827,7 @@
         "enum": [
           "user_group.view",
           "user_group.update",
+          "user_group.delete",
           "member.view",
           "member.invite",
           "member.remove",
@@ -6269,6 +6339,143 @@
         ]
       }
     },
+    "/api/v1/me/activities": {
+      "get": {
+        "description": "Return personal Owner Scope activity, including deleted-target snapshots.",
+        "operationId": "list_my_activities_api_v1_me_activities_get",
+        "parameters": [
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageOut_ActivityOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "列出个人近期活动",
+        "tags": [
+          "home"
+        ]
+      }
+    },
     "/api/v1/me/entitlements": {
       "get": {
         "description": "Resource Entitlement 属于 User 本人，按发起 User 校验 Run 资格。",
@@ -7525,6 +7732,121 @@
       }
     },
     "/api/v1/projects/{project_id}": {
+      "delete": {
+        "description": "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。",
+        "operationId": "delete_project_api_v1_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "确认已查看删除影响",
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "确认已查看删除影响",
+              "title": "Confirm",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Project 删除成功。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "description": "Project 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "删除 Project",
+        "tags": [
+          "project"
+        ]
+      },
       "get": {
         "description": "校验当前用户可查看该 Project 后，返回项目设置与当前状态。",
         "operationId": "get_project_api_v1_projects__project_id__get",
@@ -8296,6 +8618,124 @@
           }
         },
         "summary": "放弃指定的未保存变更",
+        "tags": [
+          "project"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/deletion-impact": {
+      "get": {
+        "operationId": "project_deletion_impact_api_v1_projects__project_id__deletion_impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionImpactOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "查看 Project 删除影响",
         "tags": [
           "project"
         ]
@@ -14110,6 +14550,121 @@
       }
     },
     "/api/v1/user-groups/{user_group_id}": {
+      "delete": {
+        "description": "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。",
+        "operationId": "delete_user_group_api_v1_user_groups__user_group_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_group_id",
+            "required": true,
+            "schema": {
+              "title": "User Group Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "确认已查看删除影响",
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "确认已查看删除影响",
+              "title": "Confirm",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "User Group 删除成功。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "description": "User Group 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "删除 User Group",
+        "tags": [
+          "user-group"
+        ]
+      },
       "get": {
         "operationId": "get_user_group_api_v1_user_groups__user_group_id__get",
         "parameters": [
@@ -14493,6 +15048,124 @@
           }
         },
         "summary": "列出 User Group 近期活动",
+        "tags": [
+          "user-group"
+        ]
+      }
+    },
+    "/api/v1/user-groups/{user_group_id}/deletion-impact": {
+      "get": {
+        "operationId": "user_group_deletion_impact_api_v1_user_groups__user_group_id__deletion_impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_group_id",
+            "required": true,
+            "schema": {
+              "title": "User Group Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionImpactOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "查看 User Group 删除影响",
         "tags": [
           "user-group"
         ]

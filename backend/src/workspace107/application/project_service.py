@@ -8,9 +8,11 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 from __future__ import annotations
 
 import io
+import logging
 import posixpath
 import re
 import stat
+import tempfile
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -42,7 +44,7 @@ from ..domain.models import (
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
-from ..domain.ports.repositories import Repositories
+from ..domain.ports.repositories import ProjectDeletionPlan, Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
@@ -58,6 +60,14 @@ MAX_INLINE_PREVIEW_BYTES = 512 * 1024
 # 压缩包展开预算的默认值；组合根会用配置覆盖。
 DEFAULT_MAX_ARCHIVE_TOTAL_BYTES = 128 * 1024 * 1024
 DEFAULT_MAX_ARCHIVE_ENTRIES = 500
+
+logger = logging.getLogger(__name__)
+
+
+def project_deletion_problems(plan: ProjectDeletionPlan) -> list[str]:
+    if plan.unfinished_runs == 0:
+        return []
+    return [f"请先取消并等待结束 {plan.unfinished_runs} 个未结束的 Run，再删除 Project"]
 
 
 def normalize_path(raw: str) -> str:
@@ -178,6 +188,91 @@ class ProjectService:
     async def get(self, user_id: str, project_id: str) -> ProjectAccess:
         return await self._guard.project(user_id, project_id)
 
+    async def deletion_impact(
+        self, user_id: str, project_id: str
+    ) -> tuple[ProjectAccess, ProjectDeletionPlan]:
+        access = await self._guard.project(
+            user_id,
+            project_id,
+            needs=Capability.PROJECT_DELETE,
+            owner_scope=True,
+        )
+        return access, await self._repos.lifecycle.project_plan(project_id)
+
+    async def delete(self, user_id: str, project_id: str, *, confirmed: bool = False) -> None:
+        project = await self._repos.projects.get(project_id)
+        if project is None:
+            raise ObjectNotFound("Project", project_id)
+        if (
+            project.owner.kind is OwnerKind.USER_GROUP
+            and (await self._repos.user_groups.get_for_update(project.owner.id)) is None
+        ):
+            raise ObjectNotFound("Project", project_id)
+        if await self._repos.projects.get_for_update(project_id) is None:
+            raise ObjectNotFound("Project", project_id)
+        access = await self._guard.project(
+            user_id,
+            project_id,
+            needs=Capability.PROJECT_DELETE,
+            owner_scope=True,
+        )
+        unfinished_runs = await self._repos.lifecycle.unfinished_run_count(project_id)
+        if unfinished_runs:
+            raise ConflictError(
+                "Project 仍有未结束的 Run",
+                [f"请先取消并等待结束 {unfinished_runs} 个未结束的 Run，再删除 Project"],
+            )
+        if not confirmed:
+            raise ConflictError("删除 Project 需要明确确认", ["请在确认影响范围后重试"])
+        await self._activity.record(
+            actor_id=user_id,
+            owner=access.project.owner,
+            action=ActivityAction.PROJECT_DELETED,
+            target_type=TargetType.PROJECT,
+            target_id=project_id,
+            target_name=access.project.name,
+            detail="Project 及其 Working State、Version、Run 和配置记录已结束生命周期",
+        )
+        # IDs are needed only by post-commit storage cleanup. Spool them before the
+        # database rows disappear, without retaining an unbounded Python collection.
+        with (
+            tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as run_spool,
+            tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as artifact_spool,
+        ):
+            async for run_id in self._repos.lifecycle.iter_project_run_ids(project_id):
+                run_spool.write(run_id)
+                run_spool.write("\n")
+            async for artifact_id in self._repos.lifecycle.iter_project_artifact_ids(project_id):
+                artifact_spool.write(artifact_id)
+                artifact_spool.write("\n")
+            run_spool.flush()
+            artifact_spool.flush()
+            await self._repos.lifecycle.delete_project(project_id)
+            # 先提交逻辑删除；文件系统不可参与数据库回滚，清理失败只留下不可访问的存储缓存。
+            await self._repos.commit()
+            run_spool.seek(0)
+            for line in run_spool:
+                run_id = line.rstrip("\n")
+                try:
+                    await self._storage.cleanup_run_directory(run_id)
+                except Exception:
+                    logger.warning(
+                        "Project 删除后 Run 存储清理失败",
+                        extra={"project_id": project_id, "run_id": run_id},
+                        exc_info=True,
+                    )
+            artifact_spool.seek(0)
+            for line in artifact_spool:
+                artifact_id = line.rstrip("\n")
+                try:
+                    await self._storage.delete_artifact_content(artifact_id)
+                except Exception:
+                    logger.warning(
+                        "Project 删除后 Artifact 存储清理失败",
+                        extra={"project_id": project_id, "artifact_id": artifact_id},
+                        exc_info=True,
+                    )
+
     async def create_owned(
         self,
         user_id: str,
@@ -228,6 +323,8 @@ class ProjectService:
             raise PermissionDenied(
                 f"当前角色（{access.role.value}）无权{describe(Capability.PROJECT_CREATE)}"
             )
+        if await self._repos.user_groups.get_for_update(owner.id) is None:
+            raise ObjectNotFound("Project Owner", owner.id)
 
     async def owner_summary(self, project: Project) -> OwnerSummary:
         summaries = await resolve_owner_summaries(self._repos, [project.owner])

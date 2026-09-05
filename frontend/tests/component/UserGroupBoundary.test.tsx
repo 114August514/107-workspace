@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../src/App'
 import { api } from '../../src/api/client'
-import type { Home, Member, UserGroup } from '../../src/api/types'
+import type { DeletionImpact, Home, Member, UserGroup } from '../../src/api/types'
 import { MembersSection } from '../../src/components/usergroup/MembersSection'
 import { OverviewSection } from '../../src/components/usergroup/OverviewSection'
 import {
@@ -29,6 +29,11 @@ const ownerGroup: UserGroup = {
     'member.remove',
     'member.role.manage',
   ],
+}
+
+const deletableGroup: UserGroup = {
+  ...ownerGroup,
+  capabilities: [...(ownerGroup.capabilities ?? []), 'user_group.delete'],
 }
 
 const memberGroup: UserGroup = {
@@ -177,5 +182,59 @@ describe('UserGroupPage 分区导航信息架构', () => {
     expect(screen.getByRole('complementary', { name: '页面引导' })).toHaveTextContent(
       '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
     )
+  })
+
+  it('显示删除影响并要求危险确认', async () => {
+    vi.mocked(api.getUserGroup).mockResolvedValue(deletableGroup)
+    const impact: DeletionImpact = {
+      resource_type: 'user_group',
+      resource_id: 'grp_lab',
+      resource_name: 'Research Lab',
+      can_delete: true,
+      problems: [],
+      items: [
+        { kind: 'memberships', count: 1 },
+        { kind: 'projects', count: 0 },
+      ],
+    }
+    vi.spyOn(api, 'getUserGroupDeletionImpact').mockResolvedValue(impact)
+    const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue('deleted')
+
+    renderUserGroupRoute('/user-groups/grp_lab')
+
+    await screen.findByRole('button', { name: '删除 User Group' })
+    screen.getByRole('button', { name: '删除 User Group' }).click()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Membership：1')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('删除会结束这个 User Group 的 Membership、授权和配置生命周期。'),
+    ).toBeInTheDocument()
+    within(dialog).getByRole('button', { name: '删除 User Group' }).click()
+    await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('grp_lab'))
+  })
+
+  it('将 404-on-retry 显示为目标已不存在，而不是声称本次删除成功', async () => {
+    vi.mocked(api.getUserGroup).mockResolvedValue(deletableGroup)
+    vi.spyOn(api, 'getUserGroupDeletionImpact').mockResolvedValue({
+      resource_type: 'user_group',
+      resource_id: 'grp_lab',
+      resource_name: 'Research Lab',
+      can_delete: true,
+      problems: [],
+      items: [{ kind: 'memberships', count: 0 }],
+    })
+    const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue('absent')
+
+    renderUserGroupRoute('/user-groups/grp_lab')
+    await screen.findByRole('button', { name: '删除 User Group' })
+    screen.getByRole('button', { name: '删除 User Group' }).click()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('没有需要额外处理的记录。')).toBeInTheDocument()
+    within(dialog).getByRole('button', { name: '删除 User Group' }).click()
+
+    await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith('grp_lab'))
+    expect(await within(dialog).findByText(/当前不存在/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/不能说明由谁删除/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: '返回首页' })).toBeInTheDocument()
   })
 })

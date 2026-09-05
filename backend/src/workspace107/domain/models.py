@@ -465,11 +465,12 @@ class Artifact:
 
 @dataclass(frozen=True, slots=True)
 class Activity:
-    """A current-owner activity fact with immutable display-name snapshots.
+    """An Owner-scoped activity fact with immutable target snapshots.
 
     ``owner`` is the authorization and aggregation boundary. ``project_id`` narrows
-    Project activity without inventing a second authority model. Actor and target
-    names are copied at write time so renames do not rewrite historical sentences.
+    live Project activity only; lifecycle governance events for a deleted object leave
+    it unset so the Owner Scope history survives the object's deletion. Actor and target
+    names are copied at write time so historical sentences do not require target joins.
     """
 
     id: str

@@ -1959,6 +1959,8 @@ User Group 仅可基于该组拥有的 Profile，或 PUBLIC Profile 中的确定
 
 User 拥有的资产不会仅因该 User 是某个 User Group 的成员而进入组活动汇总。被多个 Project 引用的资产发生变化时，Activity 只记录在该资产上；需要提醒时，向相关 User 发送 Notification。
 
+生命周期治理 Activity 归属于受影响的 Owner Scope，不归属于被结束生命周期的对象。删除 User Group-owned Project 时记录在该 User Group Activity；删除 User-owned Project 时记录在该 User Activity；删除 User Group 时记录在执行操作的 User Activity。删除后仍保留目标名称与身份快照，以便解释历史事实。
+
 ##### **GR-603 — Activity 查看权限**
 
 Activity 必须按作用对象归入对象的当前 Owner 边界授权。Project、Environment 或 Shared Resource 的 Activity 仅允许 Owner User，或 exact owning User Group 中具有有效 Membership 且 Role / Status 允许的 User 查看；User Group 直接 Activity 仅允许该组中具有相应权限的有效成员查看。User Group 或个人视图不得绕过这些边界，PUBLIC Project 与 USE Grant 均不公开 Activity。
@@ -1980,6 +1982,8 @@ Activity 没有未读、完成或送达状态，也不替代 Notification、Audi
 ##### 删除 User Group
 
 删除 User Group 前必须先处理其拥有的资产、Variable 和 Secret；删除不得移除 User 身份，也不得影响 User 在其他 User Group 中的 Membership。
+
+删除请求成功完成时返回 204。若目标当前不存在则返回 404；删除已经成功但响应丢失时，客户端重试也会得到 404。该 404 只说明目标不存在，不能证明由谁删除，因此界面必须将“本次已删除”和“目标已不存在”作为不同结果反馈，并继续呈现其他失败。
 
 ##### 管理 Membership
 
@@ -2050,6 +2054,8 @@ Project Branch 是指向本 Project 某一确定 Project Version 的可变引用
 Project 删除时，其 Working State、Project Version、Project Branch、Run Configuration、Project scoped Variable 与 Secret，以及归属于该 Project 的 Run 和 Run 从属对象随其生命周期结束。
 
 源 Project 删除不影响已经形成独立生命周期的对象。Template Revision 的保留按 GR-206 处理，实时来源导航与读取按 GR-508 处理。
+
+删除请求成功完成时返回 204。若目标当前不存在则返回 404；删除已经成功但响应丢失时，客户端重试也会得到 404。该 404 只说明目标不存在，不能证明由谁删除，因此界面必须将“本次已删除”和“目标已不存在”作为不同结果反馈，并继续呈现其他失败。
 
 #### 3.4.3 Run 生命周期与执行操作
 

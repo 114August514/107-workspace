@@ -27,4 +27,15 @@ describe('Run activity routes', () => {
   it('keeps ID-only activity links on the resolver route', () => {
     expect(targetPath(makeRunActivity(null))).toBe('/runs/run-1')
   })
+
+  it('keeps deleted Project activity as historical text without a dead link', () => {
+    const activity: Activity = {
+      ...makeRunActivity(null),
+      action: 'project_deleted',
+      target_id: 'project-deleted',
+      target_name: '已删除 Project',
+      target_type: 'project',
+    }
+    expect(targetPath(activity)).toBeNull()
+  })
 })
