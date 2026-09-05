@@ -1938,6 +1938,8 @@ User Group 仅可基于该组拥有的 Profile，或 PUBLIC Profile 中的确定
 
 User 拥有的资产不会仅因该 User 是某个 User Group 的成员而进入组活动汇总。被多个 Project 引用的资产发生变化时，Activity 只记录在该资产上；需要提醒时，向相关 User 发送 Notification。
 
+生命周期治理 Activity 归属于受影响的 Owner Scope，不归属于被结束生命周期的对象。删除 User Group-owned Project 时记录在该 User Group Activity；删除 User-owned Project 时记录在该 User Activity；删除 User Group 时记录在执行操作的 User Activity。删除后仍保留目标名称与身份快照，以便解释历史事实。
+
 ##### **GR-603 — Activity 查看权限**
 
 Activity 必须按作用对象归入对象的当前 Owner 边界授权。Project、Environment 或 Shared Resource 的 Activity 仅允许 Owner User，或 exact owning User Group 中具有有效 Membership 且 Role / Status 允许的 User 查看；User Group 直接 Activity 仅允许该组中具有相应权限的有效成员查看。User Group 或个人视图不得绕过这些边界，PUBLIC Project 与 USE Grant 均不公开 Activity。
