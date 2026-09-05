@@ -2005,8 +2005,13 @@ export interface components {
             expires_at: string | null;
             /** Id */
             id: string;
-            /** Max Concurrent Runs */
-            max_concurrent_runs: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "expired";
+            /** Status Reason */
+            status_reason: string | null;
         };
         /**
          * EnvironmentAvailability
@@ -2879,7 +2884,7 @@ export interface components {
             id: string;
             /**
              * Initiated By User Id
-             * @description 发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。
+             * @description 发起本次 Run 的 User（GR-307）：执行身份与通知接收方。
              */
             initiated_by_user_id: string;
             /**
@@ -2977,6 +2982,19 @@ export interface components {
             name: string;
             /** Value */
             value: string;
+        };
+        /**
+         * SecretOut
+         * @description Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。
+         */
+        SecretOut: {
+            /** Name */
+            name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** SharedResourceDetailOut */
         SharedResourceDetailOut: {
@@ -3265,6 +3283,11 @@ export interface components {
         VariableOut: {
             /** Name */
             name: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
             /** Value */
             value: string;
         };
@@ -7766,7 +7789,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["SecretOut"][];
                 };
             };
             /** @description 请求不合法 */
@@ -11148,7 +11171,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["SecretOut"][];
                 };
             };
             /** @description 请求不合法 */
@@ -11760,7 +11783,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["SecretOut"][];
                 };
             };
             /** @description 请求不合法 */

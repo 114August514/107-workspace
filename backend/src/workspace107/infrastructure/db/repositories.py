@@ -375,11 +375,23 @@ class VariableRepositoryImpl:
             .order_by(t.VariableRow.name)
         )
         rows = (await self._session.execute(stmt)).scalars().all()
-        return [Variable(scope=scope, name=r.name, value=r.value) for r in rows]
+        return [
+            Variable(
+                scope=scope,
+                name=r.name,
+                value=r.value,
+                updated_at=_required(r.updated_at),
+            )
+            for r in rows
+        ]
 
     async def get(self, scope: ConfigScope, name: str) -> Variable | None:
         row = await self._session.get(t.VariableRow, (scope.kind.value, scope.id, name))
-        return Variable(scope=scope, name=row.name, value=row.value) if row else None
+        if row is None:
+            return None
+        return Variable(
+            scope=scope, name=row.name, value=row.value, updated_at=_required(row.updated_at)
+        )
 
     async def upsert(self, variable: Variable) -> None:
         key = (variable.scope.kind.value, variable.scope.id, variable.name)
@@ -391,10 +403,12 @@ class VariableRepositoryImpl:
                     scope_id=variable.scope.id,
                     name=variable.name,
                     value=variable.value,
+                    updated_at=variable.updated_at or datetime.now(UTC),
                 )
             )
         else:
             row.value = variable.value
+            row.updated_at = variable.updated_at or datetime.now(UTC)
         await _flush(self._session)
 
     async def delete(self, scope: ConfigScope, name: str) -> None:
@@ -936,29 +950,10 @@ class EntitlementRepositoryImpl:
                 id=entitlement.id,
                 user_id=entitlement.user_id,
                 compute_plan_id=entitlement.compute_plan_id,
-                max_concurrent_runs=entitlement.max_concurrent_runs,
                 expires_at=entitlement.expires_at,
             )
         )
         await _flush(self._session)
-
-    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
-        """SELECT ... FOR UPDATE，锁到事务结束。
-
-        PostgreSQL 上这行会被真正独占，第二个并发请求阻塞到第一个提交为止。
-        SQLite 不支持 FOR UPDATE，SQLAlchemy 的方言会忽略它——开发和测试环境
-        依赖 SQLite 自身的写串行化，生产环境（PostgreSQL）才有严格保证。
-        """
-        stmt = (
-            select(t.ResourceEntitlementRow)
-            .where(
-                t.ResourceEntitlementRow.user_id == user_id,
-                t.ResourceEntitlementRow.compute_plan_id == compute_plan_id,
-            )
-            .with_for_update()
-        )
-        row = (await self._session.execute(stmt)).scalar_one_or_none()
-        return _to_entitlement(row) if row else None
 
 
 class RunConfigurationRepositoryImpl:
@@ -1153,25 +1148,6 @@ class RunRepositoryImpl:
             )
         )
         return int(result.rowcount or 0) == 1
-
-    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int:
-        """数「这个 User 在这个算力方案上」还有几个未结束的 Run。
-
-        并发额度按「User × 方案」授予，锁的也是那个 User 的那一条权益行，
-        所以只数该 User 发起（initiated_by_user_id）的 Run。**计数范围大于
-        加锁范围就等于没锁**——计数范围里混进别人的 Run，会读出一个比实际
-        大的数，让本来还有名额的请求被误拒，或反过来。
-        """
-        stmt = (
-            select(func.count())
-            .select_from(t.RunRow)
-            .where(
-                t.RunRow.initiated_by_user_id == user_id,
-                t.RunRow.compute_plan_id == compute_plan_id,
-                t.RunRow.status.in_([RunStatus.QUEUED.value, RunStatus.RUNNING.value]),
-            )
-        )
-        return int((await self._session.execute(stmt)).scalar_one())
 
 
 class IdempotencyRepositoryImpl:
@@ -2205,7 +2181,6 @@ def _to_entitlement(row: t.ResourceEntitlementRow) -> ResourceEntitlement:
         id=row.id,
         user_id=row.user_id,
         compute_plan_id=row.compute_plan_id,
-        max_concurrent_runs=row.max_concurrent_runs,
         expires_at=row.expires_at,
     )
 

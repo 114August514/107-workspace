@@ -394,7 +394,6 @@ async def seed_demo(
                 id=ids.new_id(ids.ENTITLEMENT),
                 user_id=user.id,
                 compute_plan_id="plan_cpu_quick",
-                max_concurrent_runs=2,
                 expires_at=None,
             )
         )
