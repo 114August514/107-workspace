@@ -21,3 +21,24 @@
   flex-wrap: wrap;
   gap: var(--base-size-8);
 }
+
+.admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-12);
+  padding-top: var(--base-size-8);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.adminTitle {
+  margin: 0;
+  font-size: var(--text-title-size-small);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.adminForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-12);
+  max-width: 24rem;
+}

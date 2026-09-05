@@ -11,6 +11,11 @@ export const authCopy = {
   publicTitle: '107 Workspace',
   publicSubtitle:
     '使用中国科学技术大学统一身份认证登录后，进入 Project、配置运行方案并提交计算作业。',
+  adminLogin: '管理员登录',
+  adminUsername: '用户名',
+  adminPassword: '密码',
+  adminLoginFailed: '管理员登录失败，请检查用户名和密码。',
+  adminHint: '管理员登录后进入「平台资产」User Group，管理平台运行环境和共享资源。',
   profileTitle: '个人资料',
   profileDisplayName: '显示名',
   profileUsername: '用户名',

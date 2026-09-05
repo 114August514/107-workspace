@@ -31,11 +31,15 @@ from ..domain.enums import (
     MembershipRole,
     MembershipStatus,
 )
+from ..domain.models import ExternalIdentityProfile
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..infrastructure.db import tables as t
 from ..main import build_context
 
 DEMO_USER = "student"
+LOCAL_ADMIN_USER = "platform-admin"
+LOCAL_ADMIN_DISPLAY_NAME = "平台管理员"
+LOCAL_PROVIDER = "local"
 DEMO_PROJECT = "第一个训练任务"
 DEMO_USER_GROUP_ID = "grp_demo"
 DEMO_OWNER_MEMBERSHIP_ID = "mbr_demo_owner"
@@ -233,18 +237,57 @@ def _resolve_platform_owner_username(explicit: str | None) -> str:
     return os.environ.get(PLATFORM_OWNER_ENV, "").strip() or DEMO_USER
 
 
+async def _ensure_local_admin(services):
+    return await services.identity.resolve_external_identity(
+        ExternalIdentityProfile(
+            provider=LOCAL_PROVIDER,
+            provider_user_id=LOCAL_ADMIN_USER,
+            username=LOCAL_ADMIN_USER,
+            display_name=LOCAL_ADMIN_DISPLAY_NAME,
+        )
+    )
+
+
+async def _ensure_platform_admin_membership(session: AsyncSession, user_id: str, now) -> None:
+    existing = await session.scalar(
+        select(t.MembershipRow.id).where(
+            t.MembershipRow.user_group_id == PLATFORM_ASSET_GROUP_ID,
+            t.MembershipRow.user_id == user_id,
+        )
+    )
+    if existing is not None:
+        return
+    session.add(
+        t.MembershipRow(
+            id=ids.new_id(ids.MEMBERSHIP),
+            user_group_id=PLATFORM_ASSET_GROUP_ID,
+            user_id=user_id,
+            role=MembershipRole.ADMIN.value,
+            status=MembershipStatus.ACTIVE.value,
+            created_at=now,
+        )
+    )
+    await session.flush()
+
+
 async def _ensure_platform_asset_group(
     session: AsyncSession,
     services,
     platform_owner_username: str | None,
     now,
 ) -> None:
+    admin = await _ensure_local_admin(services)
     group = await session.get(t.UserGroupRow, PLATFORM_ASSET_GROUP_ID)
     if group is not None:
+        await _ensure_platform_admin_membership(session, admin.id, now)
         return
 
     owner_username = _resolve_platform_owner_username(platform_owner_username)
-    owner = await services.identity.ensure_user(owner_username)
+    owner = (
+        admin
+        if owner_username == admin.username
+        else await services.identity.ensure_user(owner_username)
+    )
     session.add(
         t.UserGroupRow(
             id=PLATFORM_ASSET_GROUP_ID,
@@ -266,6 +309,8 @@ async def _ensure_platform_asset_group(
         )
     )
     await session.flush()
+    if owner.id != admin.id:
+        await _ensure_platform_admin_membership(session, admin.id, now)
 
 
 def _assert_fixed_record(row, expected: dict[str, object], record_kind: str) -> None:

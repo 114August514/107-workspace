@@ -25,6 +25,7 @@ ssh -N -L 127.0.0.1:8107:127.0.0.1:8107 dfy2
 - `/auth` 只从已验证会话返回 `X-User-ID`。姓名、邮箱未取得时不传，不推测 CAS 属性。
 - Nginx 覆盖身份 Header，并清除客户端 `X-User`。
 - `GET /login` 由代理发起认证并处理回调；成功后回到 `/`。前端只做整页导航。
+- `POST /login/password` 校验本地管理员账密，成功后写入同一会话并注入 `X-User-Provider: local`。
 - `POST /logout` 清除 107 会话 Cookie，随后 `303` 回到 `/`。不主动退出学校全局 SSO。
 - 浏览器 origin 与 CAS service 使用固定配置，不根据不可信请求头生成回调。
 - 登录回调保留随机会话 `id` 校验；失败时不给出登录态。

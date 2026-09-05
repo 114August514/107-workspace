@@ -85,6 +85,33 @@ async def test_cas_identity_does_not_claim_an_existing_dev_username(
 
 
 @pytest.mark.asyncio
+async def test_local_provider_does_not_merge_with_cas_identity(
+    client: httpx.AsyncClient,
+    context: AppContext,
+    session: AsyncSession,
+) -> None:
+    context.settings.auth_mode = "ustc"
+    cas = await client.get("/api/v1/me", headers={"X-User-ID": "platform-admin"})
+    local = await client.get(
+        "/api/v1/me",
+        headers={"X-User-ID": "platform-admin", "X-User-Provider": "local"},
+    )
+
+    assert cas.status_code == 200
+    assert local.status_code == 200
+    assert cas.json()["user"]["id"] != local.json()["user"]["id"]
+    cas_identity = await SqlRepositories(session).external_identities.get(
+        "ustc-cas", "platform-admin"
+    )
+    local_identity = await SqlRepositories(session).external_identities.get(
+        "local", "platform-admin"
+    )
+    assert cas_identity is not None
+    assert local_identity is not None
+    assert cas_identity.user_id != local_identity.user_id
+
+
+@pytest.mark.asyncio
 async def test_ustc_mode_rejects_request_without_proxy_identity(
     client: httpx.AsyncClient,
     context: AppContext,
