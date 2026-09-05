@@ -26,18 +26,10 @@ class SupportsNestedTransaction(Protocol):
 
 
 class ActivityRecorder:
-    """Record successful business facts in the caller's transaction.
-
-    ``begin_nested`` is a SAVEPOINT on the same AsyncSession; this recorder never
-    commits independently. The enclosing use case decides whether the activity
-    and its primary state change commit together or roll back together.
-    """
+    """Record successful business facts in the caller's transaction."""
 
     def __init__(
-        self,
-        repos: Repositories,
-        clock: Clock,
-        session: SupportsNestedTransaction,
+        self, repos: Repositories, clock: Clock, session: SupportsNestedTransaction
     ) -> None:
         self._repos = repos
         self._clock = clock
@@ -102,10 +94,10 @@ class ActivityService:
             OwnerReference(OwnerKind.USER_GROUP, user_group_id), page
         )
 
-    async def list_for_user(self, user_id: str, page: PageRequest) -> Page[Activity]:
-        """Return personal Owner Scope activity, including deleted-target snapshots."""
+    async def list_for_user(self, actor_id: str, page: PageRequest) -> Page[Activity]:
+        """Return personal activity for the authenticated actor only."""
         return await self._repos.activities.list_for_owner(
-            OwnerReference(OwnerKind.USER, user_id), page
+            OwnerReference(OwnerKind.USER, actor_id), page
         )
 
     async def list_for_project(
