@@ -1,17 +1,21 @@
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { lazy, Suspense, useCallback, useRef, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import { matchPath, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
-import { api, getCurrentUser, setCurrentUser } from './api/client'
+import { api } from './api/client'
+import { toAsyncError } from './api/errors'
 import type { Home, Project } from './api/types'
 import { useAsync, type AsyncState as AsyncResource } from './api/useAsync'
+import { AuthProvider, useAuth } from './auth/AuthProvider'
+import { authCopy } from './auth/authCopy'
 import { EnvironmentsSection } from './components/usergroup/EnvironmentsSection'
 import { MembersSection } from './components/usergroup/MembersSection'
 import { OverviewSection } from './components/usergroup/OverviewSection'
 import { ProjectsSection } from './components/usergroup/ProjectsSection'
 import { SettingsSection } from './components/usergroup/SettingsSection'
 import { SharedResourcesSection } from './components/usergroup/SharedResourcesSection'
+import { AsyncState } from './components/common/AsyncState'
 import { AppShell } from './components/layout/AppShell'
 import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
@@ -20,6 +24,7 @@ import { EnvironmentListPage } from './pages/EnvironmentListPage'
 import { EnvironmentPage } from './pages/EnvironmentPage'
 import { EnvironmentVersionPage } from './pages/EnvironmentVersionPage'
 import { ProjectPage } from './pages/ProjectPage'
+import { PublicHomePage } from './pages/PublicHomePage'
 import { RunPage } from './pages/RunPage'
 import { RunLocatorPage } from './pages/RunLocatorPage'
 import { SharedResourcePage } from './pages/SharedResourcePage'
@@ -29,12 +34,18 @@ import { UserGroupPage } from './pages/UserGroupPage'
 import { PrimerRoot } from './primer/setup'
 import { theme } from './theme'
 
-const USER_KEY = 'workspace107.devUser'
 const DesignSystemPage = lazy(() =>
   import('./pages/design-system/DesignSystemPage').then((module) => ({
     default: module.DesignSystemPage,
   })),
 )
+
+const emptyProject: AsyncResource<Project | undefined> = {
+  data: undefined,
+  loading: false,
+  error: undefined,
+  reload: async () => {},
+}
 
 export function App() {
   return (
@@ -55,47 +66,77 @@ export function App() {
 }
 
 function ProductApp() {
-  const [username, setUsername] = useState(() => {
-    const saved = window.localStorage.getItem(USER_KEY) ?? getCurrentUser()
-    setCurrentUser(saved)
-    return saved
-  })
-
-  const changeUser = useCallback((next: string) => {
-    setCurrentUser(next)
-    window.localStorage.setItem(USER_KEY, next)
-    setUsername(next)
-  }, [])
-
   return (
     <ConfigProvider locale={zhCN} theme={theme}>
       <AntdApp>
-        <ProductSession key={username} username={username} onUsernameChange={changeUser} />
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
       </AntdApp>
     </ConfigProvider>
   )
 }
 
-function ProductSession({
-  username,
-  onUsernameChange,
-}: {
-  username: string
-  onUsernameChange: (username: string) => void
-}) {
+function AuthGate() {
   const location = useLocation()
-  const homeRequest = useRef<Promise<Home> | null>(null)
-  const loadHome = () => {
-    if (homeRequest.current) return homeRequest.current
-    const request = api.home()
-    homeRequest.current = request
-    const clear = () => {
-      if (homeRequest.current === request) homeRequest.current = null
-    }
-    void request.then(clear, clear)
-    return request
+  const auth = useAuth()
+
+  if (auth.status === 'loading') {
+    return (
+      <AppShell home={auth.home} project={emptyProject}>
+        <AsyncState loading loadingText={authCopy.confirming} onRetry={auth.retry}>
+          {null}
+        </AsyncState>
+      </AppShell>
+    )
   }
-  const home = useAsync<Home>(loadHome, [username])
+
+  if (auth.status === 'error') {
+    return (
+      <AppShell home={auth.home} project={emptyProject}>
+        <AsyncState
+          loading={false}
+          loadingText={authCopy.confirming}
+          error={
+            toAsyncError(auth.error) ?? {
+              message: authCopy.confirmFailed,
+              problems: [authCopy.confirmFailedNext],
+            }
+          }
+          onRetry={auth.retry}
+        >
+          {null}
+        </AsyncState>
+      </AppShell>
+    )
+  }
+
+  if (auth.status === 'unauthenticated') {
+    if (location.pathname !== '/') {
+      return <Navigate to="/" replace />
+    }
+    return (
+      <AppShell home={auth.home} project={emptyProject}>
+        <PublicHomePage />
+      </AppShell>
+    )
+  }
+
+  if (!auth.user) {
+    return (
+      <AppShell home={auth.home} project={emptyProject}>
+        <PublicHomePage />
+      </AppShell>
+    )
+  }
+
+  return <ProductSession />
+}
+
+function ProductSession() {
+  const { user, home } = useAuth()
+  const location = useLocation()
+  const username = user?.username ?? ''
   const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const project = useAsync<Project | undefined>(
     () => (projectId ? api.getProject(projectId) : Promise.resolve(undefined)),
@@ -107,12 +148,7 @@ function ProductSession({
   }
 
   return (
-    <AppShell
-      username={username}
-      onUsernameChange={onUsernameChange}
-      home={home}
-      project={routedProject}
-    >
+    <AppShell user={user} home={home} project={routedProject}>
       <ProductRoutes username={username} home={home} project={routedProject} />
     </AppShell>
   )

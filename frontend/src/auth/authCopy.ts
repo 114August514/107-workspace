@@ -1,0 +1,20 @@
+export const authCopy = {
+  login: '统一身份认证登录',
+  logout: '退出登录',
+  profile: '个人资料',
+  settings: '设置',
+  userMenu: (name: string) => `当前用户 ${name}`,
+  confirming: '正在确认登录状态…',
+  confirmFailed: '无法确认登录状态。',
+  confirmFailedNext: '请检查网络连接后重试。',
+  retry: '重试',
+  publicTitle: '107 Workspace',
+  publicSubtitle:
+    '使用中国科学技术大学统一身份认证登录后，进入 Project、配置运行方案并提交计算作业。',
+  profileTitle: '个人资料',
+  profileDisplayName: '显示名',
+  profileUsername: '用户名',
+  profileEmail: '邮箱',
+  profileEmailMissing: '未提供',
+  profileClose: '关闭',
+} as const

@@ -28,7 +28,8 @@ src/
 │   └── useAsync.ts     加载与轮询钩子
 ├── components/
 │   ├── common/         AsyncState、RunStatusTag 等跨页面复用组件
-│   ├── layout/         AppShell、开发身份切换
+│   ├── layout/         AppShell、用户菜单
+│   ├── auth/           登录状态与公开首页入口
 │   ├── usergroup/      User Group 分区（概览/Project/共享资源/运行环境/成员/设置）
 │   ├── workspace/      成员治理面板
 │   ├── activity/       活动列表（Primer）与动作文案
@@ -129,8 +130,12 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 
 ## 身份
 
-后端 `auth_mode=dev` 时用 `X-User` 请求头识别身份，右上角的下拉框就是它的界面，
-选择结果存在 localStorage。接入学校统一身份认证后，这个控件会被真正的登录态替换。
+前端启动时请求 `GET /api/v1/me` 确认当前用户。未登录显示公开首页和「统一身份认证登录」；
+登录由反向代理的 `GET /login` 处理，前端只做整页跳转。退出通过同源 `POST /logout` 表单提交。
+
+正常客户端不发送 `X-User` 或 `X-User-ID`。本地开发继续使用后端 `dev` 模式的默认用户。
+反向代理接入见 [`docs/operations/authentication.md`](../docs/operations/authentication.md)
+与 [`deploy/cas-revproxy/README.md`](../deploy/cas-revproxy/README.md)。
 
 ## 检查
 

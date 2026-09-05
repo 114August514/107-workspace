@@ -40,6 +40,17 @@ def _run_frontend_tests() -> None:
     frontend_pnpm("run", "test", "--run")
 
 
+def _run_cas_revproxy_tests() -> None:
+    backend_uv(
+        "run",
+        "--with",
+        "flask",
+        "pytest",
+        "-q",
+        str(REPO_ROOT / "deploy/cas-revproxy/tests"),
+    )
+
+
 def setup(target: Target = "all") -> None:
     heading(f"Setup ({target})")
     _prepare(target, force=True)
@@ -82,6 +93,7 @@ def test(target: Target = "all") -> None:
     _prepare(target)
     if _uses_backend(target):
         backend_uv("run", "pytest", "-q")
+        _run_cas_revproxy_tests()
     if _uses_frontend(target):
         _run_frontend_tests()
 
@@ -137,6 +149,7 @@ def run_check(target: Target = "all") -> None:
                     lambda: backend_uv("run", "ruff", "format", "--check", "."),
                 ),
                 ("backend tests", lambda: backend_uv("run", "pytest", "-q")),
+                ("cas revproxy tests", _run_cas_revproxy_tests),
             ]
         )
     if _uses_frontend(target):

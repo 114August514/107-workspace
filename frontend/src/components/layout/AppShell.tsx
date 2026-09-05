@@ -16,8 +16,10 @@ import {
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Link as RouterLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
 
-import type { Home, Project } from '../../api/types'
+import type { Home, Project, User } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
+import { startLogin } from '../../auth/AuthProvider'
+import { authCopy } from '../../auth/authCopy'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
 import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
@@ -29,13 +31,12 @@ import {
 } from '../usergroup/UserGroupHeaderNav'
 import { appShellCopy } from './copy'
 import { ProjectSwitcher } from './ProjectSwitcher'
-import { UserSwitcher } from './UserSwitcher'
+import { UserMenu } from './UserMenu'
 import { WorkNavigation } from './WorkNavigation'
 import styles from './AppShell.module.css'
 
 interface Props {
-  username: string
-  onUsernameChange: (username: string) => void
+  user?: User
   home: AsyncResource<Home>
   project: AsyncResource<Project | undefined>
   children: ReactNode
@@ -55,7 +56,9 @@ const appShellStyle: AppShellStyle = {
   '--app-shell-sidebar-width': `${defaultPaneWidth.medium}px`,
 }
 
-export function AppShell({ username, onUsernameChange, home, project, children }: Props) {
+export function AppShell({ user, home, project, children }: Props) {
+  const signedIn = user !== undefined
+  const username = user?.username ?? ''
   const navigate = useNavigate()
   const location = useLocation()
   const navigationId = useId()
@@ -89,15 +92,17 @@ export function AppShell({ username, onUsernameChange, home, project, children }
         >
           <div className={styles.headerInner}>
             <div className={styles.headerStart}>
-              <IconButton
-                ref={navigationButtonRef}
-                icon={ThreeBarsIcon}
-                variant="default"
-                aria-label={appShellCopy.openNavigation}
-                aria-expanded={navigationOpen}
-                aria-controls={navigationId}
-                onClick={() => setNavigationOpen(true)}
-              />
+              {signedIn ? (
+                <IconButton
+                  ref={navigationButtonRef}
+                  icon={ThreeBarsIcon}
+                  variant="default"
+                  aria-label={appShellCopy.openNavigation}
+                  aria-expanded={navigationOpen}
+                  aria-controls={navigationId}
+                  onClick={() => setNavigationOpen(true)}
+                />
+              ) : null}
               <IconButton
                 as={RouterLink}
                 to="/"
@@ -156,27 +161,34 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                     </span>
                   )}
                 </div>
-              ) : location.pathname === '/' ? (
+              ) : location.pathname === '/' || !signedIn ? (
                 <span className={styles.homeContext}>{appShellCopy.homeContext}</span>
               ) : (
                 <UserGroupHeaderContext />
               )}
             </div>
             <div className={styles.actions}>
-              <IconButton
-                icon={PlusIcon}
-                variant="default"
-                aria-label={appShellCopy.createUserGroup}
-                onClick={() => setCreateOpen(true)}
-              />
-              {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
-                避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
-              <NotificationBell key={username} username={username} />
-              <UserSwitcher value={username} onChange={onUsernameChange} />
+              {signedIn ? (
+                <>
+                  <IconButton
+                    icon={PlusIcon}
+                    variant="default"
+                    aria-label={appShellCopy.createUserGroup}
+                    onClick={() => setCreateOpen(true)}
+                  />
+                  {/* key=user.id：身份变化时整棵重挂载，丢弃在途的未读数请求。 */}
+                  <NotificationBell key={user.id} username={username} />
+                  <UserMenu user={user} />
+                </>
+              ) : (
+                <Button variant="primary" onClick={() => startLogin()}>
+                  {authCopy.login}
+                </Button>
+              )}
             </div>
           </div>
-          <UserGroupHeaderNav />
-          {projectId ? (
+          {signedIn ? <UserGroupHeaderNav /> : null}
+          {signedIn && projectId ? (
             <div className={styles.projectNavigationSurface}>
               <UnderlineNav
                 aria-label={appShellCopy.projectNavigationLabel}
@@ -213,7 +225,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
         </header>
 
         <div className={styles.body}>
-          {location.pathname === '/' ? (
+          {signedIn && location.pathname === '/' ? (
             <aside className={styles.persistentSidebar} aria-label={appShellCopy.sidebarLabel}>
               {home.data ? <WorkNavigation home={home.data} /> : null}
             </aside>
@@ -233,7 +245,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
 
         <ContextGuide pathname={location.pathname} />
 
-        {navigationOpen ? (
+        {signedIn && navigationOpen ? (
           <GlobalNavigationDrawer
             id={navigationId}
             home={home}
@@ -242,14 +254,16 @@ export function AppShell({ username, onUsernameChange, home, project, children }
           />
         ) : null}
 
-        <CreateUserGroupDialog
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={(userGroup) => {
-            home.reload()
-            navigate(`/user-groups/${userGroup.id}`)
-          }}
-        />
+        {signedIn ? (
+          <CreateUserGroupDialog
+            open={createOpen}
+            onClose={() => setCreateOpen(false)}
+            onCreated={(userGroup) => {
+              home.reload()
+              navigate(`/user-groups/${userGroup.id}`)
+            }}
+          />
+        ) : null}
       </div>
     </UserGroupProvider>
   )
