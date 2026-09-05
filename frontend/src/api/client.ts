@@ -41,6 +41,7 @@ import type {
   OwnerReference,
   Project,
   ProjectPage,
+  ProjectLanguages,
   ProjectFile,
   ProjectVersion,
   ProjectVersionPage,
@@ -387,6 +388,12 @@ export const api = {
   getProject: async (id: string): Promise<Project> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),
+    ),
+  projectLanguages: async (id: string): Promise<ProjectLanguages> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/languages', {
+        params: { path: { project_id: id } },
+      }),
     ),
 
   updateProject: async (

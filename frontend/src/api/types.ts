@@ -48,6 +48,7 @@ export type Entitlement = Schemas['EntitlementOut']
 
 export type Project = Schemas['ProjectOut']
 export type ProjectPage = Schemas['PageOut_ProjectOut_']
+export type ProjectLanguages = Schemas['ProjectLanguagesOut']
 export type ProjectFile = Schemas['ProjectFileOut']
 export type FileContent = Schemas['FileContentOut']
 export type WorkingChange = Schemas['WorkingChangeOut']
