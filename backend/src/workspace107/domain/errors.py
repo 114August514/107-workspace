@@ -55,6 +55,10 @@ class ConflictError(DomainError):
 
     code = "conflict"
 
+    def __init__(self, message: str, problems: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.problems = problems or []
+
 
 class RunConfirmationChanged(ConflictError):
     """Execution facts changed since the user's submission preview."""

@@ -172,6 +172,28 @@ def test_password_login_ascii_display_name_is_forwarded(monkeypatch):
     assert auth.headers["X-User-Name"] == "Platform Admin"
 
 
+def test_workspace107_prefixed_env_is_accepted(monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.delenv("PUBLIC_ORIGIN", raising=False)
+    monkeypatch.delenv("LOCAL_ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("WORKSPACE107_AUTH_SECRET_KEY", "prefixed-secret")
+    monkeypatch.setenv("WORKSPACE107_PUBLIC_ORIGIN", "http://127.0.0.1:5174")
+    monkeypatch.setenv("WORKSPACE107_LOCAL_ADMIN_PASSWORD", "s3cret")
+    application = create_app()
+    client = application.test_client()
+    response = client.post(
+        "/login/password",
+        data={"username": "platform-admin", "password": "s3cret"},
+        headers={"Origin": "http://127.0.0.1:5174"},
+    )
+    assert response.status_code == 303
+    assert response.headers["Location"] == "http://127.0.0.1:5174/"
+    auth = client.get("/auth")
+    assert auth.status_code == 200
+    assert auth.headers["X-User-ID"] == "platform-admin"
+    assert auth.headers["X-User-Provider"] == "local"
+
+
 def test_password_login_failure_does_not_create_session(monkeypatch):
     monkeypatch.setenv("LOCAL_ADMIN_PASSWORD", "s3cret")
     application = create_app()

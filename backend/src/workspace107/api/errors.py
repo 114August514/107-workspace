@@ -49,7 +49,7 @@ def status_for(error: DomainError) -> int:
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def handle_domain_error(_: Request, error: DomainError) -> JSONResponse:
-        problems = error.problems if isinstance(error, PreflightRejected) else []
+        problems = getattr(error, "problems", [])
         return JSONResponse(
             status_code=status_for(error),
             content={

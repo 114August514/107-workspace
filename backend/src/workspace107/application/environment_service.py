@@ -239,6 +239,14 @@ class EnvironmentPublicationService:
             raise ValidationFailed("Environment 版本标签不能为空")
         if len(version) > 64:
             raise ValidationFailed("Environment 版本标签超过 64 个字符")
+        environment = await self._repos.environments.get_by_id(environment_id)
+        if environment is None:
+            raise ObjectNotFound("Environment", environment_id)
+        if (
+            environment.owner.kind is OwnerKind.USER_GROUP
+            and (await self._repos.user_groups.get_for_update(environment.owner.id)) is None
+        ):
+            raise ObjectNotFound("Environment", environment_id)
         attempt = EnvironmentPublicationAttempt(
             id=ids.new_id(ids.ENVIRONMENT_PUBLICATION_ATTEMPT),
             environment_id=environment_id,

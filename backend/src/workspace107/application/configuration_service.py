@@ -26,6 +26,8 @@ class ConfigurationService:
 
     async def group_scope(self, actor_id: str, group_id: str, *, manage: bool) -> ConfigScope:
         await self._guard.scoped_config_group(actor_id, group_id, manage=manage)
+        if manage and await self._repos.user_groups.get_for_update(group_id) is None:
+            raise ObjectNotFound("User Group", group_id)
         return ConfigScope.user_group(group_id)
 
     async def project_scope(self, actor_id: str, project_id: str, *, manage: bool) -> ConfigScope:
@@ -34,6 +36,8 @@ class ConfigurationService:
             project_id,
             needs=Capability.CONFIG_MANAGE if manage else Capability.CONFIG_VIEW,
         )
+        if manage and await self._repos.projects.get_for_update(project_id) is None:
+            raise ObjectNotFound("Project", project_id)
         return ConfigScope.project(project_id)
 
     async def list_variables(self, scope: ConfigScope) -> list[Variable]:

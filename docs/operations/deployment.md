@@ -13,10 +13,10 @@ cp .env.example .env
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
-打开 <http://127.0.0.1:8107>。默认 `WORKSPACE107_AUTH_MODE=dev`，Web 容器只反代 `/api`，
-没有 `/login` 或账密登录；浏览器会直接进入已登录控制台。要公开登录页，改用
-[`deploy/cas-revproxy/README.md`](../../deploy/cas-revproxy/README.md)，不要与本 Compose
-栈同时占用 `:8107`。
+打开 <http://127.0.0.1:8107>。Compose 默认 `WORKSPACE107_AUTH_MODE=dev`，Web 容器只反代
+`/api`，没有登录页。本地带登录页请用 `make dev`（`backend/.env` 里 `AUTH_MODE=ustc`）。
+独立 Nginx 入口见 [`deploy/cas-revproxy/README.md`](../../deploy/cas-revproxy/README.md)，
+不要与本 Compose 栈同时占用 `:8107`。
 
 停止服务但保留数据：
 

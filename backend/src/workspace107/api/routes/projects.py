@@ -8,6 +8,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, File, Query, UploadFile, status
 from fastapi.responses import Response
 
+from ...application.project_service import project_deletion_problems
 from ...application.run_configuration_service import RunConfigurationInput
 from ...domain.enums import ProjectStatus
 from ...domain.errors import ValidationFailed
@@ -129,6 +130,67 @@ async def update_project(
         owner=await services.projects.owner_summary(project),
         capabilities=access.capabilities,
     )
+
+
+@router.get(
+    "/projects/{project_id}/deletion-impact",
+    response_model=s.DeletionImpactOut,
+    summary="查看 Project 删除影响",
+)
+async def project_deletion_impact(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.DeletionImpactOut:
+    access, plan = await services.projects.deletion_impact(user.id, project_id)
+    problems = project_deletion_problems(plan)
+    return s.DeletionImpactOut(
+        resource_type="project",
+        resource_id=project_id,
+        resource_name=access.project.name,
+        can_delete=not problems,
+        problems=problems,
+        items=[
+            s.DeletionImpactItemOut(kind="working_state_files", count=plan.working_state_files),
+            s.DeletionImpactItemOut(kind="versions", count=plan.versions),
+            s.DeletionImpactItemOut(kind="branches", count=plan.branches),
+            s.DeletionImpactItemOut(kind="configurations", count=plan.configurations),
+            s.DeletionImpactItemOut(kind="variables", count=plan.variables),
+            s.DeletionImpactItemOut(kind="secrets", count=plan.secrets),
+            s.DeletionImpactItemOut(kind="runs", count=plan.runs),
+            s.DeletionImpactItemOut(kind="snapshots", count=plan.snapshots),
+            s.DeletionImpactItemOut(kind="run_events", count=plan.run_events),
+            s.DeletionImpactItemOut(kind="artifacts", count=plan.artifacts),
+            s.DeletionImpactItemOut(kind="activities", count=plan.activities),
+            s.DeletionImpactItemOut(kind="notifications", count=plan.notifications),
+            s.DeletionImpactItemOut(kind="fork_relation", count=plan.fork_relation),
+            s.DeletionImpactItemOut(kind="fork_dependents_preserved", count=plan.fork_dependents),
+        ],
+    )
+
+
+@router.delete(
+    "/projects/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除 Project",
+    description=(
+        "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在"
+        "而返回 404。404 只表示目标当前不存在，不能证明由谁删除。"
+    ),
+    responses={
+        204: {"description": "Project 删除成功。"},
+        404: {
+            "description": (
+                "Project 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+            )
+        },
+    },
+)
+async def delete_project(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    confirm: bool = Query(False, description="确认已查看删除影响"),
+) -> None:
+    await services.projects.delete(user.id, project_id, confirmed=confirm)
 
 
 # -- 文件 -------------------------------------------------------------------

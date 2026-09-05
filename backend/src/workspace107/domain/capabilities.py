@@ -12,6 +12,7 @@ class UserGroupCapability(StrEnum):
 
     USER_GROUP_VIEW = "user_group.view"
     USER_GROUP_UPDATE = "user_group.update"
+    USER_GROUP_DELETE = "user_group.delete"
     MEMBER_VIEW = "member.view"
     MEMBER_INVITE = "member.invite"
     MEMBER_REMOVE = "member.remove"
@@ -37,6 +38,7 @@ USER_GROUP_ROLE_CAPABILITIES: dict[MembershipRole, frozenset[UserGroupCapability
     | {
         UserGroupCapability.MEMBER_ROLE_MANAGE,
         UserGroupCapability.OWNERSHIP_TRANSFER,
+        UserGroupCapability.USER_GROUP_DELETE,
     },
     MembershipRole.ADMIN: _USER_GROUP_ADMINISTER,
     MembershipRole.MEMBER: _USER_GROUP_VIEW,
@@ -76,6 +78,8 @@ class Capability(StrEnum):
     PROJECT_CREATE = "project.create"
     PROJECT_UPDATE = "project.update"
     """改名称、说明、默认环境、归档状态。"""
+    PROJECT_DELETE = "project.delete"
+    """删除 Project 及其从属生命周期对象。"""
     PROJECT_CONTENT_WRITE = "project.content.write"
     """改文件、保存版本、恢复版本。"""
     RUN_CONFIGURATION_MANAGE = "run_configuration.manage"
@@ -141,6 +145,7 @@ ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
     MembershipRole.OWNER: _ADMINISTER
     | {
         Capability.MEMBER_ROLE_MANAGE,
+        Capability.PROJECT_DELETE,
         Capability.OWNERSHIP_TRANSFER,
     },
     MembershipRole.ADMIN: _ADMINISTER,
@@ -150,6 +155,7 @@ ROLE_CAPABILITIES: dict[MembershipRole, frozenset[Capability]] = {
 # 面向用户的说明，用在权限不足的错误信息里。
 CAPABILITY_LABELS: dict[Capability, str] = {
     Capability.USER_GROUP_VIEW: "查看 User Group",
+    Capability.PROJECT_DELETE: "删除 Project",
     Capability.USER_GROUP_UPDATE: "修改 User Group 设置",
     Capability.MEMBER_VIEW: "查看成员",
     Capability.MEMBER_INVITE: "邀请成员",
@@ -174,6 +180,7 @@ CAPABILITY_LABELS: dict[Capability, str] = {
 
 USER_GROUP_CAPABILITY_LABELS: dict[UserGroupCapability, str] = {
     UserGroupCapability.USER_GROUP_VIEW: "查看 User Group",
+    UserGroupCapability.USER_GROUP_DELETE: "删除 User Group",
     UserGroupCapability.USER_GROUP_UPDATE: "修改 User Group 设置",
     UserGroupCapability.MEMBER_VIEW: "查看成员",
     UserGroupCapability.MEMBER_INVITE: "邀请成员",
