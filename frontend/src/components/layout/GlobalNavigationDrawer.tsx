@@ -1,5 +1,4 @@
 import {
-  ContainerIcon,
   HomeIcon,
   OrganizationIcon,
   PersonIcon,
@@ -85,25 +84,6 @@ export function GlobalNavigationDrawer({ id, home, returnFocusRef, onClose }: Pr
                   <PersonIcon />
                 </NavList.LeadingVisual>
                 <span className={styles.itemText}>{globalNavigationCopy.executionContext}</span>
-              </NavList.Item>
-
-              <NavList.Item
-                className={styles.item}
-                as={RouterLink}
-                to="/environments"
-                aria-current={
-                  location.pathname === '/environments' ||
-                  location.pathname.startsWith('/environments/') ||
-                  location.pathname.startsWith('/environment-versions/')
-                    ? 'page'
-                    : undefined
-                }
-                onClick={onClose}
-              >
-                <NavList.LeadingVisual>
-                  <ContainerIcon />
-                </NavList.LeadingVisual>
-                <span className={styles.itemText}>{globalNavigationCopy.environments}</span>
               </NavList.Item>
 
               <NavList.Group title={globalNavigationCopy.userGroupsGroup}>
