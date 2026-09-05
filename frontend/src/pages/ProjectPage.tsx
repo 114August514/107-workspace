@@ -19,6 +19,7 @@ import type {
   Environment,
   ForkSource,
   Project,
+  ProjectLanguages,
   ProjectVersionDetail,
   ProjectVersionPage,
   RunConfiguration,
@@ -30,6 +31,7 @@ import { useAsync, type AsyncState as AsyncResource } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
 import { AsyncState } from '../components/common/AsyncState'
+import { ProjectLanguages as ProjectLanguagesSection } from '../components/project/ProjectLanguages'
 import { ListCard } from '../components/layout/ListCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
@@ -256,6 +258,10 @@ function ProjectAbout({ project, projectId }: { project: Project | undefined; pr
     () => api.environmentsForProject(projectId),
     [projectId],
   )
+  const languages = useAsync<ProjectLanguages>(
+    () => api.projectLanguages(projectId),
+    [projectId, project?.updated_at],
+  )
   if (!project) return null
   const latestVersion = versions.data?.items[0]
   const defaultEnvironment = environments.data
@@ -300,6 +306,12 @@ function ProjectAbout({ project, projectId }: { project: Project | undefined; pr
             ))}
           </section>
         )}
+        <ProjectLanguagesSection
+          statistics={languages.data}
+          loading={languages.loading}
+          error={languages.error}
+          onRetry={languages.reload}
+        />
       </div>
     </aside>
   )
