@@ -91,13 +91,22 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                 aria-controls={navigationId}
                 onClick={() => setNavigationOpen(true)}
               />
-              <RouterLink to="/" className={styles.brand}>
-                <BrandMark size={32} decorative />
-                <span className={styles.visuallyHidden}>{appShellCopy.homeMarkLabel}</span>
-              </RouterLink>
               {!projectId && !location.pathname.startsWith('/user-groups/') ? (
-                <span className={styles.homeContext}>{appShellCopy.brand}</span>
-              ) : null}
+                <RouterLink
+                  to="/"
+                  className={styles.workspaceLink}
+                  aria-label={appShellCopy.homeMarkLabel}
+                >
+                  <BrandMark size={32} decorative />
+                  <span>{appShellCopy.brand}</span>
+                  <span className={styles.visuallyHidden}>{appShellCopy.homeMarkLabel}</span>
+                </RouterLink>
+              ) : (
+                <RouterLink to="/" className={styles.brand}>
+                  <BrandMark size={32} decorative />
+                  <span className={styles.visuallyHidden}>{appShellCopy.homeMarkLabel}</span>
+                </RouterLink>
+              )}
               {projectId ? (
                 <div
                   className={styles.projectContext}
