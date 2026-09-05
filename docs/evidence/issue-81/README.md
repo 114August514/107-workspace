@@ -15,3 +15,5 @@ Slurm 的 batch I/O 证据来自 `backend/tests/integration/scheduler/test_slurm
 合入 main（`d28f934`）后完整 `make check` 通过：后端 393 passed、3 skipped；前端 272 passed；代理测试 13 passed、1 skipped；生产构建与生成契约检查通过。
 
 交互评审后的 `revised-*` 截图记录名称与说明常显、小标题字号、带边框的删除按钮、默认折叠的资源区及命令换行、集中操作菜单。截图使用本地演示数据，已在合入最新 main 后重新验证和截图。
+
+下拉高亮修正：`revised-select-*` 区分已选项勾选标记与蓝色 hover / 键盘焦点。截图中的第二项仅为浏览器 DOM 临时测试选项，未保存到 API。Chromium 实测 hover、移开恢复、键盘选择、Escape 仅关闭下拉和窄屏布局。使用 CSS `appearance: base-select` 渐进增强；不支持此能力的浏览器保留系统原生下拉样式，不保证相同配色，参见 [MDN](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select)。

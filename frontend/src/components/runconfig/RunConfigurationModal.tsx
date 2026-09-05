@@ -204,6 +204,15 @@ function ConfigurationEditor({
       <form
         ref={form}
         className={styles.form}
+        onKeyDownCapture={(event) => {
+          if (
+            event.key === 'Escape' &&
+            event.target instanceof Element &&
+            event.target.closest('select')?.matches(':open')
+          ) {
+            event.stopPropagation()
+          }
+        }}
         noValidate
         onSubmit={(e) => {
           e.preventDefault()

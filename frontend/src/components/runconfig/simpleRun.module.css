@@ -152,7 +152,42 @@
   font-weight: var(--base-text-weight-semibold);
 }
 
-.form select option:checked:not(:disabled) {
-  background-color: var(--bgColor-accent-emphasis);
-  color: var(--fgColor-onEmphasis);
+/* Keep native selection semantics while styling the open picker separately. */
+@supports (appearance: base-select) {
+  .form select,
+  .form select::picker(select) {
+    appearance: base-select;
+  }
+  .form select {
+    font-family: inherit;
+  }
+  .form select::picker-icon {
+    display: none;
+  }
+  .form select::picker(select) {
+    padding: var(--base-size-4);
+    font: inherit;
+    max-width: calc(100vw - var(--base-size-32));
+    border: var(--borderWidth-thin) solid var(--borderColor-default);
+    border-radius: var(--borderRadius-medium);
+    background: var(--bgColor-default);
+    box-shadow: var(--shadow-floating-small);
+  }
+  .form select option {
+    padding: var(--base-size-8) var(--base-size-12);
+    border-radius: var(--borderRadius-small);
+    background: var(--bgColor-default);
+    color: var(--fgColor-default);
+    font-weight: var(--base-text-weight-normal);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .form select option:disabled {
+    color: var(--fgColor-disabled);
+  }
+  .form select option:hover:not(:disabled),
+  .form select option:focus-visible:not(:disabled) {
+    background: var(--bgColor-accent-emphasis);
+    color: var(--fgColor-onEmphasis);
+  }
 }

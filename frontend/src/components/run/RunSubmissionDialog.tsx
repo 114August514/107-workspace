@@ -168,7 +168,18 @@ export function RunSubmissionDialog({
         },
       ]}
     >
-      <div className={styles.form}>
+      <div
+        className={styles.form}
+        onKeyDownCapture={(event) => {
+          if (
+            event.key === 'Escape' &&
+            event.target instanceof Element &&
+            event.target.closest('select')?.matches(':open')
+          ) {
+            event.stopPropagation()
+          }
+        }}
+      >
         {loading ? (
           <p role="status">正在加载运行方案…</p>
         ) : loadError ? (
