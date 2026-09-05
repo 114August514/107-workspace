@@ -131,10 +131,15 @@ Ant Design 时同时复核并清理这个专属 helper。
 
 ## 页面对应的核心闭环
 
-Project 页面的四个标签页呈现当前迁移实现已有的本地 Mock 闭环：
+Project 页面以 `Files / Runs / Activity / Settings` 作为顶级 local navigation。
+Files 内以 Working State、Changes 和 Versions 作为上下文入口；Run Configuration
+位于 Runs 下。Files 浏览器同时服务 Working State 和不可变 Version，README 在文件列表下
+自动展示，Project metadata 与用户可见的关联 Environment 展示在 About rail。
 
 ```text
-① 项目文件  →  ② 版本  →  ③ 运行方案  →  ④ Run 历史
+Files → Working State / Changes / Versions
+Runs  → History / Configurations
+Activity / Settings
 ```
 
 Run 页面提供状态、日志、执行事件、Artifact 和复现快照。

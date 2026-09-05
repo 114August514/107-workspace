@@ -11,7 +11,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { ForkModal } from '../components/project/ForkModal'
 import { VersionDiffPanel } from '../components/project/VersionDiffPanel'
-import { VersionFileBrowser } from '../components/project/VersionFileBrowser'
+import { FileBrowser } from '../components/project/FileBrowser'
 import { RunFromVersionModal } from '../components/run/RunFromVersionModal'
 import { formatBytes, formatTime } from '../utils/format'
 
@@ -116,7 +116,15 @@ export function VersionDetailPage() {
               {
                 key: 'files',
                 label: '文件',
-                children: <VersionFileBrowser versionId={versionId} files={version.data.files} />,
+                children: (
+                  <FileBrowser
+                    projectId={version.data.project_id}
+                    access={project.data}
+                    onChanged={() => undefined}
+                    basePath={`/projects/${version.data.project_id}/files/versions/${version.data.id}`}
+                    version={version.data}
+                  />
+                ),
               },
               {
                 key: 'diff',

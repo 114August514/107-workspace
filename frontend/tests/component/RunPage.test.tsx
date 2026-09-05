@@ -313,7 +313,7 @@ describe('RunPage backend unavailable', () => {
     expect(within(screen.getByLabelText('Run Summary')).getByText('未知用户')).toBeVisible()
   })
 
-  it('keeps Project context and prioritizes user semantics in the default summary', async () => {
+  it('keeps Run semantics without duplicating Project navigation', async () => {
     vi.spyOn(api, 'getRun').mockResolvedValue(runDetailFixture())
     vi.spyOn(api, 'readLogs').mockResolvedValue([] as LogChunk[])
 
@@ -323,14 +323,13 @@ describe('RunPage backend unavailable', () => {
       </Wrapper>,
     )
 
-    await screen.findByRole('heading', { name: 'test-run' })
-    const projectLinks = await screen.findAllByRole('link', { name: 'Demo Project' })
-    expect(
-      projectLinks.some((link) => link.getAttribute('href')?.endsWith('/projects/project-1')),
-    ).toBe(true)
-    expect((await screen.findAllByRole('link', { name: 'Runs' }))[0]).toHaveAttribute(
+    await screen.findByRole('link', { name: 'Demo Project · v1' })
+    expect(screen.queryByRole('link', { name: '项目文件' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '运行方案' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '版本' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Runs' })).toHaveAttribute(
       'href',
-      '/projects/project-1?tab=runs',
+      '/projects/project-1/runs',
     )
 
     const runHeader = screen.getByRole('banner', { name: 'Run header' })

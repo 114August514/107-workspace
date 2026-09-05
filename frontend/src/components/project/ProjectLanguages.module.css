@@ -1,0 +1,109 @@
+.section {
+  margin-top: var(--base-size-24);
+  padding-top: var(--base-size-16);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.title {
+  margin: 0 0 var(--base-size-12);
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-body-lineHeight-medium);
+}
+
+.bar {
+  display: flex;
+  width: 100%;
+  height: 0.5rem;
+  margin-bottom: var(--base-size-12);
+  overflow: hidden;
+  border-radius: var(--borderRadius-full);
+  background: var(--bgColor-muted);
+}
+
+.segment {
+  height: 100%;
+}
+
+.list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--base-size-8) var(--base-size-16);
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--base-size-8);
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-small);
+  line-height: var(--text-body-lineHeight-small);
+}
+
+.dot {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--base-text-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.percentage {
+  flex: none;
+  color: var(--fgColor-muted);
+}
+
+.empty,
+.loading {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  line-height: var(--text-body-lineHeight-small);
+}
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--base-size-8);
+  color: var(--fgColor-danger);
+  font-size: var(--text-body-size-small);
+  line-height: var(--text-body-lineHeight-small);
+}
+
+.retry {
+  padding: 0;
+  color: var(--fgColor-accent);
+  font: inherit;
+  font-weight: var(--base-text-weight-semibold);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.retry:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 30rem) {
+  .list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

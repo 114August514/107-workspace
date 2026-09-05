@@ -3,9 +3,12 @@ import {
   GearIcon,
   PlayIcon,
   PlusIcon,
+  PulseIcon,
   ThreeBarsIcon,
 } from '@primer/octicons-react'
 import {
+  ActionList,
+  ActionMenu,
   Button,
   ButtonGroup,
   defaultPaneWidth,
@@ -14,14 +17,13 @@ import {
   UnderlineNav,
 } from '@primer/react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link as RouterLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, matchPath, useLocation } from 'react-router-dom'
 
 import type { Home, Project } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
 import { BrandMark } from '../../brand/BrandMark'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
-import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { ContextGuide } from './ContextGuide'
 import {
   UserGroupHeaderContext,
@@ -49,24 +51,26 @@ const appShellStyle: AppShellStyle = {
 }
 
 export function AppShell({ username, onUsernameChange, home, project, children }: Props) {
-  const navigate = useNavigate()
   const location = useLocation()
   const navigationId = useId()
   const navigationButtonRef = useRef<HTMLButtonElement>(null)
-  const [createOpen, setCreateOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
-  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const projectId =
+    location.pathname === '/projects/new'
+      ? undefined
+      : matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const currentProject = project.data?.id === projectId ? project.data : undefined
-  const requestedTab = new URLSearchParams(location.search).get('tab')
   const isUserGroupAssetList =
     matchPath('/user-groups/:userGroupId/projects', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/shared-resources', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/environments', location.pathname) !== null
-  const projectArea = location.pathname.includes('/runs/')
+  const projectPath = projectId ? `/projects/${projectId}` : ''
+  const projectSubpath = projectPath ? location.pathname.slice(projectPath.length) : ''
+  const projectArea = projectSubpath.startsWith('/runs')
     ? 'runs'
-    : requestedTab === 'runs' || requestedTab === 'configurations'
-      ? 'runs'
-      : requestedTab === 'activities'
+    : projectSubpath.startsWith('/activity')
+      ? 'activity'
+      : projectSubpath.startsWith('/settings')
         ? 'settings'
         : 'files'
 
@@ -160,14 +164,24 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               )}
             </div>
             <div className={styles.actions}>
-              <IconButton
-                icon={PlusIcon}
-                variant="default"
-                aria-label={appShellCopy.createUserGroup}
-                onClick={() => setCreateOpen(true)}
-              />
-              {/* key=username：切换身份时整棵重挂载，丢弃在途的未读数请求，
-                避免 A 身份迟到的响应盖掉 B 身份刚拉到的数字。 */}
+              <ActionMenu>
+                <ActionMenu.Anchor>
+                  <IconButton
+                    icon={PlusIcon}
+                    variant="default"
+                    aria-label="创建"
+                    aria-haspopup="menu"
+                  />
+                </ActionMenu.Anchor>
+                <ActionMenu.Overlay align="end" width="auto">
+                  <ActionList>
+                    <ActionList.LinkItem href="/projects/new">创建 Project</ActionList.LinkItem>
+                    <ActionList.LinkItem href="/user-groups/new">
+                      创建 User Group
+                    </ActionList.LinkItem>
+                  </ActionList>
+                </ActionMenu.Overlay>
+              </ActionMenu>
               <NotificationBell key={username} username={username} />
               <UserSwitcher value={username} onChange={onUsernameChange} />
             </div>
@@ -182,7 +196,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               >
                 <UnderlineNav.Item
                   as={RouterLink}
-                  to={`/projects/${projectId}?tab=files`}
+                  to={`/projects/${projectId}/files`}
                   leadingVisual={<FileDirectoryIcon />}
                   aria-current={projectArea === 'files' ? 'page' : undefined}
                 >
@@ -190,7 +204,7 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                 </UnderlineNav.Item>
                 <UnderlineNav.Item
                   as={RouterLink}
-                  to={`/projects/${projectId}?tab=runs`}
+                  to={`/projects/${projectId}/runs`}
                   leadingVisual={<PlayIcon />}
                   aria-current={projectArea === 'runs' ? 'page' : undefined}
                 >
@@ -198,7 +212,15 @@ export function AppShell({ username, onUsernameChange, home, project, children }
                 </UnderlineNav.Item>
                 <UnderlineNav.Item
                   as={RouterLink}
-                  to={`/projects/${projectId}?tab=activities`}
+                  to={`/projects/${projectId}/activity`}
+                  leadingVisual={<PulseIcon />}
+                  aria-current={projectArea === 'activity' ? 'page' : undefined}
+                >
+                  {appShellCopy.activity}
+                </UnderlineNav.Item>
+                <UnderlineNav.Item
+                  as={RouterLink}
+                  to={`/projects/${projectId}/settings`}
                   leadingVisual={<GearIcon />}
                   aria-current={projectArea === 'settings' ? 'page' : undefined}
                 >
@@ -238,15 +260,6 @@ export function AppShell({ username, onUsernameChange, home, project, children }
             onClose={() => setNavigationOpen(false)}
           />
         ) : null}
-
-        <CreateUserGroupDialog
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={(userGroup) => {
-            home.reload()
-            navigate(`/user-groups/${userGroup.id}`)
-          }}
-        />
       </div>
     </UserGroupProvider>
   )

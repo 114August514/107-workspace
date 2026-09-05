@@ -41,6 +41,7 @@ import type {
   OwnerReference,
   Project,
   ProjectPage,
+  ProjectLanguages,
   ProjectFile,
   ProjectVersion,
   ProjectVersionPage,
@@ -426,10 +427,26 @@ export const api = {
   /** 当前 User 可见的 Project：自有、有效 User Group 拥有的与 PUBLIC。分页。 */
   listProjects: async (query: PageQuery = {}): Promise<ProjectPage> =>
     unwrap(await http.GET('/api/v1/projects', { params: { query } })),
+  createProject: async (payload: {
+    owner: OwnerReference
+    name: string
+    description: string
+  }): Promise<Project> =>
+    unwrap(
+      await http.POST('/api/v1/projects', {
+        body: { ...payload, visibility: 'owner_scope' },
+      }),
+    ),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),
+    ),
+  projectLanguages: async (id: string): Promise<ProjectLanguages> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/languages', {
+        params: { path: { project_id: id } },
+      }),
     ),
 
   updateProject: async (

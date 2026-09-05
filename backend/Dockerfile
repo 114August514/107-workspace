@@ -25,6 +25,15 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra postgres
 
+# Bookworm 没有 Tokei 包；从 Debian stable 的工具阶段取出二进制，
+# 运行镜像仍保持在与 Python 构建阶段一致的 Bookworm。
+FROM debian:trixie-slim AS tokei
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends tokei \
+ && rm -rf /var/lib/apt/lists/*
+
+
 # ---------- 运行阶段 ----------
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -32,6 +41,12 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
     WORKSPACE107_STORAGE_ROOT=/var/lib/workspace107/storage
+
+RUN apt-get update \
+ && apt-get install --yes --no-install-recommends libgcc-s1 \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=tokei /usr/bin/tokei /usr/local/bin/tokei
 
 # 非 root 运行。uid 写死方便挂载共享存储时对齐属主。
 RUN groupadd --gid 10001 workspace \

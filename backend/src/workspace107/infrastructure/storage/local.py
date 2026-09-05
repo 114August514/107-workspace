@@ -42,7 +42,8 @@ class LocalStorage:
         self._blobs = root / "blobs"
         self._runs = root / "runs"
         self._artifacts = root / "artifacts"
-        for path in (self._blobs, self._runs, self._artifacts):
+        self._temporary = root / "temporary"
+        for path in (self._blobs, self._runs, self._artifacts, self._temporary):
             path.mkdir(parents=True, exist_ok=True)
 
     # -- 内容寻址存储 ---------------------------------------------------
@@ -74,6 +75,36 @@ class LocalStorage:
         if actual != content_hash:
             raise ValidationFailed("CAS 文件内容与 Environment SIF 摘要不一致")
         return target.resolve()
+
+    @contextlib.asynccontextmanager
+    async def materialize_temporary_files(self, files: list[tuple[str, str]]):
+        root = Path(
+            await asyncio.to_thread(
+                tempfile.mkdtemp,
+                prefix="project-version-",
+                dir=self._temporary,
+            )
+        )
+        try:
+            await asyncio.to_thread(self._materialize_temporary_files_sync, root, files)
+            yield root
+        finally:
+            await asyncio.to_thread(_force_rmtree, root)
+
+    def _materialize_temporary_files_sync(
+        self, root: Path, files: list[tuple[str, str]]
+    ) -> None:
+        resolved_root = root.resolve()
+        for relative_path, content_hash in files:
+            target = (resolved_root / relative_path).resolve()
+            if resolved_root not in target.parents:
+                raise ValidationFailed(f"临时文件路径「{relative_path}」越出了根目录")
+            source = self._blob_path(content_hash)
+            if not source.is_file():
+                raise ObjectNotFound("文件内容", content_hash)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
+
 
     # -- Run 工作目录 ---------------------------------------------------
 

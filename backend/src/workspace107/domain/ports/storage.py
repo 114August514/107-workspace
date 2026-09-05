@@ -10,6 +10,7 @@ Version 不会重复占用空间，而且 ProjectVersion 的不可变性天然�
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -96,6 +97,13 @@ class StoragePort(Protocol):
     async def resolve_blob_path(self, content_hash: str) -> Path:
         """Return a scheduler-visible CAS path after rechecking the exact digest."""
         ...
+
+    def materialize_temporary_files(
+        self, files: list[tuple[str, str]]
+    ) -> AbstractAsyncContextManager[Path]:
+        """把 ``(相对路径, 内容摘要)`` 临时物化到本地目录，并在退出时清理。"""
+        ...
+
 
     # -- Run 工作目录 ---------------------------------------------------
 

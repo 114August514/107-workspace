@@ -251,6 +251,17 @@ class ProjectVersionDetailOut(ProjectVersionOut):
     files: list[ProjectVersionFileOut]
 
 
+class ProjectLanguageOut(Model):
+    name: str
+    code_lines: int
+    percentage: float
+
+
+class ProjectLanguagesOut(Model):
+    languages: list[ProjectLanguageOut]
+    total_code_lines: int
+
+
 class VersionCreateIn(Model):
     message: str = ""
 

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { FileBrowser } from '../../src/components/project/FileBrowser'
@@ -76,6 +77,18 @@ describe('FileBrowser', () => {
     cleanup()
     vi.resetAllMocks()
   })
+  function renderBrowser(access: Project = writer, currentPath = '') {
+    return render(
+      <MemoryRouter>
+        <FileBrowser
+          projectId="proj-1"
+          access={access}
+          onChanged={() => {}}
+          currentPath={currentPath}
+        />
+      </MemoryRouter>,
+    )
+  }
 
   it('逐个上传多个文件时展示上传中、成功和失败状态', async () => {
     mocks.listFiles.mockResolvedValue([])
@@ -87,9 +100,7 @@ describe('FileBrowser', () => {
       .mockReturnValueOnce(firstUpload)
       .mockRejectedValueOnce(new Error('超过单个文件上限'))
 
-    const { container } = render(
-      <FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />,
-    )
+    const { container } = renderBrowser()
     await screen.findByRole('button', { name: /上传文件/ })
 
     const input = pickInput(container, true)
@@ -113,10 +124,9 @@ describe('FileBrowser', () => {
     mocks.listFiles.mockResolvedValue([])
     mocks.uploadArchive.mockRejectedValue(new Error('压缩包包含符号链接条目「link」，已拒绝展开'))
 
-    const { container } = render(
-      <FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />,
-    )
-    await screen.findByRole('button', { name: /上传压缩包/ })
+    const { container } = renderBrowser()
+    fireEvent.click(screen.getByRole('button', { name: '添加文件' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '上传压缩包（zip）' }))
 
     const input = pickInput(container, false)
     Object.defineProperty(input, 'files', { value: [makeFile('bundle.zip')] })
@@ -129,7 +139,7 @@ describe('FileBrowser', () => {
     })
   })
 
-  it('显示嵌套目录，并以目录路径执行危险操作后刷新结果', async () => {
+  it('在目录页使用目录上下文操作，而不是列表行操作', async () => {
     mocks.listFiles
       .mockResolvedValueOnce([
         {
@@ -142,28 +152,26 @@ describe('FileBrowser', () => {
       .mockResolvedValueOnce([])
     mocks.deletePath.mockResolvedValue(undefined)
 
-    render(<FileBrowser projectId="proj-1" access={writer} onChanged={() => {}} />)
+    renderBrowser(writer, 'data')
 
-    const directoryRow = (await screen.findAllByRole('row')).find((row) =>
-      within(row).queryByRole('button', { name: '删除 data/raw' }),
-    )
-    if (!directoryRow) throw new Error('找不到 data/raw 目录行')
-    fireEvent.click(within(directoryRow).getByRole('button', { name: '删除 data/raw' }))
-    fireEvent.click(await screen.findByRole('button', { name: /^删\s*除$/ }))
+    expect(await screen.findByRole('link', { name: 'raw' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /更多操作/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '目录操作' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '删除目录' }))
+    fireEvent.click(await screen.findByRole('button', { name: '删除目录' }))
 
     await waitFor(() => {
-      expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'data/raw')
+      expect(mocks.deletePath).toHaveBeenCalledWith('proj-1', 'data')
     })
     expect(
       await screen.findByText('还没有文件。先新建一个，再保存 Project Version。'),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '删除 data/raw' })).not.toBeInTheDocument()
   })
 
   it('只读场景不暴露任何写入口', async () => {
     mocks.listFiles.mockResolvedValue(files)
 
-    render(<FileBrowser projectId="proj-1" access={reader} onChanged={() => {}} />)
+    renderBrowser(reader)
     await screen.findByText('train.py')
 
     expect(screen.queryByRole('button', { name: /上传文件/ })).not.toBeInTheDocument()

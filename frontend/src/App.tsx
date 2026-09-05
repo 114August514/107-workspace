@@ -13,6 +13,8 @@ import { ProjectsSection } from './components/usergroup/ProjectsSection'
 import { SettingsSection } from './components/usergroup/SettingsSection'
 import { SharedResourcesSection } from './components/usergroup/SharedResourcesSection'
 import { AppShell } from './components/layout/AppShell'
+import { CreateProjectPage } from './pages/CreateProjectPage'
+import { CreateUserGroupPage } from './pages/CreateUserGroupPage'
 import { ArtifactFilePreviewPage } from './pages/ArtifactFilePreviewPage'
 import { HomePage } from './pages/HomePage'
 import { PersonalExecutionContextPage } from './pages/PersonalExecutionContextPage'
@@ -130,6 +132,8 @@ export function ProductRoutes({
   return (
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
+      <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
+      <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
       <Route
         path="/execution-context"
         element={<PersonalExecutionContextPage username={username} home={home} />}
@@ -153,7 +157,7 @@ export function ProductRoutes({
         element={<EnvironmentVersionPage key={username} />}
       />
       <Route
-        path="/projects/:projectId"
+        path="/projects/:projectId/*"
         element={<ProjectPage key={username} project={project} />}
       />
       <Route path="/projects/:projectId/runs/:runId" element={<RunPage key={username} />} />

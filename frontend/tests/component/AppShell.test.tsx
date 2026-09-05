@@ -195,7 +195,7 @@ describe('AppShell 壳层', () => {
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
-  it('用独立 Home Mark、Project context 和三级本地导航表达壳层层级', () => {
+  it('用 Project context 和四级本地导航表达壳层层级', () => {
     renderShell('student', readyHome(), '/projects/p-1/runs/r-1')
 
     const header = screen.getByRole('banner')
@@ -217,18 +217,20 @@ describe('AppShell 壳层', () => {
     const navigation = screen.getByRole('navigation', { name: 'Project navigation' })
     expect(within(navigation).getByRole('link', { name: 'Files' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=files',
+      '/projects/p-1/files',
     )
     expect(within(navigation).getByRole('link', { name: 'Runs' })).toHaveAttribute(
       'aria-current',
       'page',
     )
+    expect(within(navigation).getByRole('link', { name: 'Activity' })).toHaveAttribute(
+      'href',
+      '/projects/p-1/activity',
+    )
     expect(within(navigation).getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=activities',
+      '/projects/p-1/settings',
     )
-    expect(within(navigation).queryByRole('link', { name: '版本' })).toBeNull()
-    expect(within(navigation).queryByRole('link', { name: '运行方案' })).toBeNull()
   })
 
   it('在当前 Owner namespace 内搜索并切换 Project', async () => {
@@ -428,13 +430,18 @@ describe('AppShell 壳层', () => {
     expect(screen.getByText('页面内容')).toBeVisible()
   })
 
-  it('header 紧凑创建按钮通过可访问名称打开创建 User Group 弹窗', async () => {
+  it('header 创建菜单提供 Project 和 User Group 专用创建页面入口', async () => {
     renderShell('student')
-    const trigger = screen.getByRole('button', { name: '创建 User Group' })
-    expect(trigger.textContent).toBe('')
-    fireEvent.click(trigger)
-    expect(await screen.findByRole('dialog')).toBeVisible()
-    expect(screen.getByText('创建 User Group', { selector: 'h1' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: '创建 Project' })).toHaveAttribute(
+      'href',
+      '/projects/new',
+    )
+    expect(within(menu).getByRole('menuitem', { name: '创建 User Group' })).toHaveAttribute(
+      'href',
+      '/user-groups/new',
+    )
   })
 
   it('身份切换器展示当前身份并展开可选身份', async () => {
