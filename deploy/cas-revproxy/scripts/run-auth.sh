@@ -4,15 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if [[ ! -f "$ROOT/env" ]]; then
-  echo "missing $ROOT/env; copy env.example and fill SECRET_KEY" >&2
+# shellcheck disable=SC1091
+source "$ROOT/scripts/load-env.sh"
+
+if [[ -z "${SECRET_KEY:-}" ]]; then
+  echo "SECRET_KEY or WORKSPACE107_AUTH_SECRET_KEY is required (set it in backend/.env)" >&2
   exit 1
 fi
-
-set -a
-# shellcheck disable=SC1091
-source "$ROOT/env"
-set +a
 
 if [[ -z "${HTTPS_PROXY:-}" ]]; then
   echo "warning: HTTPS_PROXY is empty; CAS serviceValidate will fail. Password login still works." >&2

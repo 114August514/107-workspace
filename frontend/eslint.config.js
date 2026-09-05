@@ -8,6 +8,13 @@ export default tseslint.config(
   // schema.d.ts 是生成物，不参与 lint
   { ignores: ['dist', 'coverage', 'node_modules', 'src/api/schema.d.ts'] },
   {
+    files: ['vite.config.ts', 'vite.auth-proxy.ts'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: globals.node,
+    },
+  },
+  {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
     languageOptions: {

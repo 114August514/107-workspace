@@ -22,11 +22,29 @@ CAS_NS = "{http://www.yale.edu/tp/cas}"
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+_ENV_ALIASES = {
+    "SECRET_KEY": ("WORKSPACE107_AUTH_SECRET_KEY",),
+    "PUBLIC_ORIGIN": ("WORKSPACE107_PUBLIC_ORIGIN",),
+    "SESSION_COOKIE_SECURE": ("WORKSPACE107_SESSION_COOKIE_SECURE",),
+    "HTTPS_PROXY": ("WORKSPACE107_HTTPS_PROXY", "https_proxy"),
+    "CAS_LOGIN_URL": ("WORKSPACE107_CAS_LOGIN_URL",),
+    "CAS_VALIDATE_URL": ("WORKSPACE107_CAS_VALIDATE_URL",),
+    "LOCAL_ADMIN_USERNAME": ("WORKSPACE107_LOCAL_ADMIN_USERNAME",),
+    "LOCAL_ADMIN_DISPLAY_NAME": ("WORKSPACE107_LOCAL_ADMIN_DISPLAY_NAME",),
+    "LOCAL_ADMIN_PASSWORD": ("WORKSPACE107_LOCAL_ADMIN_PASSWORD",),
+    "LOCAL_ADMIN_PASSWORD_HASH": ("WORKSPACE107_LOCAL_ADMIN_PASSWORD_HASH",),
+}
+
+
 def _env(name: str, default: str | None = None) -> str:
-    value = os.environ.get(name, default)
-    if value is None or not str(value).strip():
-        raise RuntimeError(f"{name} is required")
-    return str(value).rstrip()
+    keys = (name, *_ENV_ALIASES.get(name, ()))
+    for key in keys:
+        value = os.environ.get(key)
+        if value is not None and str(value).strip():
+            return str(value).rstrip()
+    if default is not None:
+        return default
+    raise RuntimeError(f"{name} is required")
 
 
 def login_service_url(session_id: str) -> str:
@@ -89,11 +107,19 @@ def check_ticket(ticket: str, service: str) -> str | None:
 _DUMMY_PASSWORD_HASH = generate_password_hash("not-used")
 
 
+def _first_env(*names: str, default: str = "") -> str:
+    for name in names:
+        value = os.environ.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return default
+
+
 def _local_password_hash() -> str:
-    configured = os.environ.get("LOCAL_ADMIN_PASSWORD_HASH", "").strip()
+    configured = _first_env("LOCAL_ADMIN_PASSWORD_HASH", "WORKSPACE107_LOCAL_ADMIN_PASSWORD_HASH")
     if configured:
         return configured
-    raw = os.environ.get("LOCAL_ADMIN_PASSWORD", "")
+    raw = _first_env("LOCAL_ADMIN_PASSWORD", "WORKSPACE107_LOCAL_ADMIN_PASSWORD")
     if raw:
         return generate_password_hash(raw)
     return ""
@@ -123,9 +149,15 @@ def create_app() -> Flask:
         PUBLIC_ORIGIN=_env("PUBLIC_ORIGIN"),
         CAS_LOGIN_URL=_env("CAS_LOGIN_URL", "https://passport.ustc.edu.cn/login"),
         CAS_VALIDATE_URL=_env("CAS_VALIDATE_URL", "https://passport.ustc.edu.cn/serviceValidate"),
-        HTTPS_PROXY=os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or "",
-        LOCAL_ADMIN_USERNAME=os.environ.get("LOCAL_ADMIN_USERNAME", "platform-admin").strip(),
-        LOCAL_ADMIN_DISPLAY_NAME=os.environ.get("LOCAL_ADMIN_DISPLAY_NAME", "平台管理员").strip(),
+        HTTPS_PROXY=_env("HTTPS_PROXY", ""),
+        LOCAL_ADMIN_USERNAME=_first_env(
+            "LOCAL_ADMIN_USERNAME", "WORKSPACE107_LOCAL_ADMIN_USERNAME", default="platform-admin"
+        ),
+        LOCAL_ADMIN_DISPLAY_NAME=_first_env(
+            "LOCAL_ADMIN_DISPLAY_NAME",
+            "WORKSPACE107_LOCAL_ADMIN_DISPLAY_NAME",
+            default="平台管理员",
+        ),
         LOCAL_ADMIN_PASSWORD_HASH=_local_password_hash(),
     )
 
