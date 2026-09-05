@@ -151,3 +151,8 @@
   line-height: var(--text-body-lineHeight-medium);
   font-weight: var(--base-text-weight-semibold);
 }
+
+.form select option:checked:not(:disabled) {
+  background-color: var(--bgColor-accent-emphasis);
+  color: var(--fgColor-onEmphasis);
+}
