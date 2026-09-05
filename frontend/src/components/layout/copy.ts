@@ -1,5 +1,6 @@
 export const appShellCopy = {
   brand: '107 Workspace',
+  homeMarkLabel: '107 Workspace 首页',
   openNavigation: '打开导航',
   createUserGroup: '创建 User Group',
   sidebarLabel: '首页工作入口',

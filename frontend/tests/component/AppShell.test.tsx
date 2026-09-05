@@ -145,7 +145,7 @@ describe('AppShell 壳层', () => {
   it('TopBar 品牌链接包含装饰性 Brand Mark', () => {
     renderShell('student')
 
-    const brand = screen.getByRole('link', { name: '107 Workspace' })
+    const brand = screen.getByRole('link', { name: '107 Workspace 首页' })
     const mark = brand.querySelector('img')
     expect(mark).not.toBeNull()
     expect(mark).toHaveAttribute('width', '32')
@@ -180,12 +180,14 @@ describe('AppShell 壳层', () => {
     renderShell('student')
 
     const header = screen.getByRole('banner')
-    const brand = within(header).getByRole('link', { name: '107 Workspace' })
+    const brand = within(header).getByRole('link', { name: '107 Workspace 首页' })
     expect(brand).toHaveAttribute('href', '/')
     const mark = brand.querySelector('img')
     expect(mark).not.toBeNull()
     expect(mark).toHaveAttribute('width', '32')
     expect(mark).toHaveAttribute('height', '32')
+    expect(within(header).getByText('107 Workspace', { selector: 'span' })).toBeVisible()
+    expect(within(header).queryByRole('link', { name: '107 Workspace' })).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
@@ -193,7 +195,11 @@ describe('AppShell 壳层', () => {
     renderShell('student', readyHome(), '/projects/p-1/runs/r-1')
 
     const header = screen.getByRole('banner')
-    expect(within(header).getByRole('link', { name: '107 Workspace' })).toHaveAttribute('href', '/')
+    expect(within(header).getByRole('link', { name: '107 Workspace 首页' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+    expect(within(header).queryByText('107 Workspace')).toBeNull()
     const context = within(header).getByRole('group', { name: '当前 Project' })
     expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
       'href',
@@ -604,7 +610,7 @@ describe('AppShell Header 的 User Group 分区导航', () => {
     renderShell('student', readyHome(), '/user-groups/grp-1')
 
     await screen.findByRole('navigation', { name: 'User Group 分区导航' })
-    fireEvent.click(screen.getByRole('link', { name: '107 Workspace' }))
+    fireEvent.click(screen.getByRole('link', { name: '107 Workspace 首页' }))
 
     await waitFor(() => {
       expect(screen.queryByRole('navigation', { name: 'User Group 分区导航' })).toBeNull()

@@ -34,16 +34,22 @@
 
 .brand {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: var(--base-size-8);
-  min-width: 0;
-  overflow: hidden;
+  justify-content: center;
   color: var(--fgColor-default);
-  font-size: var(--text-title-size-small);
-  font-weight: var(--text-title-weight-small);
   text-decoration: none;
-  text-overflow: ellipsis;
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+  border: 0;
 }
 
 .brand:focus-visible {

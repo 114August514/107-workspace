@@ -93,8 +93,11 @@ export function AppShell({ username, onUsernameChange, home, project, children }
               />
               <RouterLink to="/" className={styles.brand}>
                 <BrandMark size={32} decorative />
-                {appShellCopy.brand}
+                <span className={styles.visuallyHidden}>{appShellCopy.homeMarkLabel}</span>
               </RouterLink>
+              {!projectId && !location.pathname.startsWith('/user-groups/') ? (
+                <span className={styles.homeContext}>{appShellCopy.brand}</span>
+              ) : null}
               {projectId ? (
                 <div
                   className={styles.projectContext}
