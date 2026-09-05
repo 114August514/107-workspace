@@ -186,8 +186,12 @@ describe('AppShell 壳层', () => {
     expect(mark).not.toBeNull()
     expect(mark).toHaveAttribute('width', '32')
     expect(mark).toHaveAttribute('height', '32')
+    const workspace = within(header).getByRole('link', { name: '107 Workspace' })
+    expect(workspace).toHaveAttribute('href', '/')
     expect(within(header).getByText('107 Workspace', { selector: 'span' })).toBeVisible()
-    expect(within(header).queryByRole('link', { name: '107 Workspace' })).toBeNull()
+    expect(
+      within(header).queryByRole('link', { name: '107 Workspace 107 Workspace 首页' }),
+    ).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 

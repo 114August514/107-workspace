@@ -32,30 +32,6 @@
   gap: var(--base-size-8);
 }
 
-.workspaceLink {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--base-size-8);
-  min-height: var(--base-size-40);
-  padding: var(--base-size-4) var(--base-size-8);
-  border-radius: var(--borderRadius-medium);
-  color: var(--fgColor-default);
-  font-weight: var(--base-text-weight-semibold);
-  text-decoration: none;
-}
-
-.workspaceLink:hover,
-.workspaceLink:focus-visible {
-  color: var(--fgColor-default);
-  background: var(--bgColor-neutral-muted);
-}
-
-.workspaceLink:focus-visible {
-  outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
-  outline-offset: 2px;
-}
-
 .brand {
   display: inline-flex;
   flex: 0 0 auto;
