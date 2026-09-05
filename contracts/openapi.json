@@ -1830,6 +1830,17 @@
       },
       "PreflightOut": {
         "properties": {
+          "artifact_rules": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactRuleModel"
+            },
+            "title": "Artifact Rules",
+            "type": "array"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
           "compute_plan_id": {
             "anyOf": [
               {
@@ -1841,6 +1852,17 @@
             ],
             "title": "Compute Plan Id"
           },
+          "compute_plan_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Plan Name"
+          },
           "compute_request": {
             "anyOf": [
               {
@@ -1851,6 +1873,32 @@
               }
             ]
           },
+          "configuration_name": {
+            "title": "Configuration Name",
+            "type": "string"
+          },
+          "confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Token"
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment Name"
+          },
           "environment_version": {
             "anyOf": [
               {
@@ -1860,6 +1908,13 @@
                 "type": "null"
               }
             ]
+          },
+          "input_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/InputBindingModel"
+            },
+            "title": "Input Bindings",
+            "type": "array"
           },
           "ok": {
             "title": "Ok",
@@ -1882,6 +1937,17 @@
               }
             ],
             "title": "Project Version Id"
+          },
+          "project_version_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Version Label"
           },
           "resolved_environment_variables": {
             "additionalProperties": {
@@ -1907,9 +1973,22 @@
                 "type": "null"
               }
             ]
+          },
+          "working_directory": {
+            "title": "Working Directory",
+            "type": "string"
           }
         },
         "required": [
+          "configuration_name",
+          "command",
+          "working_directory",
+          "input_bindings",
+          "artifact_rules",
+          "project_version_label",
+          "compute_plan_name",
+          "environment_name",
+          "confirmation_token",
           "ok",
           "problems",
           "project_version_id",
@@ -2604,6 +2683,18 @@
                 "type": "null"
               }
             ]
+          },
+          "confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preflight 返回的配置变化检测标识；不能替代当前授权校验。",
+            "title": "Confirmation Token"
           },
           "environment_version_id_override": {
             "anyOf": [

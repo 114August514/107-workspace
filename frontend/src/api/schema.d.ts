@@ -2560,16 +2560,32 @@ export interface components {
         };
         /** PreflightOut */
         PreflightOut: {
+            /** Artifact Rules */
+            artifact_rules: components["schemas"]["ArtifactRuleModel"][];
+            /** Command */
+            command: string;
             /** Compute Plan Id */
             compute_plan_id: string | null;
+            /** Compute Plan Name */
+            compute_plan_name: string | null;
             compute_request: components["schemas"]["ComputeRequestModel"] | null;
+            /** Configuration Name */
+            configuration_name: string;
+            /** Confirmation Token */
+            confirmation_token: string | null;
+            /** Environment Name */
+            environment_name: string | null;
             environment_version: components["schemas"]["EnvironmentVersionOut"] | null;
+            /** Input Bindings */
+            input_bindings: components["schemas"]["InputBindingModel"][];
             /** Ok */
             ok: boolean;
             /** Problems */
             problems: string[];
             /** Project Version Id */
             project_version_id: string | null;
+            /** Project Version Label */
+            project_version_label: string | null;
             /** Resolved Environment Variables */
             resolved_environment_variables: {
                 [key: string]: string;
@@ -2582,6 +2598,8 @@ export interface components {
                 [key: string]: string;
             };
             slurm_projection: components["schemas"]["SlurmProjectionOut"] | null;
+            /** Working Directory */
+            working_directory: string;
         };
         /** ProjectCreateOwnedIn */
         ProjectCreateOwnedIn: {
@@ -2837,6 +2855,11 @@ export interface components {
             /** Command Override */
             command_override?: string | null;
             compute_request_override?: components["schemas"]["ComputeRequestModel"] | null;
+            /**
+             * Confirmation Token
+             * @description Preflight 返回的配置变化检测标识；不能替代当前授权校验。
+             */
+            confirmation_token?: string | null;
             /** Environment Version Id Override */
             environment_version_id_override?: string | null;
             /** Input Bindings Override */

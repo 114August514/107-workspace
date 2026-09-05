@@ -56,6 +56,12 @@ class ConflictError(DomainError):
     code = "conflict"
 
 
+class RunConfirmationChanged(ConflictError):
+    """Execution facts changed since the user's submission preview."""
+
+    code = "run_confirmation_changed"
+
+
 class ImmutableObjectError(ConflictError):
     """试图修改不可变的 Version、Run Snapshot 或 Artifact 内容（GR-201、GR-202、GR-203）。"""
 
