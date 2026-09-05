@@ -1049,6 +1049,9 @@ export const api = {
       }),
     ),
 
+  listMyActivities: async (query: PageQuery = {}): Promise<ActivityPage> =>
+    unwrap(await http.GET('/api/v1/me/activities', { params: { query } })),
+
   // -- 通知 ---------------------------------------------------------------
   listNotifications: async (
     query: PageQuery & { unread_only?: boolean } = {},

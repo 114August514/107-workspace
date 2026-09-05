@@ -45,9 +45,9 @@ export function describeAction(action: ActivityAction): string {
 export function targetPath(activity: Activity): string | null {
   switch (activity.target_type) {
     case 'user_group':
-      return `/user-groups/${activity.target_id}`
+      return activity.action === 'user_group_deleted' ? null : `/user-groups/${activity.target_id}`
     case 'project':
-      return `/projects/${activity.target_id}`
+      return activity.action === 'project_deleted' ? null : `/projects/${activity.target_id}`
     case 'run':
       return activity.project_id
         ? `/projects/${activity.project_id}/runs/${activity.target_id}`

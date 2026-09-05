@@ -99,6 +99,16 @@ async def test_user_group_delete_preserves_user_and_other_group_membership(clien
     assert (
         await client.get(f"/api/v1/user-groups/{remove['id']}", headers=ALICE)
     ).status_code == 404
+    personal_activities = await client.get("/api/v1/me/activities", headers=ALICE)
+    assert personal_activities.status_code == 200, personal_activities.text
+    deleted_group_events = [
+        item
+        for item in personal_activities.json()["items"]
+        if item["action"] == "user_group_deleted" and item["target_id"] == remove["id"]
+    ]
+    assert len(deleted_group_events) == 1
+    assert deleted_group_events[0]["owner"] == {"kind": "user", "id": alice["id"]}
+    assert deleted_group_events[0]["project_id"] is None
 
     me = await client.get("/api/v1/me", headers=ALICE)
     assert me.status_code == 200
@@ -235,6 +245,21 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
     deleted = await client.delete(f"/api/v1/projects/{project_id}?confirm=true", headers=ALICE)
     assert deleted.status_code == 204, deleted.text
     assert (await client.get(f"/api/v1/projects/{project_id}", headers=ALICE)).status_code == 404
+    group_activities = await client.get(
+        f"/api/v1/user-groups/{project['owner']['id']}/activities", headers=ALICE
+    )
+    assert group_activities.status_code == 200, group_activities.text
+    deleted_project_events = [
+        item
+        for item in group_activities.json()["items"]
+        if item["action"] == "project_deleted" and item["target_id"] == project_id
+    ]
+    assert deleted_project_events[0]["owner"]["kind"] == project["owner"]["kind"]
+    assert deleted_project_events[0]["owner"]["id"] == project["owner"]["id"]
+    assert deleted_project_events[0]["project_id"] is None
+    assert (
+        await client.get(f"/api/v1/projects/{project_id}/activities", headers=ALICE)
+    ).status_code == 404
     assert not run_root.exists()
     assert not artifact_root.exists()
     assert (

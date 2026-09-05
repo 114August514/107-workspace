@@ -97,6 +97,12 @@ class ActivityService:
             OwnerReference(OwnerKind.USER_GROUP, user_group_id), page
         )
 
+    async def list_for_user(self, user_id: str, page: PageRequest) -> Page[Activity]:
+        """Return personal Owner Scope activity, including deleted-target snapshots."""
+        return await self._repos.activities.list_for_owner(
+            OwnerReference(OwnerKind.USER, user_id), page
+        )
+
     async def list_for_project(
         self, user_id: str, project_id: str, page: PageRequest
     ) -> Page[Activity]:
