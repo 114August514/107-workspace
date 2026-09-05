@@ -1,0 +1,18 @@
+export const settingsCopy = {
+  title: '设置',
+  subtitle: '修改显示名称和用户名。邮箱由登录身份提供，不能在此更改。',
+  loading: '正在加载设置…',
+  account: '账户',
+  displayName: '显示名称',
+  username: '用户名',
+  usernameCaption: '用户名用于邀请和 @ 提及；只能包含字母、数字、点、下划线、连字符和波浪号。',
+  email: '邮箱',
+  emailMissing: '未提供',
+  emailCaption: '邮箱来自登录身份，不能在设置中修改。',
+  save: '保存设置',
+  saved: '设置已保存。',
+  saveFailed: '保存失败。',
+  saveFailedNext: '请检查输入后重试。',
+  displayNameRequired: '显示名称不能为空',
+  usernameRequired: '用户名不能为空',
+} as const

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,6 +93,8 @@ describe('启动时的认证状态', () => {
 
     expect(await screen.findByRole('heading', { name: '107 Workspace' })).toBeVisible()
     expect(loginButtons().length).toBeGreaterThan(0)
+    expect(screen.getByText('统一身份认证面向科大用户。')).toBeVisible()
+    expect(screen.queryByRole('banner')).toBeNull()
     expect(screen.queryByText('同学，欢迎回来')).toBeNull()
     expect(screen.queryByRole('button', { name: '创建 User Group' })).toBeNull()
     expect(screen.queryByRole('button', { name: '通知' })).toBeNull()
@@ -156,10 +158,35 @@ describe('登录入口与内部路由', () => {
     expect(screen.queryByText('页面内容')).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
+
+  it('公开首页提供账密登录', async () => {
+    vi.spyOn(api, 'home').mockRejectedValue(
+      new ApiError(401, 'authentication_required', '需要登录。', []),
+    )
+    renderApp()
+
+    await screen.findByRole('heading', { name: '账密登录' })
+    const form = document.querySelector('form[action="/login/password"]')
+    expect(form).not.toBeNull()
+    expect(form).toHaveAttribute('method', 'post')
+    expect(screen.getByLabelText('用户名')).toBeVisible()
+    expect(screen.getByLabelText('密码')).toHaveAttribute('type', 'password')
+    expect(screen.getByRole('button', { name: /^登录$/ })).toBeVisible()
+    expect(screen.getByText('或使用以下方式登录')).toBeVisible()
+    expect(screen.getByRole('button', { name: '统一身份认证登录' })).toBeVisible()
+  })
+
+  it('账密登录失败时显示错误', async () => {
+    vi.spyOn(api, 'home').mockRejectedValue(
+      new ApiError(401, 'authentication_required', '需要登录。', []),
+    )
+    renderApp('/?login_error=1')
+    expect(await screen.findByText('登录失败，请检查用户名和密码。')).toBeVisible()
+  })
 })
 
 describe('用户菜单与个人资料', () => {
-  it('资料弹窗展示接口已有字段，缺失邮箱显示未提供', async () => {
+  it('个人资料进入独立页面，缺失邮箱显示未提供，不使用弹窗或输入框', async () => {
     mockSignedInApis({
       ...homeData,
       user: { ...homeData.user, email: null },
@@ -169,23 +196,25 @@ describe('用户菜单与个人资料', () => {
     fireEvent.click(await screen.findByRole('button', { name: '当前用户 同学' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: '个人资料' }))
 
-    const dialog = await screen.findByRole('dialog', { name: '个人资料' })
-    expect(within(dialog).getByLabelText('显示名')).toHaveValue('同学')
-    expect(within(dialog).getByLabelText('用户名')).toHaveValue('student')
-    expect(within(dialog).getByLabelText('邮箱')).toHaveValue('未提供')
-    expect(within(dialog).queryByRole('textbox', { name: /编辑/ })).toBeNull()
+    expect(await screen.findByRole('heading', { name: '个人资料' })).toBeVisible()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('heading', { name: '同学' })).toBeVisible()
+    expect(screen.getByText('@student')).toBeVisible()
+    expect(screen.getByText('未提供')).toBeVisible()
+    expect(screen.getByText('u-1')).toBeVisible()
+    expect(screen.queryByRole('textbox')).toBeNull()
   })
 
-  it('设置进入现有个人执行上下文', async () => {
+  it('设置进入账户设置而不是个人执行上下文', async () => {
     mockSignedInApis()
-    vi.spyOn(api, 'listEntitlements').mockResolvedValue([])
-    vi.spyOn(api, 'listUserVariables').mockResolvedValue([])
-    vi.spyOn(api, 'listUserSecrets').mockResolvedValue([])
     renderApp()
 
     fireEvent.click(await screen.findByRole('button', { name: '当前用户 同学' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: '设置' }))
-    expect(await screen.findByRole('heading', { name: '个人执行上下文' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: '设置' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: /显示名称/ })).toHaveValue('同学')
+    expect(screen.getByRole('textbox', { name: /用户名/ })).toHaveValue('student')
+    expect(screen.queryByRole('heading', { name: '个人执行上下文' })).toBeNull()
   })
 
   it('退出登录以同源 POST 表单提交 /logout', async () => {

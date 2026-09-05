@@ -314,7 +314,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * 更新当前用户资料
+         * @description Update the signed-in User's username and display name. Email stays identity-provided.
+         */
+        patch: operations["update_me_api_v1_me_patch"];
         trace?: never;
     };
     "/api/v1/me/entitlements": {
@@ -3272,6 +3276,13 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** UserProfileUpdateIn */
+        UserProfileUpdateIn: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Username */
+            username?: string | null;
+        };
         /** VariableIn */
         VariableIn: {
             /** Name */
@@ -4750,6 +4761,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HomeOut"];
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 请求没有有效的认证身份 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    update_me_api_v1_me_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserProfileUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserOut"];
                 };
             };
             /** @description 请求不合法 */

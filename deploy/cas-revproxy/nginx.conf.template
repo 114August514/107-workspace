@@ -44,6 +44,17 @@ http {
             add_header Cache-Control "no-store" always;
         }
 
+        location = /login/password {
+            limit_except POST { deny all; }
+            proxy_pass ${AUTH_ORIGIN};
+            proxy_set_header Host 127.0.0.1:8107;
+            proxy_set_header Cookie $http_cookie;
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Referer $http_referer;
+            proxy_hide_header Cache-Control;
+            add_header Cache-Control "no-store" always;
+        }
+
         location = /logout {
             limit_except POST { deny all; }
             proxy_pass ${AUTH_ORIGIN};
@@ -70,6 +81,8 @@ http {
         location /api/ {
             auth_request /auth;
             auth_request_set $user_id $upstream_http_x_user_id;
+            auth_request_set $user_provider $upstream_http_x_user_provider;
+            auth_request_set $user_name $upstream_http_x_user_name;
             error_page 401 = @api_unauthorized;
             error_page 403 = @api_forbidden;
 
@@ -82,7 +95,8 @@ http {
             proxy_set_header Cookie $http_cookie;
             proxy_set_header X-User "";
             proxy_set_header X-User-ID $user_id;
-            proxy_set_header X-User-Name "";
+            proxy_set_header X-User-Provider $user_provider;
+            proxy_set_header X-User-Name $user_name;
             proxy_set_header X-User-Email "";
             proxy_read_timeout 300s;
             proxy_send_timeout 300s;

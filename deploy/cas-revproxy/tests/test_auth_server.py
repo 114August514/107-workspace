@@ -130,3 +130,57 @@ def test_session_cookie_flags(client):
     assert "HttpOnly" in set_cookie
     assert "SameSite=Lax" in set_cookie
     assert "Secure" not in set_cookie
+
+
+def test_password_login_requires_origin_and_sets_local_provider(monkeypatch):
+    monkeypatch.setenv("LOCAL_ADMIN_PASSWORD", "s3cret")
+    application = create_app()
+    client = application.test_client()
+    denied = client.post(
+        "/login/password",
+        data={"username": "platform-admin", "password": "s3cret"},
+    )
+    assert denied.status_code == 403
+
+    response = client.post(
+        "/login/password",
+        data={"username": "platform-admin", "password": "s3cret"},
+        headers={"Origin": "http://127.0.0.1:8107"},
+    )
+    assert response.status_code == 303
+    assert response.headers["Location"] == "http://127.0.0.1:8107/"
+    auth = client.get("/auth")
+    assert auth.status_code == 200
+    assert auth.headers["X-User-ID"] == "platform-admin"
+    assert auth.headers["X-User-Provider"] == "local"
+    assert "X-User-Name" not in auth.headers
+
+
+def test_password_login_ascii_display_name_is_forwarded(monkeypatch):
+    monkeypatch.setenv("LOCAL_ADMIN_PASSWORD", "s3cret")
+    monkeypatch.setenv("LOCAL_ADMIN_DISPLAY_NAME", "Platform Admin")
+    application = create_app()
+    client = application.test_client()
+    response = client.post(
+        "/login/password",
+        data={"username": "platform-admin", "password": "s3cret"},
+        headers={"Origin": "http://127.0.0.1:8107"},
+    )
+    assert response.status_code == 303
+    auth = client.get("/auth")
+    assert auth.status_code == 200
+    assert auth.headers["X-User-Name"] == "Platform Admin"
+
+
+def test_password_login_failure_does_not_create_session(monkeypatch):
+    monkeypatch.setenv("LOCAL_ADMIN_PASSWORD", "s3cret")
+    application = create_app()
+    client = application.test_client()
+    response = client.post(
+        "/login/password",
+        data={"username": "platform-admin", "password": "wrong"},
+        headers={"Origin": "http://127.0.0.1:8107"},
+    )
+    assert response.status_code == 303
+    assert "login_error=1" in response.headers["Location"]
+    assert client.get("/auth").status_code == 401

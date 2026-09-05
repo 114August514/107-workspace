@@ -1,0 +1,16 @@
+export const profileCopy = {
+  title: '个人资料',
+  loading: '正在加载个人资料…',
+  basics: '基本资料',
+  email: '邮箱',
+  emailMissing: '未提供',
+  userId: '用户 ID',
+  copyUserId: '复制用户 ID',
+  copied: '已复制',
+  copyFailed: '复制失败，请手动选择用户 ID。',
+  groups: '我的 User Group',
+  groupsEmpty: '还没有加入 User Group',
+  groupLink: (name: string) => `进入 ${name}`,
+  settings: '相关设置',
+  executionContext: '个人执行上下文',
+} as const

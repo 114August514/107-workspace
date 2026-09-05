@@ -1,14 +1,6 @@
 import { ChevronDownIcon } from '@primer/octicons-react'
-import {
-  ActionList,
-  ActionMenu,
-  Button,
-  Dialog,
-  FormControl,
-  Stack,
-  TextInput,
-} from '@primer/react'
-import { useRef, useState } from 'react'
+import { ActionList, ActionMenu, Button } from '@primer/react'
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import type { User } from '../../api/types'
@@ -20,7 +12,6 @@ interface Props {
 
 export function UserMenu({ user }: Props) {
   const navigate = useNavigate()
-  const [profileOpen, setProfileOpen] = useState(false)
   const logoutFormRef = useRef<HTMLFormElement>(null)
   const displayName = user.display_name || user.username
 
@@ -38,12 +29,16 @@ export function UserMenu({ user }: Props) {
         </ActionMenu.Anchor>
         <ActionMenu.Overlay>
           <ActionList>
-            <ActionList.Item onSelect={() => setProfileOpen(true)}>
+            <ActionList.Item
+              onSelect={() => {
+                navigate('/profile')
+              }}
+            >
               {authCopy.profile}
             </ActionList.Item>
             <ActionList.Item
               onSelect={() => {
-                navigate('/execution-context')
+                navigate('/settings')
               }}
             >
               {authCopy.settings}
@@ -60,42 +55,6 @@ export function UserMenu({ user }: Props) {
         </ActionMenu.Overlay>
       </ActionMenu>
       <form ref={logoutFormRef} method="post" action="/logout" hidden />
-      {profileOpen ? <ProfileDialog user={user} onClose={() => setProfileOpen(false)} /> : null}
     </>
-  )
-}
-
-function ProfileDialog({ user, onClose }: { user: User; onClose: () => void }) {
-  return (
-    <Dialog
-      title={authCopy.profileTitle}
-      onClose={onClose}
-      footerButtons={[
-        {
-          content: authCopy.profileClose,
-          buttonType: 'primary',
-          onClick: onClose,
-        },
-      ]}
-    >
-      <Stack gap="normal">
-        <FormControl>
-          <FormControl.Label>{authCopy.profileDisplayName}</FormControl.Label>
-          <TextInput value={user.display_name} readOnly block />
-        </FormControl>
-        <FormControl>
-          <FormControl.Label>{authCopy.profileUsername}</FormControl.Label>
-          <TextInput value={user.username} readOnly block />
-        </FormControl>
-        <FormControl>
-          <FormControl.Label>{authCopy.profileEmail}</FormControl.Label>
-          <TextInput
-            value={user.email?.trim() ? user.email : authCopy.profileEmailMissing}
-            readOnly
-            block
-          />
-        </FormControl>
-      </Stack>
-    </Dialog>
   )
 }

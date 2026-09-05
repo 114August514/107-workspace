@@ -70,9 +70,9 @@ uv run python -m workspace107.tools.seed --demo
 uv run python -m workspace107.tools.seed --demo --platform-owner-username <username>
 ```
 
-Owner 选择顺序是 CLI、`WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME`、`student`，且只在
-`grp_platform_assets` 首次不存在时生效。User Group 已存在时不会创建新配置的 User，也
-不会改回或协调已转让的 Owner。演示 Project 使用 `grp_demo` 自己的 Environment；它与
+Owner 选择顺序是 CLI、`WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME`、`platform-admin`，且只在
+`grp_platform_assets` 首次不存在时生效。组已存在时仍确保账密管理员 User 存在，尚未加入则补为
+管理员，不改已有 Owner。演示 Project 使用 `grp_demo` 自己的 Environment；它与
 `grp_platform_assets` 持有的两条平台演示 Environment 是不同资产。这不是 production
 provisioning 接口。
 
