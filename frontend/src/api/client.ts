@@ -284,11 +284,16 @@ export const api = {
     ),
 
   deleteUserGroup: async (id: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/user-groups/{user_group_id}', {
-        params: { path: { user_group_id: id }, query: { confirm: true } },
-      }),
-    )
+    try {
+      unwrap(
+        await http.DELETE('/api/v1/user-groups/{user_group_id}', {
+          params: { path: { user_group_id: id }, query: { confirm: true } },
+        }),
+      )
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return
+      throw error
+    }
   },
 
   createUserGroup: async (name: string, description: string): Promise<UserGroup> =>
@@ -456,11 +461,16 @@ export const api = {
     ),
 
   deleteProject: async (id: string): Promise<void> => {
-    unwrap(
-      await http.DELETE('/api/v1/projects/{project_id}', {
-        params: { path: { project_id: id }, query: { confirm: true } },
-      }),
-    )
+    try {
+      unwrap(
+        await http.DELETE('/api/v1/projects/{project_id}', {
+          params: { path: { project_id: id }, query: { confirm: true } },
+        }),
+      )
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return
+      throw error
+    }
   },
 
   updateProject: async (
