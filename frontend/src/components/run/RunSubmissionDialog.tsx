@@ -1,3 +1,4 @@
+import { RunCommand } from '../runconfig/RunCommand'
 import { Banner, Button, Dialog, Select, Spinner, TextInput } from '@primer/react'
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, api, newIdempotencyKey } from '../../api/client'
@@ -275,10 +276,6 @@ export function RunSubmissionDialog({
             <dl className={styles.summary}>
               <dt>Project 版本</dt>
               <dd>{preflight.project_version_label ?? versionLabel ?? '尚未创建版本'}</dd>
-              <dt>执行命令</dt>
-              <dd>
-                <code className={styles.code}>{preflight.command}</code>
-              </dd>
               <dt>运行环境</dt>
               <dd>
                 {preflight.environment_version
@@ -295,6 +292,7 @@ export function RunSubmissionDialog({
                 )}
               </dd>
             </dl>
+            <RunCommand command={preflight.command} />
             <details className={styles.disclosure}>
               <summary>配置详情</summary>
               <div className={styles.section}>

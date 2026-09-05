@@ -75,7 +75,7 @@ function ConfigurationEditor({
     Object.entries(editing?.environment_variables ?? {}).map(([name, value]) => ({ name, value })),
   )
   const [custom, setCustom] = useState(!!editing?.compute_request)
-  const [resourcesOpen, setResourcesOpen] = useState(!!editing?.compute_request)
+  const [resourcesOpen, setResourcesOpen] = useState(false)
   const plan = plans.find((p) => p.id === data.compute_plan_id)
   const [request, setRequest] = useState(() => editing?.compute_request ?? defaults(plan))
   const [advanced, setAdvanced] = useState(false)
@@ -148,8 +148,7 @@ function ConfigurationEditor({
     }
     setErrors(problems)
     if (Object.keys(problems).length) {
-      if (problems.name || problems.work || problems.parameters || problems.inputs)
-        setAdvanced(true)
+      if (problems.work || problems.parameters || problems.inputs) setAdvanced(true)
       if (problems.outputs) setOutputs(true)
       if (Object.keys(problems).some((key) => key.startsWith('resource_'))) setResourcesOpen(true)
       requestAnimationFrame(() =>
@@ -230,6 +229,22 @@ function ConfigurationEditor({
               </Banner.Description>
             </Banner>
           )}
+          <RunField disabled={submitting} label="方案名称" error={errors.name}>
+            <TextInput
+              block
+              value={data.name}
+              maxLength={128}
+              aria-invalid={!!errors.name}
+              onChange={(e) => patch({ name: e.target.value })}
+            />
+          </RunField>
+          <RunField disabled={submitting} label="说明">
+            <TextInput
+              block
+              value={data.description}
+              onChange={(e) => patch({ description: e.target.value })}
+            />
+          </RunField>
           <RunField
             disabled={submitting}
             label="执行命令"
@@ -262,7 +277,9 @@ function ConfigurationEditor({
               onChange={(e) => patch({ environment_version_id: e.target.value })}
               aria-invalid={!!errors.environment}
             >
-              <Select.Option value="">选择运行环境</Select.Option>
+              <Select.Option value="" disabled hidden>
+                请选择运行环境
+              </Select.Option>
               {data.environment_version_id && !selectedVersion && (
                 <Select.Option value={data.environment_version_id}>
                   已保存版本（当前不可用）
@@ -309,7 +326,9 @@ function ConfigurationEditor({
                 if (!custom) setRequest(defaults(plans.find((p) => p.id === e.target.value)))
               }}
             >
-              <Select.Option value="">选择算力方案</Select.Option>
+              <Select.Option value="" disabled hidden>
+                请选择算力方案
+              </Select.Option>
               {data.compute_plan_id && !plan && (
                 <Select.Option value={data.compute_plan_id}>已保存方案（当前不可用）</Select.Option>
               )}
@@ -351,8 +370,9 @@ function ConfigurationEditor({
                 </RunField>
               ))}
             </div>
-            <div className={styles.row}>
+            <div className={`${styles.row} ${styles.resourceActions}`}>
               <Button
+                disabled={!plan}
                 onClick={() => {
                   setCustom(false)
                   setRequest(defaults(plan))
@@ -429,10 +449,11 @@ function ConfigurationEditor({
                   </label>
                   <div>
                     <Button
-                      variant="invisible"
+                      variant="danger"
+                      aria-label={`删除产物规则 ${i + 1}`}
                       onClick={() => patch({ artifact_rules: rules.filter((_, j) => j !== i) })}
                     >
-                      删除产物规则 {i + 1}
+                      删除产物规则
                     </Button>
                   </div>
                 </div>
@@ -468,7 +489,7 @@ function ConfigurationEditor({
               )}
               {errors.inputs && <p role="alert">{errors.inputs}</p>}
               <section className={styles.section} aria-label="参数">
-                <h3 className={styles.title}>参数</h3>
+                <h3 className={styles.subheading}>参数</h3>
                 <p className={styles.muted}>
                   值可使用普通文本、{'${{ vars.NAME }}'} 或 {'${{ secrets.NAME }}'}。个人引用使用{' '}
                   {'${{ user.vars.NAME }}'} / {'${{ user.secrets.NAME }}'}。
@@ -504,10 +525,11 @@ function ConfigurationEditor({
                     </RunField>
                     <div>
                       <Button
-                        variant="invisible"
+                        variant="danger"
+                        aria-label={`删除参数 ${i + 1}`}
                         onClick={() => setParameters((old) => old.filter((_, j) => j !== i))}
                       >
-                        删除参数 {i + 1}
+                        删除参数
                       </Button>
                     </div>
                   </div>
@@ -529,22 +551,6 @@ function ConfigurationEditor({
                   value={data.working_directory}
                   aria-invalid={!!errors.work}
                   onChange={(e) => patch({ working_directory: e.target.value })}
-                />
-              </RunField>
-              <RunField disabled={submitting} label="方案名称" error={errors.name}>
-                <TextInput
-                  block
-                  value={data.name}
-                  maxLength={128}
-                  aria-invalid={!!errors.name}
-                  onChange={(e) => patch({ name: e.target.value })}
-                />
-              </RunField>
-              <RunField disabled={submitting} label="说明">
-                <TextInput
-                  block
-                  value={data.description}
-                  onChange={(e) => patch({ description: e.target.value })}
                 />
               </RunField>
             </div>

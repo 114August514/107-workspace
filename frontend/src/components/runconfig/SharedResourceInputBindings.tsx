@@ -25,7 +25,7 @@ export function SharedResourceInputBindings({
     onChange(bindings.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   return (
     <section className={styles.section} aria-label="运行输入">
-      <h3 className={styles.title}>运行输入</h3>
+      <h3 className={styles.subheading}>运行输入</h3>
       <p className={styles.muted}>选择确定的资源版本，作为只读输入。保存后不会自动切换版本。</p>
       <AsyncState
         loading={resources.loading}

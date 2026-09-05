@@ -166,7 +166,8 @@ describe('Simple Run configuration', () => {
     expect(screen.getByText(/运行产物 · outputs/)).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: /^运行环境/ })).toHaveValue('envv-1')
     expect(screen.getByRole('combobox', { name: /^算力方案/ })).toHaveValue('plan-1')
-    expect(screen.getByRole('textbox', { name: '方案名称' })).not.toBeVisible()
+    expect(screen.getByRole('textbox', { name: '方案名称' })).toBeVisible()
+    expect(screen.getByRole('textbox', { name: '说明' })).toBeVisible()
     fireEvent.change(screen.getByRole('textbox', { name: /^执行命令/ }), {
       target: { value: 'python train.py' },
     })

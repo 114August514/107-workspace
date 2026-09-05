@@ -1,5 +1,13 @@
-import { PlayIcon, PlusIcon } from '@primer/octicons-react'
-import { Banner, Button, ConfirmationDialog, Label } from '@primer/react'
+import { KebabHorizontalIcon, PlayIcon, PlusIcon } from '@primer/octicons-react'
+import {
+  ActionList,
+  ActionMenu,
+  Banner,
+  Button,
+  ConfirmationDialog,
+  IconButton,
+  Label,
+} from '@primer/react'
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { toAsyncError } from '../../api/errors'
@@ -7,6 +15,7 @@ import { can } from '../../api/types'
 import type { Project, RunConfiguration } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { AsyncState } from '../common/AsyncState'
+import { RunCommand } from './RunCommand'
 import { RunConfigurationModal } from './RunConfigurationModal'
 import styles from './simpleRun.module.css'
 
@@ -132,7 +141,7 @@ export function RunConfigurationPanel({
               <li key={configuration.id} className={styles.section}>
                 <div className={styles.header}>
                   <div className={styles.row}>
-                    <strong>{configuration.name}</strong>
+                    <strong className={styles.configurationName}>{configuration.name}</strong>
                     {configuration.id === defaultConfigurationId && (
                       <Label variant="accent">默认</Label>
                     )}
@@ -143,49 +152,67 @@ export function RunConfigurationPanel({
                         提交 Run
                       </Button>
                     )}
-                    {canManage && (
-                      <Button
-                        disabled={!choices.data || pending}
-                        onClick={() => setEditing(configuration)}
-                      >
-                        编辑
-                      </Button>
+                    {(canManage || canDefault) && (
+                      <ActionMenu>
+                        <ActionMenu.Anchor>
+                          <IconButton
+                            icon={KebabHorizontalIcon}
+                            variant="invisible"
+                            aria-label={`${configuration.name} 的更多操作`}
+                            disabled={pending}
+                          />
+                        </ActionMenu.Anchor>
+                        <ActionMenu.Overlay align="end" width="auto">
+                          <ActionList>
+                            {canManage && (
+                              <ActionList.Item
+                                disabled={!choices.data || pending}
+                                onSelect={() => setEditing(configuration)}
+                              >
+                                编辑
+                              </ActionList.Item>
+                            )}
+                            {canDefault && (
+                              <ActionList.Item
+                                disabled={pending}
+                                onSelect={() =>
+                                  void setDefault(
+                                    configuration.id === defaultConfigurationId
+                                      ? null
+                                      : configuration.id,
+                                  )
+                                }
+                              >
+                                {configuration.id === defaultConfigurationId
+                                  ? '取消默认'
+                                  : '设为默认'}
+                              </ActionList.Item>
+                            )}
+                            {canManage && (
+                              <>
+                                <ActionList.Divider />
+                                <ActionList.Item
+                                  variant="danger"
+                                  disabled={pending}
+                                  onSelect={() => setDeleting(configuration)}
+                                >
+                                  删除
+                                </ActionList.Item>
+                              </>
+                            )}
+                          </ActionList>
+                        </ActionMenu.Overlay>
+                      </ActionMenu>
                     )}
                   </div>
                 </div>
-                <code className={styles.code}>{configuration.command}</code>
                 <p className={styles.muted}>
                   {environment
                     ? `${environment.name} · ${version?.version}${version?.availability !== 'available' ? '（当前不可用）' : ''}`
                     : '运行环境待确认'}{' '}
                   · {plan?.name ?? '算力方案待确认'}
                 </p>
-                <div className={styles.actions}>
-                  {canDefault && (
-                    <Button
-                      variant="invisible"
-                      size="small"
-                      disabled={pending}
-                      onClick={() =>
-                        void setDefault(
-                          configuration.id === defaultConfigurationId ? null : configuration.id,
-                        )
-                      }
-                    >
-                      {configuration.id === defaultConfigurationId ? '取消默认' : '设为默认'}
-                    </Button>
-                  )}
-                  {canManage && (
-                    <Button
-                      variant="invisible"
-                      size="small"
-                      disabled={pending}
-                      onClick={() => setDeleting(configuration)}
-                    >
-                      删除
-                    </Button>
-                  )}
-                </div>
+                <RunCommand command={configuration.command} />
               </li>
             )
           })}

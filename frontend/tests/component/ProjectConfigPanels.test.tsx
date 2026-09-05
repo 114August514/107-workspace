@@ -338,7 +338,8 @@ describe('RunConfigurationPanel 默认运行方案', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: '设为默认' }))
+    fireEvent.click(await screen.findByRole('button', { name: /的更多操作/ }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: '设为默认' }))
     await waitFor(() => {
       expect(mockUpdateProject).toHaveBeenCalledWith('proj-1', {
         default_run_configuration_id: 'cfg-1',

@@ -1145,7 +1145,7 @@ Command 是 shell command，不增加语言专用的 entry file 字段。
 用户无需填写底层 cluster、account、partition、QoS、GRES 或原始 SBATCH 参数。
 CPU、Memory、GPU、Time 等数量按需展开调整，并受 Compute Plan 范围约束。
 折叠设置不改变已经填写的值；恢复方案默认资源必须是明确操作。
-Input Bindings、Variable / Secret 引用、Working Directory、方案名称与说明默认放在高级设置。
+方案名称与说明在表单顶部常显；Input Bindings、Variable / Secret 引用、Working Directory 默认放在高级设置。
 高级设置在折叠时提示已有输入、参数和自定义工作目录；字段错误应展开相应设置。
 
 Core Run 是非交互式 batch execution，stdin 固定连接 `/dev/null`，Mock 与 Slurm 保持一致。
