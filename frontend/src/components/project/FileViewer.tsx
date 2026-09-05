@@ -171,6 +171,7 @@ export function FileViewer({
               <CodeMirror
                 className={styles.editor}
                 value={content}
+                onChange={setContent}
                 height="32rem"
                 readOnly={!canWrite || file.data.truncated}
                 extensions={[...editorExtensions, EditorView.contentAttributes.of({ 'aria-label': `编辑 ${path}` })]}

@@ -18,6 +18,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../src/api/client', () => ({ api: mocks }))
+vi.mock('@uiw/react-codemirror', () => ({
+  default: ({ value, onChange, ...props }: { value: string; onChange: (value: string) => void }) => (
+    <textarea {...props} value={value} onChange={(event) => onChange(event.target.value)} />
+  ),
+}))
 
 const project: Project = {
   capabilities: ['project.content.write'],
