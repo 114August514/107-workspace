@@ -15,8 +15,7 @@ source "$ROOT/env"
 set +a
 
 if [[ -z "${HTTPS_PROXY:-}" ]]; then
-  echo "HTTPS_PROXY must be set explicitly for CAS validation" >&2
-  exit 1
+  echo "warning: HTTPS_PROXY is empty; CAS serviceValidate will fail. Password login still works." >&2
 fi
 
 if [[ ! -d "$ROOT/.venv" ]]; then

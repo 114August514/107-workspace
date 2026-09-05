@@ -144,11 +144,13 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 
 ## 身份
 
-前端启动时请求 `GET /api/v1/me` 确认当前用户。未登录显示公开首页和「统一身份认证登录」；
-登录由反向代理的 `GET /login` 处理，前端只做整页跳转。退出通过同源 `POST /logout` 表单提交。
+前端启动时请求 `GET /api/v1/me` 确认当前用户。未登录显示公开首页（账密 + 统一身份认证）；
+登录由反向代理的 `GET /login` 与 `POST /login/password` 处理，前端只做整页跳转和同源表单。
+退出通过同源 `POST /logout` 表单提交。
 
-正常客户端不发送 `X-User` 或 `X-User-ID`。本地开发继续使用后端 `dev` 模式的默认用户。
-反向代理接入见 [`docs/operations/authentication.md`](../docs/operations/authentication.md)
+`make dev` 走后端 `dev` 模式，一打开就是 `student`，看不到未登录首页。
+正常客户端不发送 `X-User` 或 `X-User-ID`。反向代理接入见
+[`docs/operations/authentication.md`](../docs/operations/authentication.md)
 与 [`deploy/cas-revproxy/README.md`](../deploy/cas-revproxy/README.md)。
 
 ## 检查
