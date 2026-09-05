@@ -1,15 +1,15 @@
 .section {
   margin-top: var(--base-size-24);
+  padding-top: var(--base-size-16);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .title {
   margin: 0 0 var(--base-size-12);
-  padding-bottom: var(--base-size-8);
   color: var(--fgColor-default);
   font-size: var(--text-body-size-medium);
   font-weight: var(--base-text-weight-semibold);
   line-height: var(--text-body-lineHeight-medium);
-  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
 .bar {
