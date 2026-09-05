@@ -12,6 +12,6 @@
 
 Slurm 的 batch I/O 证据来自 `backend/tests/integration/scheduler/test_slurm_batch_io.py` 的 HTTP transport 测试及生成脚本；未连接真实 Slurm，不声明完成 #7 的真实环境验收。
 
-完整 `make check` 通过：后端 384 passed、3 skipped；前端 243 passed；生产构建与生成契约检查通过。
+合入 main（`d28f934`）后完整 `make check` 通过：后端 393 passed、3 skipped；前端 272 passed；代理测试 13 passed、1 skipped；生产构建与生成契约检查通过。
 
-交互评审后的 `revised-*` 截图记录名称与说明常显、小标题字号、带边框的删除按钮、默认折叠的资源区及命令换行、集中操作菜单。截图使用本地演示数据；页面外壳为合入最新 main 前的版本。
+交互评审后的 `revised-*` 截图记录名称与说明常显、小标题字号、带边框的删除按钮、默认折叠的资源区及命令换行、集中操作菜单。截图使用本地演示数据，已在合入最新 main 后重新验证和截图。
