@@ -350,9 +350,9 @@ describe('AppShell 壳层', () => {
     expect(within(sidebar).getByRole('navigation', { name: '工作入口' })).toBeVisible()
     expect(within(sidebar).getByRole('heading', { name: 'User Group' })).toBeVisible()
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
-    const homeLink = within(dialog).getByRole('link', { name: '首页' })
+    const homeLink = within(dialog).getByRole('link', { name: '107 Workspace' })
     expect(homeLink).toHaveAttribute('aria-current', 'page')
-    expect(within(homeLink).getByText('首页', { selector: 'span' })).toBeVisible()
+    expect(within(homeLink).getByText('107 Workspace', { selector: 'span' })).toBeVisible()
     expect(within(dialog).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
       'href',
       '/user-groups/grp-1',
