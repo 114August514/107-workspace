@@ -175,24 +175,29 @@ export function VersionPanel({
         <>
           <AsyncSection loading={changes.loading} error={changes.error}>
             {pending.length === 0 ? (
-              <Alert type="success" showIcon message="工作区没有未保存的变更" />
+              <Alert type="success" showIcon message="Working State 与最近保存的 Version 一致" />
             ) : (
               <Alert
-                type="warning"
+                type="info"
                 showIcon
-                message={`有 ${pending.length} 处未保存的变更`}
+                message={`Working State 有 ${pending.length} 个文件变更`}
                 description={
-                  <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
+                  <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 8 }}>
+                    <Typography.Text type="secondary">
+                      检查这些变更后，可将整个 Working State 保存为新的 Project Version。
+                    </Typography.Text>
                     {pending.map((change) => (
                       <Button
                         key={change.path}
                         type="link"
                         size="small"
+                        style={{ display: 'flex', justifyContent: 'flex-start', padding: 0 }}
                         onClick={() => setInspecting(change)}
                       >
                         <Tag color={CHANGE_LABEL[change.change].color}>
-                          {CHANGE_LABEL[change.change].text} {change.path}
+                          {CHANGE_LABEL[change.change].text}
                         </Tag>
+                        {change.path}
                       </Button>
                     ))}
                   </Space>
