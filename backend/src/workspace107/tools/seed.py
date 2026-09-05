@@ -234,7 +234,7 @@ def _resolve_platform_owner_username(explicit: str | None) -> str:
         if not username:
             raise ValueError("--platform-owner-username 不能为空")
         return username
-    return os.environ.get(PLATFORM_OWNER_ENV, "").strip() or DEMO_USER
+    return os.environ.get(PLATFORM_OWNER_ENV, "").strip() or LOCAL_ADMIN_USER
 
 
 async def _ensure_local_admin(services):
@@ -523,7 +523,8 @@ def cli() -> int:
     parser.add_argument(
         "--platform-owner-username",
         help=(
-            f"平台资产 User Group 首次创建时的 Owner；优先于 {PLATFORM_OWNER_ENV}，默认 {DEMO_USER}"
+            "平台资产 User Group 首次创建时的 Owner；"
+            f"优先于 {PLATFORM_OWNER_ENV}，默认 {LOCAL_ADMIN_USER}"
         ),
     )
     args = parser.parse_args()

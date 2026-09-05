@@ -20,25 +20,24 @@ export function PublicHomePage() {
           {authCopy.login}
         </Button>
       </div>
-      <section className={styles.admin} aria-label={authCopy.adminLogin}>
-        <h2 className={styles.adminTitle}>{authCopy.adminLogin}</h2>
-        <p className={styles.subtitle}>{authCopy.adminHint}</p>
+      <section className={styles.passwordLogin} aria-label={authCopy.passwordLogin}>
+        <h2 className={styles.passwordTitle}>{authCopy.passwordLogin}</h2>
         {loginError ? (
           <Banner variant="critical">
-            <Banner.Title>{authCopy.adminLoginFailed}</Banner.Title>
+            <Banner.Title>{authCopy.passwordLoginFailed}</Banner.Title>
           </Banner>
         ) : null}
-        <form method="post" action="/login/password" className={styles.adminForm}>
+        <form method="post" action="/login/password" className={styles.passwordForm}>
           <FormControl>
-            <FormControl.Label>{authCopy.adminUsername}</FormControl.Label>
+            <FormControl.Label>{authCopy.username}</FormControl.Label>
             <TextInput name="username" autoComplete="username" block />
           </FormControl>
           <FormControl>
-            <FormControl.Label>{authCopy.adminPassword}</FormControl.Label>
+            <FormControl.Label>{authCopy.password}</FormControl.Label>
             <TextInput name="password" type="password" autoComplete="current-password" block />
           </FormControl>
           <Button type="submit" variant="default">
-            {authCopy.adminLogin}
+            {authCopy.passwordSubmit}
           </Button>
         </form>
       </section>

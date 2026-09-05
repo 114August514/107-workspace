@@ -157,27 +157,27 @@ describe('登录入口与内部路由', () => {
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
-  it('公开首页提供管理员账密表单', async () => {
+  it('公开首页提供账密登录', async () => {
     vi.spyOn(api, 'home').mockRejectedValue(
       new ApiError(401, 'authentication_required', '需要登录。', []),
     )
     renderApp()
 
-    await screen.findByRole('heading', { name: '管理员登录' })
+    await screen.findByRole('heading', { name: '账密登录' })
     const form = document.querySelector('form[action="/login/password"]')
     expect(form).not.toBeNull()
     expect(form).toHaveAttribute('method', 'post')
     expect(screen.getByLabelText('用户名')).toBeVisible()
     expect(screen.getByLabelText('密码')).toHaveAttribute('type', 'password')
-    expect(screen.getByRole('button', { name: '管理员登录' })).toBeVisible()
+    expect(screen.getByRole('button', { name: /^登录$/ })).toBeVisible()
   })
 
-  it('管理员登录失败时显示错误', async () => {
+  it('账密登录失败时显示错误', async () => {
     vi.spyOn(api, 'home').mockRejectedValue(
       new ApiError(401, 'authentication_required', '需要登录。', []),
     )
     renderApp('/?login_error=1')
-    expect(await screen.findByText('管理员登录失败，请检查用户名和密码。')).toBeVisible()
+    expect(await screen.findByText('登录失败，请检查用户名和密码。')).toBeVisible()
   })
 })
 

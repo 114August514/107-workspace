@@ -22,7 +22,7 @@
   gap: var(--base-size-8);
 }
 
-.admin {
+.passwordLogin {
   display: flex;
   flex-direction: column;
   gap: var(--base-size-12);
@@ -30,13 +30,13 @@
   border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
 }
 
-.adminTitle {
+.passwordTitle {
   margin: 0;
   font-size: var(--text-title-size-small);
   font-weight: var(--base-text-weight-semibold);
 }
 
-.adminForm {
+.passwordForm {
   display: flex;
   flex-direction: column;
   gap: var(--base-size-12);
