@@ -185,10 +185,7 @@ export function toApiError(body: unknown, response: Response): ApiError {
 export const api = {
   // -- 首页与目录 --------------------------------------------------------
   home: async (): Promise<Home> => unwrap(await http.GET('/api/v1/me')),
-  updateProfile: async (payload: {
-    username?: string
-    display_name?: string
-  }): Promise<User> =>
+  updateProfile: async (payload: { username?: string; display_name?: string }): Promise<User> =>
     unwrap(
       await http.PATCH('/api/v1/me', {
         body: payload,

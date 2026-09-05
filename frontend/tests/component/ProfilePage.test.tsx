@@ -9,7 +9,12 @@ import { PrimerRoot } from '../../src/primer/setup'
 import { ProfilePage } from '../../src/pages/ProfilePage'
 
 const homeData: Home = {
-  user: { id: 'usr_abc', username: 'student', display_name: '同学', email: 'student@mail.ustc.edu.cn' },
+  user: {
+    id: 'usr_abc',
+    username: 'student',
+    display_name: '同学',
+    email: 'student@mail.ustc.edu.cn',
+  },
   user_groups: [
     {
       id: 'grp-1',
