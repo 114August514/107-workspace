@@ -1,0 +1,120 @@
+worker_processes 1;
+error_log logs/error.log warn;
+pid logs/nginx.pid;
+
+events {
+    worker_connections 128;
+}
+
+http {
+    types {
+        text/html                             html htm;
+        text/css                              css;
+        application/javascript                js mjs;
+        application/json                      json;
+        image/png                             png;
+        image/svg+xml                         svg;
+        font/woff2                            woff2;
+    }
+    default_type  application/octet-stream;
+    sendfile      on;
+    server_tokens off;
+    access_log    logs/access.log;
+
+    client_body_temp_path temp/client_body;
+    proxy_temp_path       temp/proxy;
+    fastcgi_temp_path     temp/fastcgi;
+    uwsgi_temp_path       temp/uwsgi;
+    scgi_temp_path        temp/scgi;
+
+    server {
+        listen ${NGINX_LISTEN};
+        server_name 127.0.0.1 localhost;
+
+        root ${FRONTEND_DIST};
+        index index.html;
+        client_max_body_size 128m;
+        absolute_redirect off;
+
+        location = /login {
+            proxy_pass ${AUTH_ORIGIN};
+            proxy_set_header Host 127.0.0.1:8107;
+            proxy_set_header Cookie $http_cookie;
+            proxy_hide_header Cache-Control;
+            add_header Cache-Control "no-store" always;
+        }
+
+        location = /logout {
+            limit_except POST { deny all; }
+            proxy_pass ${AUTH_ORIGIN};
+            proxy_set_header Host 127.0.0.1:8107;
+            proxy_set_header Cookie $http_cookie;
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Referer $http_referer;
+            proxy_hide_header Cache-Control;
+            add_header Cache-Control "no-store" always;
+        }
+
+        location = /auth {
+            internal;
+            proxy_pass ${AUTH_ORIGIN};
+            proxy_pass_request_body off;
+            proxy_set_header Content-Length "";
+            proxy_set_header Cookie $http_cookie;
+            proxy_set_header X-Original-Method $request_method;
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Referer $http_referer;
+            proxy_set_header Host 127.0.0.1:8107;
+        }
+
+        location /api/ {
+            auth_request /auth;
+            auth_request_set $user_id $upstream_http_x_user_id;
+            error_page 401 = @api_unauthorized;
+            error_page 403 = @api_forbidden;
+
+            proxy_pass ${BACKEND_ORIGIN};
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Cookie $http_cookie;
+            proxy_set_header X-User "";
+            proxy_set_header X-User-ID $user_id;
+            proxy_set_header X-User-Name "";
+            proxy_set_header X-User-Email "";
+            proxy_read_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_request_buffering off;
+            proxy_hide_header Cache-Control;
+            add_header Cache-Control "no-store" always;
+        }
+
+        location @api_unauthorized {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 401 '{"code":"authentication_required","message":"需要登录。","problems":[],"request_id":""}';
+        }
+
+        location @api_forbidden {
+            default_type application/json;
+            add_header Cache-Control "no-store" always;
+            return 403 '{"code":"permission_denied","message":"请求来源不被允许。","problems":[],"request_id":""}';
+        }
+
+        location /assets/ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            try_files $uri =404;
+        }
+
+        location = /index.html {
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}

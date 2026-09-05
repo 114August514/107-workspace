@@ -41,6 +41,11 @@ HTTP Header 本身不能证明请求经过 CAS。真实部署必须同时满足�
 3. Backend 端口只对 revproxy 所在受信任网络开放，外部请求不能绕过代理直连；
 4. 面向用户的入口使用 HTTPS，并由 revproxy 管理 CAS 会话。
 
-当前仓库不包含 `ustccas-revproxy` 的部署配置，也无法在应用内区分“代理注入”与“客户端
-伪造”的同名 Header。真实上线前必须在目标部署中完成 Header 清洗、网络隔离和端到端
-验收；仅把 `WORKSPACE107_AUTH_MODE` 改为 `ustc` 不构成安全接入。
+可审查的代理配置、上游补丁和运行说明保存在
+[`deploy/cas-revproxy/`](../../deploy/cas-revproxy/README.md)。后端仍然无法自行区分
+“代理注入”与“客户端伪造”的同名 Header。真实上线前必须由反向代理清洗 Header、
+把 Backend 端口限制在受信任网络，并完成端到端验收；仅把 `WORKSPACE107_AUTH_MODE`
+改为 `ustc` 不构成安全接入。
+
+前端通过 `GET /api/v1/me` 确认当前用户。未登录显示公开首页；`GET /login` 与
+`POST /logout` 由代理处理，前端只做整页跳转和同源表单提交。
