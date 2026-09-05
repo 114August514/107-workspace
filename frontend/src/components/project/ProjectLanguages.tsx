@@ -67,7 +67,9 @@ export function ProjectLanguages({ statistics, loading, error, onRetry }: Props)
       ) : errorView ? (
         <div className={styles.error} role="alert">
           <span>无法加载语言统计。</span>
-          {errorView.problems?.map((problem) => <span key={problem}>{problem}</span>)}
+          {errorView.problems?.map((problem) => (
+            <span key={problem}>{problem}</span>
+          ))}
           {errorView.requestId ? <span>请求标识 {errorView.requestId}</span> : null}
           <button className={styles.retry} type="button" onClick={onRetry}>
             重试
