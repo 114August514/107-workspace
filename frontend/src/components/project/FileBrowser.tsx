@@ -27,6 +27,7 @@ interface Props {
   basePath?: string
   version?: ProjectVersionDetail
   contextControls?: ReactNode
+  toolbarAction?: ReactNode
 }
 
 /** 当前目录级动作；文件对象操作位于文件查看页。 */
@@ -103,6 +104,7 @@ export function FileBrowser({
   basePath = `/projects/${projectId}/files`,
   version,
   contextControls,
+  toolbarAction,
 }: Props) {
   const readOnly = version !== undefined
   const canWrite = !readOnly && can(access, 'project.content.write')
@@ -335,33 +337,41 @@ export function FileBrowser({
       <div className={styles.directoryToolbar}>
         {contextControls}
         {fileContext}
-        {canWrite && (
+        {(toolbarAction || canWrite) && (
           <div className={styles.fileToolbar}>
-            <PrimerButton leadingVisual={UploadIcon} onClick={() => fileInputRef.current?.click()}>
-              上传文件
-            </PrimerButton>
-            {uploadMenu}
-            {directoryActions}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                void uploadOneByOne(Array.from(event.target.files ?? []))
-                event.target.value = ''
-              }}
-            />
-            <input
-              ref={archiveInputRef}
-              type="file"
-              accept=".zip,application/zip"
-              hidden
-              onChange={(event) => {
-                void uploadArchive(event.target.files)
-                event.target.value = ''
-              }}
-            />
+            {toolbarAction}
+            {canWrite && (
+              <>
+                <PrimerButton
+                  leadingVisual={UploadIcon}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  上传文件
+                </PrimerButton>
+                {uploadMenu}
+                {directoryActions}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    void uploadOneByOne(Array.from(event.target.files ?? []))
+                    event.target.value = ''
+                  }}
+                />
+                <input
+                  ref={archiveInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  hidden
+                  onChange={(event) => {
+                    void uploadArchive(event.target.files)
+                    event.target.value = ''
+                  }}
+                />
+              </>
+            )}
           </div>
         )}
       </div>

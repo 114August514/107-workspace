@@ -25,6 +25,7 @@ import type {
   RunPage,
   WorkingChange,
 } from '../api/types'
+import { can } from '../api/types'
 import { useAsync, type AsyncState as AsyncResource } from '../api/useAsync'
 import { ActivityFeed } from '../components/activity/ActivityFeed'
 import { AsyncSection } from '../components/common/AsyncSection'
@@ -163,12 +164,11 @@ function FilesContextControls({
     () => (mode === 'working' ? api.workingChanges(projectId) : Promise.resolve([])),
     [projectId, mode],
   )
-  const options: ActionListItemInput[] = [
-    { id: 'working', text: 'Working State' },
-    ...(versions.data?.items ?? []).map((version) => ({ id: version.id, text: version.label })),
-  ]
-  const selected =
-    mode === 'working' ? options[0] : options.find((option) => option.id === selectedVersion?.id)
+  const options: ActionListItemInput[] = (versions.data?.items ?? []).map((version) => ({
+    id: version.id,
+    text: version.label,
+  }))
+  const selected = options.find((option) => option.id === selectedVersion?.id)
   const error = toAsyncError(versions.error)
   const close = () => {
     setOpen(false)
@@ -176,66 +176,64 @@ function FilesContextControls({
   }
   return (
     <div className={styles.fileContextControls} aria-label="Files context">
-      <SelectPanel
-        open={open}
-        onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
-        renderAnchor={({ children: _children, ...anchorProps }) => (
-          <PrimerButton
-            {...anchorProps}
-            leadingVisual={mode === 'working' ? PencilIcon : VersionsIcon}
-            trailingVisual={TriangleDownIcon}
-            aria-label={
-              mode === 'working' ? '选择 Files 引用，当前 Working State' : '选择 Project Version'
-            }
-            aria-haspopup="dialog"
-          >
-            {mode === 'working' ? 'Working State' : (selectedVersion?.label ?? 'Project Version')}
-          </PrimerButton>
-        )}
-        title="选择 Files 引用"
-        placeholder={
-          mode === 'working' ? 'Working State' : (selectedVersion?.label ?? 'Project Version')
-        }
-        placeholderText="搜索 Files 引用"
-        inputLabel="搜索 Files 引用"
-        filterValue={query}
-        onFilterChange={setQuery}
-        items={options}
-        selected={selected}
-        onSelectedChange={(item: ActionListItemInput | undefined) => {
-          if (!item) return
-          close()
-          navigate(
-            item.id === 'working'
-              ? `/projects/${projectId}/files/working`
-              : `/projects/${projectId}/files/versions/${item.id}`,
-          )
-        }}
-        loading={versions.loading}
-        initialLoadingType="spinner"
-        message={
-          error
-            ? {
-                variant: 'error' as const,
-                title: '无法加载 Project Versions。',
-                body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
-                action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
-              }
-            : !versions.loading && versions.data?.items.length === 0
+      {mode === 'working' ? (
+        <span className={styles.refControl}>
+          <PencilIcon size={16} /> Working State
+        </span>
+      ) : (
+        <SelectPanel
+          open={open}
+          onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : close())}
+          renderAnchor={({ children: _children, ...anchorProps }) => (
+            <PrimerButton
+              {...anchorProps}
+              leadingVisual={VersionsIcon}
+              trailingVisual={TriangleDownIcon}
+              aria-label="选择 Project Version"
+              aria-haspopup="dialog"
+            >
+              {selectedVersion?.label ?? 'Project Version'}
+            </PrimerButton>
+          )}
+          title="选择 Project Version"
+          placeholder={selectedVersion?.label ?? 'Project Version'}
+          placeholderText="搜索 Project Version"
+          inputLabel="搜索 Project Version"
+          filterValue={query}
+          onFilterChange={setQuery}
+          items={options}
+          selected={selected}
+          onSelectedChange={(item: ActionListItemInput | undefined) => {
+            if (!item) return
+            close()
+            navigate(`/projects/${projectId}/files/versions/${item.id}`)
+          }}
+          loading={versions.loading}
+          initialLoadingType="spinner"
+          message={
+            error
               ? {
-                  variant: 'empty' as const,
-                  title: '还没有保存的 Version。',
-                  body: '当前仍可进入 Working State 编辑文件。',
+                  variant: 'error' as const,
+                  title: '无法加载 Project Versions。',
+                  body: <Text size="small">{error.problems?.join(' ') || '请重试。'}</Text>,
+                  action: <PrimerButton onClick={() => void versions.reload()}>重试</PrimerButton>,
                 }
-              : undefined
-        }
-        width="auto"
-        height="auto"
-        overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
-        align="start"
-        disableFullscreenOnNarrow
-        aria-label="Files references"
-      />
+              : !versions.loading && options.length === 0
+                ? {
+                    variant: 'empty' as const,
+                    title: '还没有保存的 Version。',
+                    body: '进入 Working State 保存第一个 Version。',
+                  }
+                : undefined
+          }
+          width="auto"
+          height="auto"
+          overlayProps={{ maxWidth: 'small', maxHeight: 'medium' }}
+          align="start"
+          disableFullscreenOnNarrow
+          aria-label="Project Versions"
+        />
+      )}
       {mode === 'working' ? (
         <Link to={projectViewHref(projectId, 'files', 'changes')} className={styles.contextLink}>
           <DiffIcon size={16} /> {changes.data?.length ?? '—'} changes
@@ -360,6 +358,14 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
   const workingFileHref = filePath
     ? `/projects/${projectId}/files/working/file/${filePath.split('/').map(encodeURIComponent).join('/')}`
     : undefined
+  const startEditingAction = can(project.data, 'project.content.write') ? (
+    <PrimerButton
+      leadingVisual={PencilIcon}
+      onClick={() => navigate(`/projects/${projectId}/files/working`)}
+    >
+      开始编辑
+    </PrimerButton>
+  ) : undefined
 
   const content =
     view === 'latest' ? (
@@ -372,6 +378,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             currentPath={currentPath}
             basePath={fileBasePath}
             version={latestVersion.data}
+            toolbarAction={startEditingAction}
             contextControls={
               <FilesContextControls
                 projectId={projectId}
@@ -446,6 +453,7 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
             currentPath={currentPath}
             basePath={fileBasePath}
             version={version.data}
+            toolbarAction={startEditingAction}
             contextControls={
               <FilesContextControls
                 projectId={projectId}
