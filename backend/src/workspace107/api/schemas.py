@@ -291,6 +291,21 @@ class ModulesEnvironmentPublicationIn(Model):
     modules: list[str] = Field(min_length=1)
 
 
+class ImportEnvironmentPublicationIn(Model):
+    version: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    source_uri: str = Field(min_length=1, max_length=2048)
+    expected_sha256: str = Field(default="", max_length=64)
+
+
+class EnvironmentPublicationOptionsOut(Model):
+    modules: list[str]
+    max_upload_bytes: int
+    max_import_bytes: int
+    import_timeout_seconds: float
+    architecture: str
+
+
 class EnvironmentPublicationAttemptOut(Model):
     id: str
     environment_id: str
@@ -298,6 +313,12 @@ class EnvironmentPublicationAttemptOut(Model):
     version: str
     description: str
     runtime_kind: EnvironmentRuntimeKind
+    source_kind: Literal["modules", "upload", "import"] = "upload"
+    source_uri: str = ""
+    source_digest: str = ""
+    expected_sha256: str = ""
+    modules: list[str] = Field(default_factory=list)
+    stage: str = ""
     validation_summary: str
     validation_evidence: dict[str, object]
     failure_code: str | None
@@ -325,6 +346,7 @@ class OwnerSummaryOut(Model):
 
 
 class EnvironmentOut(Model):
+    capabilities: list[Capability] = Field(default_factory=list)
     id: str
     name: str
     description: str

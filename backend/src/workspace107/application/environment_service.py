@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import re
+from pathlib import Path
 
 from ..domain import ids
 from ..domain.capabilities import Capability
@@ -11,6 +14,7 @@ from ..domain.enums import (
     EnvironmentPublicationStatus,
     EnvironmentRuntimeKind,
 )
+from ..domain.environment_source import validate_image_source
 from ..domain.errors import ObjectNotFound, ValidationFailed
 from ..domain.models import EnvironmentPublicationAttempt, EnvironmentVersion
 from ..domain.ownership import OwnerKind
@@ -36,6 +40,11 @@ class EnvironmentPublicationService:
         self._storage = storage
         self._clock = clock
         self._notifier = notifier
+
+    async def authorize(self, user_id: str, environment_id: str) -> None:
+        await self._guard.environment(
+            user_id, environment_id, needs=Capability.ENVIRONMENT_VERSION_CREATE
+        )
 
     async def create_modules(
         self,
@@ -91,6 +100,67 @@ class EnvironmentPublicationService:
                 "source_digest": source_digest,
                 "architecture": architecture,
             },
+        )
+
+    async def create_sif_file(
+        self,
+        user_id: str,
+        environment_id: str,
+        *,
+        version: str,
+        description: str,
+        path: Path,
+        source_uri: str,
+        source_digest: str,
+        architecture: str,
+    ) -> EnvironmentPublicationAttempt:
+        await self._guard.environment(
+            user_id, environment_id, needs=Capability.ENVIRONMENT_VERSION_CREATE
+        )
+        size = (await asyncio.to_thread(path.stat)).st_size
+        if not size:
+            raise ValidationFailed("SIF 文件不能为空")
+        locator = await self._storage.write_blob_file(path)
+        return await self._create(
+            user_id,
+            environment_id,
+            version,
+            description,
+            EnvironmentRuntimeKind.APPTAINER_SIF,
+            {
+                "locator": locator,
+                "sha256": locator,
+                "size": size,
+                "source_uri": source_uri,
+                "source_digest": source_digest,
+                "architecture": architecture,
+            },
+        )
+
+    async def create_import(
+        self,
+        user_id: str,
+        environment_id: str,
+        *,
+        version: str,
+        description: str,
+        source_uri: str,
+        expected_sha256: str = "",
+    ) -> EnvironmentPublicationAttempt:
+        await self._guard.environment(
+            user_id, environment_id, needs=Capability.ENVIRONMENT_VERSION_CREATE
+        )
+        source_uri = validate_image_source(source_uri)
+        expected_sha256 = expected_sha256.strip().lower()
+        if expected_sha256 and not re.fullmatch(r"[a-f0-9]{64}", expected_sha256):
+            raise ValidationFailed("预期文件摘要须为 64 位 SHA-256")
+        return await self._create(
+            user_id,
+            environment_id,
+            version,
+            description,
+            EnvironmentRuntimeKind.APPTAINER_SIF,
+            {"source_uri": source_uri, "expected_sha256": expected_sha256, "import_source": True},
         )
 
     async def get(self, user_id: str, attempt_id: str) -> EnvironmentPublicationAttempt:

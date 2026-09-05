@@ -848,6 +848,7 @@ class EnvironmentRepositoryImpl:
             return
         for name in (
             "status",
+            "candidate_definition",
             "validation_summary",
             "validation_evidence",
             "failure_code",
