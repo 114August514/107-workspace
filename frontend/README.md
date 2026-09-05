@@ -28,7 +28,8 @@ src/
 │   └── useAsync.ts     加载与轮询钩子
 ├── components/
 │   ├── common/         AsyncState、RunStatusTag 等跨页面复用组件
-│   ├── layout/         AppShell、开发身份切换
+│   ├── layout/         AppShell、用户菜单
+│   ├── auth/           登录状态与公开首页入口
 │   ├── usergroup/      User Group 分区（概览/Project/共享资源/运行环境/成员/设置）
 │   ├── workspace/      成员治理面板
 │   ├── activity/       活动列表（Primer）与动作文案
@@ -74,6 +75,20 @@ Primer 迁移由 [GitHub Issue #16](https://github.com/114August514/107-workspac
 
 迁移基础切片应提供 `/design-system` 页面，展示实际采用的 token、组件状态、数据四态和
 常用文案。该页面是可运行的实现参考，不替代产品设计。
+
+### 107 / USTC 品牌边界
+
+- `src/primer/setup.tsx` 仍是唯一 Primer runtime；当前 Brand Mark 资源位于
+  `src/assets/brand/107_pig_final.svg`，使用黑色静态填充与透明负空间；不新增 Provider、主题切换器或
+  第二套 semantic token；
+- USTC 校徽、校名与标准色属于学校 affiliation，来源与使用约束记录在
+  [`docs/references/brand/ustc-vis.md`](../docs/references/brand/ustc-vis.md)；
+- 当前产品身份采用黑白灰：Brand Mark / favicon 使用 final 几何和黑白单色逻辑，灰色由 Primer
+  neutral 与 state tokens 负责；
+- 蓝白配色仍是后续调研候选，不属于当前 active UI；任何 HEX 都只能称为 107 Workspace 的候选网页适配，不能称为 USTC 官方色值；
+- 产品与状态图标优先使用 Primer Octicons；自定义 SVG 只用于经过人工选择的 Brand Mark；
+- `/design-system` 可以在人工视觉门阶段并列少量候选，但必须使用相同上下文；选择后删除
+  未采用候选，不保留运行时 mark/theme playground。
 
 ### UI 验证
 
@@ -129,8 +144,13 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 
 ## 身份
 
-后端 `auth_mode=dev` 时用 `X-User` 请求头识别身份，右上角的下拉框就是它的界面，
-选择结果存在 localStorage。接入学校统一身份认证后，这个控件会被真正的登录态替换。
+前端启动时请求 `GET /api/v1/me` 确认当前用户。未登录显示公开首页（账密 + 统一身份认证）；
+登录由反向代理的 `GET /login` 与 `POST /login/password` 处理，前端只做整页跳转和同源表单。
+退出通过同源 `POST /logout` 表单提交。
+
+`make dev` 在 `WORKSPACE107_AUTH_MODE=ustc` 时由 Vite 代理 `/login` 与 `/api` 的
+`auth_request`，打开即是未登录首页。`AUTH_MODE=dev` 时仍直接以 `student` 进入。
+正常客户端不发送 `X-User` 或 `X-User-ID`。配置字段见仓库 `.env.example`。
 
 ## 检查
 

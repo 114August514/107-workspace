@@ -6,7 +6,7 @@ from sqlalchemy import select
 from workspace107.api.deps import build_services
 from workspace107.domain.enums import MembershipRole, MembershipStatus
 from workspace107.infrastructure.db import tables as t
-from workspace107.tools.seed import DEMO_PROJECT, DEMO_USER, seed_demo
+from workspace107.tools.seed import DEMO_PROJECT, DEMO_USER, LOCAL_ADMIN_USER, seed_demo
 
 DEMO_USER_GROUP_ID = "grp_demo"
 DEMO_OWNER_MEMBERSHIP_ID = "mbr_demo_owner"
@@ -186,7 +186,9 @@ async def test_issue_35_demo_seed_uses_only_its_deterministic_group(context, ses
     first_project_id = await seed_demo(session, context)
     second_project_id = await seed_demo(session, context)
     await session.commit()
-    assert await _active_owner_id(session, PLATFORM_ASSET_GROUP_ID) == user.id
+    admin_id = await _user_id_by_username(session, LOCAL_ADMIN_USER)
+    assert admin_id is not None
+    assert await _active_owner_id(session, PLATFORM_ASSET_GROUP_ID) == admin_id
 
     demo_group = await session.get(t.UserGroupRow, DEMO_USER_GROUP_ID)
     assert demo_group is not None

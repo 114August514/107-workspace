@@ -70,6 +70,7 @@ class MockScheduler:
             process = await asyncio.create_subprocess_shell(
                 submission.command,
                 cwd=str(work_dir),
+                stdin=asyncio.subprocess.DEVNULL,
                 stdout=stdout,
                 stderr=stderr,
                 env=environment,

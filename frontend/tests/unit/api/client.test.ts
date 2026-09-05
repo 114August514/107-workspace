@@ -113,6 +113,93 @@ describe('toAsyncError', () => {
   })
 })
 
+describe('unauthorized session signal', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('HTTP 401 通知订阅方，403 不通知', async () => {
+    const OriginalRequest = globalThis.Request
+    vi.stubGlobal(
+      'Request',
+      class extends OriginalRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')) {
+            super(new URL(input, 'http://localhost:5173'), init)
+          } else {
+            super(input, init)
+          }
+        }
+      },
+    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: 'authentication_required', message: '需要登录。' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ code: 'permission_denied', message: '没有权限。' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    const { api, onUnauthorized } = await import('../../../src/api/client')
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
+
+    await expect(api.home()).rejects.toMatchObject({ status: 401 })
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    await expect(api.listInvitations()).rejects.toMatchObject({ status: 403 })
+    expect(listener).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
+  it('正常客户端不发送 X-User 或 X-User-ID', async () => {
+    const OriginalRequest = globalThis.Request
+    vi.stubGlobal(
+      'Request',
+      class extends OriginalRequest {
+        constructor(input: RequestInfo | URL, init?: RequestInit) {
+          if (typeof input === 'string' && input.startsWith('/') && !input.startsWith('//')) {
+            super(new URL(input, 'http://localhost:5173'), init)
+          } else {
+            super(input, init)
+          }
+        }
+      },
+    )
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          user: { id: 'u-1', username: 'student', display_name: '同学' },
+          user_groups: [],
+          personal_execution_context: {
+            owner: { kind: 'user', id: 'u-1', display_name: '同学' },
+            entitlements: [],
+          },
+          recent_projects: [],
+          recent_runs: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    const { api } = await import('../../../src/api/client')
+    await api.home()
+
+    const request = fetchMock.mock.calls[0]?.[0] as Request
+    expect(request.headers.get('X-User')).toBeNull()
+    expect(request.headers.get('X-User-ID')).toBeNull()
+  })
+})
+
 describe('fetch transport wrapper', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

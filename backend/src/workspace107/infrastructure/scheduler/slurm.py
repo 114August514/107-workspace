@@ -68,6 +68,7 @@ class SlurmRestScheduler:
                 "partition": config.partition,
                 "qos": config.qos,
                 "current_working_directory": str(submission.work_dir),
+                "standard_input": "/dev/null",
                 "standard_output": str(submission.stdout_path),
                 "standard_error": str(submission.stderr_path),
                 "tasks": config.nodes,

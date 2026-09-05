@@ -55,7 +55,7 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 export function formatMemory(megabytes: number): string {
-  return megabytes >= 1024 ? `${(megabytes / 1024).toFixed(0)} GB` : `${megabytes} MB`
+  return megabytes >= 1024 && megabytes % 1024 === 0 ? `${megabytes / 1024} GB` : `${megabytes} MB`
 }
 
 /** 运行时限用整分钟表达，不要退化成「15 分 0 秒」这种读起来别扭的写法。 */

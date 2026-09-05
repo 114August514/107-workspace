@@ -194,6 +194,14 @@ class UserRepositoryImpl:
         rows = (await self._session.execute(stmt)).scalars().all()
         return {row.id: _to_user(row) for row in rows}
 
+    async def update(self, user: User) -> None:
+        row = await self._session.get(t.UserRow, user.id)
+        if row is None:
+            return
+        row.username = user.username
+        row.display_name = user.display_name
+        await _flush(self._session)
+
 
 class ExternalIdentityRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:

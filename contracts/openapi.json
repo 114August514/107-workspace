@@ -1899,6 +1899,17 @@
       },
       "PreflightOut": {
         "properties": {
+          "artifact_rules": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactRuleModel"
+            },
+            "title": "Artifact Rules",
+            "type": "array"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
           "compute_plan_id": {
             "anyOf": [
               {
@@ -1910,6 +1921,17 @@
             ],
             "title": "Compute Plan Id"
           },
+          "compute_plan_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Plan Name"
+          },
           "compute_request": {
             "anyOf": [
               {
@@ -1920,6 +1942,32 @@
               }
             ]
           },
+          "configuration_name": {
+            "title": "Configuration Name",
+            "type": "string"
+          },
+          "confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Token"
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment Name"
+          },
           "environment_version": {
             "anyOf": [
               {
@@ -1929,6 +1977,13 @@
                 "type": "null"
               }
             ]
+          },
+          "input_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/InputBindingModel"
+            },
+            "title": "Input Bindings",
+            "type": "array"
           },
           "ok": {
             "title": "Ok",
@@ -1951,6 +2006,17 @@
               }
             ],
             "title": "Project Version Id"
+          },
+          "project_version_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Version Label"
           },
           "resolved_environment_variables": {
             "additionalProperties": {
@@ -1976,9 +2042,22 @@
                 "type": "null"
               }
             ]
+          },
+          "working_directory": {
+            "title": "Working Directory",
+            "type": "string"
           }
         },
         "required": [
+          "configuration_name",
+          "command",
+          "working_directory",
+          "input_bindings",
+          "artifact_rules",
+          "project_version_label",
+          "compute_plan_name",
+          "environment_name",
+          "confirmation_token",
           "ok",
           "problems",
           "project_version_id",
@@ -2673,6 +2752,18 @@
                 "type": "null"
               }
             ]
+          },
+          "confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preflight 返回的配置变化检测标识；不能替代当前授权校验。",
+            "title": "Confirmation Token"
           },
           "environment_version_id_override": {
             "anyOf": [
@@ -3887,6 +3978,38 @@
           "display_name"
         ],
         "title": "UserOut",
+        "type": "object"
+      },
+      "UserProfileUpdateIn": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "UserProfileUpdateIn",
         "type": "object"
       },
       "VariableIn": {
@@ -6093,6 +6216,124 @@
           }
         },
         "summary": "获取个人首页",
+        "tags": [
+          "home"
+        ]
+      },
+      "patch": {
+        "description": "Update the signed-in User's username and display name. Email stays identity-provided.",
+        "operationId": "update_me_api_v1_me_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserProfileUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "更新当前用户资料",
         "tags": [
           "home"
         ]

@@ -66,6 +66,7 @@ def render_sbatch_script(submission: SchedulerSubmission) -> str:
         f"#SBATCH --mem={config.memory_mb}M",
         f"#SBATCH --time={_minutes_to_walltime(config.time_limit_minutes)}",
         f"#SBATCH --chdir={submission.work_dir}",
+        "#SBATCH --input=/dev/null",
         f"#SBATCH --output={submission.stdout_path}",
         f"#SBATCH --error={submission.stderr_path}",
     ]
