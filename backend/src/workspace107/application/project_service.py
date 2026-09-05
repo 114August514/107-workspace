@@ -7,13 +7,16 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 
 from __future__ import annotations
 
+import asyncio
 import io
+import json
 import posixpath
 import re
 import stat
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
@@ -129,6 +132,19 @@ class WorkingChangeDetail:
     """基线（最近保存版本）中的内容；新增时为空。"""
     current: bytes | None
     """当前工作区内容；删除时为空。"""
+
+
+@dataclass(frozen=True, slots=True)
+class LanguageStatistic:
+    name: str
+    code_lines: int
+    percentage: float
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectLanguages:
+    languages: tuple[LanguageStatistic, ...]
+    total_code_lines: int
 
 
 class ProjectService:
@@ -623,6 +639,30 @@ class ProjectService:
             raise ObjectNotFound("Project Version", version_id) from exc
         return version
 
+    async def latest_languages(self, user_id: str, project_id: str) -> ProjectLanguages:
+        """统计最新不可变 Version 的语言组成，不读取 Project Working State。"""
+        await self._guard.project(user_id, project_id)
+        version = await self._repos.project_versions.latest(project_id)
+        if version is None:
+            return ProjectLanguages(languages=(), total_code_lines=0)
+
+        files = [(entry.path, entry.content_hash) for entry in version.files]
+        async with self._storage.materialize_temporary_files(files) as root:
+            code_lines = await _count_language_code_lines(root)
+
+        total = sum(code_lines.values())
+        if total == 0:
+            return ProjectLanguages(languages=(), total_code_lines=0)
+        languages = tuple(
+            LanguageStatistic(
+                name=name,
+                code_lines=lines,
+                percentage=lines / total * 100,
+            )
+            for name, lines in sorted(code_lines.items(), key=lambda item: (-item[1], item[0]))
+        )
+        return ProjectLanguages(languages=languages, total_code_lines=total)
+
     async def working_changes(self, user_id: str, project_id: str) -> list[WorkingTreeChange]:
         """查看当前未保存的文件变更：工作区与最近一个版本的差异。"""
         await self._guard.project(user_id, project_id, owner_scope=True)
@@ -1025,6 +1065,40 @@ class ProjectService:
     async def _touch(self, project: Project) -> None:
         project.updated_at = self._clock.now()
         await self._repos.projects.update(project)
+
+
+async def _count_language_code_lines(root: Path) -> dict[str, int]:
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "tokei",
+            str(root),
+            "--output",
+            "json",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("未安装 Tokei CLI，无法统计 Project 语言") from exc
+
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"Tokei 语言统计失败：{detail or 'unknown error'}")
+    try:
+        report = json.loads(stdout)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError("Tokei 未返回有效的 JSON 语言统计") from exc
+    if not isinstance(report, dict):
+        raise RuntimeError("Tokei JSON 语言统计不是对象")
+
+    result: dict[str, int] = {}
+    for name, statistics in report.items():
+        if name == "Total" or not isinstance(name, str) or not isinstance(statistics, dict):
+            continue
+        code = statistics.get("code")
+        if isinstance(code, int) and not isinstance(code, bool) and code > 0:
+            result[name] = code
+    return result
 
 
 def _diff(left: dict[str, str], right: dict[str, str]) -> list[tuple[str, ChangeKind]]:

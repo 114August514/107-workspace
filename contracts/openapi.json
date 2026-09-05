@@ -1971,6 +1971,50 @@
         "title": "ProjectFileOut",
         "type": "object"
       },
+      "ProjectLanguageOut": {
+        "properties": {
+          "code_lines": {
+            "title": "Code Lines",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "percentage": {
+            "title": "Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "code_lines",
+          "percentage"
+        ],
+        "title": "ProjectLanguageOut",
+        "type": "object"
+      },
+      "ProjectLanguagesOut": {
+        "properties": {
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectLanguageOut"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "total_code_lines": {
+            "title": "Total Code Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "languages",
+          "total_code_lines"
+        ],
+        "title": "ProjectLanguagesOut",
+        "type": "object"
+      },
       "ProjectOut": {
         "properties": {
           "capabilities": {
@@ -9122,6 +9166,115 @@
           }
         },
         "summary": "这个 Project 从哪儿来的",
+        "tags": [
+          "project"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/languages": {
+      "get": {
+        "description": "校验 Project 查看权限后，用 Tokei 统计最新不可变版本，不包含 Working State。",
+        "operationId": "project_languages_api_v1_projects__project_id__languages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLanguagesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "统计 Project 最新版本的语言",
         "tags": [
           "project"
         ]

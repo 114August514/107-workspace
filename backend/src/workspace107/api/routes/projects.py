@@ -422,6 +422,29 @@ async def list_versions(
     return p.page_out(result, p.version_out)
 
 
+@router.get(
+    "/projects/{project_id}/languages",
+    response_model=s.ProjectLanguagesOut,
+    summary="统计 Project 最新版本的语言",
+)
+async def project_languages(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.ProjectLanguagesOut:
+    """校验 Project 查看权限后，用 Tokei 统计最新不可变版本，不包含 Working State。"""
+    result = await services.projects.latest_languages(user.id, project_id)
+    return s.ProjectLanguagesOut(
+        languages=[
+            s.ProjectLanguageOut(
+                name=language.name,
+                code_lines=language.code_lines,
+                percentage=language.percentage,
+            )
+            for language in result.languages
+        ],
+        total_code_lines=result.total_code_lines,
+    )
+
+
 @router.post(
     "/projects/{project_id}/versions",
     response_model=s.ProjectVersionOut,
