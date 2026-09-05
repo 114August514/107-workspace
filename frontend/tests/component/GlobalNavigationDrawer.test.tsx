@@ -151,6 +151,12 @@ describe('GlobalNavigationDrawer', () => {
     )
     expect(within(dialog).queryByRole('button', { name: /Project/ })).toBeNull()
   })
+  it('有 Project 或 User Group context 时隐藏 Workspace 入口', async () => {
+    renderDrawer(makeHome(), '/projects/project-1')
+
+    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
+    expect(within(dialog).queryByRole('link', { name: '107 Workspace' })).toBeNull()
+  })
 
   it('Project 次级文案直接使用显式 Owner，并标记当前 route', async () => {
     const home = makeHome({ projectCount: 3 })
