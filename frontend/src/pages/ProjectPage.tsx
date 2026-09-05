@@ -93,8 +93,8 @@ function resolveProjectPath(pathname: string, projectId: string): ProjectLocatio
       return {
         section: 'files',
         view: 'file',
-        currentPath: segments.slice(2, -1).join('/'),
-        filePath: segments.slice(2).join('/'),
+        currentPath: segments.slice(3, -1).join('/'),
+        filePath: segments.slice(3).join('/'),
       }
     }
     return {
