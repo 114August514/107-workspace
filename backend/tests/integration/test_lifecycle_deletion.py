@@ -228,6 +228,7 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
     artifact_root.mkdir(parents=True)
     (artifact_root / "result.txt").write_text("out", encoding="utf-8")
 
+    cas_hash = await context.storage.write_blob(b"shared-cas-content")
     impact = await client.get(f"/api/v1/projects/{project_id}/deletion-impact", headers=ALICE)
     assert impact.status_code == 200, impact.text
     impact_body = impact.json()
@@ -265,6 +266,7 @@ async def test_project_delete_removes_owned_lifecycle_rows_and_storage(
     assert (
         await session.execute(select(t.RunRow).where(t.RunRow.id == run_id))
     ).scalar_one_or_none() is None
+    assert await context.storage.blob_exists(cas_hash)
     assert (
         await session.execute(select(t.RunSnapshotRow).where(t.RunSnapshotRow.id == snapshot_id))
     ).scalar_one_or_none() is None

@@ -26,7 +26,12 @@ class SupportsNestedTransaction(Protocol):
 
 
 class ActivityRecorder:
-    """Record successful business facts without failing their primary transaction."""
+    """Record successful business facts in the caller's transaction.
+
+    ``begin_nested`` is a SAVEPOINT on the same AsyncSession; this recorder never
+    commits independently. The enclosing use case decides whether the activity
+    and its primary state change commit together or roll back together.
+    """
 
     def __init__(
         self,
