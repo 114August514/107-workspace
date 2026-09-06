@@ -67,3 +67,17 @@ HTTP Header 本身不能证明请求经过 CAS。真实部署必须同时满足�
 本地管理员账密只用于受信任演示：登录后映射为 `provider=local` 的内部 User，并通过
 「平台资产」User Group 的普通 Membership 管理平台 Environment / Shared Resource。
 这不是设计文档 2.12 的 Platform Admin 控制台，也不授予业务数据特权。密码不得提交到仓库。
+
+### 多账号本地演示
+
+保留既有 `WORKSPACE107_LOCAL_ADMIN_*` 账号配置。额外本地账号通过
+`WORKSPACE107_LOCAL_ACCOUNTS_JSON` 配置 JSON 数组，每项必须包含 `username`、
+`display_name`、`password_hash` 三个字段。密码哈希使用 Werkzeug 的
+`generate_password_hash` 生成；该配置只保存在忽略提交的 `.env` 中，默认空数组不会启用额外账号。
+用户名由 1–64 位 ASCII 字母、数字、下划线、点、@ 或连字符组成，且不能与已有本地账号重复。
+配置错误会阻止认证服务启动，报错不包含凭据内容。更改配置后重启 `make dev`。
+
+额外账号与现有本地账号一样使用密码登录，身份为 `provider=local`，按各自用户名映射为独立 User。
+登录不会自动加入 User Group、获得算力权益或管理员权限，组内协作仍需邀请并接受。
+演示时使用两个浏览器或两个独立浏览器配置；同一浏览器的普通标签页共享会话。
+一个账号退出登录不影响另一独立会话。

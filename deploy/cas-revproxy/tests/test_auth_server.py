@@ -206,3 +206,85 @@ def test_password_login_failure_does_not_create_session(monkeypatch):
     assert response.status_code == 303
     assert "login_error=1" in response.headers["Location"]
     assert client.get("/auth").status_code == 401
+
+
+def test_multiple_local_accounts_have_independent_sessions(monkeypatch):
+    import json
+
+    from werkzeug.security import generate_password_hash
+
+    monkeypatch.setenv("LOCAL_ADMIN_PASSWORD", "owner-password")
+    monkeypatch.setenv(
+        "WORKSPACE107_LOCAL_ACCOUNTS_JSON",
+        json.dumps(
+            [
+                {
+                    "username": "demo-member",
+                    "display_name": "Demo Member",
+                    "password_hash": generate_password_hash("member-password"),
+                }
+            ]
+        ),
+    )
+    application = create_app()
+    owner, member = application.test_client(), application.test_client()
+    origin = {"Origin": "http://127.0.0.1:8107"}
+    for client, username, password in [
+        (owner, "platform-admin", "owner-password"),
+        (member, "demo-member", "member-password"),
+    ]:
+        assert (
+            client.post(
+                "/login/password",
+                data={"username": username, "password": password},
+                headers=origin,
+            ).status_code
+            == 303
+        )
+        response = client.get("/auth")
+        assert response.headers["X-User-ID"] == username
+        assert response.headers["X-User-Provider"] == "local"
+    assert member.get("/auth").headers["X-User-Name"] == "Demo Member"
+    member.post("/logout", headers=origin)
+    assert member.get("/auth").status_code == 401
+    assert owner.get("/auth").headers["X-User-ID"] == "platform-admin"
+    for username, password in [
+        ("demo-member", "owner-password"),
+        ("unknown", "member-password"),
+    ]:
+        response = member.post(
+            "/login/password",
+            data={"username": username, "password": password},
+            headers=origin,
+        )
+        assert "login_error=1" in response.headers["Location"]
+        assert member.get("/auth").status_code == 401
+
+
+@pytest.mark.parametrize("value", ["{}", '[{"username":"oops"}]', "not-json"])
+def test_invalid_local_account_config_fails_without_disclosing_values(monkeypatch, value):
+    monkeypatch.setenv("WORKSPACE107_LOCAL_ACCOUNTS_JSON", value)
+    with pytest.raises(RuntimeError, match="^Invalid LOCAL_ACCOUNTS_JSON configuration$"):
+        create_app()
+
+
+@pytest.mark.parametrize("username", ["platform-admin", "bad\nheader", " ", "x" * 65])
+def test_local_accounts_reject_conflicting_or_unsafe_usernames(monkeypatch, username):
+    import json
+
+    from werkzeug.security import generate_password_hash
+
+    monkeypatch.setenv(
+        "WORKSPACE107_LOCAL_ACCOUNTS_JSON",
+        json.dumps(
+            [
+                {
+                    "username": username,
+                    "display_name": "Demo Member",
+                    "password_hash": generate_password_hash("member-password"),
+                }
+            ]
+        ),
+    )
+    with pytest.raises(RuntimeError, match="^Invalid LOCAL_ACCOUNTS_JSON configuration$"):
+        create_app()
