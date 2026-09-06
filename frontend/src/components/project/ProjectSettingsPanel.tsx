@@ -58,12 +58,14 @@ export function ProjectSettingsPanel({ projectId, access, onChanged, deletion }:
                 <h2 id="project-danger-title" className={styles.paneTitle}>
                   危险操作
                 </h2>
-                <VisibilitySettings
-                  key={`${projectId}:${access.visibility}`}
-                  project={access}
-                  onChanged={onChanged}
-                />
-                {deletion}
+                <div className={styles.dangerGroup}>
+                  <VisibilitySettings
+                    key={`${projectId}:${access.visibility}`}
+                    project={access}
+                    onChanged={onChanged}
+                  />
+                  {deletion}
+                </div>
               </section>
             )}
           </>
@@ -218,7 +220,7 @@ function VisibilitySettings({ project, onChanged }: { project: Project; onChange
           <Banner.Title>可见范围已更新。</Banner.Title>
         </Banner>
       )}
-      <div className={styles.danger}>
+      <div className={styles.dangerRow}>
         <div>
           <strong>更改可见范围</strong>
           <p className={styles.sectionDescription}>

@@ -16,7 +16,7 @@ export function DeleteProjectPanel({
   const [open, setOpen] = useState(false)
   return (
     <>
-      <div className={styles.danger}>
+      <div className={styles.dangerRow}>
         <div>
           <strong>删除 Project</strong>
           <p className={styles.sectionDescription}>删除项目及其版本、运行等从属数据。</p>

@@ -201,9 +201,18 @@
 .mobileNavigation {
   display: none;
 }
-.danger {
+.danger,
+.dangerGroup {
   border: var(--borderWidth-thin) solid var(--borderColor-danger-emphasis);
   border-radius: var(--borderRadius-medium);
+}
+
+.dangerRow + .dangerRow {
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.danger,
+.dangerRow {
   padding: var(--base-size-16);
   display: flex;
   flex-wrap: wrap;
