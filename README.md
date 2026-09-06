@@ -28,30 +28,77 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 
 ## 快速开始
 
-需要 Python 3.12、[uv](https://docs.astral.sh/uv/)、Node.js 24 LTS、pnpm 11 和 GNU Make。
+只读 README 即可从零跑通。先满足环境前提，再按你要的形态二选一：
+**本地开发**（`make dev`，源码热载）或 **容器**（Docker Compose，一体化演示）。
+
+### 环境前提
+
+| 工具 | 版本 | 用途 |
+| :--- | :--- | :--- |
+| Python | 3.12 | 后端与脚本 |
+| [uv](https://docs.astral.sh/uv/) | 任意近期版 | Python 依赖与环境 |
+| Node.js | 24 LTS | 前端构建 |
+| pnpm | 11 | 前端依赖 |
+| GNU Make | 任意 | 任务入口 |
+| Docker + Compose 插件 | 任意 | 仅容器形态需要 |
+
 支持 Linux 开发环境；Windows 主机只支持在 WSL2 中使用 Linux toolchain，并将仓库放在
 WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持，部署与运行目标
 均为 Linux。
 
+### 方式一：本地开发（`make dev`）
+
 ```bash
-./scripts/platform/posix/bootstrap.sh
-cp .env.example backend/.env
-# 填写 WORKSPACE107_AUTH_SECRET_KEY 和 WORKSPACE107_LOCAL_ADMIN_PASSWORD
-make migrate
-make dev
+./scripts/platform/posix/bootstrap.sh     # 安装后端与前端依赖
+cp .env.example backend/.env              # 本地开发用 backend/.env
+# 编辑 backend/.env，至少填：
+#   WORKSPACE107_AUTH_SECRET_KEY=<随机长字符串>     # ustc 登录会话签名，必填
+#   WORKSPACE107_LOCAL_ADMIN_PASSWORD=<本地账密>    # 本地账密登录，必填
+make migrate                              # 初始化/升级数据库
+make dev                                  # 拉起 后端 + 前端 + 认证服务
 ```
 
-后端接口文档默认位于 <http://127.0.0.1:8000/docs>，前端默认位于
-<http://127.0.0.1:5174>。模板里 `WORKSPACE107_AUTH_MODE=ustc`：`make dev` 会再拉起认证服务，
-Vite 对 `/api` 做 `auth_request`，浏览器看到公开登录页（账密 + 统一身份认证）。
-账密和会话密钥都写在 `backend/.env`，不要提交。把 `WORKSPACE107_AUTH_MODE` 改成 `dev`
-则仍直接以 `student` 进入，没有登录页。
+`make dev` 后逐一确认（全部应返回 200）：
 
-Compose 默认栈的 `:8107` 仍是 `dev`，没有登录页。独立 Nginx 入口见
-[`deploy/cas-revproxy/README.md`](deploy/cas-revproxy/README.md)，不要和 Compose 同时占用
-`:8107`。
+```bash
+curl -fsS http://127.0.0.1:8000/api/v1/ready   # 后端就绪且数据库可用
+curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5174/   # 前端可达
+```
 
-提交前运行统一检查：
+- 后端接口文档：<http://127.0.0.1:8000/docs>
+- 前端入口：<http://127.0.0.1:5174>
+- 模板默认 `WORKSPACE107_AUTH_MODE=ustc`：`make dev` 会拉起认证服务，Vite 对 `/api`
+  做 `auth_request`，浏览器打开会看到公开登录页（本地账密 + 统一身份认证）。账密和
+  会话密钥都写在 `backend/.env`，不要提交。把 `WORKSPACE107_AUTH_MODE` 改成 `dev`
+  则跳过登录页，直接以 `student` 进入。
+
+停止：`make dev` 前台运行，按 `Ctrl+C` 结束全部组件。
+
+### 方式二：容器（Docker Compose）
+
+```bash
+cp .env.example .env                      # 容器用仓库根的 .env（注意：不是 backend/.env）
+# 编辑 .env，至少填：
+#   POSTGRES_PASSWORD=<强随机密码>          # Compose 必填
+docker compose --project-directory . --file deploy/compose.yaml up -d --build
+```
+
+确认容器栈就绪：
+
+```bash
+docker compose --project-directory . --file deploy/compose.yaml ps
+curl -fsS http://127.0.0.1:8107/api/v1/ready   # 经 web 反代的后端就绪
+```
+
+浏览器访问 <http://127.0.0.1:8107>。Compose 默认栈是 `AUTH_MODE=dev`，打开即已登录为
+开发用户，**没有登录页**。
+
+> 注意：本地开发的 `backend/.env`（`make dev` 用）与容器的根 `.env`（Compose 用）是
+> 两个不同文件、必填项也不同。带登录页的 `:8107` 入口是
+> [`deploy/cas-revproxy/`](deploy/cas-revproxy/README.md) 那套独立 Nginx（`auth_request`
+> + `/login`），不要与 Compose 栈同时占用 `:8107`。
+
+### 提交前
 
 ```bash
 make check
@@ -65,8 +112,9 @@ make check
 107 project sync ./my-project <project-id-or-exact-name>
 ```
 
-该入口需要部署方先配置受控 SSH 暂存目标；具体配置与 `.107ignore` 行为见
-[`backend/README.md`](backend/README.md#project-本地目录同步)。
+该入口需要部署方先配置受控 SSH 暂存目标（`WORKSPACE107_PROJECT_SYNC_SSH_TARGET` 与
+`WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT`，见 `.env.example`）；具体配置与 `.107ignore`
+行为见 [`backend/README.md`](backend/README.md#project-本地目录同步)。
 
 ## 架构
 
@@ -88,14 +136,6 @@ api -> application -> domain ports <- infrastructure
 
 ## 容器
 
-```bash
-cp .env.example .env
-# 设置 POSTGRES_PASSWORD
-docker compose --project-directory . --file deploy/compose.yaml up -d --build
-```
-
-浏览器访问 <http://127.0.0.1:8107>。Compose 默认仍是 `AUTH_MODE=dev`，打开即已登录为
-开发用户，**没有登录页**。带登录页的 `:8107` 是
-[`deploy/cas-revproxy/`](deploy/cas-revproxy/README.md) 那套 Nginx（`auth_request` +
-`/login` / `/login/password`），不是这个 `web` 容器。部署和共享存储约束见
+容器形态的完整从零步骤见上文「快速开始 → 方式二」。共享存储、真实 Slurm 接入、
+上线前最低条件与排障命令见
 [`docs/operations/deployment.md`](docs/operations/deployment.md)。
