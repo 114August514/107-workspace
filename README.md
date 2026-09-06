@@ -46,6 +46,29 @@ Slurm 环境仍需要按现行 Milestone 验证或实现。
 WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持，部署与运行目标
 均为 Linux。
 
+#### 裸机引导（什么都没有的 Ubuntu）
+
+`make setup` / `bootstrap.sh` 只安装**项目内**的 Python 与 npm 依赖，**不会**替你装上表中的
+系统级工具——裸机上第一步就会因缺 `git`/`curl` 而失败。在一台只有网络的 Ubuntu 24.04 上，
+先执行下面这段把工具链装齐，再继续任一形态（以下命令已在裸 `ubuntu:24.04` 实测通过）：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git curl make python3 python3-venv ca-certificates
+curl -fsSL https://astral.sh/uv/install.sh | sh                 # 安装 uv
+export PATH="$HOME/.local/bin:$PATH"
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -  # Node 24 LTS 源
+sudo apt-get install -y nodejs
+sudo corepack enable                                            # 启用 pnpm（按仓库锁定 11.x）
+```
+
+之后 `git clone` 本仓库并进入目录，pnpm 会按 `frontend/package.json` 的
+`packageManager: pnpm@11.18.0` 自动锁定版本。仅容器形态还需另外安装
+[Docker Engine 与 Compose 插件](https://docs.docker.com/engine/install/ubuntu/)。
+
+> 提示：`make setup` 在干净 clone 上一次通过；若在保留了旧 `node_modules` 的目录里复跑，
+> pnpm 可能因无 TTY 拒绝清理而中止——删掉 `frontend/node_modules` 或设 `CI=true` 后重跑即可。
+
 ### 方式一：本地开发（`make dev`）
 
 ```bash
