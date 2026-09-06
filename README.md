@@ -78,8 +78,9 @@ curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5174/   # 前端可�
 
 ```bash
 cp .env.example .env                      # 容器用仓库根的 .env（注意：不是 backend/.env）
-# 编辑 .env，至少填：
+# 编辑 .env，至少改两项：
 #   POSTGRES_PASSWORD=<强随机密码>          # Compose 必填
+#   WORKSPACE107_AUTH_MODE=dev             # 模板默认 ustc，Compose web 无登录页，必须改成 dev
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
@@ -90,7 +91,7 @@ docker compose --project-directory . --file deploy/compose.yaml ps
 curl -fsS http://127.0.0.1:8107/api/v1/ready   # 经 web 反代的后端就绪
 ```
 
-浏览器访问 <http://127.0.0.1:8107>。Compose 默认栈是 `AUTH_MODE=dev`，打开即已登录为
+浏览器访问 <http://127.0.0.1:8107>。上面把 `AUTH_MODE` 设为 `dev`，打开即已登录为
 开发用户，**没有登录页**。
 
 > 注意：本地开发的 `backend/.env`（`make dev` 用）与容器的根 `.env`（Compose 用）是
