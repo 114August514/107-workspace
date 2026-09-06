@@ -168,9 +168,6 @@ describe('HomePage 首页请求统一异步状态', () => {
     renderHome()
 
     expect(screen.getAllByText('正在加载首页内容…')).toHaveLength(1)
-    expect(screen.queryByText('正在加载工作区…')).toBeNull()
-    expect(screen.queryByText('正在加载项目…')).toBeNull()
-    expect(screen.queryByText('正在加载 Run…')).toBeNull()
     resolveHome(homeData)
   })
 

@@ -19,7 +19,6 @@ import { RunConfigurationPanel } from '../../src/components/runconfig/RunConfigu
  * - 删除走确认弹窗；「设为默认运行方案」由 project.update 决定。
  *
  * 断言用角色和可见文案，不绑定 Primer 私有 DOM；
- * <relative-time> 在 jsdom 不产出文本，只断言 datetime 属性。
  */
 
 const mockListProjectVariables = vi.hoisted(() => vi.fn())
@@ -90,7 +89,7 @@ afterEach(() => {
 
 describe('ProjectVariablesPanel', () => {
   it('列出 Variable 与值，config.manage 用户可以新建', async () => {
-    const { container } = render(
+    render(
       <MemoryRouter>
         <ProjectVariablesPanel projectId="proj-1" access={manager} />
       </MemoryRouter>,
@@ -100,9 +99,7 @@ describe('ProjectVariablesPanel', () => {
     expect(screen.getByText('5')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /添加变量/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '复制 EPOCHS 的值' })).toBeInTheDocument()
-    const time = container.querySelector('relative-time')
-    expect(time).not.toBeNull()
-    expect(time!.getAttribute('datetime')).toMatch(/^2026-09-01T10:00:00/)
+    expect(screen.getByRole('columnheader', { name: '最近更新' })).toBeVisible()
   })
 
   it('添加变量 提交 PUT 并刷新列表', async () => {
@@ -111,6 +108,12 @@ describe('ProjectVariablesPanel', () => {
       value: 'http://x',
       updated_at: '2026-09-02T10:00:00Z',
     })
+    mockListProjectVariables
+      .mockResolvedValueOnce([{ name: 'EPOCHS', value: '5', updated_at: '2026-09-01T10:00:00Z' }])
+      .mockResolvedValueOnce([
+        { name: 'EPOCHS', value: '5', updated_at: '2026-09-01T10:00:00Z' },
+        { name: 'DATASET_URL', value: 'http://x', updated_at: '2026-09-02T10:00:00Z' },
+      ])
     render(
       <MemoryRouter>
         <ProjectVariablesPanel projectId="proj-1" access={manager} />
@@ -128,9 +131,8 @@ describe('ProjectVariablesPanel', () => {
         value: 'http://x',
       })
     })
-    await waitFor(() => {
-      expect(mockListProjectVariables).toHaveBeenCalledTimes(2)
-    })
+    expect(await screen.findByText('DATASET_URL')).toBeVisible()
+    expect(screen.getByText('http://x')).toBeVisible()
   })
 
   it('名称不合法时提交前拦截', async () => {
@@ -198,7 +200,7 @@ describe('ProjectVariablesPanel', () => {
 
 describe('ProjectSecretsPanel', () => {
   it('列表只展示 Secret 名字与更新时间，不展示值', async () => {
-    const { container } = render(
+    render(
       <MemoryRouter>
         <ProjectSecretsPanel projectId="proj-1" access={manager} />
       </MemoryRouter>,
@@ -206,9 +208,7 @@ describe('ProjectSecretsPanel', () => {
 
     expect(await screen.findByText('HF_TOKEN')).toBeInTheDocument()
     expect(screen.getByText('AWS_KEY')).toBeInTheDocument()
-    const time = container.querySelector('relative-time')
-    expect(time).not.toBeNull()
-    expect(time!.getAttribute('datetime')).toMatch(/^2026-09-01T10:00:00/)
+    expect(screen.getByRole('columnheader', { name: '最近更新' })).toBeVisible()
   })
 
   it('添加敏感变量 的值输入框是密码框，提交后不回显', async () => {

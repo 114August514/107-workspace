@@ -338,19 +338,16 @@ describe('RunPage backend unavailable', () => {
     expect(within(runHeader).queryByText('默认训练方案')).not.toBeInTheDocument()
     expect(within(runHeader).getByText('#run-1')).toBeVisible()
     expect(within(runHeader).getByLabelText('成功')).toBeVisible()
-    expect(runHeader.querySelector('[data-component="Label"]')).toBeNull()
 
     const summary = screen.getByLabelText('Run Summary')
     expect(within(summary).getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(within(summary).getByText('这个 Run 还没有执行事件。')).toBeVisible()
 
-    const snapshotSummary = within(summary)
-      .getByRole('heading', { name: '运行快照' })
-      .closest('section')!
-    expect(within(snapshotSummary).getByText('本次 Run 的不可变执行配置')).toBeVisible()
-    const basicTab = within(snapshotSummary).getByRole('button', { name: '基本信息' })
-    const environmentTab = within(snapshotSummary).getByRole('button', { name: '环境与算力' })
-    const executionTab = within(snapshotSummary).getByRole('button', { name: '执行配置' })
+    const snapshotSummary = within(summary).getByRole('region', { name: '基本信息运行快照' })
+    expect(screen.getByText('本次 Run 的不可变执行配置')).toBeVisible()
+    const basicTab = screen.getByRole('button', { name: '基本信息' })
+    const environmentTab = screen.getByRole('button', { name: '环境与算力' })
+    const executionTab = screen.getByRole('button', { name: '执行配置' })
     expect(basicTab).toHaveAttribute('aria-pressed', 'true')
     expect(within(snapshotSummary).getByRole('link', { name: 'Demo Project · v1' })).toBeVisible()
     expect(within(snapshotSummary).getByText('默认训练方案')).toBeVisible()
@@ -372,7 +369,7 @@ describe('RunPage backend unavailable', () => {
     expect(within(snapshotSummary).queryByRole('link', { name: 'Python · 3.12' })).toBeNull()
     expect(within(summary).queryByText('完整运行快照')).toBeNull()
 
-    const diagnosticSummary = screen.getByText('诊断信息').closest('summary')!
+    const diagnosticSummary = screen.getByText('诊断信息')
     expect(screen.getByText('调度任务')).not.toBeVisible()
     fireEvent.click(diagnosticSummary)
     expect(screen.getByText('环境执行规格')).toBeVisible()
@@ -392,10 +389,8 @@ describe('RunPage backend unavailable', () => {
       </Wrapper>,
     )
 
-    const snapshotSummary = (await screen.findByRole('heading', { name: '运行快照' })).closest(
-      'section',
-    )!
-    fireEvent.click(within(snapshotSummary).getByRole('button', { name: '环境与算力' }))
+    const snapshotSummary = await screen.findByRole('region', { name: '基本信息运行快照' })
+    fireEvent.click(screen.getByRole('button', { name: '环境与算力' }))
     expect(await within(snapshotSummary).findByText('运行环境信息暂不可用')).toBeVisible()
     expect(screen.getByRole('heading', { name: '运行快照' })).toBeVisible()
     expect(screen.getByText('env-1')).not.toBeVisible()
@@ -429,10 +424,8 @@ describe('RunPage backend unavailable', () => {
     expect(eventTime.getAttribute('title')).toMatch(/^2026-08-15 \d{2}:00:00$/)
     expect(screen.getByRole('img', { name: '已完成' })).toBeVisible()
     const logsSummary = screen.getByText('日志')
-    const logsDisclosure = logsSummary.closest('details')
-    expect(logsDisclosure).not.toHaveAttribute('open')
+    expect(screen.queryByRole('button', { name: '标准输出' })).not.toBeVisible()
     fireEvent.click(logsSummary)
-    expect(logsDisclosure).toHaveAttribute('open')
     expect(screen.getByRole('button', { name: '标准输出' })).toBeVisible()
     expect(screen.getByRole('button', { name: '标准错误' })).toBeVisible()
     expect(screen.getByLabelText('stdout 日志')).toHaveTextContent('done')
@@ -470,16 +463,11 @@ describe('RunPage backend unavailable', () => {
 
     await screen.findByRole('heading', { name: 'test-run' })
     const artifactSummary = screen.getByText('运行产物')
-    const artifactDisclosure = artifactSummary.closest('details')
-    expect(artifactDisclosure).not.toHaveAttribute('open')
     expect(screen.queryByText('训练指标')).toBeNull()
     fireEvent.click(artifactSummary)
-    expect(artifactDisclosure).toHaveAttribute('open')
     const groupSummary = await screen.findByText('训练指标')
-    const group = groupSummary.closest('details')
-    expect(group).toHaveAttribute('open')
-    expect(within(group!).getByText('outputs')).toBeVisible()
-    expect(screen.queryByText('outputs/')).toBeNull()
+    expect(groupSummary).toBeVisible()
+    expect(screen.getByText('outputs')).toBeVisible()
     expect(await screen.findByRole('list', { name: '训练指标 文件' })).toBeVisible()
     expect(screen.getByRole('link', { name: 'metrics.json' })).toHaveAttribute(
       'href',
@@ -487,17 +475,15 @@ describe('RunPage backend unavailable', () => {
     )
     expect(screen.getByRole('button', { name: '下载 metrics.json' })).toBeVisible()
 
-    const directory = screen.getByText('plots/').closest('details')
-    expect(directory).not.toHaveAttribute('open')
+    const directory = screen.getByText('plots/')
     expect(screen.getByText('loss.png')).not.toBeVisible()
-    fireEvent.click(screen.getByText('plots/'))
-    expect(directory).toHaveAttribute('open')
+    fireEvent.click(directory)
     expect(screen.getByText('loss.png')).toBeVisible()
-    expect(screen.getByText('nested/').closest('details')).not.toHaveAttribute('open')
+    expect(screen.getByText('nested/')).toBeVisible()
     expect(screen.getByText('chart.png')).not.toBeVisible()
 
     fireEvent.click(groupSummary)
-    expect(group).not.toHaveAttribute('open')
+    expect(screen.getByRole('list', { name: '训练指标 文件' })).not.toBeVisible()
   })
 
   it('keeps execution identifiers out of the user-facing Timeline', async () => {
@@ -567,7 +553,7 @@ describe('RunPage backend unavailable', () => {
     const logsLink = screen.getByRole('link', { name: '查看日志' })
     expect(logsLink).toHaveAttribute('href', '#run-logs')
     fireEvent.click(logsLink)
-    expect(screen.getByText('日志').closest('details')).toHaveAttribute('open')
+    expect(screen.getByRole('button', { name: '标准输出' })).toBeVisible()
     expect(screen.getByLabelText('stderr 日志')).toHaveTextContent('boom')
   })
   it('switches to stderr when a running Run becomes failed', async () => {
@@ -666,13 +652,13 @@ describe('RunPage backend unavailable', () => {
 
     await screen.findByRole('heading', { name: 'test-run' })
     fireEvent.click(screen.getByText('日志'))
-    expect(screen.getByText('日志').closest('details')).toHaveAttribute('open')
+    expect(screen.getByText('这个 Run 还没有日志输出。')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '重新运行' }))
     await waitFor(() =>
       expect(screen.getByRole('banner', { name: 'Run header' })).toHaveTextContent('#run-2'),
     )
     expect(within(screen.getByLabelText('基本信息运行快照')).getByText('来源 Run')).toBeVisible()
-    expect(screen.getByText('日志').closest('details')).not.toHaveAttribute('open')
+    expect(screen.getByText('这个 Run 还没有日志输出。')).not.toBeVisible()
     expect(screen.getByRole('heading', { name: '执行过程' })).toBeVisible()
     expect(screen.getByLabelText('Run Summary')).toBeVisible()
     const snapshotSummary = screen.getByLabelText('基本信息运行快照')

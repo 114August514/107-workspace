@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -106,8 +106,7 @@ describe('SharedResourceVersionPage 文件预览', () => {
     const dialog = await screen.findByRole('dialog', { name: 'train.py' })
     expect(dialog).toBeInTheDocument()
     await waitFor(() => {
-      // 内容渲染在 <pre> 里；scope 到 dialog 内部，避免匹配到祖先文本节点。
-      expect(dialog.querySelector('pre')?.textContent).toContain('import os')
+      expect(within(dialog).getByText(/import os/)).toBeVisible()
     })
   })
 

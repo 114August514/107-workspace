@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -71,9 +71,9 @@ describe('成员退出 User Group', () => {
 
     expect(leave).not.toHaveBeenCalled()
 
-    const confirmInDialog = screen
-      .getAllByRole('button', { name: '退出 User Group' })
-      .find((button) => button.closest('[data-component="Dialog.FooterButton"]'))!
+    const confirmInDialog = within(screen.getByRole('alertdialog')).getByRole('button', {
+      name: '退出 User Group',
+    })
     fireEvent.click(confirmInDialog)
 
     await waitFor(() => expect(leave).toHaveBeenCalledWith('grp_lab'))
@@ -88,13 +88,11 @@ describe('成员退出 User Group', () => {
     renderSettings(memberGroup)
 
     const dialogConfirm = () =>
-      screen
-        .getAllByRole('button', { name: '退出 User Group' })
-        .find((button) => button.closest('[data-component="Dialog.FooterButton"]'))!
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: '退出 User Group' })
     const panelLeave = () =>
-      screen
-        .getAllByRole('button', { name: '退出 User Group' })
-        .find((button) => !button.closest('[data-component="Dialog.FooterButton"]'))!
+      within(screen.getByRole('region', { name: '危险操作' })).getByRole('button', {
+        name: '退出 User Group',
+      })
 
     fireEvent.click(await screen.findByRole('button', { name: '退出 User Group' }))
     fireEvent.click(dialogConfirm())

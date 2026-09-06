@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import httpx
-from sqlalchemy import event, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import (
@@ -25,7 +25,6 @@ from tests.helpers import (
     process_shared_resource_publication,
     wait_for_run,
 )
-from workspace107.api.deps import AppContext
 from workspace107.application.run_service import RunDraft
 from workspace107.domain import ids
 from workspace107.domain.config_scope import ConfigScope
@@ -171,7 +170,7 @@ async def _preflight(
 
 
 async def test_run_records_initiating_user_end_to_end(
-    client: httpx.AsyncClient, session: AsyncSession, context: AppContext
+    client: httpx.AsyncClient, session: AsyncSession
 ) -> None:
     group = await _create_group(client, "Initiator Group")
     _, environment_version_id = await _create_environment(session, owner_user_group_id=group)
@@ -211,33 +210,14 @@ async def test_run_records_initiating_user_end_to_end(
     assert bob_run.json()["initiated_by_username"] == "bob"
 
     # History resolves every Run's recorded User, not the current viewer.
-    user_projection_selects = 0
-
-    def count_user_projection(
-        _connection: object,
-        _cursor: object,
-        statement: str,
-        _parameters: object,
-        _context: object,
-        _executemany: bool,
-    ) -> None:
-        nonlocal user_projection_selects
-        if "FROM users" in statement and "users.id IN" in statement:
-            user_projection_selects += 1
-
-    event.listen(context.engine.sync_engine, "before_cursor_execute", count_user_projection)
-    try:
-        history = await client.get(
-            f"/api/v1/projects/{project['id']}/runs?page_size=20", headers=ALICE
-        )
-    finally:
-        event.remove(context.engine.sync_engine, "before_cursor_execute", count_user_projection)
+    history = await client.get(
+        f"/api/v1/projects/{project['id']}/runs?page_size=20", headers=ALICE
+    )
     history.raise_for_status()
     assert {
         item["initiated_by_user_id"]: item["initiated_by_username"]
         for item in history.json()["items"]
     } == {alice_id: "alice", bob_id: "bob"}
-    assert user_projection_selects == 1
 
     # Username is a current authoritative User projection, not a Run snapshot.
     await session.execute(

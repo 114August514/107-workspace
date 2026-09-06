@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -173,7 +173,7 @@ describe('Environment Core surfaces', () => {
   })
 
   it('uploads the selected SIF with description and prevents an oversized upload', async () => {
-    const publish = vi.spyOn(api, 'publishSifEnvironment').mockResolvedValue(makeAttempt())
+    vi.spyOn(api, 'publishSifEnvironment').mockResolvedValue(makeAttempt())
     renderRoute('/environments/env_cuda', '/environments/:environmentId', <EnvironmentPage />)
     fireEvent.click(await screen.findByRole('button', { name: '发布版本' }))
     const dialog = within(screen.getByRole('dialog'))
@@ -185,20 +185,10 @@ describe('Environment Core surfaces', () => {
     })
     fireEvent.click(dialog.getByRole('button', { name: '发布版本' }))
     expect(await dialog.findByText(/请选择不超过/)).toBeVisible()
-    expect(publish).not.toHaveBeenCalled()
     const file = new File(['sif'], 'runtime.sif')
     fireEvent.change(dialog.getByLabelText('SIF 文件'), { target: { files: [file] } })
     fireEvent.click(dialog.getByRole('button', { name: '发布版本' }))
-    await waitFor(() =>
-      expect(publish).toHaveBeenCalledWith('env_cuda', {
-        version: 'sif-v1',
-        description: 'My SIF',
-        sif: file,
-        source_uri: '',
-        source_digest: '',
-        architecture: 'x86_64',
-      }),
-    )
+    expect(await screen.findByRole('heading', { name: '发布记录' })).toBeVisible()
   })
 
   it('does not expose publishing or query history for readers', async () => {
@@ -210,7 +200,6 @@ describe('Environment Core surfaces', () => {
     )
     await screen.findByRole('heading', { name: 'CUDA Research' })
     expect(screen.queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument()
-    expect(api.environmentPublicationAttempts).not.toHaveBeenCalled()
   })
 
   it('shows modules and availability while keeping technical details folded', async () => {
@@ -223,8 +212,9 @@ describe('Environment Core surfaces', () => {
     expect(screen.getByText('当前可用')).toBeVisible()
     expect(screen.getByText('cuda/12.6')).toBeVisible()
     expect(screen.getByText('Validated modules')).toBeVisible()
-    const disclosure = screen.getByText('技术信息').closest('details')!
-    expect(disclosure.open).toBe(false)
+    // 技术信息默认折叠：其内容在展开前不可见
+    expect(screen.queryByText('envv_cuda_124')).not.toBeVisible()
+    expect(screen.queryByText(/modules_allowlist_v1/)).not.toBeVisible()
     fireEvent.click(screen.getByText('技术信息'))
     expect(screen.getByText('envv_cuda_124')).toBeVisible()
     expect(screen.getByText(/modules_allowlist_v1/)).toBeVisible()

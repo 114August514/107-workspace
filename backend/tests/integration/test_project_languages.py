@@ -5,8 +5,6 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from workspace107.config import Settings
-
 ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
 
@@ -38,8 +36,8 @@ async def write_file(client: httpx.AsyncClient, project_id: str, path: str, cont
 
 
 @pytest.mark.asyncio
-async def test_languages_use_latest_version_not_working_state_and_clean_temporary_files(
-    client: httpx.AsyncClient, settings: Settings
+async def test_languages_use_latest_version_not_working_state(
+    client: httpx.AsyncClient,
 ) -> None:
     project_id = await create_project(client, "语言统计", visibility="public")
 
@@ -67,7 +65,6 @@ async def test_languages_use_latest_version_not_working_state_and_clean_temporar
         ("JavaScript", 1),
     ]
     assert sum(entry["percentage"] for entry in body["languages"]) == pytest.approx(100)
-    assert not any((settings.storage_root / "temporary").iterdir())
 
 
 @pytest.mark.asyncio

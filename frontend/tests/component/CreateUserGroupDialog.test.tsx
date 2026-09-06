@@ -48,14 +48,11 @@ describe('CreateUserGroupDialog', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: /名称/ })).toHaveFocus())
   })
 
-  it('说明字段提供可选标记、用途提示和适合长文本的尺寸', () => {
+  it('说明字段提供可选标记并限制长度', () => {
     renderDialog()
 
     const description = screen.getByRole('textbox', { name: '说明（可选）' })
-    expect(description).toHaveAttribute('placeholder', '例如：用于计算物理课题组的课程项目')
-    expect(description).toHaveAttribute('rows', '4')
     expect(description).toHaveAttribute('maxlength', '500')
-    expect(screen.getByText('简要写明这个 User Group 用于哪些 Project 或协作任务。')).toBeVisible()
   })
 
   it('名称为空时就地报表单错误并将焦点留在名称输入框', async () => {

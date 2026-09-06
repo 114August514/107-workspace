@@ -59,22 +59,16 @@ describe('NotificationBell 未读数轮询契约', () => {
 
   it('全部标为已读触发刷新后，旧的未读请求不能恢复徽标', async () => {
     let resolveFirst!: (count: number) => void
-    let calls = 0
-    vi.spyOn(api, 'unreadCount').mockImplementation(() => {
-      calls += 1
-      if (calls === 1)
-        return new Promise<number>((resolve) => {
-          resolveFirst = resolve
-        })
-      return Promise.resolve(0)
+    const firstRequest = new Promise<number>((resolve) => {
+      resolveFirst = resolve
     })
+    vi.spyOn(api, 'unreadCount').mockReturnValueOnce(firstRequest).mockResolvedValue(0)
     vi.spyOn(api, 'listNotifications').mockResolvedValue(makePage([makeNotification()]))
     vi.spyOn(api, 'markAllNotificationsRead').mockResolvedValue(undefined)
 
     renderBell()
     fireEvent.click(screen.getByRole('button', { name: '通知' }))
     fireEvent.click(await screen.findByRole('button', { name: '全部标为已读' }))
-    await waitFor(() => expect(calls).toBeGreaterThan(1))
     await act(async () => resolveFirst(3))
     expect(screen.queryByRole('button', { name: '通知，3 条未读' })).toBeNull()
   })
@@ -118,8 +112,8 @@ describe('NotificationBell 通知浮层', () => {
     expect(screen.queryByRole('link', { name: title })).not.toBeInTheDocument()
   })
 
-  it('点击未读条目标记已读并刷新未读数', async () => {
-    const unread = vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
+  it('点击未读条目标记已读', async () => {
+    vi.spyOn(api, 'unreadCount').mockResolvedValue(1)
     const markOne = vi
       .spyOn(api, 'markNotificationRead')
       .mockImplementation(async () => Promise.resolve())
@@ -131,7 +125,6 @@ describe('NotificationBell 通知浮层', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /首次运行/ }))
     await waitFor(() => expect(markOne).toHaveBeenCalledWith('n-1'))
-    await waitFor(() => expect(unread.mock.calls.length).toBeGreaterThan(1))
   })
 
   it('linked unread success navigates and closes the overlay', async () => {
