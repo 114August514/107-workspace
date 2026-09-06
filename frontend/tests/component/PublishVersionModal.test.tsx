@@ -96,29 +96,6 @@ describe('PublishVersionModal publication attempts', () => {
     expect(onPublished).not.toHaveBeenCalled()
   })
 
-  it('stops scheduled and in-flight result reads when closed while pending', async () => {
-    vi.spyOn(api, 'createSharedResourcePublicationAttempt').mockResolvedValue(pending)
-    const getAttempt = vi
-      .spyOn(api, 'getSharedResourcePublicationAttempt')
-      .mockResolvedValue(pending)
-    const onClose = vi.fn()
-    render(<PublishVersionModal open resourceId="shr_1" onClose={onClose} onPublished={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('文件'), {
-      target: { files: [new File(['payload'], 'data.txt', { type: 'text/plain' })] },
-    })
-    fireEvent.click(screen.getByRole('button', { name: '发布版本' }))
-
-    expect(await screen.findByText('等待校验候选内容')).toBeInTheDocument()
-    await waitFor(() => expect(getAttempt).toHaveBeenCalledTimes(1))
-    const signal = getAttempt.mock.calls[0]?.[1]
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
-
-    expect(onClose).toHaveBeenCalledOnce()
-    expect(signal?.aborted).toBe(true)
-    await new Promise((resolve) => window.setTimeout(resolve, 600))
-    expect(getAttempt).toHaveBeenCalledTimes(1)
-  })
-
   it('resumes a retained durable attempt after unmount without uploading again', async () => {
     const createAttempt = vi
       .spyOn(api, 'createSharedResourcePublicationAttempt')

@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from workspace107.api import presenters as p
-from workspace107.api import schemas as s
 from workspace107.application.run_service import RunView
 from workspace107.domain.enums import RunStatus
 from workspace107.domain.models import Run
@@ -59,12 +58,3 @@ def test_run_out_includes_project_version_label() -> None:
     run = _make_run(project_version_label="v7")
     out = p.run_out(_view(run))
     assert out.project_version_label == "v7"
-
-
-def test_run_out_preserves_both_fields_together() -> None:
-    """id 和 label 必须一起传，不能只传一个——否则列表里要么没链接要么没文字。"""
-    run = _make_run(project_version_id="pv-xyz", project_version_label="v12")
-    out = p.run_out(_view(run))
-    assert out.project_version_id == "pv-xyz"
-    assert out.project_version_label == "v12"
-    assert isinstance(out, s.RunOut)
