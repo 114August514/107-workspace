@@ -44,6 +44,22 @@ class DotenvFileTests(unittest.TestCase):
 
 
 class DevLoginStackTests(unittest.TestCase):
+    def test_default_login_mode_requires_session_key(self) -> None:
+        with (
+            mock.patch.object(project, "load_local_env_files", return_value={}),
+            mock.patch.dict(os.environ, {}, clear=True),
+            self.assertRaisesRegex(TaskError, "AUTH_SECRET_KEY"),
+        ):
+            project._prepare_dev_environment()
+
+    def test_default_login_mode_is_passed_to_child_processes(self) -> None:
+        with (
+            mock.patch.object(project, "load_local_env_files", return_value={}),
+            mock.patch.dict(os.environ, {"SECRET_KEY": "test-secret"}, clear=True),
+        ):
+            environment = project._prepare_dev_environment()
+            self.assertEqual(environment["WORKSPACE107_AUTH_MODE"], "ustc")
+
     def test_ustc_without_secret_fails(self) -> None:
         env = {"WORKSPACE107_AUTH_MODE": "ustc", "PATH": os.environ.get("PATH", "")}
         with (

@@ -118,6 +118,22 @@ async function handleDevAuthProxy(
   res: ServerResponse,
   next: () => void,
 ): Promise<void> {
+  // Keep page navigation on the configured origin so login/logout forms and
+  // session cookies cannot drift between localhost and 127.0.0.1.
+  const publicOrigin = new URL(process.env.WORKSPACE107_PUBLIC_ORIGIN ?? 'http://127.0.0.1:5174')
+  if (
+    req.method === 'GET' &&
+    req.headers.accept?.includes('text/html') &&
+    req.headers.host !== publicOrigin.host &&
+    !isBackendApiRoute(req.url)
+  ) {
+    const destination = new URL(req.url ?? '/', publicOrigin)
+    destination.host = publicOrigin.host
+    destination.protocol = publicOrigin.protocol
+    res.writeHead(302, { location: destination.href, 'cache-control': 'no-store' })
+    res.end()
+    return
+  }
   if (isAuthRoute(req.url)) {
     pipeProxy(req, res, authOrigin())
     return

@@ -9,7 +9,7 @@ Workspace、Project、Run 等业务权限仍只依赖内部 `User`、Ownership �
 
 - `dev`：仅用于本地开发和受信任演示。读取 `X-User`，缺省为 `student`，并按用户名创建
   开发用户。
-- `ustc`：读取受信任反向代理注入的身份。没有有效身份时返回 `401`。
+- `ustc`（默认）：读取受信任反向代理注入的身份。没有有效身份时返回 `401`。
   默认 `provider=ustc-cas`；代理在本地密码登录成功后注入 `X-User-Provider: local`。
 
 本地模拟登录：
@@ -19,10 +19,13 @@ WORKSPACE107_AUTH_MODE=dev uv run uvicorn workspace107.main:create_app --factory
 curl -H 'X-User: alice' http://127.0.0.1:8000/api/v1/me
 ```
 
-`make dev` 读取仓库根目录 `.env` 和 `backend/.env`。`WORKSPACE107_AUTH_MODE=ustc` 时会
+`make dev` 读取仓库根目录 `.env` 和 `backend/.env`，默认使用 `ustc` 登录模式；缺少会话密钥时明确报错。
+`WORKSPACE107_AUTH_MODE=ustc` 时会
 同时启动认证服务，Vite 对 `/login`、`/login/password`、`/logout` 和 `/api/` 做与 Nginx
 `auth_request` 相同的分流，浏览器打开 <http://127.0.0.1:5174> 就是公开登录页。
 账密、会话密钥、CAS 代理都使用 `.env.example` 里的 `WORKSPACE107_*` 字段。
+Vite 会把浏览器页面导航统一到 `WORKSPACE107_PUBLIC_ORIGIN` 配置的地址，避免混用
+`localhost` 与 `127.0.0.1` 导致登录、退出的同源校验失败。退出请求仍须通过同源校验。
 
 `WORKSPACE107_AUTH_MODE=dev` 时仍直接以 `student` 进入。Compose 默认 `web` 容器没有这些
 路由，应保持 `AUTH_MODE=dev`。独立 Nginx 入口见

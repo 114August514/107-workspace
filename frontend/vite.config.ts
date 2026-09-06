@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 
 import { authRequestProxy } from './vite.auth-proxy'
 
-const authMode = process.env.WORKSPACE107_AUTH_MODE ?? 'dev'
+const authMode = process.env.WORKSPACE107_AUTH_MODE?.trim() || 'ustc'
 const loginStack = authMode === 'ustc'
 const backendOrigin = process.env.WORKSPACE107_BACKEND_ORIGIN ?? 'http://127.0.0.1:8000'
 const frontendPort = Number(
