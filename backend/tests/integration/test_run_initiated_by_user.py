@@ -210,9 +210,7 @@ async def test_run_records_initiating_user_end_to_end(
     assert bob_run.json()["initiated_by_username"] == "bob"
 
     # History resolves every Run's recorded User, not the current viewer.
-    history = await client.get(
-        f"/api/v1/projects/{project['id']}/runs?page_size=20", headers=ALICE
-    )
+    history = await client.get(f"/api/v1/projects/{project['id']}/runs?page_size=20", headers=ALICE)
     history.raise_for_status()
     assert {
         item["initiated_by_user_id"]: item["initiated_by_username"]

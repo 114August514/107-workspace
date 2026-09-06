@@ -443,7 +443,6 @@ describe('AppShell 壳层', () => {
     expect(within(dialog).getByRole('link', { name: 'User Group 7' })).toBeVisible()
     expect(within(dialog).getByRole('link', { name: /Project 7/ })).toBeVisible()
 
-
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭导航' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '107 Workspace' })).toBeNull())
     fireEvent.click(trigger)
