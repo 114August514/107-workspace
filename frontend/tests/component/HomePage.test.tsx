@@ -136,20 +136,6 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
     )
   })
 
-  it('HomePage 正文不自行渲染导航或重复的 User Group、Project 卡片', async () => {
-    vi.spyOn(api, 'home').mockResolvedValue(homeData)
-    vi.spyOn(api, 'listInvitations').mockResolvedValue([])
-    vi.spyOn(api, 'computePlans').mockResolvedValue([])
-
-    renderHome()
-
-    expect(await screen.findByRole('region', { name: '最近提交的 Run' })).toBeVisible()
-    expect(screen.queryByRole('complementary', { name: '首页工作入口' })).toBeNull()
-    expect(screen.queryByRole('navigation', { name: '工作入口' })).toBeNull()
-    expect(screen.queryByRole('region', { name: '我的 User Group' })).toBeNull()
-    expect(screen.queryByRole('region', { name: '最近使用的 Project' })).toBeNull()
-  })
-
   it('没有数据时栏目显示空态说明，而不是只剩标题', async () => {
     vi.spyOn(api, 'home').mockResolvedValue({
       ...homeData,

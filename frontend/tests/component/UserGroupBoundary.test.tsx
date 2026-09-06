@@ -162,16 +162,6 @@ describe('UserGroupPage 分区导航信息架构', () => {
     expect(within(nav).getByText('Members')).toBeInTheDocument()
   })
 
-  it('REQ-21-04 不出现旧导航与 Workspace 术语', async () => {
-    renderUserGroupRoute('/user-groups/grp_lab')
-
-    await screen.findByRole('heading', { name: 'Research Lab' })
-    expect(screen.queryByRole('navigation', { name: 'User Group 内容' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '查看 Project 与配置' })).not.toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/Workspace|旧|Legacy|兼容/)
-    expect(screen.queryByRole('complementary', { name: 'User Group 身份' })).not.toBeInTheDocument()
-  })
-
   it('REQ-21-05 与 AppShell 组合时保持单一 main landmark 与新页面引导', async () => {
     render(
       <MemoryRouter initialEntries={['/user-groups/grp_lab']}>

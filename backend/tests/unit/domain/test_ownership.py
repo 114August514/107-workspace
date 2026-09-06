@@ -11,9 +11,3 @@ def test_user_and_user_group_are_distinct_owner_references() -> None:
     assert user.owner_reference == OwnerReference(kind=OwnerKind.USER, id="usr_alice")
     assert group.owner_reference == OwnerReference(kind=OwnerKind.USER_GROUP, id="grp_lab")
     assert user.owner_reference != group.owner_reference
-
-
-def test_migrated_user_group_may_truthfully_have_unknown_creator() -> None:
-    group = UserGroup(id="ws_legacy", name="Migrated Lab", created_by_id=None)
-
-    assert group.created_by_id is None

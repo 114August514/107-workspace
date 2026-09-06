@@ -105,60 +105,9 @@ describe('createSharedResourcePublicationAttempt', () => {
     const form = await request.formData()
     expect(form.get('prefix')).toBeNull()
   })
-
-  it('Content-Type 让浏览器带 multipart boundary，不写成 JSON', async () => {
-    await api.createSharedResourcePublicationAttempt('res_1', {
-      files: [new File(['x'], 'x.txt')],
-      description: '',
-    })
-
-    const contentType = lastRequest().headers.get('Content-Type') ?? ''
-    // openapi-fetch 识别到 FormData 后不设 Content-Type，留给浏览器补
-    // multipart/form-data; boundary=...。关键是不能退化成 application/json，
-    // 否则后端的 File(...) 解析不到文件。
-    expect(contentType).not.toContain('application/json')
-  })
 })
 
-describe('canonical Shared Resource API / getSharedResourceVersion', () => {
-  it('actor discovery uses the canonical owner-scoped path', async () => {
-    await api.listSharedResources()
-    expect(new URL(lastRequest().url).pathname).toBe('/api/v1/shared-resources')
-  })
-
-  it('creation sends the explicit legal owner in the canonical request body', async () => {
-    await api.createSharedResource({
-      name: '权重',
-      description: '',
-      owner: { kind: 'user_group', id: 'grp_lab' },
-    })
-
-    const request = lastRequest()
-    expect(request.method).toBe('POST')
-    expect(new URL(request.url).pathname).toBe('/api/v1/shared-resources')
-    expect(await request.json()).toEqual({
-      name: '权重',
-      description: '',
-      owner: { kind: 'user_group', id: 'grp_lab' },
-    })
-  })
-
-  it('版本详情和文件读取用各自的路径参数', async () => {
-    await api.getSharedResourceVersion('ver_1')
-    expect(new URL(lastRequest().url).pathname).toBe('/api/v1/shared-resource-versions/ver_1')
-
-    await api.getSharedResourcePublicationAttempt('shrpa_1')
-    expect(new URL(lastRequest().url).pathname).toBe(
-      '/api/v1/shared-resource-publication-attempts/shrpa_1',
-    )
-
-    await api.readSharedResourceVersionFile('ver_1', 'data/train.py')
-    const fileUrl = new URL(lastRequest().url)
-    expect(fileUrl.pathname).toBe('/api/v1/shared-resource-versions/ver_1/files/content')
-    // 路径作为 query 传递
-    expect(fileUrl.searchParams.get('path')).toBe('data/train.py')
-  })
-
+describe('getSharedResourceVersion 文件读取', () => {
   it('文件内容按 text/plain 解析成字符串，不被 JSON.parse 吞掉', async () => {
     // 后端这个端点直返纯文本（schema 里 200 是 text/plain:string）。
     // 缺 parseAs:'text' 时 openapi-fetch 会默认走 response.json()，

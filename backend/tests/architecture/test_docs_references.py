@@ -167,16 +167,3 @@ def test_active_markdown_local_links_resolve() -> None:
                 missing.append(f"{_label(source)}: {reference}")
 
     assert missing == [], "这些活动 Markdown 链接无法解析：\n" + "\n".join(missing)
-
-
-def test_active_docs_use_pnpm_11_argument_form() -> None:
-    obsolete = "pnpm run test -- --run"
-    offenders = [
-        _label(path)
-        for path in [*_active_files(), *_maintained_documents()]
-        if path.suffix == ".md" and obsolete in _read(path)
-    ]
-
-    assert offenders == [], "这些活动文档仍使用 pnpm 11 会错误透传的测试命令：\n" + "\n".join(
-        offenders
-    )

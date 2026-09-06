@@ -4,11 +4,40 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import httpx
 
-from tests.integration.scheduler.test_mock_scheduler import _submission
+from workspace107.domain.compute import ResolvedSchedulerConfiguration
+from workspace107.domain.ports.scheduler import SchedulerSubmission
 from workspace107.infrastructure.scheduler.slurm import SlurmRestScheduler
+
+
+def _submission(root: Path) -> SchedulerSubmission:
+    work = root / "run" / "work"
+    logs = root / "run" / "logs"
+    work.mkdir(parents=True)
+    logs.mkdir(parents=True)
+    return SchedulerSubmission(
+        run_id="run_slurm",
+        job_name="Slurm batch IO",
+        work_dir=work,
+        command="python main.py",
+        environment_execution_spec={"kind": "modules", "commands": []},
+        stdout_path=logs / "stdout.log",
+        stderr_path=logs / "stderr.log",
+        configuration=ResolvedSchedulerConfiguration(
+            cluster="local",
+            account="test",
+            partition="test",
+            qos="normal",
+            nodes=1,
+            cpus=1,
+            memory_mb=512,
+            gpus=0,
+            time_limit_minutes=5,
+        ),
+    )
 
 
 async def test_slurm_batch_io_request(monkeypatch, tmp_path):

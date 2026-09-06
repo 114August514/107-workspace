@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from workspace107.domain.errors import ValidationFailed
 from workspace107.domain.models import (
     SharedResource,
     SharedResourceFile,
@@ -146,15 +145,3 @@ def test_空版本文件列表的_file_count_和_total_size_为零() -> None:
     )
     assert version.file_count == 0
     assert version.total_size == 0
-
-
-# -- SharedResourceFile 无路径校验（校验在 application 层，见 test_shared_resource_paths） --
-
-
-def test_shared_resource_file_本身不做路径校验() -> None:
-    """路径校验在 application 层的 ``_normalize_path``，不在领域对象上（与 ProjectFile 一致）。"""
-    # 构造时不抛——校验是 service 层职责
-    file = SharedResourceFile(path="any/raw/path", size=1, content_hash="h")
-    assert file.path == "any/raw/path"
-    # 即便如此，ValidationFailed 仍是这一族对象在校验层抛出的错误类型
-    assert ValidationFailed is not None

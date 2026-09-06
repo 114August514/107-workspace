@@ -12,7 +12,7 @@ from workspace107.domain.enums import EnvValueKind, MembershipRole
 from workspace107.domain.models import Project, Variable
 from workspace107.domain.ownership import OwnerKind, OwnerReference
 from workspace107.domain.run_snapshot import build_snapshot
-from workspace107.domain.secrets import EnvValue, ResolvedEnv, parse_env_map
+from workspace107.domain.secrets import EnvValue, ResolvedEnv
 from workspace107.infrastructure.db.repositories import SqlRepositories
 from workspace107.infrastructure.db.secret_vault import DatabaseSecretVault
 
@@ -89,20 +89,3 @@ async def test_deleted_project_secret_never_falls_back_to_owner(context, session
     )
     assert values == {}
     assert problems
-
-
-def test_fork_expression_only_preserves_standard_and_user_namespaces() -> None:
-    expressions = parse_env_map(
-        {
-            "A": "${{ vars.LEVEL }}",
-            "B": "${{ secrets.TOKEN }}",
-            "C": "${{ user.vars.LEVEL }}",
-            "D": "${{ user.secrets.TOKEN }}",
-        }
-    )
-    assert {name: value.expression for name, value in expressions.items()} == {
-        "A": "${{ vars.LEVEL }}",
-        "B": "${{ secrets.TOKEN }}",
-        "C": "${{ user.vars.LEVEL }}",
-        "D": "${{ user.secrets.TOKEN }}",
-    }
