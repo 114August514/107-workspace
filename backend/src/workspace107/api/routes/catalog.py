@@ -11,11 +11,25 @@ from fastapi import APIRouter, File, Form, UploadFile, status
 
 from ...application.environment_publication import ALLOWED_MODULES
 from ...domain.errors import ValidationFailed
+from ...domain.ownership import OwnerReference
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import ContextDep, CurrentUser, ServicesDep
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
+
+
+@router.post("/environments", response_model=s.EnvironmentOut, status_code=status.HTTP_201_CREATED)
+async def create_environment(
+    body: s.EnvironmentCreateIn, user: CurrentUser, services: ServicesDep
+) -> s.EnvironmentOut:
+    view = await services.catalog.create_environment(
+        user.id,
+        owner=OwnerReference(body.owner.kind, body.owner.id),
+        name=body.name,
+        description=body.description,
+    )
+    return p.environment_out(view)
 
 
 @router.get("/environment-publication-options", response_model=s.EnvironmentPublicationOptionsOut)

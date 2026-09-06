@@ -8,7 +8,7 @@ import { authRequestProxy } from './vite.auth-proxy'
 // 三组用例超出 5s 预算的直接诱因。CI 上降到 2 个 worker；本地多大核工作站保持 4 个。
 const isCI = Boolean(process.env.CI)
 
-const authMode = process.env.WORKSPACE107_AUTH_MODE ?? 'dev'
+const authMode = process.env.WORKSPACE107_AUTH_MODE?.trim() || 'ustc'
 const loginStack = authMode === 'ustc'
 const backendOrigin = process.env.WORKSPACE107_BACKEND_ORIGIN ?? 'http://127.0.0.1:8000'
 const frontendPort = Number(

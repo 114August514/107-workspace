@@ -1,3 +1,4 @@
+import { CreateAssetPage } from './pages/CreateAssetPage'
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { lazy, Suspense } from 'react'
@@ -133,7 +134,10 @@ function ProductSession() {
   const { user, home } = useAuth()
   const location = useLocation()
   const username = user?.username ?? ''
-  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const projectId =
+    location.pathname === '/projects/new'
+      ? undefined
+      : matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const project = useAsync<Project | undefined>(
     () => (projectId ? api.getProject(projectId) : Promise.resolve(undefined)),
     [username, projectId],
@@ -164,8 +168,18 @@ export function ProductRoutes({
       <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
       <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
-      <Route path="/profile" element={<ProfilePage home={home} />} />
+      <Route path="/profile/*" element={<ProfilePage home={home} />} />
       <Route path="/settings" element={<SettingsPage home={home} />} />
+      <Route
+        path="/environments/new"
+        element={<CreateAssetPage key="environment" kind="environment" home={home} />}
+      />
+      <Route
+        path="/shared-resources/new"
+        element={<CreateAssetPage key="shared-resource" kind="shared-resource" home={home} />}
+      />
+      <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
+      <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
       <Route
         path="/execution-context"
         element={<PersonalExecutionContextPage username={username} home={home} />}
@@ -187,6 +201,10 @@ export function ProductRoutes({
       <Route
         path="/environment-versions/:versionId"
         element={<EnvironmentVersionPage key={username} />}
+      />
+      <Route
+        path="/projects/:projectId/runs/configurations"
+        element={<ProjectPage key={username} project={project} />}
       />
       <Route
         path="/projects/:projectId/*"

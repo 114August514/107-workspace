@@ -51,7 +51,7 @@ describe('User Group 设置分区', () => {
 
     fireEvent.change(nameInput, { target: { value: '  New Lab  ' } })
     fireEvent.change(screen.getByLabelText(/说明/), { target: { value: '  New description  ' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
 
     await screen.findByText('User Group 设置已保存。')
     expect(update).toHaveBeenCalledWith('grp_lab', {
@@ -66,7 +66,7 @@ describe('User Group 设置分区', () => {
 
     const nameInput = await screen.findByLabelText(/名称/)
     fireEvent.change(nameInput, { target: { value: '   ' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
 
     expect(await screen.findByText('名称不能为空')).toBeInTheDocument()
     expect(update).not.toHaveBeenCalled()
@@ -80,12 +80,12 @@ describe('User Group 设置分区', () => {
     renderSettings()
 
     await screen.findByLabelText(/名称/)
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
 
     expect(await screen.findByText('保存失败。')).toBeInTheDocument()
     expect(screen.queryByText('forbidden')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
     await screen.findByText('User Group 设置已保存。')
     expect(update).toHaveBeenCalledTimes(2)
   })
@@ -98,9 +98,9 @@ describe('User Group 设置分区', () => {
     }
     renderSettings(memberGroup)
 
-    expect(await screen.findByRole('heading', { name: '退出 User Group' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '危险操作' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '退出 User Group' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/名称/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '保存设置' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '保存更改' })).not.toBeInTheDocument()
   })
 })

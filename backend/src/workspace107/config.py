@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     slurm_api_user: str = ""
     slurm_jwt: str = Field(default="", repr=False)
 
-    auth_mode: AuthMode = "dev"
+    auth_mode: AuthMode = "ustc"
 
     # 后台状态同步间隔（秒）。设为 0 表示不启动后台同步，由调用方显式触发。
     run_sync_interval_seconds: float = 1.0

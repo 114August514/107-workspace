@@ -4,15 +4,17 @@ import { useNavigate } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import type { UserGroup } from '../../api/types'
+import settingsStyles from '../project/projectSettingsPanel.module.css'
 import styles from './assets.module.css'
 
 interface Props {
   userGroup: UserGroup
   onLeft: () => void
+  compact?: boolean
 }
 
 /** 非 Owner 成员的主动退出入口；Owner 需先转让所有权，服务端会拒绝。 */
-export function LeaveGroupPanel({ userGroup, onLeft }: Props) {
+export function LeaveGroupPanel({ userGroup, onLeft, compact = false }: Props) {
   const navigate = useNavigate()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -32,16 +34,27 @@ export function LeaveGroupPanel({ userGroup, onLeft }: Props) {
     }
   }
 
-  return (
-    <section className={styles.section} aria-labelledby="user-group-leave-title">
-      <header className={styles.sectionHeader}>
-        <h2 id="user-group-leave-title" className={styles.sectionTitle}>
-          退出 User Group
-        </h2>
-        <p className={styles.sectionDescription}>
-          退出后你将失去这个 User Group 及组内资源的访问权，需要重新受邀才能加入。
-        </p>
-      </header>
+  const action = (
+    <>
+      {!compact && (
+        <header className={styles.sectionHeader}>
+          <h2 id="user-group-leave-title" className={styles.sectionTitle}>
+            退出 User Group
+          </h2>
+          <p className={styles.sectionDescription}>
+            退出后你将失去这个 User Group 及组内资源的访问权，需要重新受邀才能加入。
+          </p>
+        </header>
+      )}
+
+      {compact && (
+        <div>
+          <strong>退出 User Group</strong>
+          <p className={settingsStyles.sectionDescription}>
+            退出后你将失去这个 User Group 及组内资源的访问权，需要重新受邀才能加入。
+          </p>
+        </div>
+      )}
 
       {failed ? (
         <Banner variant="critical" onDismiss={() => setFailed(false)}>
@@ -75,6 +88,13 @@ export function LeaveGroupPanel({ userGroup, onLeft }: Props) {
           退出后，你将立刻失去这个 User Group 及组内资源的访问权，需要重新受邀才能加入。
         </ConfirmationDialog>
       ) : null}
+    </>
+  )
+  return compact ? (
+    <div className={settingsStyles.danger}>{action}</div>
+  ) : (
+    <section className={styles.section} aria-labelledby="user-group-leave-title">
+      {action}
     </section>
   )
 }

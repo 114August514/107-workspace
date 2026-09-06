@@ -185,3 +185,35 @@ async def test_variable_changes_require_confirmation_but_secret_rotation_keeps_e
     response.raise_for_status()
     response = await client.post(f"{scope}/runs", json=draft(configuration, initial), headers=ALICE)
     assert response.status_code == 409
+
+
+async def test_missing_scheduler_job_keeps_status_without_repeating_identical_errors(
+    client, session, context, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    from workspace107.domain.ports.scheduler import SchedulerJobState, SchedulerState
+
+    _, project, configuration = await setup_run(client, session)
+    result = await preview(client, project, configuration)
+    response = await client.post(
+        f"/api/v1/projects/{project['id']}/runs",
+        json=draft(configuration, result),
+        headers=ALICE,
+    )
+    response.raise_for_status()
+    run = response.json()
+    monkeypatch.setattr(
+        context.scheduler,
+        "poll",
+        AsyncMock(return_value=SchedulerJobState(state=SchedulerState.UNKNOWN)),
+    )
+    for _ in range(3):
+        response = await client.post("/api/v1/runs/sync", headers=ALICE)
+        response.raise_for_status()
+    detail = (await client.get(f"/api/v1/runs/{run['id']}", headers=ALICE)).json()
+    assert detail["run"]["status"] == run["status"]
+    assert detail["run"]["finished_at"] is None
+    errors = [event for event in detail["events"] if event["type"] == "error"]
+    assert len(errors) == 1
+    assert "状态待人工确认" in errors[0]["message"]

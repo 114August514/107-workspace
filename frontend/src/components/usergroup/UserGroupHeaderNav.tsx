@@ -72,11 +72,18 @@ export function UserGroupHeaderContext() {
 
 export function UserGroupHeaderNav() {
   const { userGroupId, userGroup } = useCurrentUserGroup()
-  const { pathname } = useLocation()
-
   if (!userGroupId || !userGroup) return null
+  return <OwnerResourceNav basePath={`/user-groups/${userGroupId}`} governance />
+}
 
-  const basePath = `/user-groups/${userGroupId}`
+export function OwnerResourceNav({
+  basePath,
+  governance = false,
+}: {
+  basePath: string
+  governance?: boolean
+}) {
+  const { pathname } = useLocation()
   const activeSection = pathname.startsWith(`${basePath}/`)
     ? pathname.slice(basePath.length + 1).split('/')[0] || 'overview'
     : 'overview'
@@ -84,7 +91,12 @@ export function UserGroupHeaderNav() {
   // 导航渲染在 AppShell,位于路由树之外,相对链接会按当前 URL 叠加解析,
   // 必须用绝对路径。
   const sections = [
-    { key: 'overview', label: copy.nav.overview, to: basePath, icon: <HomeIcon /> },
+    {
+      key: 'overview',
+      label: governance ? copy.nav.overview : '个人简介',
+      to: basePath,
+      icon: <HomeIcon />,
+    },
     {
       key: 'projects',
       label: copy.nav.projects,
@@ -103,19 +115,28 @@ export function UserGroupHeaderNav() {
       to: `${basePath}/environments`,
       icon: <ServerIcon />,
     },
-    { key: 'members', label: copy.nav.members, to: `${basePath}/members`, icon: <PeopleIcon /> },
-    {
-      key: 'settings',
-      label: copy.nav.settings,
-      to: `${basePath}/settings`,
-      icon: <GearIcon />,
-    },
+    ...(governance
+      ? [
+          {
+            key: 'members',
+            label: copy.nav.members,
+            to: `${basePath}/members`,
+            icon: <PeopleIcon />,
+          },
+          {
+            key: 'settings',
+            label: copy.nav.settings,
+            to: `${basePath}/settings`,
+            icon: <GearIcon />,
+          },
+        ]
+      : []),
   ]
 
   return (
     <div className={shellStyles.projectNavigationSurface}>
       <UnderlineNav
-        aria-label={copy.page.navLabel}
+        aria-label={governance ? copy.page.navLabel : '个人页面导航'}
         className={shellStyles.projectNavigation}
         hideIconsBreakpoint={null}
       >

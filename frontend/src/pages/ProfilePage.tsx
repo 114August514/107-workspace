@@ -1,13 +1,15 @@
 import { CheckIcon, ChevronRightIcon, CopyIcon } from '@primer/octicons-react'
 import { IconButton } from '@primer/react'
 import { useEffect, useRef, useState } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useLocation } from 'react-router-dom'
 
 import { toAsyncError } from '../api/errors'
 import type { Home } from '../api/types'
 import type { AsyncState as AsyncResource } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
 import { membershipRoleLabel } from '../components/workspace/memberCopy'
+import { OwnerProjectsSection } from '../components/usergroup/ProjectsSection'
+import { PersonalAssets } from '../components/usergroup/PersonalAssets'
 import { profileCopy } from './profileCopy'
 import styles from './ProfilePage.module.css'
 
@@ -16,18 +18,36 @@ interface Props {
 }
 
 export function ProfilePage({ home }: Props) {
+  const { pathname } = useLocation()
+  const section = pathname.split('/')[2] ?? ''
   return (
     <div className={styles.page}>
-      <header>
-        <h1 className={styles.title}>{profileCopy.title}</h1>
-      </header>
+      {!section && (
+        <header>
+          <h1 className={styles.title}>{profileCopy.title}</h1>
+        </header>
+      )}
       <AsyncState
         loading={home.loading}
         loadingText={profileCopy.loading}
         error={toAsyncError(home.error)}
         onRetry={home.reload}
       >
-        {home.data ? <ProfileBody home={home.data} /> : null}
+        {home.data ? (
+          section === 'projects' ? (
+            <OwnerProjectsSection
+              owner={{
+                kind: 'user',
+                id: home.data.user.id,
+                display_name: home.data.user.display_name,
+              }}
+            />
+          ) : section === 'environments' || section === 'shared-resources' ? (
+            <PersonalAssets key={section} kind={section} userId={home.data.user.id} />
+          ) : (
+            <ProfileBody home={home.data} />
+          )
+        ) : null}
       </AsyncState>
     </div>
   )
@@ -85,18 +105,6 @@ function ProfileBody({ home }: { home: Home }) {
             ))}
           </ul>
         )}
-      </section>
-
-      <section className={styles.section} aria-labelledby="profile-settings-title">
-        <h2 id="profile-settings-title" className={styles.sectionTitle}>
-          {profileCopy.settings}
-        </h2>
-        <div className={styles.panel}>
-          <RouterLink className={styles.rowLink} to="/execution-context">
-            <span className={styles.rowName}>{profileCopy.executionContext}</span>
-            <ChevronRightIcon className={styles.chevron} size={16} aria-hidden="true" />
-          </RouterLink>
-        </div>
       </section>
     </>
   )

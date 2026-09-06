@@ -166,6 +166,8 @@ class ProjectVersionRepository(Protocol):
 
 
 class EnvironmentRepository(Protocol):
+    async def add(self, environment: Environment) -> None: ...
+
     async def list_discoverable_for_user(self, user_id: str) -> list[Environment]: ...
     async def get_discoverable_for_user(
         self, user_id: str, environment_id: str

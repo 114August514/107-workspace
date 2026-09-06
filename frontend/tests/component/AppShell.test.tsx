@@ -91,7 +91,8 @@ function readyProject(data: Project | undefined = projectData): AsyncState<Proje
 
 const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
-  ['/profile', '这里查看自己的身份信息、所属 User Group，并进入个人执行上下文。'],
+  ['/profile', '这里查看个人简介，以及自己拥有的 Project、共享资源和运行环境。'],
+  ['/profile/projects', '这里查看个人简介，以及自己拥有的 Project、共享资源和运行环境。'],
   ['/settings', '这里修改显示名称和用户名；邮箱由登录身份提供。'],
   [
     '/execution-context',
@@ -194,7 +195,7 @@ describe('AppShell 壳层', () => {
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
-  it('用独立 Home Mark、Project context 和三级本地导航表达壳层层级', () => {
+  it('用 Project context 和四级本地导航表达壳层层级', () => {
     renderShell(homeData.user, readyHome(), '/projects/p-1/runs/r-1')
 
     const header = screen.getByRole('banner')
@@ -216,18 +217,20 @@ describe('AppShell 壳层', () => {
     const navigation = screen.getByRole('navigation', { name: 'Project navigation' })
     expect(within(navigation).getByRole('link', { name: 'Files' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=files',
+      '/projects/p-1/files',
     )
     expect(within(navigation).getByRole('link', { name: 'Runs' })).toHaveAttribute(
       'aria-current',
       'page',
     )
+    expect(within(navigation).getByRole('link', { name: 'Activity' })).toHaveAttribute(
+      'href',
+      '/projects/p-1/activity',
+    )
     expect(within(navigation).getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
-      '/projects/p-1?tab=activities',
+      '/projects/p-1/settings',
     )
-    expect(within(navigation).queryByRole('link', { name: '版本' })).toBeNull()
-    expect(within(navigation).queryByRole('link', { name: '运行方案' })).toBeNull()
   })
 
   it('在当前 Owner namespace 内搜索并切换 Project', async () => {
@@ -391,13 +394,18 @@ describe('AppShell 壳层', () => {
     expect(screen.getByText('页面内容')).toBeVisible()
   })
 
-  it('header 紧凑创建按钮通过可访问名称打开创建 User Group 弹窗', async () => {
-    renderShell()
-    const trigger = screen.getByRole('button', { name: '创建 User Group' })
-    expect(trigger.textContent).toBe('')
-    fireEvent.click(trigger)
-    expect(await screen.findByRole('dialog')).toBeVisible()
-    expect(screen.getByText('创建 User Group', { selector: 'h1' })).toBeTruthy()
+  it('header 创建菜单提供 Project 和 User Group 专用创建页面入口', async () => {
+    renderShell(homeData.user)
+    fireEvent.click(screen.getByRole('button', { name: '创建' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: '创建 Project' })).toHaveAttribute(
+      'href',
+      '/projects/new',
+    )
+    expect(within(menu).getByRole('menuitem', { name: '创建 User Group' })).toHaveAttribute(
+      'href',
+      '/user-groups/new',
+    )
   })
 
   it('已登录时用户菜单展示姓名、资料、设置和退出', async () => {

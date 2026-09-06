@@ -178,3 +178,5 @@ export function isTerminal(status: RunStatus): boolean {
 
 export type EnvironmentPublicationOptions = Schemas['EnvironmentPublicationOptionsOut']
 export type ImportEnvironmentPublicationInput = Schemas['ImportEnvironmentPublicationIn']
+
+export type EnvironmentCreate = Schemas['EnvironmentCreateIn']

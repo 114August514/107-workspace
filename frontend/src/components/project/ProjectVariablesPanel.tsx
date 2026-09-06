@@ -113,19 +113,18 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
   const rows = variables.data ?? []
 
   return (
-    <section id="settings-pane" className={styles.section} aria-label="Project variables">
+    <section id="project-variables" className={styles.section} aria-label="Project variables">
       <div className={styles.paneHeader}>
-        <h2 className={styles.paneTitle}>Project variables</h2>
+        <p className={styles.sectionDescription}>
+          在运行方案的环境变量里用 <code className={styles.reference}>{'${{ vars.NAME }}'}</code>{' '}
+          引用。
+        </p>
         {canManage && (
           <Button variant="primary" leadingVisual={PlusIcon} onClick={openCreate}>
-            新建 Variable
+            添加变量
           </Button>
         )}
       </div>
-      <p className={styles.sectionDescription}>
-        在运行方案的环境变量里用 <code className={styles.reference}>{'${{ vars.NAME }}'}</code>{' '}
-        引用。
-      </p>
 
       {listError && (
         <Banner variant="critical">
@@ -216,7 +215,7 @@ export function ProjectVariablesPanel({ projectId, access, onChanged }: Props) {
             if (!submitting) closeDialog()
           }}
           initialFocusRef={dialog.mode === 'edit' ? valueInputRef : nameInputRef}
-          title={dialog.mode === 'edit' ? `编辑 Variable「${dialog.name}」` : '新建 Variable'}
+          title={dialog.mode === 'edit' ? `编辑 Variable「${dialog.name}」` : '添加变量'}
           width="medium"
           footerButtons={[
             { content: '取消', disabled: submitting, onClick: closeDialog },

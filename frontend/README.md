@@ -147,6 +147,17 @@ Run 页面提供状态、日志、执行事件、Artifact 和复现快照。
 Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 Run——
 状态只能来自调度系统的轮询结果。
 
+## Project 设置与创建入口
+
+Project Settings 默认进入“常规”，提供名称与说明编辑；可见范围位于底部危险操作，须独立确认后更新；所属范围与可见范围继续显示在 Files 的 About 中。
+删除 Project 仅位于常规设置底部，保留删除影响及阻塞检查。
+“环境变量”分区保留 Variables / Secrets 标签栏，Secret 值不回显。
+
+右上角创建菜单将 Project、共享资源、运行环境放在同组，分隔线下单独放 User Group；
+User Group 页面通过右上角菜单创建资源，并自动带入当前所属范围；资源列表不再重复提供创建按钮。Runs 中的“提交 Run”
+复用已有运行方案与确认弹窗。创建 Environment 对象使用
+`POST /api/v1/catalog/environments`，发布版本继续在环境详情页完成。
+
 ## 身份
 
 前端启动时请求 `GET /api/v1/me` 确认当前用户。未登录显示公开首页（账密 + 统一身份认证）；
@@ -177,3 +188,10 @@ pnpm run generate:api     # 仅重新生成类型；平时在根目录用 make c
 
 GPU 型号、分区、QoS、配额这些是会变的平台事实。界面上只展示后端返回的值，
 不在前端硬编码，也不写成固定结论。
+
+个人页 `/profile` 提供个人简介、Projects、共享资源和运行环境，不设置 Members 或 Settings 分区。
+个人 Projects 复用 User Group 列表与筛选，按当前 User 的精确 Owner 归属过滤，并跟随分页读取；
+首页“查看我的全部 Projects”和用户菜单“我的 Projects”均链接到 `/profile/projects`。
+User Group Settings 左侧只保留常规，基本信息与底部危险操作在同一页；Owner 删除，非 Owner 退出。
+
+个人 Project Type 仅展示 All / Public / Sources / Forks；个人和 User Group Project 列表均隐藏 Archived / Templates 筛选。

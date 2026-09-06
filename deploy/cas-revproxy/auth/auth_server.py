@@ -7,8 +7,9 @@ handles tickets or session cookies.
 
 from __future__ import annotations
 
-import hmac
+import json
 import os
+import re
 import uuid
 from urllib.error import URLError
 from urllib.parse import urlencode
@@ -79,9 +80,7 @@ def open_cas(url: str):
 
 
 def check_ticket(ticket: str, service: str) -> str | None:
-    validate = (
-        f"{current_app.config['CAS_VALIDATE_URL']}?{urlencode({'service': service, 'ticket': ticket})}"
-    )
+    validate = f"{current_app.config['CAS_VALIDATE_URL']}?{urlencode({'service': service, 'ticket': ticket})}"
     try:
         with open_cas(validate) as resp:
             body = resp.read()
@@ -125,16 +124,49 @@ def _local_password_hash() -> str:
     return ""
 
 
+def _local_accounts(app: Flask) -> dict[str, dict[str, str]]:
+    accounts = {
+        app.config["LOCAL_ADMIN_USERNAME"]: {
+            "display_name": app.config["LOCAL_ADMIN_DISPLAY_NAME"],
+            "password_hash": app.config["LOCAL_ADMIN_PASSWORD_HASH"],
+        }
+    }
+    raw = _first_env("LOCAL_ACCOUNTS_JSON", "WORKSPACE107_LOCAL_ACCOUNTS_JSON", default="[]")
+    try:
+        entries = json.loads(raw)
+        if not isinstance(entries, list):
+            raise TypeError
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {
+                "username",
+                "display_name",
+                "password_hash",
+            }:
+                raise ValueError
+            if any(not isinstance(value, str) or not value.strip() for value in entry.values()):
+                raise ValueError
+            username = entry["username"]
+            if not re.fullmatch(r"[A-Za-z0-9_.@-]{1,64}", username) or username in accounts:
+                raise ValueError
+            if not entry["password_hash"].startswith(("scrypt:", "pbkdf2:")):
+                raise ValueError
+            check_password_hash(entry["password_hash"], "configuration-check")
+            accounts[username] = {
+                "display_name": entry["display_name"],
+                "password_hash": entry["password_hash"],
+            }
+    except (ValueError, TypeError):
+        raise RuntimeError("Invalid LOCAL_ACCOUNTS_JSON configuration") from None
+    return accounts
+
+
 def _password_matches(app: Flask, username: str, password: str) -> bool:
-    expected_user = app.config["LOCAL_ADMIN_USERNAME"]
-    password_hash = app.config["LOCAL_ADMIN_PASSWORD_HASH"]
-    if not expected_user or not password_hash:
-        check_password_hash(_DUMMY_PASSWORD_HASH, password)
-        return False
+    account = app.config["LOCAL_ACCOUNTS"].get(username)
     selected = (
-        password_hash if hmac.compare_digest(username, expected_user) else _DUMMY_PASSWORD_HASH
+        account["password_hash"] if account and account["password_hash"] else _DUMMY_PASSWORD_HASH
     )
-    return check_password_hash(selected, password)
+    matched = check_password_hash(selected, password)
+    return bool(account and account["password_hash"] and matched)
 
 
 def create_app() -> Flask:
@@ -151,7 +183,9 @@ def create_app() -> Flask:
         CAS_VALIDATE_URL=_env("CAS_VALIDATE_URL", "https://passport.ustc.edu.cn/serviceValidate"),
         HTTPS_PROXY=_env("HTTPS_PROXY", ""),
         LOCAL_ADMIN_USERNAME=_first_env(
-            "LOCAL_ADMIN_USERNAME", "WORKSPACE107_LOCAL_ADMIN_USERNAME", default="platform-admin"
+            "LOCAL_ADMIN_USERNAME",
+            "WORKSPACE107_LOCAL_ADMIN_USERNAME",
+            default="platform-admin",
         ),
         LOCAL_ADMIN_DISPLAY_NAME=_first_env(
             "LOCAL_ADMIN_DISPLAY_NAME",
@@ -160,6 +194,8 @@ def create_app() -> Flask:
         ),
         LOCAL_ADMIN_PASSWORD_HASH=_local_password_hash(),
     )
+
+    app.config["LOCAL_ACCOUNTS"] = _local_accounts(app)
 
     @app.after_request
     def _no_store(response):
@@ -213,9 +249,9 @@ def create_app() -> Flask:
         if not _password_matches(app, username, password):
             return redirect(f"{app.config['PUBLIC_ORIGIN']}/?login_error=1", code=303)
         session.clear()
-        session["user"] = app.config["LOCAL_ADMIN_USERNAME"]
+        session["user"] = username
         session["provider"] = "local"
-        session["name"] = app.config["LOCAL_ADMIN_DISPLAY_NAME"]
+        session["name"] = app.config["LOCAL_ACCOUNTS"][username]["display_name"]
         return redirect(f"{app.config['PUBLIC_ORIGIN']}/", code=303)
 
     @app.post("/logout")

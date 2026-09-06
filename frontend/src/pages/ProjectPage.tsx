@@ -1,3 +1,4 @@
+import { SubmitRunButton } from '../components/run/SubmitRunButton'
 import {
   DiffIcon,
   HistoryIcon,
@@ -8,7 +9,7 @@ import {
 import { Button as PrimerButton, SelectPanel, Text } from '@primer/react'
 import type { ActionListItemInput } from '@primer/react/deprecated'
 import { BranchesOutlined } from '@ant-design/icons'
-import { Card, Empty, Tag } from 'antd'
+import { Card, Tag } from 'antd'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
@@ -36,6 +37,8 @@ import { ListCard } from '../components/layout/ListCard'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Stack } from '../components/layout/Stack'
 import { FileBrowser } from '../components/project/FileBrowser'
+import { DeleteProjectPanel } from '../components/project/DeleteProjectPanel'
+import { ProjectSettingsPanel } from '../components/project/ProjectSettingsPanel'
 import { VersionPanel } from '../components/project/VersionPanel'
 import { FileViewer } from '../components/project/FileViewer'
 import { PrimerListCard } from '../components/primer/PrimerListCard'
@@ -514,9 +517,18 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
         />
       </ListCard>
     ) : (
-      <Card>
-        <Empty description="Project 自身管理配置入口；编辑能力不在本 Issue 范围内。" />
-      </Card>
+      <AsyncSection loading={project.loading} error={project.error}>
+        <ProjectSettingsPanel
+          projectId={projectId}
+          access={project.data}
+          onChanged={bump}
+          deletion={
+            project.data && can(project.data, 'project.delete') ? (
+              <DeleteProjectPanel project={project.data} onDeleted={() => navigate('/')} />
+            ) : null
+          }
+        />
+      </AsyncSection>
     )
 
   const filesContent =
@@ -531,7 +543,8 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
 
   return (
     <Stack gap="large">
-      {section === 'files' && (view === 'working' || view === 'latest') ? null : (
+      {section === 'settings' ||
+      (section === 'files' && (view === 'working' || view === 'latest')) ? null : (
         <AsyncSection loading={project.loading} error={project.error}>
           {project.data && (
             <PageHeader
@@ -542,6 +555,25 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
               }
               description={project.data.description || '这个 Project 还没有填写说明'}
               tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
+              actions={
+                section === 'runs' ? (
+                  <>
+                    <PrimerButton
+                      as={Link}
+                      to={projectViewHref(
+                        projectId,
+                        'runs',
+                        view === 'history' ? 'configurations' : 'history',
+                      )}
+                    >
+                      {view === 'history' ? '运行方案' : '返回运行历史'}
+                    </PrimerButton>
+                    {view === 'history' && can(project.data, 'run.submit') && (
+                      <SubmitRunButton project={project.data} onSubmit={setSubmitting} />
+                    )}
+                  </>
+                ) : undefined
+              }
             />
           )}
         </AsyncSection>

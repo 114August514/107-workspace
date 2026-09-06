@@ -112,19 +112,18 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
   const rows = secrets.data ?? []
 
   return (
-    <section id="settings-pane" className={styles.section} aria-label="Project secrets">
+    <section id="project-secrets" className={styles.section} aria-label="Project secrets">
       <div className={styles.paneHeader}>
-        <h2 className={styles.paneTitle}>Project secrets</h2>
+        <p className={styles.sectionDescription}>
+          在运行方案环境变量里用 <code className={styles.reference}>{'${{ secrets.NAME }}'}</code>{' '}
+          引用；值只在写入时可见，保存后不能回读，列表只展示名字。
+        </p>
         {canManage && (
           <Button variant="primary" leadingVisual={PlusIcon} onClick={openCreate}>
-            新建 Secret
+            添加敏感变量
           </Button>
         )}
       </div>
-      <p className={styles.sectionDescription}>
-        在运行方案环境变量里用 <code className={styles.reference}>{'${{ secrets.NAME }}'}</code>{' '}
-        引用；值只在写入时可见，保存后不能回读，列表只展示名字。
-      </p>
 
       {listError && (
         <Banner variant="critical">
@@ -198,7 +197,7 @@ export function ProjectSecretsPanel({ projectId, access, onChanged }: Props) {
             if (!submitting) closeDialog()
           }}
           initialFocusRef={dialog.mode === 'replace' ? valueInputRef : nameInputRef}
-          title={dialog.mode === 'replace' ? `替换 Secret「${dialog.name}」的值` : '新建 Secret'}
+          title={dialog.mode === 'replace' ? `替换 Secret「${dialog.name}」的值` : '添加敏感变量'}
           width="medium"
           footerButtons={[
             { content: '取消', disabled: submitting, onClick: closeDialog },

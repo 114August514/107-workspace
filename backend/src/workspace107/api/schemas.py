@@ -171,6 +171,12 @@ class ProjectCreateOwnedIn(ProjectCreateIn):
     visibility: ProjectVisibility = ProjectVisibility.OWNER_SCOPE
 
 
+class EnvironmentCreateIn(Model):
+    owner: OwnerReferenceIn
+    name: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="", max_length=4096)
+
+
 class ProjectUpdateIn(Model):
     name: str | None = None
     description: str | None = None

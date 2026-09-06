@@ -1,5 +1,5 @@
 import { ContainerIcon, HomeIcon } from '@primer/octicons-react'
-import { Label, Link, Text } from '@primer/react'
+import { Button, Label, Link, Text } from '@primer/react'
 import { Link as RouterLink } from 'react-router-dom'
 
 import { api } from '../api/client'
@@ -32,6 +32,11 @@ export function EnvironmentListPage() {
           当前列表包含你本人、有效 User Group，以及通过 USE Grant 可以使用的运行环境。 Run
           Configuration 保存后固定引用一个确定版本。
         </Text>
+        <div>
+          <Button as={RouterLink} to="/environments/new" variant="primary">
+            创建运行环境
+          </Button>
+        </div>
       </header>
 
       <PrimerListCard title="当前可使用" padded>

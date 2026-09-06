@@ -82,7 +82,7 @@ AUTH_ROOT = REPO_ROOT / "deploy" / "cas-revproxy"
 
 
 def _auth_mode() -> str:
-    return os.environ.get("WORKSPACE107_AUTH_MODE", "dev").strip() or "dev"
+    return os.environ.get("WORKSPACE107_AUTH_MODE", "ustc").strip() or "ustc"
 
 
 def _backend_port() -> str:
@@ -106,6 +106,7 @@ def _auth_port() -> str:
 def _prepare_dev_environment() -> dict[str, str]:
     load_local_env_files()
     environment = apply_auth_env_aliases(os.environ.copy())
+    environment["WORKSPACE107_AUTH_MODE"] = _auth_mode()
     if _auth_mode() != "ustc":
         return environment
     environment.setdefault("WORKSPACE107_PUBLIC_ORIGIN", "http://127.0.0.1:5174")
@@ -151,6 +152,8 @@ def run_dev(component: str = "all") -> None:
                     "workspace107.main:create_app",
                     "--factory",
                     "--reload",
+                    "--reload-dir",
+                    str(BACKEND_ROOT / "src"),
                     "--host",
                     "127.0.0.1",
                     "--port",
@@ -472,7 +475,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         for environment in environments
         if environment["owner"]["id"] == user_group_id
         for version in environment["versions"]
-        if version["available"]
+        if version["availability"] == "available"
     )
     configuration = client.request(
         "POST",

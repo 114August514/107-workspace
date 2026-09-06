@@ -36,6 +36,9 @@ export function UserMenu({ user }: Props) {
             >
               {authCopy.profile}
             </ActionList.Item>
+            <ActionList.Item onSelect={() => navigate('/profile/projects')}>
+              我的 Projects
+            </ActionList.Item>
             <ActionList.Item
               onSelect={() => {
                 navigate('/settings')
