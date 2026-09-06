@@ -472,7 +472,7 @@ def _exercise_core_run(client: ApiClient, *, verbose: bool) -> None:
         for environment in environments
         if environment["owner"]["id"] == user_group_id
         for version in environment["versions"]
-        if version["available"]
+        if version["availability"] == "available"
     )
     configuration = client.request(
         "POST",

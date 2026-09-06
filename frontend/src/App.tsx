@@ -203,6 +203,10 @@ export function ProductRoutes({
         element={<EnvironmentVersionPage key={username} />}
       />
       <Route
+        path="/projects/:projectId/runs/configurations"
+        element={<ProjectPage key={username} project={project} />}
+      />
+      <Route
         path="/projects/:projectId/*"
         element={<ProjectPage key={username} project={project} />}
       />
