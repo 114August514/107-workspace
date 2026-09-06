@@ -8990,6 +8990,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorOut"];
                 };
             };
+            /** @description 请求没有有效的认证身份 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
             /** @description 对象可见，但当前角色无权执行该操作 */
             403: {
                 headers: {
@@ -9061,6 +9070,15 @@ export interface operations {
             };
             /** @description 请求不合法 */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 请求没有有效的认证身份 */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
