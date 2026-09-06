@@ -194,7 +194,6 @@ def run_dev(component: str = "all") -> None:
                     resolve_executable("pnpm"),
                     "run",
                     "dev",
-                    "--",
                     "--host",
                     "127.0.0.1",
                     "--port",
@@ -365,6 +364,9 @@ def demo(*, smoke: bool = False) -> None:
         environment = merged_environment(
             {
                 "WORKSPACE107_ENV": "local",
+                # The demo drives the API with the X-User header, which only the
+                # dev auth mode accepts; force it so a ustc backend/.env cannot 401.
+                "WORKSPACE107_AUTH_MODE": "dev",
                 "WORKSPACE107_DATABASE_URL": f"sqlite+aiosqlite:///{database_path}",
                 "WORKSPACE107_STORAGE_ROOT": str(workdir / "storage"),
                 "WORKSPACE107_SCHEDULER": "mock",
