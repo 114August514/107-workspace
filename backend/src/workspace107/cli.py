@@ -139,7 +139,9 @@ def _build_rsync_command(
     command = [
         "rsync",
         "--archive",
-        "--partial",
+        # 半截文件隔离到暂存区内的专用目录，apply 只读正式条目、不读 partial 残留，
+        # 避免中断后的半成品被当成「变化」写入 Working State。
+        "--partial-dir=.rsync-partial",
         "--delete",
         "--delete-excluded",
         "--prune-empty-dirs",
@@ -151,6 +153,7 @@ def _build_rsync_command(
     ]
     for name in DEFAULT_EXCLUDED_DIRS:
         command.extend(("--exclude", f"{name}/"))
+    command.extend(("--exclude", ".rsync-partial/"))
     for pattern in DEFAULT_EXCLUDED_FILES:
         command.extend(("--exclude", pattern))
     command.extend(("--", f"{source}/", f"{ssh_target}:{remote.as_posix().rstrip('/')}/"))
