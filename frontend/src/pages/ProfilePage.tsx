@@ -1,5 +1,5 @@
 import { CheckIcon, ChevronRightIcon, CopyIcon } from '@primer/octicons-react'
-import { IconButton, UnderlineNav } from '@primer/react'
+import { IconButton } from '@primer/react'
 import { useEffect, useRef, useState } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 
@@ -20,30 +20,13 @@ interface Props {
 export function ProfilePage({ home }: Props) {
   const { pathname } = useLocation()
   const section = pathname.split('/')[2] ?? ''
-  const tabs = [
-    ['', '个人简介'],
-    ['projects', 'Projects'],
-    ['shared-resources', '共享资源'],
-    ['environments', '运行环境'],
-  ]
-
   return (
     <div className={styles.page}>
-      <header>
-        <h1 className={styles.title}>{profileCopy.title}</h1>
-      </header>
-      <UnderlineNav aria-label="个人页面导航">
-        {tabs.map(([key, label]) => (
-          <UnderlineNav.Item
-            key={key}
-            as={RouterLink}
-            to={`/profile${key ? '/' + key : ''}`}
-            aria-current={section === key ? 'page' : undefined}
-          >
-            {label}
-          </UnderlineNav.Item>
-        ))}
-      </UnderlineNav>
+      {!section && (
+        <header>
+          <h1 className={styles.title}>{profileCopy.title}</h1>
+        </header>
+      )}
       <AsyncState
         loading={home.loading}
         loadingText={profileCopy.loading}

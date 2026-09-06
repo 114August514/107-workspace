@@ -35,6 +35,7 @@ import { ContextGuide } from './ContextGuide'
 import {
   UserGroupHeaderContext,
   UserGroupHeaderNav,
+  OwnerResourceNav,
   UserGroupProvider,
 } from '../usergroup/UserGroupHeaderNav'
 import { appShellCopy } from './copy'
@@ -71,7 +72,9 @@ export function AppShell({ user, home, project, children }: Props) {
   const isEnvironment =
     location.pathname !== '/environments/new' &&
     /^\/(environments|environment-versions)\/[^/]+$/.test(location.pathname)
+  const isPersonal = matchPath('/profile/*', location.pathname) !== null
   const isUserGroupAssetList =
+    /^\/profile\/(projects|shared-resources|environments)$/.test(location.pathname) ||
     matchPath('/user-groups/:userGroupId/projects', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/shared-resources', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/environments', location.pathname) !== null
@@ -122,11 +125,13 @@ export function AppShell({ user, home, project, children }: Props) {
                 {!projectId && !isEnvironment && !location.pathname.startsWith('/user-groups/') ? (
                   <Button
                     as={RouterLink}
-                    to="/"
+                    to={isPersonal ? '/profile' : '/'}
                     variant="invisible"
                     className={`${styles.projectContextItem} ${styles.projectOwner}`}
                   >
-                    <span className={styles.projectContextLabel}>{appShellCopy.brand}</span>
+                    <span className={styles.projectContextLabel}>
+                      {isPersonal ? user?.display_name || user?.username : appShellCopy.brand}
+                    </span>
                   </Button>
                 ) : null}
                 {projectId ? (
@@ -142,7 +147,7 @@ export function AppShell({ user, home, project, children }: Props) {
                           to={
                             currentProject.owner.kind === 'user_group'
                               ? `/user-groups/${currentProject.owner.id}`
-                              : '/'
+                              : '/profile'
                           }
                           variant="invisible"
                           className={`${styles.projectContextItem} ${styles.projectOwner}`}
@@ -234,6 +239,7 @@ export function AppShell({ user, home, project, children }: Props) {
             {signedIn ? (
               <>
                 <UserGroupHeaderNav />
+                {isPersonal && <OwnerResourceNav basePath="/profile" />}
                 <EnvironmentHeaderNav />
               </>
             ) : null}

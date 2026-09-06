@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Home } from '../../src/api/types'
 import { PrimerRoot } from '../../src/primer/setup'
+import { OwnerResourceNav } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { ProfilePage } from '../../src/pages/ProfilePage'
 
 const homeData: Home = {
@@ -38,6 +39,7 @@ function renderProfile(home: Home = homeData) {
   return render(
     <MemoryRouter>
       <PrimerRoot>
+        <OwnerResourceNav basePath="/profile" />
         <ProfilePage
           home={{
             data: home,
@@ -70,15 +72,15 @@ describe('个人资料页面', () => {
       '/user-groups/grp-1',
     )
     expect(screen.getByText('所有者')).toBeVisible()
-    expect(screen.getByRole('link', { name: 'Projects' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Project' })).toHaveAttribute(
       'href',
       '/profile/projects',
     )
-    expect(screen.getByRole('link', { name: '运行环境' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Environment' })).toHaveAttribute(
       'href',
       '/profile/environments',
     )
-    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Shared Resource' })).toHaveAttribute(
       'href',
       '/profile/shared-resources',
     )
