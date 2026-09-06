@@ -1,10 +1,4 @@
-import {
-  HomeIcon,
-  OrganizationIcon,
-  PersonIcon,
-  ProjectIcon,
-  XIcon,
-} from '@primer/octicons-react'
+import { HomeIcon, OrganizationIcon, PersonIcon, ProjectIcon, XIcon } from '@primer/octicons-react'
 import { Button, Dialog, IconButton, NavList, type DialogHeaderProps } from '@primer/react'
 import { useRef, useState, type RefObject } from 'react'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
