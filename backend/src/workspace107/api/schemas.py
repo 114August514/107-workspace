@@ -239,6 +239,7 @@ class FileContentOut(Model):
 class WorkingChangeOut(Model):
     path: str
     change: ChangeKind
+    base_version: str | None = None
 
 
 class WorkingChangeDetailOut(Model):
@@ -272,6 +273,17 @@ class ProjectVersionOut(Model):
 
 class ProjectVersionDetailOut(ProjectVersionOut):
     files: list[ProjectVersionFileOut]
+
+
+class ProjectLanguageOut(Model):
+    name: str
+    code_lines: int
+    percentage: float
+
+
+class ProjectLanguagesOut(Model):
+    languages: list[ProjectLanguageOut]
+    total_code_lines: int
 
 
 class VersionCreateIn(Model):

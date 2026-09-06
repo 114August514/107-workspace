@@ -416,7 +416,10 @@ async def working_changes(
     尚无历史版本时以空内容为基线，结果只表示新增、修改或删除，不写入数据。
     """
     changes = await services.projects.working_changes(user.id, project_id)
-    return [s.WorkingChangeOut(path=c.path, change=c.change) for c in changes]
+    return [
+        s.WorkingChangeOut(path=c.path, change=c.change, base_version=c.base_version)
+        for c in changes
+    ]
 
 
 @router.get(
@@ -429,12 +432,10 @@ async def working_change_detail(
     user: CurrentUser,
     services: ServicesDep,
     path: str = Query(min_length=1),
+    base_version: str | None = Query(default=None, min_length=1),
 ) -> s.WorkingChangeDetailOut:
-    """校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。
-
-    每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。
-    """
-    detail = await services.projects.working_change_detail(user.id, project_id, path)
+    """按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。"""
+    detail = await services.projects.working_change_detail(user.id, project_id, path, base_version)
     return s.WorkingChangeDetailOut(
         path=detail.path,
         change=detail.change,
@@ -465,7 +466,10 @@ async def discard_changes(
     返回剩余的未保存变更。
     """
     remaining = await services.projects.discard_changes(user.id, project_id, list(payload.paths))
-    return [s.WorkingChangeOut(path=c.path, change=c.change) for c in remaining]
+    return [
+        s.WorkingChangeOut(path=c.path, change=c.change, base_version=c.base_version)
+        for c in remaining
+    ]
 
 
 # -- 版本 -------------------------------------------------------------------
@@ -482,6 +486,29 @@ async def list_versions(
     """校验 Project 查看权限后，分页返回已保存的不可变历史版本。"""
     result = await services.projects.list_versions(user.id, project_id, page)
     return p.page_out(result, p.version_out)
+
+
+@router.get(
+    "/projects/{project_id}/languages",
+    response_model=s.ProjectLanguagesOut,
+    summary="统计 Project 最新版本的语言",
+)
+async def project_languages(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.ProjectLanguagesOut:
+    """校验 Project 查看权限后，用 Tokei 统计最新不可变版本，不包含 Working State。"""
+    result = await services.projects.latest_languages(user.id, project_id)
+    return s.ProjectLanguagesOut(
+        languages=[
+            s.ProjectLanguageOut(
+                name=language.name,
+                code_lines=language.code_lines,
+                percentage=language.percentage,
+            )
+            for language in result.languages
+        ],
+        total_code_lines=result.total_code_lines,
+    )
 
 
 @router.post(

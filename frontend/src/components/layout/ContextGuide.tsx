@@ -22,6 +22,7 @@ interface Props {
 }
 
 export function ContextGuide({ pathname }: Props) {
+  if (pathname === '/projects/new' || pathname === '/user-groups/new') return null
   const guide = contextGuides.find(({ pattern }) => matchPath(pattern, pathname))
   if (!guide) return null
 

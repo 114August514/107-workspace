@@ -628,9 +628,7 @@ export interface paths {
         };
         /**
          * 查看未保存变更的内容级详情
-         * @description 校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。
-         *
-         *     每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。
+         * @description 按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。
          */
         get: operations["working_change_detail_api_v1_projects__project_id__changes_detail_get"];
         put?: never;
@@ -888,6 +886,26 @@ export interface paths {
          * @description 校验 Project 查看权限后返回固定的派生来源记录；非派生项目返回空。
          */
         get: operations["fork_source_api_v1_projects__project_id__fork_source_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 统计 Project 最新版本的语言
+         * @description 校验 Project 查看权限后，用 Tokei 统计最新不可变版本，不包含 Working State。
+         */
+        get: operations["project_languages_api_v1_projects__project_id__languages_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2812,6 +2830,22 @@ export interface components {
             /** Updated At */
             updated_at: string | null;
         };
+        /** ProjectLanguageOut */
+        ProjectLanguageOut: {
+            /** Code Lines */
+            code_lines: number;
+            /** Name */
+            name: string;
+            /** Percentage */
+            percentage: number;
+        };
+        /** ProjectLanguagesOut */
+        ProjectLanguagesOut: {
+            /** Languages */
+            languages: components["schemas"]["ProjectLanguageOut"][];
+            /** Total Code Lines */
+            total_code_lines: number;
+        };
         /** ProjectOut */
         ProjectOut: {
             /** Capabilities */
@@ -3541,6 +3575,8 @@ export interface components {
         };
         /** WorkingChangeOut */
         WorkingChangeOut: {
+            /** Base Version */
+            base_version?: string | null;
             change: components["schemas"]["ChangeKind"];
             /** Path */
             path: string;
@@ -6718,6 +6754,7 @@ export interface operations {
         parameters: {
             query: {
                 path: string;
+                base_version?: string | null;
             };
             header?: {
                 "X-User"?: string | null;
@@ -7990,6 +8027,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForkSourceOut"] | null;
+                };
+            };
+            /** @description 请求不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 请求没有有效的认证身份 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象可见，但当前角色无权执行该操作 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 对象不存在，或当前用户没有发现权限 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 与现有状态冲突，例如重名或对象不可修改 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 参数校验或提交前检查未通过，problems 列出全部原因 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+            /** @description 底层调度系统返回错误 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
+        };
+    };
+    project_languages_api_v1_projects__project_id__languages_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-User"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectLanguagesOut"];
                 };
             };
             /** @description 请求不合法 */

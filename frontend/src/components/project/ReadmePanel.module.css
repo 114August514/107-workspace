@@ -1,0 +1,48 @@
+.panel {
+  overflow: hidden;
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-default);
+}
+
+.header {
+  min-height: var(--base-size-40);
+  padding: var(--base-size-8) var(--base-size-12);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  background: var(--bgColor-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-8);
+}
+
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.body:global(.markdown-body) {
+  min-width: 0;
+  max-width: none;
+  padding: var(--base-size-32);
+  background: var(--bgColor-default);
+  color: var(--fgColor-default);
+}
+
+.body:global(.markdown-body) > :first-child {
+  margin-top: 0;
+}
+
+.body:global(.markdown-body) > :last-child {
+  margin-bottom: 0;
+}
+
+@media not all and (min-width: 48rem) {
+  .body:global(.markdown-body) {
+    padding: var(--base-size-16);
+  }
+}

@@ -18,6 +18,7 @@ env:
   UV_PYTHON: "3.12"
   NODE_VERSION: "24"
   PNPM_VERSION: "11.18.0"
+  TOKEI_VERSION: "14.0.0"
 
 jobs:
   check:
@@ -42,6 +43,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends cargo
+          cargo install --locked --version "${TOKEI_VERSION}" tokei
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install locked dependencies
         run: make setup
       - name: Run the same check used locally

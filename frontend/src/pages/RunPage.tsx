@@ -2,7 +2,6 @@ import {
   ArrowLeftIcon,
   ChevronRightIcon,
   KebabHorizontalIcon,
-  ProjectIcon,
   StopIcon,
   SyncIcon,
 } from '@primer/octicons-react'
@@ -177,46 +176,11 @@ export function RunPage() {
     >
       {detail.data && run ? (
         <div className={styles.page}>
-          <header className={styles.projectShell} aria-label="Project shell">
-            <div className={styles.projectIdentity}>
-              <ProjectIcon size={16} aria-hidden />
-              {project.data?.owner.kind === 'user_group' ? (
-                <Link as={RouterLink} to={`/user-groups/${project.data.owner.id}`}>
-                  {project.data.owner.display_name}
-                </Link>
-              ) : (
-                <span>{project.data?.owner.display_name ?? 'Project'}</span>
-              )}
-              <span className={styles.projectSeparator}>/</span>
-              <Link
-                as={RouterLink}
-                to={`/projects/${run.project_id}`}
-                className={styles.projectName}
-              >
-                {project.data?.name ?? 'Project'}
-              </Link>
-            </div>
-            <nav className={styles.projectNavigation} aria-label="Project navigation">
-              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=files`}>
-                项目文件
-              </Link>
-              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=versions`}>
-                版本
-              </Link>
-              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=configurations`}>
-                运行方案
-              </Link>
-              <Link as={RouterLink} to={`/projects/${run.project_id}?tab=runs`} aria-current="page">
-                Runs
-              </Link>
-            </nav>
-          </header>
-
           <div className={styles.runSurface}>
             <header className={styles.runHeader} aria-label="Run header">
               <Link
                 as={RouterLink}
-                to={`/projects/${run.project_id}?tab=runs`}
+                to={`/projects/${run.project_id}/runs`}
                 className={styles.backLink}
               >
                 <ArrowLeftIcon size={16} aria-hidden />
