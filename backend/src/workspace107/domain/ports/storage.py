@@ -56,6 +56,22 @@ class ArtifactEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectSyncEntry:
+    """受控 Project 同步暂存区中的一个普通文件。
+
+    ``inode`` / ``mtime_ns`` / ``size`` / ``content_hash`` 一起构成 scan 时的
+    对象快照，供 apply 读取时核对「读到的还是不是 scan 到的那个对象、内容
+    是否一致」，防止 scan 之后暂存区被原子替换、就地改写或同长篡改。
+    """
+
+    path: str
+    size: int
+    inode: int
+    mtime_ns: int
+    content_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class RunInput:
     """一次 Run 的一个输入绑定，按来源类型决定如何物化。
 
@@ -97,6 +113,23 @@ class StoragePort(Protocol):
     async def read_blob(self, content_hash: str) -> bytes: ...
 
     async def blob_exists(self, content_hash: str) -> bool: ...
+
+    # -- Project 本地同步暂存区 ---------------------------------------
+
+    async def prepare_project_sync(self, project_id: str, actor_id: str) -> str:
+        """创建稳定的 actor-scoped 暂存区并返回相对 storage key。"""
+        ...
+
+    async def collect_project_sync_files(
+        self, project_id: str, actor_id: str
+    ) -> list[tuple[ProjectSyncEntry, bytes]]:
+        """一次性收集暂存区内容：校验路径、防符号链接逃逸、读字节并核对大小。
+
+        暂存区可被 SSH 身份在 list 与 apply 之间改写，因此收集必须在读取时
+        对每个路径做真实父链校验，并核对读到的实际字节数与清单大小一致，
+        不接受 scan 后再 append / 替换 / 半截文件的输入。
+        """
+        ...
 
     async def resolve_blob_path(self, content_hash: str) -> Path:
         """Return a scheduler-visible CAS path after rechecking the exact digest."""

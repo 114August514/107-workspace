@@ -8,6 +8,7 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import logging
@@ -143,6 +144,12 @@ class WorkingChangeDetail:
     """基线（最近保存版本）中的内容；新增时为空。"""
     current: bytes | None
     """当前工作区内容；删除时为空。"""
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectSyncApplyResult:
+    scanned_files: int
+    changed_files: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,6 +452,57 @@ class ProjectService:
         record = await self._store_entry(project_id, normalized, content)
         await self._touch(access.project)
         return record
+
+    async def prepare_sync(self, user_id: str, project_id: str) -> str:
+        """授权并准备 actor-scoped、可重复使用的 rsync 暂存区。"""
+        await self._guard.project(user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE)
+        return await self._storage.prepare_project_sync(project_id, user_id)
+
+    async def apply_sync(self, user_id: str, project_id: str) -> ProjectSyncApplyResult:
+        """把受控暂存区内容创建或覆盖到 Working State，不删除额外文件。"""
+        access = await self._guard.project(
+            user_id, project_id, needs=Capability.PROJECT_CONTENT_WRITE
+        )
+        collected = await self._storage.collect_project_sync_files(project_id, user_id)
+        if not collected:
+            raise ValidationFailed("同步暂存区中没有可应用的文件")
+
+        paths: list[str] = []
+        contents: list[tuple[str, bytes]] = []
+        for entry, content in collected:
+            normalized = normalize_path(entry.path)
+            if normalized != entry.path:
+                raise ValidationFailed(f"同步路径「{entry.path}」不是规范的 Project 相对路径")
+            # 上限用读取后的真实字节数判断，不信任 scan 时记录的 size，
+            # 避免暂存区在扫描后被 append 或替换而绕过限制。
+            if len(content) > self._max_file_bytes:
+                limit_mb = self._max_file_bytes // (1024 * 1024)
+                raise ValidationFailed(
+                    f"文件 {entry.path} 超过单个文件上限 {limit_mb} MB。"
+                    "大数据集和模型权重应当作为共享资源管理，不要放进 Project 文件。"
+                )
+            paths.append(normalized)
+            contents.append((normalized, content))
+
+        _validate_user_file_paths(paths)
+        existing = await self._repos.project_files.list_for_project(project_id)
+        _validate_file_namespace((file.path for file in existing), paths)
+        existing_by_path = {file.path: file for file in existing}
+
+        # 所有校验（路径、namespace、大小、暂存读取一致性）通过后才落盘；
+        # 此前任一文件不合格都整批拒绝，不留半新半旧的 Working State。
+        changed = 0
+        for path, content in contents:
+            content_hash = hashlib.sha256(content).hexdigest()
+            current = existing_by_path.get(path)
+            if current is not None and current.content_hash == content_hash:
+                continue
+            await self._store_entry(project_id, path, content)
+            changed += 1
+
+        if changed:
+            await self._touch(access.project)
+        return ProjectSyncApplyResult(scanned_files=len(contents), changed_files=changed)
 
     async def _store_entry(self, project_id: str, path: str, content: bytes) -> ProjectFile:
         """写入单个文件条目：上限校验、内容寻址存储、元数据 upsert。
