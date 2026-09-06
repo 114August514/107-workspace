@@ -172,6 +172,23 @@ api -> application -> domain ports <- infrastructure
 本地 `mock` 调度器会通过宿主机 shell **真实执行用户命令**，仅适合开发、测试和
 受信任演示。它不是沙箱，也不能替代真实集群验收。
 
+### 从演示走向真实部署
+
+上面的两种方式默认都是 `mock` 调度 + dev/ustc 演示身份，**不是生产形态**。当以下条件
+（字段 + 平台事实）就位并通过验收后，才谈得上真实集群部署：
+
+| 领域 | 关键字段 / 前提 | 当前状态 |
+| :--- | :--- | :--- |
+| 调度器 | `WORKSPACE107_SCHEDULER=slurm` + `WORKSPACE107_SLURM_API_BASE_URL` / `_API_USER` / `_JWT` | 适配器已实现，未在真实 107 集群验收 |
+| 共享存储 | API 与各计算节点以同一绝对路径 `/var/lib/workspace107/storage` 访问同一文件系统 | Docker 命名卷只单机可见，需真实共享 FS |
+| 运行环境 | Environment Version 用平台 Modules 或经真实 Apptainer 校验的 SIF | seed 是演示目录，需替换为平台事实 |
+| 身份认证 | 关闭 `dev` 模式，ustc 认证经真实环境验收 | Compose 默认 `dev`，无生产登录 |
+
+切换配置不等于完成接入。共享存储拓扑、Slurm 接入验收、上线前最低条件（HTTPS、备份、
+多副本拆分等）的权威说明见
+[`docs/operations/deployment.md`](docs/operations/deployment.md#接入真实集群)；107 平台端到端
+验收属于 Issue #7。
+
 ## 容器
 
 容器形态的完整从零步骤见上文「快速开始 → 方式二」。共享存储、真实 Slurm 接入、
