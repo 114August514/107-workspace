@@ -98,6 +98,11 @@ curl -fsS http://127.0.0.1:8107/api/v1/ready   # 经 web 反代的后端就绪
 > 两个不同文件、必填项也不同。带登录页的 `:8107` 入口是
 > [`deploy/cas-revproxy/`](deploy/cas-revproxy/README.md) 那套独立 Nginx（`auth_request`
 > + `/login`），不要与 Compose 栈同时占用 `:8107`。
+>
+> 重复部署或更换 `POSTGRES_PASSWORD` 前，先 `docker compose --project-directory . --file
+> deploy/compose.yaml down -v` 清掉旧数据卷（**会删除数据库与存储数据**）。Compose 卷不在
+> git 里，仅靠 `git clean` 清不掉；卷内残留的旧密码与新 `.env` 不一致会导致 api 容器
+> 报 `password authentication failed` 起不来。
 
 ### 提交前
 
