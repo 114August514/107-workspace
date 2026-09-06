@@ -15,10 +15,7 @@ export function DeleteProjectPanel({
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <section className={styles.section} aria-labelledby="project-danger-title">
-      <h2 id="project-danger-title" className={styles.paneTitle}>
-        危险操作
-      </h2>
+    <>
       <div className={styles.danger}>
         <div>
           <strong>删除 Project</strong>
@@ -35,7 +32,7 @@ export function DeleteProjectPanel({
           onDeleted={onDeleted}
         />
       )}
-    </section>
+    </>
   )
 }
 

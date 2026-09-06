@@ -149,7 +149,7 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 
 ## Project 设置与创建入口
 
-Project Settings 默认进入“常规”，提供名称、说明与可见范围编辑；所属范围与可见范围继续显示在 Files 的 About 中。
+Project Settings 默认进入“常规”，提供名称与说明编辑；可见范围位于底部危险操作，须独立确认后更新；所属范围与可见范围继续显示在 Files 的 About 中。
 删除 Project 仅位于常规设置底部，保留删除影响及阻塞检查。
 “环境变量”分区保留 Variables / Secrets 标签栏，Secret 值不回显。
 

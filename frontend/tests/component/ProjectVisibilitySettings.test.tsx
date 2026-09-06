@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { api } from '../../src/api/client'
@@ -31,49 +31,48 @@ function show(access = project, onChanged = vi.fn()) {
     </MemoryRouter>,
   )
 }
-it('可见范围在保存时才更新，并通知页面刷新', async () => {
+it.each(['user', 'user_group'] as const)('%s 拥有的项目经独立确认后才能公开', async (kind) => {
+  const access = { ...project, owner: { ...project.owner, kind } }
   const update = vi
     .spyOn(api, 'updateProject')
-    .mockResolvedValue({ ...project, visibility: 'public' })
+    .mockResolvedValue({ ...access, visibility: 'public' })
   const changed = vi.fn()
-  show(project, changed)
-  const field = screen.getByRole('combobox', { name: '可见范围' })
-  expect(field).toHaveValue('owner_scope')
-  fireEvent.change(field, { target: { value: 'public' } })
+  show(access, changed)
+  const danger = screen.getByRole('region', { name: '危险操作' })
+  fireEvent.click(within(danger).getByRole('button', { name: '更改可见范围' }))
+  const dialog = await screen.findByRole('alertdialog')
+  expect(within(dialog).getByText(/所有已登录用户/)).toBeVisible()
   expect(update).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
-  await waitFor(() =>
-    expect(update).toHaveBeenCalledWith('p', {
-      name: 'Demo',
-      description: '',
-      visibility: 'public',
-    }),
-  )
-  expect(await screen.findByText('Project 设置已保存。')).toBeVisible()
+  fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+  expect(update).not.toHaveBeenCalled()
+  fireEvent.click(within(danger).getByRole('button', { name: '更改可见范围' }))
+  fireEvent.click(screen.getByRole('button', { name: '确认改为平台公开' }))
+  await waitFor(() => expect(update).toHaveBeenCalledWith('p', { visibility: 'public' }))
+  expect(await screen.findByText('当前：平台公开')).toBeVisible()
   expect(changed).toHaveBeenCalledOnce()
 })
-it('组拥有的项目可以从公开改回所属组范围，失败后保留输入以便重试', async () => {
-  const update = vi
-    .spyOn(api, 'updateProject')
-    .mockRejectedValueOnce(new Error('保存失败'))
-    .mockResolvedValue(project)
-  show({
+it('组项目可改回所属组范围，失败后保留确认弹窗并可重试', async () => {
+  const access: Project = {
     ...project,
     owner: { kind: 'user_group', id: 'g', display_name: 'Group' },
     visibility: 'public',
-  })
-  expect(screen.getByRole('option', { name: '仅所属 User Group' })).toBeInTheDocument()
-  fireEvent.change(screen.getByRole('combobox', { name: '可见范围' }), {
-    target: { value: 'owner_scope' },
-  })
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+  }
+  const update = vi
+    .spyOn(api, 'updateProject')
+    .mockRejectedValueOnce(new Error('保存失败'))
+    .mockResolvedValue({ ...access, visibility: 'owner_scope' })
+  show(access)
+  fireEvent.click(screen.getByRole('button', { name: '更改可见范围' }))
+  expect(screen.getByText(/已有 Fork 是独立项目/)).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '确认改为仅所属 User Group' }))
   expect(await screen.findByText('保存失败')).toBeVisible()
-  expect(screen.getByRole('combobox', { name: '可见范围' })).toHaveValue('owner_scope')
-  fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
-  await waitFor(() => expect(update).toHaveBeenCalledTimes(2))
+  expect(screen.getByRole('alertdialog')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '确认改为仅所属 User Group' }))
+  expect(await screen.findByText('当前：仅所属 User Group')).toBeVisible()
+  expect(update).toHaveBeenLastCalledWith('p', { visibility: 'owner_scope' })
 })
-it('没有修改权限时不能修改可见范围', () => {
+it('没有修改权限时只显示当前可见范围', () => {
   show({ ...project, capabilities: [] })
-  expect(screen.getByRole('combobox', { name: '可见范围' })).toBeDisabled()
-  expect(screen.queryByRole('button', { name: '保存更改' })).toBeNull()
+  expect(screen.getByText('当前：仅自己')).toBeVisible()
+  expect(screen.queryByRole('button', { name: '更改可见范围' })).toBeNull()
 })
