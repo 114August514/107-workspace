@@ -9,7 +9,11 @@ import { formatRelative } from '../../utils/format'
 import type { UserGroupOutletContext } from '../../pages/UserGroupPage'
 import { loadOwnerProjects } from './groupAssets'
 import { RepoList } from './RepoList'
-import { DEFAULT_REPO_TYPE_FLAGS, PROJECT_TYPE_FILTERS } from './repoType'
+import {
+  DEFAULT_REPO_TYPE_FLAGS,
+  PROJECT_TYPE_FILTERS,
+  PERSONAL_PROJECT_TYPE_FILTERS,
+} from './repoType'
 import { userGroupPageCopy as copy } from './userGroupCopy'
 
 function compareUpdatedDesc(left: Project, right: Project): number {
@@ -65,7 +69,7 @@ export function OwnerProjectsSection({ owner }: { owner: OwnerSummary }) {
           : copy.list.emptyProjectsHint
       }
       truncatedNote={projects.data?.truncated ? copy.list.truncatedProjects : null}
-      typeFilters={PROJECT_TYPE_FILTERS}
+      typeFilters={owner.kind === 'user' ? PERSONAL_PROJECT_TYPE_FILTERS : PROJECT_TYPE_FILTERS}
       items={items.map((project) => {
         const forked = forkedIds.has(project.id)
         const source = sourceIds.has(project.id)

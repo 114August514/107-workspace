@@ -165,6 +165,9 @@ describe('User Group 资源分区', () => {
     expect(screen.queryByText('Group Project')).not.toBeInTheDocument()
     expect(screen.queryByText('Other Group Project')).not.toBeInTheDocument()
     expect(list).toHaveBeenCalledWith({ page: 2, page_size: 200 })
+    for (const name of ['Contributed by me', 'Admin access', 'Archived', 'Templates']) {
+      expect(screen.queryByRole('link', { name })).not.toBeInTheDocument()
+    }
   })
 
   it('REQ-21-06 Project 分区只显示组拥有的 Project 并链接详情页', async () => {
@@ -186,6 +189,8 @@ describe('User Group 资源分区', () => {
       'page',
     )
     expect(listProjects).toHaveBeenCalledWith({ page: 1, page_size: 200 })
+    expect(within(typeNav).queryByRole('link', { name: 'Archived' })).toBeNull()
+    expect(within(typeNav).queryByRole('link', { name: 'Templates' })).toBeNull()
     expect(screen.queryByText('Other Group Project')).not.toBeInTheDocument()
     expect(screen.queryByText('Personal Project')).not.toBeInTheDocument()
   })

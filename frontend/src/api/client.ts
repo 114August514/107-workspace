@@ -525,6 +525,7 @@ export const api = {
       description?: string
       environment_version_id?: string | null
       default_run_configuration_id?: string | null
+      visibility?: Project['visibility']
     },
   ): Promise<Project> =>
     unwrap(

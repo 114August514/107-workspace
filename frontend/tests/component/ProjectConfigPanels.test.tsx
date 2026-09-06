@@ -295,6 +295,7 @@ describe('ProjectSettingsPanel', () => {
     expect(mockUpdateProject).toHaveBeenLastCalledWith('proj-1', {
       name: '新名称',
       description: '新的说明',
+      visibility: 'owner_scope',
     })
     expect(onChanged).toHaveBeenCalledTimes(1)
   })

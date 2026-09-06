@@ -13,7 +13,20 @@ export const REPO_TYPE_FILTERS = [
 
 export type RepoTypeFilter = (typeof REPO_TYPE_FILTERS)[number]
 
-export const PROJECT_TYPE_FILTERS = REPO_TYPE_FILTERS
+export const PROJECT_TYPE_FILTERS = [
+  'all',
+  'contributed',
+  'admin',
+  'public',
+  'sources',
+  'forks',
+] as const satisfies readonly RepoTypeFilter[]
+export const PERSONAL_PROJECT_TYPE_FILTERS = [
+  'all',
+  'public',
+  'sources',
+  'forks',
+] as const satisfies readonly RepoTypeFilter[]
 
 /** Project 以外的组资产：没有 fork / archive / template 语义。 */
 export const GROUP_ASSET_TYPE_FILTERS = [

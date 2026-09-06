@@ -97,6 +97,7 @@ export function ProjectSettingsPanel({ projectId, access, onChanged, deletion }:
 function GeneralSettings({ project, onChanged }: { project: Project; onChanged?: () => void }) {
   const [name, setName] = useState(project.name)
   const [description, setDescription] = useState(project.description)
+  const [visibility, setVisibility] = useState(project.visibility)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string }>()
   const editable = can(project, 'project.update')
@@ -109,7 +110,11 @@ function GeneralSettings({ project, onChanged }: { project: Project; onChanged?:
     setBusy(true)
     setFeedback(undefined)
     try {
-      await api.updateProject(project.id, { name: name.trim(), description: description.trim() })
+      await api.updateProject(project.id, {
+        name: name.trim(),
+        description: description.trim(),
+        visibility,
+      })
       setFeedback({ ok: true, text: 'Project 设置已保存。' })
       onChanged?.()
     } catch (error) {
@@ -127,9 +132,7 @@ function GeneralSettings({ project, onChanged }: { project: Project; onChanged?:
         <h2 id="project-general-title" className={styles.paneTitle}>
           基本信息
         </h2>
-        <p className={styles.sectionDescription}>
-          修改 Project 的名称与说明，说明会显示在 About 中。
-        </p>
+        <p className={styles.sectionDescription}>修改 Project 的名称、说明与可见范围。</p>
         {feedback && (
           <Banner variant={feedback.ok ? 'success' : 'critical'}>
             <Banner.Title>{feedback.text}</Banner.Title>
@@ -160,6 +163,23 @@ function GeneralSettings({ project, onChanged }: { project: Project; onChanged?:
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
+          </FormControl>
+          <FormControl disabled={!editable || busy}>
+            <FormControl.Label>可见范围</FormControl.Label>
+            <Select
+              block
+              value={visibility}
+              onChange={(event) => setVisibility(event.target.value as Project['visibility'])}
+            >
+              <Select.Option value="owner_scope">
+                {project.owner.kind === 'user' ? '仅自己' : '仅所属 User Group'}
+              </Select.Option>
+              <Select.Option value="public">平台公开</Select.Option>
+            </Select>
+            <FormControl.Caption>
+              平台公开后，已登录用户可以查看已保存版本并
+              Fork；不会获得暂存区、运行记录、运行方案或环境变量的访问权，也不能编辑此 Project。
+            </FormControl.Caption>
           </FormControl>
           {editable && (
             <Button type="submit" variant="primary" loading={busy} disabled={busy}>

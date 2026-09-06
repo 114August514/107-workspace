@@ -149,7 +149,7 @@ Run 未结束时每 2 秒轮询一次：先触发后端状态同步，再读取 
 
 ## Project 设置与创建入口
 
-Project Settings 默认进入“常规”，提供名称、说明编辑；所属范围与可见范围继续显示在 Files 的 About 中。
+Project Settings 默认进入“常规”，提供名称、说明与可见范围编辑；所属范围与可见范围继续显示在 Files 的 About 中。
 删除 Project 仅位于常规设置底部，保留删除影响及阻塞检查。
 “环境变量”分区保留 Variables / Secrets 标签栏，Secret 值不回显。
 
@@ -193,3 +193,5 @@ GPU 型号、分区、QoS、配额这些是会变的平台事实。界面上只�
 个人 Projects 复用 User Group 列表与筛选，按当前 User 的精确 Owner 归属过滤，并跟随分页读取；
 首页“查看我的全部 Projects”和用户菜单“我的 Projects”均链接到 `/profile/projects`。
 User Group Settings 左侧只保留常规，基本信息与底部危险操作在同一页；Owner 删除，非 Owner 退出。
+
+个人 Project Type 仅展示 All / Public / Sources / Forks；个人和 User Group Project 列表均隐藏 Archived / Templates 筛选。
