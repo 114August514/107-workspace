@@ -194,7 +194,6 @@ def run_dev(component: str = "all") -> None:
                     resolve_executable("pnpm"),
                     "run",
                     "dev",
-                    "--",
                     "--host",
                     "127.0.0.1",
                     "--port",
