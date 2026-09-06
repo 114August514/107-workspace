@@ -1,11 +1,11 @@
-import { Banner, Button, FormControl, Textarea, TextInput } from '@primer/react'
+import { ActionList, Banner, Button, FormControl, Select, Textarea, TextInput } from '@primer/react'
 import { useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
 import type { UserGroupOutletContext } from '../../pages/UserGroupPage'
-import styles from './assets.module.css'
+import styles from '../project/projectSettingsPanel.module.css'
 import { LeaveGroupPanel } from './LeaveGroupPanel'
 
 interface Feedback {
@@ -17,6 +17,9 @@ export function SettingsSection() {
     useOutletContext<UserGroupOutletContext>()
   const canUpdate = can(userGroup, 'user_group.update')
   const canLeave = userGroup.role !== 'owner'
+  const [params, setParams] = useSearchParams()
+  const section = params.get('section') === 'danger' || !canUpdate ? 'danger' : 'general'
+  const selectSection = (value: string) => setParams(value === 'general' ? {} : { section: value })
   const nameRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(userGroup.name)
   const [description, setDescription] = useState(userGroup.description)
@@ -49,35 +52,57 @@ export function SettingsSection() {
   }
 
   return (
-    <div className={styles.membersSection}>
-      {canUpdate ? (
-        <section className={styles.section} aria-labelledby="user-group-settings-title">
-          <header className={styles.sectionHeader}>
-            <h2 id="user-group-settings-title" className={styles.sectionTitle}>
-              设置
+    <div className={styles.layout}>
+      <nav className={styles.navigation} aria-label="User Group 设置分区">
+        <ActionList>
+          {canUpdate && (
+            <ActionList.LinkItem as={Link} to="?section=general" active={section === 'general'}>
+              常规
+            </ActionList.LinkItem>
+          )}
+          {(onDelete || canLeave) && (
+            <ActionList.LinkItem as={Link} to="?section=danger" active={section === 'danger'}>
+              危险操作
+            </ActionList.LinkItem>
+          )}
+        </ActionList>
+      </nav>
+      <FormControl className={styles.mobileNavigation}>
+        <FormControl.Label>设置分区</FormControl.Label>
+        <Select block value={section} onChange={(event) => selectSection(event.target.value)}>
+          {canUpdate && <Select.Option value="general">常规</Select.Option>}
+          {(onDelete || canLeave) && <Select.Option value="danger">危险操作</Select.Option>}
+        </Select>
+      </FormControl>
+      <div className={styles.content}>
+        {section === 'general' && canUpdate ? (
+          <section className={styles.section} aria-labelledby="user-group-settings-title">
+            <h2 id="user-group-settings-title" className={styles.paneTitle}>
+              基本信息
             </h2>
-            <p className={styles.sectionDescription}>修改 User Group 的名称与说明。</p>
-          </header>
+            <p className={styles.sectionDescription}>
+              修改 User Group 的名称与说明，说明会显示在 About 中。
+            </p>
 
-          {feedback ? (
-            <Banner variant={feedback.variant} onDismiss={() => setFeedback(null)}>
-              <Banner.Title>
-                {feedback.variant === 'success' ? 'User Group 设置已保存。' : '保存失败。'}
-              </Banner.Title>
-              {feedback.variant === 'critical' ? (
-                <Banner.Description>请确认你仍有管理权限后重试。</Banner.Description>
-              ) : null}
-            </Banner>
-          ) : null}
+            {feedback ? (
+              <Banner variant={feedback.variant} onDismiss={() => setFeedback(null)}>
+                <Banner.Title>
+                  {feedback.variant === 'success' ? 'User Group 设置已保存。' : '保存失败。'}
+                </Banner.Title>
+                {feedback.variant === 'critical' ? (
+                  <Banner.Description>请确认你仍有管理权限后重试。</Banner.Description>
+                ) : null}
+              </Banner>
+            ) : null}
 
-          <form
-            autoComplete="off"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!submitting) void submit()
-            }}
-          >
-            <div className={styles.settingsForm}>
+            <form
+              className={styles.form}
+              autoComplete="off"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!submitting) void submit()
+              }}
+            >
               <FormControl required disabled={submitting} id="user-group-name">
                 <FormControl.Label>名称</FormControl.Label>
                 <TextInput
@@ -96,6 +121,8 @@ export function SettingsSection() {
                 <FormControl.Label>说明</FormControl.Label>
                 <Textarea
                   block
+                  rows={4}
+                  resize="vertical"
                   name="user-group-description"
                   autoComplete="off"
                   value={description}
@@ -104,37 +131,41 @@ export function SettingsSection() {
                 <FormControl.Caption>说明会显示在 User Group 的 About 中。</FormControl.Caption>
               </FormControl>
               <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
-                保存设置
+                保存更改
               </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
+            </form>
+          </section>
+        ) : null}
 
-      {onDelete ? (
-        <section className={styles.section} aria-labelledby="user-group-delete-title">
-          <header className={styles.sectionHeader}>
-            <h2 id="user-group-delete-title" className={styles.sectionTitle}>
-              删除 User Group
+        {section === 'danger' && (onDelete || canLeave) ? (
+          <section className={styles.section} aria-labelledby="user-group-danger-title">
+            <h2 id="user-group-danger-title" className={styles.paneTitle}>
+              危险操作
             </h2>
-            <p className={styles.sectionDescription}>
-              删除前会检查组内资源和影响范围。若只想退出，请先转让所有权。
-            </p>
-          </header>
-          <Button variant="danger" onClick={onDelete}>
-            删除 User Group
-          </Button>
-        </section>
-      ) : null}
-
-      {canLeave ? (
-        <LeaveGroupPanel
-          userGroup={userGroup}
-          onLeft={() => {
-            onMembershipChanged?.()
-          }}
-        />
-      ) : null}
+            {onDelete ? (
+              <div className={styles.danger}>
+                <div>
+                  <strong>删除 User Group</strong>
+                  <p className={styles.sectionDescription}>
+                    删除前会检查组内资源和影响范围。若只想退出，请先转让所有权。
+                  </p>
+                </div>
+                <Button variant="danger" onClick={onDelete}>
+                  删除 User Group
+                </Button>
+              </div>
+            ) : (
+              <LeaveGroupPanel
+                compact
+                userGroup={userGroup}
+                onLeft={() => {
+                  onMembershipChanged?.()
+                }}
+              />
+            )}
+          </section>
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -192,6 +192,8 @@ describe('UserGroupPage 分区导航信息架构', () => {
     await screen.findByRole('heading', { name: 'Research Lab' })
     expect(screen.queryByRole('button', { name: '删除 User Group' })).not.toBeInTheDocument()
     screen.getByRole('link', { name: 'Settings' }).click()
+    await screen.findByRole('heading', { name: '基本信息' })
+    screen.getByRole('link', { name: '危险操作' }).click()
     expect(await screen.findByRole('button', { name: '删除 User Group' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退出 User Group' })).not.toBeInTheDocument()
   })
@@ -212,7 +214,7 @@ describe('UserGroupPage 分区导航信息架构', () => {
     vi.spyOn(api, 'getUserGroupDeletionImpact').mockResolvedValue(impact)
     const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue('deleted')
 
-    renderUserGroupRoute('/user-groups/grp_lab/settings')
+    renderUserGroupRoute('/user-groups/grp_lab/settings?section=danger')
 
     await screen.findByRole('button', { name: '删除 User Group' })
     screen.getByRole('button', { name: '删除 User Group' }).click()
@@ -237,7 +239,7 @@ describe('UserGroupPage 分区导航信息架构', () => {
     })
     const deleteGroup = vi.spyOn(api, 'deleteUserGroup').mockResolvedValue('absent')
 
-    renderUserGroupRoute('/user-groups/grp_lab/settings')
+    renderUserGroupRoute('/user-groups/grp_lab/settings?section=danger')
     await screen.findByRole('button', { name: '删除 User Group' })
     screen.getByRole('button', { name: '删除 User Group' }).click()
     const dialog = await screen.findByRole('dialog')

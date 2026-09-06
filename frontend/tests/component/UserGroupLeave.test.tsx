@@ -56,7 +56,7 @@ describe('成员退出 User Group', () => {
   it('REQ-21-20 Owner 不显示退出入口', async () => {
     renderSettings(ownerGroup)
 
-    await screen.findByRole('heading', { name: '设置' })
+    await screen.findByRole('heading', { name: '基本信息' })
     expect(screen.queryByRole('heading', { name: '退出 User Group' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退出 User Group' })).not.toBeInTheDocument()
   })
