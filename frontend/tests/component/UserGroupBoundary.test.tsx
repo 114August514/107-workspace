@@ -193,7 +193,7 @@ describe('UserGroupPage 分区导航信息架构', () => {
     expect(screen.queryByRole('button', { name: '删除 User Group' })).not.toBeInTheDocument()
     screen.getByRole('link', { name: 'Settings' }).click()
     await screen.findByRole('heading', { name: '基本信息' })
-    screen.getByRole('link', { name: '危险操作' }).click()
+    expect(screen.queryByRole('link', { name: '危险操作' })).not.toBeInTheDocument()
     expect(await screen.findByRole('button', { name: '删除 User Group' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '退出 User Group' })).not.toBeInTheDocument()
   })

@@ -29,13 +29,24 @@ export function isOwnedByGroup(owner: OwnerSummary, groupId: string): boolean {
 }
 
 export async function loadGroupProjects(groupId: string): Promise<GroupProjectList> {
+  return loadOwnerProjects('user_group', groupId)
+}
+
+export async function loadOwnerProjects(
+  kind: 'user' | 'user_group',
+  ownerId: string,
+): Promise<GroupProjectList> {
   const items: Project[] = []
   const visible: Project[] = []
   let truncated = true
   for (let page = 1; page <= PROJECT_PAGE_LIMIT; page += 1) {
     const result = await api.listProjects({ page, page_size: PROJECT_PAGE_SIZE })
     visible.push(...result.items)
-    items.push(...result.items.filter((project) => isOwnedByGroup(project.owner, groupId)))
+    items.push(
+      ...result.items.filter(
+        (project) => project.owner.kind === kind && project.owner.id === ownerId,
+      ),
+    )
     if (!result.has_more) {
       truncated = false
       break

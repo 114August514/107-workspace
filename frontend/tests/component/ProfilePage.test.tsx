@@ -57,7 +57,7 @@ afterEach(() => {
 })
 
 describe('个人资料页面', () => {
-  it('只读展示身份、邮箱、用户 ID、所属 User Group 与执行上下文入口', () => {
+  it('只读展示身份、邮箱、用户 ID、所属 User Group 与资源入口', () => {
     renderProfile()
 
     expect(screen.getByRole('heading', { name: '个人资料' })).toBeVisible()
@@ -70,10 +70,20 @@ describe('个人资料页面', () => {
       '/user-groups/grp-1',
     )
     expect(screen.getByText('所有者')).toBeVisible()
-    expect(screen.getByRole('link', { name: '个人执行上下文' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Projects' })).toHaveAttribute(
       'href',
-      '/execution-context',
+      '/profile/projects',
     )
+    expect(screen.getByRole('link', { name: '运行环境' })).toHaveAttribute(
+      'href',
+      '/profile/environments',
+    )
+    expect(screen.getByRole('link', { name: '共享资源' })).toHaveAttribute(
+      'href',
+      '/profile/shared-resources',
+    )
+    expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Members' })).toBeNull()
     expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.queryByRole('img')).toBeNull()
   })

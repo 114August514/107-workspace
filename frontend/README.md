@@ -188,3 +188,8 @@ pnpm run generate:api     # 仅重新生成类型；平时在根目录用 make c
 
 GPU 型号、分区、QoS、配额这些是会变的平台事实。界面上只展示后端返回的值，
 不在前端硬编码，也不写成固定结论。
+
+个人页 `/profile` 提供个人简介、Projects、共享资源和运行环境，不设置 Members 或 Settings 分区。
+个人 Projects 复用 User Group 列表与筛选，按当前 User 的精确 Owner 归属过滤，并跟随分页读取；
+首页“查看我的全部 Projects”和用户菜单“我的 Projects”均链接到 `/profile/projects`。
+User Group Settings 左侧只保留常规，基本信息与底部危险操作在同一页；Owner 删除，非 Owner 退出。

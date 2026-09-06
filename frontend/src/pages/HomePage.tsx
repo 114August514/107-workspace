@@ -31,6 +31,9 @@ export function HomePage({ username, home }: Props) {
       <header>
         <h1 className={styles.title}>{homeTitle(user?.display_name)}</h1>
         <p className={styles.subtitle}>{homeCopy.subtitle}</p>
+        <Link as={RouterLink} to="/profile/projects">
+          查看我的全部 Projects
+        </Link>
       </header>
 
       <AsyncState

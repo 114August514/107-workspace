@@ -3,11 +3,11 @@ import { useOutletContext } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { toAsyncError } from '../../api/errors'
-import { can, type Home, type Project, type UserGroup } from '../../api/types'
+import { can, type Home, type Project, type OwnerSummary } from '../../api/types'
 import { useAsync } from '../../api/useAsync'
 import { formatRelative } from '../../utils/format'
 import type { UserGroupOutletContext } from '../../pages/UserGroupPage'
-import { loadGroupProjects } from './groupAssets'
+import { loadOwnerProjects } from './groupAssets'
 import { RepoList } from './RepoList'
 import { DEFAULT_REPO_TYPE_FLAGS, PROJECT_TYPE_FILTERS } from './repoType'
 import { userGroupPageCopy as copy } from './userGroupCopy'
@@ -24,15 +24,23 @@ function ProjectMeta({ project }: { project: Project }) {
   return <>更新于 {formatRelative(updated)}</>
 }
 
-function hasProjectAdmin(project: Project, userGroup: UserGroup): boolean {
+function hasProjectAdmin(project: Project, owner: OwnerSummary): boolean {
   if (can(project, 'project.update')) return true
-  // 发现列表不投影 capabilities；组页上的组拥有 Project，当前成员具备 project.update。
-  return project.owner.kind === 'user_group' && project.owner.id === userGroup.id
+  // 发现列表不投影 capabilities；仅在当前用户本人或所属组的 Owner 列表中使用。
+  return project.owner.kind === owner.kind && project.owner.id === owner.id
 }
 
 export function ProjectsSection() {
   const { userGroup } = useOutletContext<UserGroupOutletContext>()
-  const projects = useAsync(() => loadGroupProjects(userGroup.id), [userGroup.id])
+  return (
+    <OwnerProjectsSection
+      owner={{ kind: 'user_group', id: userGroup.id, display_name: userGroup.name }}
+    />
+  )
+}
+
+export function OwnerProjectsSection({ owner }: { owner: OwnerSummary }) {
+  const projects = useAsync(() => loadOwnerProjects(owner.kind, owner.id), [owner.kind, owner.id])
   const me = useAsync<Home>(() => api.home(), [])
   const currentUserId = me.data?.user.id
   const items = (projects.data?.items ?? []).slice().sort(compareUpdatedDesc)
@@ -50,8 +58,12 @@ export function ProjectsSection() {
       loadingText={copy.list.loadingProjects}
       error={toAsyncError(projects.error)}
       onRetry={projects.reload}
-      emptyText={copy.list.emptyProjects}
-      emptyDescription={copy.list.emptyProjectsHint}
+      emptyText={owner.kind === 'user' ? '你还没有个人 Project' : copy.list.emptyProjects}
+      emptyDescription={
+        owner.kind === 'user'
+          ? '通过右上角创建菜单创建 Project，并将所属范围选择为自己。'
+          : copy.list.emptyProjectsHint
+      }
       truncatedNote={projects.data?.truncated ? copy.list.truncatedProjects : null}
       typeFilters={PROJECT_TYPE_FILTERS}
       items={items.map((project) => {
@@ -65,7 +77,7 @@ export function ProjectsSection() {
           types: {
             ...DEFAULT_REPO_TYPE_FLAGS,
             contributed: currentUserId !== undefined && project.created_by === currentUserId,
-            admin: hasProjectAdmin(project, userGroup),
+            admin: hasProjectAdmin(project, owner),
             isPublic: project.visibility === 'public',
             source,
             fork: forked,

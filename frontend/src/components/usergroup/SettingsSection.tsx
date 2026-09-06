@@ -1,6 +1,6 @@
-import { ActionList, Banner, Button, FormControl, Select, Textarea, TextInput } from '@primer/react'
+import { ActionList, Banner, Button, FormControl, Textarea, TextInput } from '@primer/react'
 import { useRef, useState } from 'react'
-import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 
 import { api } from '../../api/client'
 import { can } from '../../api/types'
@@ -17,9 +17,6 @@ export function SettingsSection() {
     useOutletContext<UserGroupOutletContext>()
   const canUpdate = can(userGroup, 'user_group.update')
   const canLeave = userGroup.role !== 'owner'
-  const [params, setParams] = useSearchParams()
-  const section = params.get('section') === 'danger' || !canUpdate ? 'danger' : 'general'
-  const selectSection = (value: string) => setParams(value === 'general' ? {} : { section: value })
   const nameRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(userGroup.name)
   const [description, setDescription] = useState(userGroup.description)
@@ -55,34 +52,18 @@ export function SettingsSection() {
     <div className={styles.layout}>
       <nav className={styles.navigation} aria-label="User Group 设置分区">
         <ActionList>
-          {canUpdate && (
-            <ActionList.LinkItem as={Link} to="?section=general" active={section === 'general'}>
-              常规
-            </ActionList.LinkItem>
-          )}
-          {(onDelete || canLeave) && (
-            <ActionList.LinkItem as={Link} to="?section=danger" active={section === 'danger'}>
-              危险操作
-            </ActionList.LinkItem>
-          )}
+          <ActionList.LinkItem as={Link} to="?section=general" active>
+            常规
+          </ActionList.LinkItem>
         </ActionList>
       </nav>
-      <FormControl className={styles.mobileNavigation}>
-        <FormControl.Label>设置分区</FormControl.Label>
-        <Select block value={section} onChange={(event) => selectSection(event.target.value)}>
-          {canUpdate && <Select.Option value="general">常规</Select.Option>}
-          {(onDelete || canLeave) && <Select.Option value="danger">危险操作</Select.Option>}
-        </Select>
-      </FormControl>
       <div className={styles.content}>
-        {section === 'general' && canUpdate ? (
+        {canUpdate ? (
           <section className={styles.section} aria-labelledby="user-group-settings-title">
             <h2 id="user-group-settings-title" className={styles.paneTitle}>
               基本信息
             </h2>
-            <p className={styles.sectionDescription}>
-              修改 User Group 的名称与说明，说明会显示在 About 中。
-            </p>
+            <p className={styles.sectionDescription}>修改 User Group 的名称与说明。</p>
 
             {feedback ? (
               <Banner variant={feedback.variant} onDismiss={() => setFeedback(null)}>
@@ -128,7 +109,6 @@ export function SettingsSection() {
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
                 />
-                <FormControl.Caption>说明会显示在 User Group 的 About 中。</FormControl.Caption>
               </FormControl>
               <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
                 保存更改
@@ -137,7 +117,7 @@ export function SettingsSection() {
           </section>
         ) : null}
 
-        {section === 'danger' && (onDelete || canLeave) ? (
+        {onDelete || canLeave ? (
           <section className={styles.section} aria-labelledby="user-group-danger-title">
             <h2 id="user-group-danger-title" className={styles.paneTitle}>
               危险操作

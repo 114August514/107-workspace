@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from '../../src/api/client'
 import type { Environment, Project, SharedResource, UserGroup } from '../../src/api/types'
 import { EnvironmentsSection } from '../../src/components/usergroup/EnvironmentsSection'
-import { ProjectsSection } from '../../src/components/usergroup/ProjectsSection'
+import {
+  OwnerProjectsSection,
+  ProjectsSection,
+} from '../../src/components/usergroup/ProjectsSection'
 import { SharedResourcesSection } from '../../src/components/usergroup/SharedResourcesSection'
 import { UserGroupProvider } from '../../src/components/usergroup/UserGroupHeaderNav'
 import { UserGroupPage } from '../../src/pages/UserGroupPage'
@@ -130,6 +133,38 @@ describe('User Group 资源分区', () => {
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
+  })
+
+  it('个人 Projects 跟随分页，只显示当前 User 拥有的项目', async () => {
+    vi.spyOn(api, 'forkSource').mockResolvedValue(null)
+    const list = vi
+      .spyOn(api, 'listProjects')
+      .mockResolvedValueOnce({
+        items: [groupProject, otherProject],
+        page: 1,
+        page_size: 200,
+        total: 3,
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [userProject],
+        page: 2,
+        page_size: 200,
+        total: 3,
+        has_more: false,
+      })
+    render(
+      <MemoryRouter>
+        <OwnerProjectsSection owner={userProject.owner} />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByRole('link', { name: 'Personal Project' })).toHaveAttribute(
+      'href',
+      '/projects/prj_user',
+    )
+    expect(screen.queryByText('Group Project')).not.toBeInTheDocument()
+    expect(screen.queryByText('Other Group Project')).not.toBeInTheDocument()
+    expect(list).toHaveBeenCalledWith({ page: 2, page_size: 200 })
   })
 
   it('REQ-21-06 Project 分区只显示组拥有的 Project 并链接详情页', async () => {
