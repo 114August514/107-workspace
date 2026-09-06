@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import httpx
 import pytest
 
@@ -30,9 +28,7 @@ async def create_project(
     return str(response.json()["id"])
 
 
-async def write_file(
-    client: httpx.AsyncClient, project_id: str, path: str, content: str
-) -> None:
+async def write_file(client: httpx.AsyncClient, project_id: str, path: str, content: str) -> None:
     response = await client.put(
         f"/api/v1/projects/{project_id}/files",
         json={"path": path, "content": content},

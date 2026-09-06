@@ -110,9 +110,7 @@ class LocalStorage:
         finally:
             await asyncio.to_thread(_force_rmtree, root)
 
-    def _materialize_temporary_files_sync(
-        self, root: Path, files: list[tuple[str, str]]
-    ) -> None:
+    def _materialize_temporary_files_sync(self, root: Path, files: list[tuple[str, str]]) -> None:
         resolved_root = root.resolve()
         for relative_path, content_hash in files:
             target = (resolved_root / relative_path).resolve()
@@ -123,7 +121,6 @@ class LocalStorage:
                 raise ObjectNotFound("文件内容", content_hash)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
-
 
     # -- Run 工作目录 ---------------------------------------------------
 

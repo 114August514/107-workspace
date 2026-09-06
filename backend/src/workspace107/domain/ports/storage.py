@@ -108,7 +108,6 @@ class StoragePort(Protocol):
         """把 ``(相对路径, 内容摘要)`` 临时物化到本地目录，并在退出时清理。"""
         ...
 
-
     # -- Run 工作目录 ---------------------------------------------------
 
     def run_paths(self, run_id: str) -> RunPaths: ...

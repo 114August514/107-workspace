@@ -132,6 +132,7 @@ class WorkingTreeChange:
     change: ChangeKind
     base_version: str | None
 
+
 @dataclass(frozen=True, slots=True)
 class WorkingChangeDetail:
     """一个未保存变更的两侧内容事实，由路由层负责预览截断与解码。"""
@@ -800,7 +801,6 @@ class ProjectService:
             previous=await self._storage.read_blob(previous_hash) if previous_hash else None,
             current=await self._storage.read_blob(current_hash) if current_hash else None,
         )
-
 
     async def discard_changes(
         self, user_id: str, project_id: str, paths: list[str]

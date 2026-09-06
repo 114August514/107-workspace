@@ -80,7 +80,6 @@
   gap: var(--base-size-8);
 }
 
-
 .error {
   display: flex;
   flex-direction: column;

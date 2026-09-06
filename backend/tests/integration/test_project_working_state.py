@@ -648,11 +648,11 @@ async def setup_project_with_baseline(client: httpx.AsyncClient) -> tuple[str, d
 async def change_detail(
     client: httpx.AsyncClient, project_id: str, path: str, base_version: str | None = None
 ) -> httpx.Response:
-    params: dict[str, str] = {'path': path}
+    params: dict[str, str] = {"path": path}
     if base_version is not None:
-        params['base_version'] = base_version
+        params["base_version"] = base_version
     return await client.get(
-        f'/api/v1/projects/{project_id}/changes/detail', params=params, headers=ALICE
+        f"/api/v1/projects/{project_id}/changes/detail", params=params, headers=ALICE
     )
 
 
@@ -667,22 +667,22 @@ async def test_change_detail_returns_both_sides_of_each_change_kind(client) -> N
     stale = await change_detail(client, project_id, "a.txt", "pv_stale")
     assert stale.status_code == 409
 
-    detail = (await change_detail(client, project_id, 'a.txt', baseline_version['id'])).json()
+    detail = (await change_detail(client, project_id, "a.txt", baseline_version["id"])).json()
     assert detail["change"] == "modified"
     assert detail["previous"]["content"] == "original a"
     assert detail["current"]["content"] == "changed a"
 
-    added = (await change_detail(client, project_id, 'new.txt', baseline_version['id'])).json()
+    added = (await change_detail(client, project_id, "new.txt", baseline_version["id"])).json()
     assert added["change"] == "added"
     assert added["previous"] is None
     assert added["current"]["content"] == "brand new"
 
-    removed = (await change_detail(client, project_id, 'dir/b.txt', baseline_version['id'])).json()
+    removed = (await change_detail(client, project_id, "dir/b.txt", baseline_version["id"])).json()
     assert removed["change"] == "removed"
     assert removed["previous"]["content"] == "original b"
     assert removed["current"] is None
 
-    unchanged = await change_detail(client, project_id, 'not-changed.txt', baseline_version['id'])
+    unchanged = await change_detail(client, project_id, "not-changed.txt", baseline_version["id"])
     assert unchanged.status_code == 404
 
 

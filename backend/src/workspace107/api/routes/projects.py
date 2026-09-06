@@ -435,9 +435,7 @@ async def working_change_detail(
     base_version: str | None = Query(default=None, min_length=1),
 ) -> s.WorkingChangeDetailOut:
     """按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。"""
-    detail = await services.projects.working_change_detail(
-        user.id, project_id, path, base_version
-    )
+    detail = await services.projects.working_change_detail(user.id, project_id, path, base_version)
     return s.WorkingChangeDetailOut(
         path=detail.path,
         change=detail.change,

@@ -42,9 +42,22 @@ function languageForPath(path: string): string {
   return languages[extension ?? ''] ?? 'text'
 }
 const editorLanguages = {
-  js: langs.js, jsx: langs.jsx, ts: langs.ts, tsx: langs.tsx,
-  json: langs.json, md: langs.markdown, py: langs.python, yaml: langs.yaml, yml: langs.yaml,
-  cpp: langs.cpp, cc: langs.cpp, hpp: langs.cpp, java: langs.java, go: langs.go, sh: langs.sh, bash: langs.bash,
+  js: langs.js,
+  jsx: langs.jsx,
+  ts: langs.ts,
+  tsx: langs.tsx,
+  json: langs.json,
+  md: langs.markdown,
+  py: langs.python,
+  yaml: langs.yaml,
+  yml: langs.yaml,
+  cpp: langs.cpp,
+  cc: langs.cpp,
+  hpp: langs.cpp,
+  java: langs.java,
+  go: langs.go,
+  sh: langs.sh,
+  bash: langs.bash,
 }
 function editorLanguage(path: string) {
   const extension = path.split('.').at(-1)?.toLowerCase()
@@ -173,7 +186,10 @@ export function FileViewer({
                 onChange={setContent}
                 height="32rem"
                 readOnly={!canWrite || file.data.truncated}
-                extensions={[...editorExtensions, EditorView.contentAttributes.of({ 'aria-label': `编辑 ${path}` })]}
+                extensions={[
+                  ...editorExtensions,
+                  EditorView.contentAttributes.of({ 'aria-label': `编辑 ${path}` }),
+                ]}
                 aria-label={`编辑 ${path}`}
               />
             )}

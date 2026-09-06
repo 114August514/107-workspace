@@ -201,9 +201,15 @@ export function VersionPanel({
                       >
                         <FileIcon size={16} />
                         <span className={styles.changePath}>{change.path}</span>
-                        <span className={styles.changeSource}>{projectName || 'Working State'}</span>
+                        <span className={styles.changeSource}>
+                          {projectName || 'Working State'}
+                        </span>
                         <span className={`${styles.changeStatus} ${styles[change.change]}`}>
-                          {change.change === 'modified' ? 'M' : change.change === 'added' ? 'A' : 'D'}
+                          {change.change === 'modified'
+                            ? 'M'
+                            : change.change === 'added'
+                              ? 'A'
+                              : 'D'}
                         </span>
                       </Button>
                     ))}
@@ -371,8 +377,17 @@ function ChangeDetailDrawer({
         <Space direction="vertical" size={4} style={{ width: '100%', marginBottom: 16 }}>
           <Typography.Text strong>更改 ({changes.length})</Typography.Text>
           {changes.map((item) => (
-            <Button key={item.path} type={item.path === change?.path ? 'primary' : 'text'} block onClick={() => onSelect(item)} style={{ textAlign: 'left' }}>
-              <Tag color={CHANGE_LABEL[item.change].color}>{item.change === 'modified' ? 'M' : item.change === 'added' ? 'A' : 'D'}</Tag>{item.path}
+            <Button
+              key={item.path}
+              type={item.path === change?.path ? 'primary' : 'text'}
+              block
+              onClick={() => onSelect(item)}
+              style={{ textAlign: 'left' }}
+            >
+              <Tag color={CHANGE_LABEL[item.change].color}>
+                {item.change === 'modified' ? 'M' : item.change === 'added' ? 'A' : 'D'}
+              </Tag>
+              {item.path}
             </Button>
           ))}
         </Space>
@@ -414,29 +429,96 @@ function ChangeDetailDrawer({
   )
 }
 
-function DiffView({ previous, current, previousEmpty, currentEmpty }: { previous: string | null; current: string | null; previousEmpty: string; currentEmpty: string }) {
+function DiffView({
+  previous,
+  current,
+  previousEmpty,
+  currentEmpty,
+}: {
+  previous: string | null
+  current: string | null
+  previousEmpty: string
+  currentEmpty: string
+}) {
   if (previous === null || current === null) {
-    return <Typography.Text type="secondary">{previous === null ? previousEmpty : currentEmpty}</Typography.Text>
+    return (
+      <Typography.Text type="secondary">
+        {previous === null ? previousEmpty : currentEmpty}
+      </Typography.Text>
+    )
   }
   const oldLines = previous.split('\n')
   const newLines = current.split('\n')
-  const rows: Array<{ kind: 'same' | 'remove' | 'add'; old: number | ''; next: number | ''; text: string }> = []
+  const rows: Array<{
+    kind: 'same' | 'remove' | 'add'
+    old: number | ''
+    next: number | ''
+    text: string
+  }> = []
   let old = 0
   let next = 0
   while (old < oldLines.length || next < newLines.length) {
     if (oldLines[old] === newLines[next]) {
-      rows.push({ kind: 'same', old: old + 1, next: next + 1, text: oldLines[old] ?? '' }); old++; next++
-    } else if (old < oldLines.length && (next >= newLines.length || !newLines.slice(next + 1).includes(oldLines[old]!))) {
-      rows.push({ kind: 'remove', old: old + 1, next: '', text: oldLines[old]! }); old++
+      rows.push({ kind: 'same', old: old + 1, next: next + 1, text: oldLines[old] ?? '' })
+      old++
+      next++
+    } else if (
+      old < oldLines.length &&
+      (next >= newLines.length || !newLines.slice(next + 1).includes(oldLines[old]!))
+    ) {
+      rows.push({ kind: 'remove', old: old + 1, next: '', text: oldLines[old]! })
+      old++
     } else {
-      rows.push({ kind: 'add', old: '', next: next + 1, text: newLines[next] ?? '' }); next++
+      rows.push({ kind: 'add', old: '', next: next + 1, text: newLines[next] ?? '' })
+      next++
     }
   }
-  return <div style={{ overflowX: 'auto', border: '1px solid #d0d7de', borderRadius: 6, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12 }}>
-    {rows.map((row, index) => <div key={`${row.kind}-${index}`} style={{ display: 'grid', gridTemplateColumns: '48px 48px 1fr', whiteSpace: 'pre', background: row.kind === 'remove' ? '#ffebe9' : row.kind === 'add' ? '#dafbe1' : undefined }}>
-      <span style={{ padding: '2px 8px', textAlign: 'right', color: '#6e7781', borderRight: '1px solid #d0d7de' }}>{row.old}</span>
-      <span style={{ padding: '2px 8px', textAlign: 'right', color: '#6e7781', borderRight: '1px solid #d0d7de' }}>{row.next}</span>
-      <span style={{ padding: '2px 12px' }}><b>{row.kind === 'remove' ? '−' : row.kind === 'add' ? '+' : ' '}</b> {row.text}</span>
-    </div>)}
-  </div>
+  return (
+    <div
+      style={{
+        overflowX: 'auto',
+        border: '1px solid #d0d7de',
+        borderRadius: 6,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 12,
+      }}
+    >
+      {rows.map((row, index) => (
+        <div
+          key={`${row.kind}-${index}`}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '48px 48px 1fr',
+            whiteSpace: 'pre',
+            background:
+              row.kind === 'remove' ? '#ffebe9' : row.kind === 'add' ? '#dafbe1' : undefined,
+          }}
+        >
+          <span
+            style={{
+              padding: '2px 8px',
+              textAlign: 'right',
+              color: '#6e7781',
+              borderRight: '1px solid #d0d7de',
+            }}
+          >
+            {row.old}
+          </span>
+          <span
+            style={{
+              padding: '2px 8px',
+              textAlign: 'right',
+              color: '#6e7781',
+              borderRight: '1px solid #d0d7de',
+            }}
+          >
+            {row.next}
+          </span>
+          <span style={{ padding: '2px 12px' }}>
+            <b>{row.kind === 'remove' ? '−' : row.kind === 'add' ? '+' : ' '}</b> {row.text}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
 }
