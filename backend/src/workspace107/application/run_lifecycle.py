@@ -113,11 +113,14 @@ class RunLifecycleService:
                 run.failure_reason = state.reason or "任务已被取消"
             case SchedulerState.UNKNOWN:
                 # 平台记录与调度系统不一致。保留异常状态，等待同步或人工处置。
-                await self._record_event(
-                    run.id,
-                    RunEventType.ERROR,
-                    f"调度系统中查不到任务 {run.scheduler_job_id}，状态待人工确认",
-                )
+                message = f"调度系统中查不到任务 {run.scheduler_job_id}，状态待人工确认"
+                events = await self._repos.run_events.list_for_run(run.id)
+                if (
+                    not events
+                    or events[-1].type != RunEventType.ERROR
+                    or events[-1].message != message
+                ):
+                    await self._record_event(run.id, RunEventType.ERROR, message)
                 await self._repos.runs.update(run)
                 return False
 

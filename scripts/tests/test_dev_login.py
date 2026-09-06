@@ -92,6 +92,8 @@ class DevLoginStackTests(unittest.TestCase):
         commands = [call.args[0] for call in popen.call_args_list]
         self.assertEqual(len(commands), 3)
         self.assertIn("uvicorn", commands[0])
+        reload_dir = commands[0][commands[0].index("--reload-dir") + 1]
+        self.assertEqual(reload_dir, str(project.BACKEND_ROOT / "src"))
         self.assertIn("flask", commands[1])
         self.assertEqual(commands[2][:2], ["pnpm", "run"])
         self.assertIn("auth.auth_server:create_app", commands[1])
