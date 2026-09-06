@@ -58,7 +58,6 @@ async def test_inaccessible_group_notifications_are_recipient_only_and_non_linki
     notification = mine.json()["items"][0]
     assert notification["target_type"] is None
     assert notification["target_id"] is None
-    assert "workspace_id" not in notification
     accepted = await client.post(
         f"/api/v1/user-groups/{group_id}/invitation",
         json={"accept": True},

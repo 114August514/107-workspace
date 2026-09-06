@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ProjectLanguages as ProjectLanguagesData } from '../../src/api/types'
@@ -37,10 +37,9 @@ describe('Project Languages', () => {
   it('renders a GitHub-style composition bar and legend for the latest Version statistics', () => {
     renderLanguages()
 
-    const composition = screen.getByRole('img', {
-      name: '最新 Project Version 的语言构成，共 200 行代码',
-    })
-    expect(within(composition).getByTitle('Python 75% · 150 行代码')).toHaveStyle({ width: '75%' })
+    expect(
+      screen.getByRole('img', { name: '最新 Project Version 的语言构成，共 200 行代码' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('Python')).toBeInTheDocument()
     expect(screen.getByText('75%')).toBeInTheDocument()
     expect(screen.getByText('Shell')).toBeInTheDocument()

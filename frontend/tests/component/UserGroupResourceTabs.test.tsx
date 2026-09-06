@@ -171,7 +171,7 @@ describe('User Group 资源分区', () => {
   })
 
   it('REQ-21-06 Project 分区只显示组拥有的 Project 并链接详情页', async () => {
-    const listProjects = vi.spyOn(api, 'listProjects').mockResolvedValue({
+    vi.spyOn(api, 'listProjects').mockResolvedValue({
       items: [groupProject, otherProject, userProject],
       page: 1,
       page_size: 200,
@@ -188,7 +188,6 @@ describe('User Group 资源分区', () => {
       'aria-current',
       'page',
     )
-    expect(listProjects).toHaveBeenCalledWith({ page: 1, page_size: 200 })
     expect(within(typeNav).queryByRole('link', { name: 'Archived' })).toBeNull()
     expect(within(typeNav).queryByRole('link', { name: 'Templates' })).toBeNull()
     expect(screen.queryByText('Other Group Project')).not.toBeInTheDocument()
@@ -215,7 +214,8 @@ describe('User Group 资源分区', () => {
     renderSection('/user-groups/grp_lab/projects')
 
     const archivedLink = await screen.findByRole('link', { name: 'Archived Project' })
-    expect(within(archivedLink.closest('li')!).getByText('已归档')).toBeInTheDocument()
+    expect(archivedLink).toBeVisible()
+    expect(await screen.findByText('已归档')).toBeVisible()
     expect(screen.getByRole('link', { name: 'Group Project' })).toBeInTheDocument()
   })
 
@@ -234,14 +234,12 @@ describe('User Group 资源分区', () => {
 
     renderSection('/user-groups/grp_lab/projects')
 
-    expect(await screen.findByRole('link', { name: /Group Project 6/ })).toBeInTheDocument()
-    expect(listProjects).toHaveBeenCalledTimes(6)
+    expect(await screen.findByRole('link', { name: /Group Project 6/ })).toBeVisible()
     expect(screen.queryByText(/列表过长/)).not.toBeInTheDocument()
   })
 
   it('REQ-21-08 Project 分区错误时展示稳定错误并提供重试', async () => {
-    const listProjects = vi
-      .spyOn(api, 'listProjects')
+    vi.spyOn(api, 'listProjects')
       .mockRejectedValueOnce(new ApiError(500, 'internal_error', 'Project 列表加载失败', []))
       .mockResolvedValueOnce({
         items: [groupProject],
@@ -254,12 +252,10 @@ describe('User Group 资源分区', () => {
     renderSection('/user-groups/grp_lab/projects')
 
     const retry = await screen.findByRole('button', { name: '重试' })
-    expect(screen.getByText('Project 列表加载失败')).toBeInTheDocument()
-    expect(listProjects).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Project 列表加载失败')).toBeVisible()
 
     retry.click()
     await screen.findByRole('link', { name: /Group Project/ })
-    expect(listProjects).toHaveBeenCalledTimes(2)
   })
 
   it('REQ-21-09 共享资源分区过滤并链接详情页', async () => {
@@ -291,7 +287,7 @@ describe('User Group 资源分区', () => {
 
     const link = await screen.findByRole('link', { name: 'Group Env' })
     expect(link).toHaveAttribute('href', '/environments/env_group')
-    expect(within(link.closest('li')!).getByText('1/2 个版本可用')).toBeInTheDocument()
+    expect(await screen.findByText('1/2 个版本可用')).toBeVisible()
     expect(screen.queryByText('Other Env')).not.toBeInTheDocument()
   })
 

@@ -63,20 +63,30 @@
 backend/tests/
 ├── unit/domain/          纯领域规则和不变量
 ├── unit/application/     使用 Fake Port 的用例编排
+├── unit/infrastructure/  环境导入与可信代理身份等输入安全边界
 ├── unit/observability/   请求上下文和日志格式化
 ├── integration/          API、DB、Storage、Scheduler 或 Worker Adapter
+│   ├── resource/         共享资源服务、发布、授权与输入绑定
+│   ├── storage/          本地存储与设置
+│   ├── scheduler/        Scheduler Adapter 协议
+│   ├── db/               当前 schema 的数据不变量与所有权约束
+│   ├── identity/         外部身份、用户组与资料
+│   └── postgres/         PostgreSQL 并发与持久化行为
 ├── contract/             OpenAPI、错误信封和外部协议
-├── architecture/         依赖方向与仓库治理
-└── system/               少量 API + Worker + PostgreSQL 核心闭环
+└── architecture/         依赖方向与仓库治理
 
 frontend/tests/
 ├── unit/                 纯函数、状态判断和边界降级
-├── component/            用户可观察的组件行为
-├── feature/              在 API 边界替换外部依赖的页面流程
-└── e2e/                  少量真实浏览器核心闭环
+└── component/            用户可观察的组件行为
+
+scripts/tests/            Workflow 脚本（stdlib unittest；任务入口、CLI 解析、
+                          开发登录栈行为）
+deploy/cas-revproxy/tests/  CAS 反向代理（Flask auth server 与 HTTP 代理行为）
 ```
 
 目录只在存在对应长期测试资产时创建。
+`unit/test_cli.py` 保护 CLI 同步输入的扫描规则（gitignore 语义与默认排除）。
+前端暂无 feature/e2e 层；需要跨页面流程或真实浏览器闭环时再引入。
 
 安全是测试主题，不是独立粒度。
 安全断言放在实际规则或执行边界所在的最低有效层级，
@@ -90,14 +100,27 @@ frontend/tests/
 当前仓库已有测试只代表它们实际保护的行为和工程边界，
 不因为测试已经存在就自动获得永久兼容地位。
 
+各测试文件保护的具体目标见 [`coverage.md`](coverage.md) 对照表。
+
 当前较稳定的保护包括：
 
 - 后端领域规则：算力校验、路径规范化、Run Snapshot 相关规则、
-  Variable 与 Secret 解析；
+  Variable 与 Secret 解析、ownership 与 config scope；
 - 后端横切行为：请求标识上下文与日志格式化；
-- Adapter 行为：本地存储、文件权限和 Mock Scheduler；
+- 输入安全边界：环境导入的 SSRF/凭据/超时与取消、可信代理身份识别；
+- Adapter 行为：本地存储的文件权限与清理、Slurm batch I/O 协议；
+- 数据不变量：Project / Environment / SharedResource 的恰好一个 owner
+  与 owner 不可删除（FK RESTRICT）、PostgreSQL 下 owner 并发 transfer/removal
+  序列化；
 - 架构治理：Domain / Application 依赖方向，以及活动文档和引用关系；
-- 前端边界行为：API 错误降级与环境变量引用解析。
+- 前端边界行为：API 错误降级与环境变量引用解析；
+- 前端组件行为：权限决定入口可见性、危险操作确认、失败重试与恢复、
+  通知与邀请的可观察状态流转——均通过可访问角色、可见内容与交互结果断言，
+  不绑定组件库私有 class、内部 DOM 结构或视觉实现。
+
+数据库层测试针对当前 schema 断言数据不变量，不再保留 alembic 迁移的
+round-trip / downgrade / 旧字段清除检查；这些属于一次性施工史，应用一次性
+脚本验证，不占永久测试位。
 
 旧 ASGI / SQLite 工作流、进程内 `/runs/sync` 驱动、
 `X-User` 自动建号、固定 seed 数据、旧角色矩阵和 Ant Design 视觉实现
@@ -184,10 +207,12 @@ make coverage
 测试支持 Linux，以及 Windows 主机上使用 Linux toolchain 与 Linux filesystem 的
 WSL2 环境；不支持原生 Windows / PowerShell runtime。
 
-`make test` 是项目测试套件的统一入口。
+`make test` 运行 backend（pytest）+ deploy/cas-revproxy + frontend（vitest）
+三套测试，是开发中最常用的测试入口。
 
-`make check` 是完整工程验证入口，
-但开发中的每个局部步骤不要求机械运行完整检查。
+`make check` 是完整工程验证入口，在 `make test` 范围之外还包含
+scripts/tests（workflow 脚本，stdlib unittest）、lint、format、typecheck
+与 contract 校验；开发中的每个局部步骤不要求机械运行完整检查。
 
 `make coverage` 在当前测试基线演进期间只生成报告，
 不设置全仓统一百分比门槛。

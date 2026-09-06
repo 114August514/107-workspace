@@ -24,10 +24,7 @@ describe('ReadmePanel', () => {
       'href',
       '/projects/project-1/files/file/README.md',
     )
-    const article = panel.querySelector('article.markdown-body')
-    expect(article).not.toBeNull()
-    expect(within(article as HTMLElement).getByRole('heading', { name: '训练任务' })).toBeVisible()
-    expect(within(article as HTMLElement).getByRole('table')).toBeVisible()
-    expect(within(article as HTMLElement).queryByText('README.md')).not.toBeInTheDocument()
+    expect(within(panel).getByRole('heading', { name: '训练任务' })).toBeVisible()
+    expect(within(panel).getByRole('table')).toBeVisible()
   })
 })

@@ -94,8 +94,7 @@ describe('User Group 概览分区', () => {
   it('REQ-21-13 Project 仓库列表：名称与查看全部入口，且不展示其他模块', async () => {
     renderOverview()
 
-    const projectHeading = await screen.findByRole('heading', { name: 'Project', level: 2 })
-    const projectRow = projectHeading.closest('section')!
+    const projectRow = await screen.findByRole('region', { name: 'Project' })
     const item = await within(projectRow).findByRole('link', { name: /Group Project/ })
     expect(item).toHaveAttribute('href', '/projects/prj_group')
     const viewAll = within(projectRow).getByRole('link', { name: '查看全部' })

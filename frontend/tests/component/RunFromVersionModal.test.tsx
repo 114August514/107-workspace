@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, act, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
@@ -226,12 +226,9 @@ describe('Simple Run submission', () => {
     mockPreflight.mockResolvedValue(preview)
     renderModal()
     await ready()
-    const summary = screen.getByText('配置详情')
-    fireEvent.click(summary)
-    const details = summary.parentElement! as HTMLDetailsElement
-    details.open = true
-    expect(within(details).getByText('shrv-2/train')).toBeVisible()
-    expect(within(details).getByText('/inputs/train')).toBeVisible()
+    fireEvent.click(screen.getByText('配置详情'))
+    expect(screen.getByText('shrv-2/train')).toBeVisible()
+    expect(screen.getByText('/inputs/train')).toBeVisible()
   })
   it('does not allow repeated clicks during creation', async () => {
     mockCreateRun.mockReturnValue(new Promise(() => {}))

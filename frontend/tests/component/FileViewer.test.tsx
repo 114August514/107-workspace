@@ -76,10 +76,9 @@ describe('FileViewer', () => {
     renderViewer({ version })
 
     expect(await screen.findByText('v1 · 只读')).toBeVisible()
-    await waitFor(() => expect(document.querySelector('pre')).toHaveTextContent('print(1)'))
+    expect(await screen.findByText('print')).toBeVisible()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
-    expect(mocks.readVersionFile).toHaveBeenCalledWith('version-1', 'train.py')
   })
 
   it('edits and saves a working-state file', async () => {

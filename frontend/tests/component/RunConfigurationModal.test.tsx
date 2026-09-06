@@ -144,9 +144,6 @@ function renderModal(editing: RunConfiguration | null = makeConfiguration()) {
 
 function expandAdvanced() {
   fireEvent.click(screen.getByText(/^高级设置/))
-  const details = screen.getByText(/^高级设置/).parentElement! as HTMLDetailsElement
-  details.open = true
-  fireEvent(details, new Event('toggle'))
 }
 
 describe('Simple Run configuration', () => {
@@ -332,9 +329,7 @@ describe('Simple Run configuration', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /^执行命令/ }), {
       target: { value: 'echo ok' },
     })
-    const details = screen.getByText(/^运行产物/).parentElement! as HTMLDetailsElement
-    details.open = true
-    fireEvent(details, new Event('toggle'))
+    fireEvent.click(screen.getByText(/^运行产物/))
     fireEvent.click(screen.getByRole('button', { name: '删除产物规则 1' }))
     fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
     await waitFor(() =>
@@ -347,9 +342,7 @@ describe('Simple Run configuration', () => {
 
   it('keeps custom resources when folded and rejects values beyond the plan bounds', async () => {
     renderModal()
-    const details = screen.getByText(/^调整资源/).parentElement! as HTMLDetailsElement
-    details.open = true
-    fireEvent(details, new Event('toggle'))
+    fireEvent.click(screen.getByText(/^调整资源/))
     fireEvent.change(screen.getByRole('spinbutton', { name: 'CPU 核数' }), {
       target: { value: '9' },
     })
@@ -359,8 +352,7 @@ describe('Simple Run configuration', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: 'CPU 核数' }), {
       target: { value: '3' },
     })
-    details.open = false
-    fireEvent(details, new Event('toggle'))
+    fireEvent.click(screen.getByText(/^调整资源/))
     fireEvent.click(screen.getByRole('button', { name: '保存运行方案' }))
     await waitFor(() =>
       expect(api.updateRunConfiguration).toHaveBeenCalledWith(

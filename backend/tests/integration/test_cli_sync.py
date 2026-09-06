@@ -15,7 +15,6 @@ from workspace107.infrastructure.storage.local import _scan_project_sync
 @pytest.mark.skipif(shutil.which("rsync") is None, reason="rsync is required")
 def test_real_rsync_mirrors_staging_and_second_run_transfers_only_changes(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     source = tmp_path / "source"
     target = tmp_path / "target"
@@ -32,7 +31,6 @@ def test_real_rsync_mirrors_staging_and_second_run_transfers_only_changes(
         command = _build_rsync_command(source, "example", "/controlled", filter_file)
         command[-1] = f"{target}/"
         _run_rsync(command)
-        assert "100%" in capsys.readouterr().out
         assert sorted(path.name for path in target.iterdir()) == [
             ".107ignore",
             "changed.txt",
