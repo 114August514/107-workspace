@@ -97,6 +97,15 @@ curl -fsS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5174/   # 前端可�
 
 停止：`make dev` 前台运行，按 `Ctrl+C` 结束全部组件。
 
+想先快速验证核心链路再决定是否常驻开发，可跑一次性演示（自带临时 SQLite + mock 调度 +
+seed 数据，跑完即焚，不需要 `.env` 或 `make migrate`）：
+
+```bash
+make demo    # Project -> Version -> Run -> logs -> Artifact，成功结尾打印 Demo complete
+```
+
+`make demo` 用 mock 调度器在宿主机真实执行命令，只验证核心流程闭环，不代表真实集群验收。
+
 ### 方式二：容器（Docker Compose）
 
 ```bash
