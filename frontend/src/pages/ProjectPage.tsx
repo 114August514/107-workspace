@@ -556,8 +556,22 @@ export function ProjectPage({ project }: { project: AsyncResource<Project | unde
               description={project.data.description || '这个 Project 还没有填写说明'}
               tags={forkSource.data ? <ForkSourceTag source={forkSource.data} /> : null}
               actions={
-                view === 'history' && project.data && can(project.data, 'run.submit') ? (
-                  <SubmitRunButton project={project.data} onSubmit={setSubmitting} />
+                section === 'runs' ? (
+                  <>
+                    <PrimerButton
+                      as={Link}
+                      to={projectViewHref(
+                        projectId,
+                        'runs',
+                        view === 'history' ? 'configurations' : 'history',
+                      )}
+                    >
+                      {view === 'history' ? '运行方案' : '返回运行历史'}
+                    </PrimerButton>
+                    {view === 'history' && can(project.data, 'run.submit') && (
+                      <SubmitRunButton project={project.data} onSubmit={setSubmitting} />
+                    )}
+                  </>
                 ) : undefined
               }
             />
