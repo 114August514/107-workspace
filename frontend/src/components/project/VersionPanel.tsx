@@ -1,3 +1,4 @@
+import { ChevronDownIcon, ChevronRightIcon, FileIcon } from '@primer/octicons-react'
 import {
   Alert,
   Button,
@@ -28,9 +29,10 @@ import type {
 import { useAsync } from '../../api/useAsync'
 import { field } from '../../utils/field'
 import { formatBytes, formatTime } from '../../utils/format'
+import { tablePagination } from '../../utils/pagination'
 import { AsyncSection } from '../common/AsyncSection'
 import { ForkModal } from './ForkModal'
-import { tablePagination } from '../../utils/pagination'
+import styles from './VersionPanel.module.css'
 
 const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
   added: { text: '新增', color: 'green' },
@@ -78,6 +80,7 @@ export function VersionPanel({
   )
   const [message_, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [changesExpanded, setChangesExpanded] = useState(true)
 
   const pending = changes.data ?? []
 
@@ -174,36 +177,40 @@ export function VersionPanel({
       {showChanges && (
         <>
           <AsyncSection loading={changes.loading} error={changes.error}>
-            {pending.length === 0 ? (
-              <Alert type="success" showIcon message="Working State 与最近保存的 Version 一致" />
-            ) : (
-              <Alert
-                type="info"
-                showIcon
-                message={`Working State 有 ${pending.length} 个文件变更`}
-                description={
-                  <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 8 }}>
-                    <Typography.Text type="secondary">
-                      检查这些变更后，可将整个 Working State 保存为新的 Project Version。
-                    </Typography.Text>
+            {pending.length > 0 ? (
+              <section className={styles.changesSection} aria-labelledby="working-changes-title">
+                <button
+                  className={styles.changesHeader}
+                  type="button"
+                  aria-expanded={changesExpanded}
+                  onClick={() => setChangesExpanded((expanded) => !expanded)}
+                >
+                  {changesExpanded ? <ChevronDownIcon size={16} /> : <ChevronRightIcon size={16} />}
+                  <span id="working-changes-title">变更</span>
+                  <span className={styles.changeCount}>{pending.length}</span>
+                </button>
+                {changesExpanded && (
+                  <div className={styles.changeList}>
                     {pending.map((change) => (
                       <Button
                         key={change.path}
-                        type="link"
-                        size="small"
-                        style={{ display: 'flex', justifyContent: 'flex-start', padding: 0 }}
+                        type="text"
+                        className={styles.changeRow}
+                        aria-label={`${change.change === 'modified' ? '修改' : change.change === 'added' ? '新增' : '删除'} ${change.path}`}
                         onClick={() => setInspecting(change)}
                       >
-                        <Tag color={CHANGE_LABEL[change.change].color}>
-                          {CHANGE_LABEL[change.change].text}
-                        </Tag>
-                        {change.path}
+                        <FileIcon size={16} />
+                        <span className={styles.changePath}>{change.path}</span>
+                        <span className={styles.changeSource}>{projectName || 'Working State'}</span>
+                        <span className={`${styles.changeStatus} ${styles[change.change]}`}>
+                          {change.change === 'modified' ? 'M' : change.change === 'added' ? 'A' : 'D'}
+                        </span>
                       </Button>
                     ))}
-                  </Space>
-                }
-              />
-            )}
+                  </div>
+                )}
+              </section>
+            ) : null}
           </AsyncSection>
 
           {canWrite && (
@@ -306,7 +313,7 @@ function ChangeDetailDrawer({
     setDetail(null)
     setLoadError(null)
     api
-      .workingChangeDetail(projectId, change.path)
+      .workingChangeDetail(projectId, change.path, change.base_version ?? null)
       .then((result) => {
         if (!cancelled) setDetail(result)
       })

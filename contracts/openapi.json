@@ -3978,6 +3978,17 @@
       },
       "WorkingChangeOut": {
         "properties": {
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
           "change": {
             "$ref": "#/components/schemas/ChangeKind"
           },
@@ -7844,7 +7855,7 @@
     },
     "/api/v1/projects/{project_id}/changes/detail": {
       "get": {
-        "description": "校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。\n\n每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。",
+        "description": "按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。",
         "operationId": "working_change_detail_api_v1_projects__project_id__changes_detail_get",
         "parameters": [
           {
@@ -7864,6 +7875,23 @@
               "minLength": 1,
               "title": "Path",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "base_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Version"
             }
           },
           {
@@ -9714,6 +9742,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {

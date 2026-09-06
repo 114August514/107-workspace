@@ -75,8 +75,8 @@ function makeVersionPage(): ProjectVersionPage {
 }
 
 const changes: WorkingChange[] = [
-  { path: 'a.txt', change: 'modified' },
-  { path: 'new.txt', change: 'added' },
+  { path: 'a.txt', change: 'modified', base_version: 'ver-1' },
+  { path: 'new.txt', change: 'added', base_version: 'ver-1' },
 ]
 
 const detail: WorkingChangeDetail = {
@@ -119,12 +119,12 @@ describe('VersionPanel 未保存变更', () => {
     mocks.workingChangeDetail.mockResolvedValueOnce(detail).mockResolvedValueOnce(addedDetail)
 
     renderPanel(writer)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText('变更')
 
     fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
 
     await waitFor(() => {
-      expect(mocks.workingChangeDetail).toHaveBeenCalledWith('proj-1', 'a.txt')
+      expect(mocks.workingChangeDetail).toHaveBeenCalledWith('proj-1', 'a.txt', 'ver-1')
       expect(screen.getByText('original a')).toBeInTheDocument()
       expect(screen.getByText('changed a')).toBeInTheDocument()
     })
@@ -143,7 +143,7 @@ describe('VersionPanel 未保存变更', () => {
 
     const onVersionSaved = vi.fn()
     renderPanel(writer, onVersionSaved)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText('变更')
 
     fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
     fireEvent.click(await screen.findByRole('button', { name: /放弃此变更/ }))
@@ -161,7 +161,7 @@ describe('VersionPanel 未保存变更', () => {
     mocks.workingChangeDetail.mockResolvedValue(detail)
 
     renderPanel(reader)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText('变更')
 
     expect(screen.queryByRole('button', { name: /保存 Project Version/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /恢复到此版本/ })).not.toBeInTheDocument()
@@ -179,7 +179,7 @@ describe('VersionPanel 未保存变更', () => {
       .mockResolvedValueOnce(detail)
 
     renderPanel(writer)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText('变更')
     const opener = screen.getByRole('button', { name: '修改 a.txt' })
     opener.focus()
     expect(opener).toHaveFocus()
@@ -189,5 +189,16 @@ describe('VersionPanel 未保存变更', () => {
 
     expect(await screen.findByText('changed a')).toBeInTheDocument()
     expect(mocks.workingChangeDetail).toHaveBeenCalledTimes(2)
+  })
+  it('没有未保存变化时不展示 Changes 区域', async () => {
+    mocks.listVersions.mockResolvedValue(makeVersionPage())
+    mocks.workingChanges.mockResolvedValue([])
+
+    renderPanel(writer)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: '变更' })).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /保存 Project Version/ })).toBeDisabled()
   })
 })

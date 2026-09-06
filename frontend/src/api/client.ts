@@ -596,10 +596,17 @@ export const api = {
       }),
     ),
 
-  workingChangeDetail: async (id: string, path: string): Promise<WorkingChangeDetail> =>
+  workingChangeDetail: async (
+    id: string,
+    path: string,
+    baseVersion: string | null,
+  ): Promise<WorkingChangeDetail> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/changes/detail', {
-        params: { path: { project_id: id }, query: { path } },
+        params: {
+          path: { project_id: id },
+          query: { path, base_version: baseVersion ?? undefined },
+        },
       }),
     ),
 
