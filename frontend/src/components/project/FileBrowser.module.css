@@ -1,0 +1,151 @@
+.fileSurface {
+  display: grid;
+  gap: var(--base-size-16);
+}
+.directoryToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+
+.directoryToolbar > * {
+  min-width: 0;
+}
+
+.directoryToolbar .fileToolbar {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.fileToolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  flex-wrap: wrap;
+}
+
+.fileTable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-small);
+}
+
+.fileTable th,
+.fileTable td {
+  padding: var(--base-size-8) var(--base-size-12);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.fileTable th {
+  color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.fileTable tbody tr:hover {
+  background: var(--bgColor-muted);
+}
+
+.nameCell {
+  width: auto;
+  min-width: 0;
+}
+
+.fileTable th:nth-child(2),
+.fileTable td:nth-child(2) {
+  width: 6rem;
+}
+
+.fileTable th:nth-child(3),
+.fileTable td:nth-child(3) {
+  width: 9rem;
+}
+
+.metaCell {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.fileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fgColor-accent);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fileLink:hover {
+  text-decoration: underline;
+}
+
+.fileLink:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  outline-offset: var(--base-size-4);
+}
+
+.fileContext {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+
+.refControl,
+.contextLink {
+  color: var(--fgColor-accent);
+  font-weight: var(--base-text-weight-semibold);
+  text-decoration: none;
+}
+
+.refControl:hover,
+.contextLink:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb {
+  display: flex;
+  gap: var(--base-size-4);
+  overflow-x: auto;
+  color: var(--fgColor-muted);
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+  white-space: nowrap;
+}
+
+.breadcrumb a {
+  color: var(--fgColor-default);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+@media not all and (min-width: 48rem) {
+  .directoryToolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .directoryToolbar .fileToolbar {
+    margin-left: 0;
+  }
+
+  .fileToolbar {
+    flex-wrap: wrap;
+  }
+
+  .fileContext {
+    overflow-x: auto;
+  }
+}

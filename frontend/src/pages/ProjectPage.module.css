@@ -1,0 +1,99 @@
+.filesLayout {
+  width: min(100%, 80rem);
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18.5rem;
+  gap: var(--base-size-32);
+  align-items: start;
+}
+
+.filesMain {
+  min-width: 0;
+}
+
+.fileContextControls {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-16);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.refControl,
+.contextLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-4);
+  color: var(--fgColor-accent);
+  font-weight: var(--base-text-weight-semibold);
+  text-decoration: none;
+}
+
+.aboutRail {
+  min-width: 0;
+}
+
+.aboutCard {
+  padding: 0;
+}
+
+.aboutCard h2 {
+  margin: 0 0 var(--base-size-16);
+  font-size: var(--text-title-size-medium);
+}
+
+.aboutCard p {
+  margin: 0 0 var(--base-size-16);
+  color: var(--fgColor-muted);
+  line-height: var(--text-body-lineHeight-medium);
+}
+
+.aboutFacts {
+  display: grid;
+  gap: var(--base-size-12);
+  margin: 0;
+}
+
+.aboutFacts div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--base-size-12);
+}
+
+.aboutFacts dt {
+  color: var(--fgColor-muted);
+}
+
+.aboutFacts dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.relatedResources {
+  display: grid;
+  gap: var(--base-size-8);
+  margin-top: var(--base-size-20);
+  padding-top: var(--base-size-20);
+  border-top: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.relatedResources h3 {
+  margin: 0 0 var(--base-size-4);
+  font-size: var(--text-title-size-small);
+}
+
+.relatedResources a {
+  color: var(--fgColor-accent);
+  text-decoration: none;
+}
+
+.relatedResources a:hover {
+  text-decoration: underline;
+}
+
+@media not all and (min-width: 48rem) {
+  .filesLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

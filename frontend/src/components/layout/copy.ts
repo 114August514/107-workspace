@@ -11,6 +11,7 @@ export const appShellCopy = {
   projectError: 'Project context 加载失败，重试',
   files: 'Files',
   runs: 'Runs',
+  activity: 'Activity',
   settings: 'Settings',
 } as const
 

@@ -8,9 +8,12 @@ import {
   GearIcon,
   PlayIcon,
   PlusIcon,
+  PulseIcon,
   ThreeBarsIcon,
 } from '@primer/octicons-react'
 import {
+  ActionList,
+  ActionMenu,
   Button,
   ButtonGroup,
   defaultPaneWidth,
@@ -19,7 +22,7 @@ import {
   UnderlineNav,
 } from '@primer/react'
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Link as RouterLink, matchPath, useLocation, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, matchPath, useLocation } from 'react-router-dom'
 
 import type { Home, Project, User } from '../../api/types'
 import type { AsyncState as AsyncResource } from '../../api/useAsync'
@@ -28,7 +31,6 @@ import { authCopy } from '../../auth/authCopy'
 import { BrandMark } from '../../brand/BrandMark'
 import { GlobalNavigationDrawer } from './GlobalNavigationDrawer'
 import { NotificationBell } from '../notification/NotificationBell'
-import { CreateUserGroupDialog } from '../workspace/CreateUserGroupDialog'
 import { ContextGuide } from './ContextGuide'
 import {
   UserGroupHeaderContext,
@@ -57,25 +59,27 @@ const appShellStyle: AppShellStyle = {
 export function AppShell({ user, home, project, children }: Props) {
   const signedIn = user !== undefined
   const username = user?.username ?? ''
-  const navigate = useNavigate()
   const location = useLocation()
   const navigationId = useId()
   const navigationButtonRef = useRef<HTMLButtonElement>(null)
-  const [createOpen, setCreateOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
-  const projectId = matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
+  const projectId =
+    location.pathname === '/projects/new'
+      ? undefined
+      : matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const currentProject = project.data?.id === projectId ? project.data : undefined
   const isEnvironment = /^\/(environments|environment-versions)\/[^/]+$/.test(location.pathname)
-  const requestedTab = new URLSearchParams(location.search).get('tab')
   const isUserGroupAssetList =
     matchPath('/user-groups/:userGroupId/projects', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/shared-resources', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/environments', location.pathname) !== null
-  const projectArea = location.pathname.includes('/runs/')
+  const projectPath = projectId ? `/projects/${projectId}` : ''
+  const projectSubpath = projectPath ? location.pathname.slice(projectPath.length) : ''
+  const projectArea = projectSubpath.startsWith('/runs')
     ? 'runs'
-    : requestedTab === 'runs' || requestedTab === 'configurations'
-      ? 'runs'
-      : requestedTab === 'activities'
+    : projectSubpath.startsWith('/activity')
+      ? 'activity'
+      : projectSubpath.startsWith('/settings')
         ? 'settings'
         : 'files'
 
@@ -179,12 +183,27 @@ export function AppShell({ user, home, project, children }: Props) {
               <div className={styles.actions}>
                 {signedIn ? (
                   <>
-                    <IconButton
-                      icon={PlusIcon}
-                      variant="default"
-                      aria-label={appShellCopy.createUserGroup}
-                      onClick={() => setCreateOpen(true)}
-                    />
+                    <ActionMenu>
+                      <ActionMenu.Anchor>
+                        <IconButton
+                          icon={PlusIcon}
+                          variant="default"
+                          aria-label="创建"
+                          aria-haspopup="menu"
+                        />
+                      </ActionMenu.Anchor>
+                      <ActionMenu.Overlay align="end" width="auto">
+                        <ActionList>
+                          <ActionList.LinkItem href="/projects/new">
+                            创建 Project
+                          </ActionList.LinkItem>
+                          <ActionList.LinkItem href="/user-groups/new">
+                            创建 User Group
+                          </ActionList.LinkItem>
+                        </ActionList>
+                      </ActionMenu.Overlay>
+                    </ActionMenu>
+
                     {/* key=user.id：身份变化时整棵重挂载，丢弃在途的未读数请求。 */}
                     <NotificationBell key={user.id} username={username} />
                     <UserMenu user={user} />
@@ -211,7 +230,7 @@ export function AppShell({ user, home, project, children }: Props) {
                 >
                   <UnderlineNav.Item
                     as={RouterLink}
-                    to={`/projects/${projectId}?tab=files`}
+                    to={`/projects/${projectId}/files`}
                     leadingVisual={<FileDirectoryIcon />}
                     aria-current={projectArea === 'files' ? 'page' : undefined}
                   >
@@ -219,7 +238,7 @@ export function AppShell({ user, home, project, children }: Props) {
                   </UnderlineNav.Item>
                   <UnderlineNav.Item
                     as={RouterLink}
-                    to={`/projects/${projectId}?tab=runs`}
+                    to={`/projects/${projectId}/runs`}
                     leadingVisual={<PlayIcon />}
                     aria-current={projectArea === 'runs' ? 'page' : undefined}
                   >
@@ -227,7 +246,15 @@ export function AppShell({ user, home, project, children }: Props) {
                   </UnderlineNav.Item>
                   <UnderlineNav.Item
                     as={RouterLink}
-                    to={`/projects/${projectId}?tab=activities`}
+                    to={`/projects/${projectId}/activity`}
+                    leadingVisual={<PulseIcon />}
+                    aria-current={projectArea === 'activity' ? 'page' : undefined}
+                  >
+                    {appShellCopy.activity}
+                  </UnderlineNav.Item>
+                  <UnderlineNav.Item
+                    as={RouterLink}
+                    to={`/projects/${projectId}/settings`}
                     leadingVisual={<GearIcon />}
                     aria-current={projectArea === 'settings' ? 'page' : undefined}
                   >
@@ -265,17 +292,6 @@ export function AppShell({ user, home, project, children }: Props) {
               home={home}
               returnFocusRef={navigationButtonRef}
               onClose={() => setNavigationOpen(false)}
-            />
-          ) : null}
-
-          {signedIn ? (
-            <CreateUserGroupDialog
-              open={createOpen}
-              onClose={() => setCreateOpen(false)}
-              onCreated={(userGroup) => {
-                home.reload()
-                navigate(`/user-groups/${userGroup.id}`)
-              }}
             />
           ) : null}
         </div>

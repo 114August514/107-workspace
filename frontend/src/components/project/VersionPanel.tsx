@@ -37,8 +37,10 @@ const CHANGE_LABEL: Record<ChangeKind, { text: string; color: string }> = {
   modified: { text: '修改', color: 'blue' },
   removed: { text: '删除', color: 'red' },
 }
+type VersionPanelSection = 'all' | 'changes' | 'versions'
 
 interface Props {
+  section?: VersionPanelSection
   projectId: string
   projectName: string
   access: Project | undefined
@@ -52,12 +54,15 @@ interface Props {
  * Project Version 是不可变快照，恢复历史版本改的是工作区，不会动那个版本。
  */
 export function VersionPanel({
+  section = 'all',
   projectId,
   projectName,
   access,
   refreshToken,
   onVersionSaved,
 }: Props) {
+  const showChanges = section !== 'versions'
+  const showVersions = section !== 'changes'
   const navigate = useNavigate()
   const [forking, setForking] = useState<ProjectVersion | null>(null)
   const [inspecting, setInspecting] = useState<WorkingChange | null>(null)
@@ -130,7 +135,11 @@ export function VersionPanel({
       key: 'actions',
       render: (_, version) => (
         <Space size={0}>
-          <Button type="link" size="small" onClick={() => navigate(`/versions/${version.id}`)}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => navigate(`/projects/${projectId}/files/versions/${version.id}`)}
+          >
             查看详情
           </Button>
           {canWrite && (
@@ -162,85 +171,106 @@ export function VersionPanel({
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <AsyncSection loading={changes.loading} error={changes.error}>
-        {pending.length === 0 ? (
-          <Alert type="success" showIcon message="工作区没有未保存的变更" />
-        ) : (
-          <Alert
-            type="warning"
-            showIcon
-            message={`有 ${pending.length} 处未保存的变更`}
-            description={
-              <Space wrap size={[8, 8]} style={{ marginTop: 8 }}>
-                {pending.map((change) => (
-                  <Button
-                    key={change.path}
-                    type="link"
-                    size="small"
-                    onClick={() => setInspecting(change)}
-                  >
-                    <Tag color={CHANGE_LABEL[change.change].color}>
-                      {CHANGE_LABEL[change.change].text} {change.path}
-                    </Tag>
-                  </Button>
-                ))}
-              </Space>
-            }
-          />
-        )}
-      </AsyncSection>
+      {showChanges && (
+        <>
+          <AsyncSection loading={changes.loading} error={changes.error}>
+            {pending.length === 0 ? (
+              <Alert type="success" showIcon message="Working State 与最近保存的 Version 一致" />
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                message={`Working State 有 ${pending.length} 个文件变更`}
+                description={
+                  <Space direction="vertical" size={4} style={{ width: '100%', marginTop: 8 }}>
+                    <Typography.Text type="secondary">
+                      检查这些变更后，可将整个 Working State 保存为新的 Project Version。
+                    </Typography.Text>
+                    {pending.map((change) => (
+                      <Button
+                        key={change.path}
+                        type="link"
+                        size="small"
+                        style={{ display: 'flex', justifyContent: 'flex-start', padding: 0 }}
+                        onClick={() => setInspecting(change)}
+                      >
+                        <Tag color={CHANGE_LABEL[change.change].color}>
+                          {CHANGE_LABEL[change.change].text}
+                        </Tag>
+                        {change.path}
+                      </Button>
+                    ))}
+                  </Space>
+                }
+              />
+            )}
+          </AsyncSection>
 
-      {canWrite && (
-        <Space.Compact style={{ width: '100%' }}>
-          <Input
-            placeholder="这次改了什么"
-            value={message_}
-            onChange={(event) => setMessage(event.target.value)}
-            onPressEnter={save}
-          />
-          <Button type="primary" onClick={save} loading={saving} disabled={pending.length === 0}>
-            保存 Project Version
-          </Button>
-        </Space.Compact>
+          {canWrite && (
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                placeholder="这次改了什么"
+                value={message_}
+                onChange={(event) => setMessage(event.target.value)}
+                onPressEnter={save}
+              />
+              <Button
+                type="primary"
+                onClick={save}
+                loading={saving}
+                disabled={pending.length === 0}
+              >
+                保存 Project Version
+              </Button>
+            </Space.Compact>
+          )}
+
+          <Typography.Text type="secondary">
+            Run 只能从确定的 Project Version 发起。保存版本之后，这份内容就固定下来了。
+          </Typography.Text>
+        </>
       )}
 
-      <Typography.Text type="secondary">
-        Run 只能从确定的 Project Version 发起。保存版本之后，这份内容就固定下来了。
-      </Typography.Text>
+      {showVersions && (
+        <AsyncSection
+          loading={versions.loading}
+          error={versions.error}
+          empty={versions.data?.total === 0}
+          emptyText="还没有保存过版本"
+        >
+          <Table
+            rowKey="id"
+            size="small"
+            dataSource={versions.data?.items ?? []}
+            columns={columns}
+            pagination={tablePagination(versions.data, setPage)}
+          />
+        </AsyncSection>
+      )}
 
-      <AsyncSection
-        loading={versions.loading}
-        error={versions.error}
-        empty={versions.data?.total === 0}
-        emptyText="还没有保存过版本"
-      >
-        <Table
-          rowKey="id"
-          size="small"
-          dataSource={versions.data?.items ?? []}
-          columns={columns}
-          pagination={tablePagination(versions.data, setPage)}
+      {showVersions && (
+        <ForkModal
+          open={forking !== null}
+          version={forking}
+          sourceProjectName={projectName}
+          onClose={() => setForking(null)}
+          onForked={(project) => navigate(`/projects/${project.id}`)}
         />
-      </AsyncSection>
-
-      <ForkModal
-        open={forking !== null}
-        version={forking}
-        sourceProjectName={projectName}
-        onClose={() => setForking(null)}
-        onForked={(project) => navigate(`/projects/${project.id}`)}
-      />
-
-      <ChangeDetailDrawer
-        projectId={projectId}
-        change={inspecting}
-        canWrite={canWrite}
-        onClose={() => setInspecting(null)}
-        onDiscarded={() => {
-          changes.reload()
-          onVersionSaved()
-        }}
-      />
+      )}
+      {showChanges && (
+        <ChangeDetailDrawer
+          projectId={projectId}
+          change={inspecting}
+          changes={pending}
+          canWrite={canWrite}
+          onSelect={setInspecting}
+          onClose={() => setInspecting(null)}
+          onDiscarded={() => {
+            changes.reload()
+            onVersionSaved()
+          }}
+        />
+      )}
     </Space>
   )
 }
@@ -249,13 +279,17 @@ export function VersionPanel({
 function ChangeDetailDrawer({
   projectId,
   change,
+  changes,
   canWrite,
+  onSelect,
   onClose,
   onDiscarded,
 }: {
   projectId: string
   change: WorkingChange | null
+  changes: WorkingChange[]
   canWrite: boolean
+  onSelect: (change: WorkingChange) => void
   onClose: () => void
   onDiscarded: () => void
 }) {
@@ -326,6 +360,25 @@ function ChangeDetailDrawer({
         )
       }
     >
+      {changes.length > 0 && (
+        <Space direction="vertical" size={4} style={{ width: '100%', marginBottom: 16 }}>
+          <Typography.Text strong>更改 ({changes.length})</Typography.Text>
+          {changes.map((item) => (
+            <Button
+              key={item.path}
+              type={item.path === change?.path ? 'primary' : 'text'}
+              block
+              onClick={() => onSelect(item)}
+              style={{ textAlign: 'left' }}
+            >
+              <Tag color={CHANGE_LABEL[item.change].color}>
+                {item.change === 'modified' ? 'M' : item.change === 'added' ? 'A' : 'D'}
+              </Tag>
+              {item.path}
+            </Button>
+          ))}
+        </Space>
+      )}
       {loading ? (
         <Spin />
       ) : loadError ? (
@@ -351,61 +404,108 @@ function ChangeDetailDrawer({
               <Typography.Text type="secondary">工作区内容过长，仅显示前 256 KB</Typography.Text>
             )}
           </Space>
-          {/* 二进制内容经 UTF-8 替换解码会出现替代符——照实显示，
-              不假装这是精确的文本 diff（后端只存内容摘要）。 */}
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <DiffSide
-              title="最近保存版本"
-              content={detail.previous?.content ?? null}
-              emptyText="此路径在基线版本中不存在（新增）"
-            />
-            <DiffSide
-              title="当前工作区"
-              content={detail.current?.content ?? null}
-              emptyText="文件已被删除"
-            />
-          </div>
+          <DiffView
+            previous={detail.previous?.content ?? null}
+            current={detail.current?.content ?? null}
+            previousEmpty="此路径在基线版本中不存在"
+            currentEmpty="文件已被删除"
+          />
         </Space>
       ) : null}
     </Drawer>
   )
 }
 
-function DiffSide({
-  title,
-  content,
-  emptyText,
+function DiffView({
+  previous,
+  current,
+  previousEmpty,
+  currentEmpty,
 }: {
-  title: string
-  content: string | null
-  emptyText: string
+  previous: string | null
+  current: string | null
+  previousEmpty: string
+  currentEmpty: string
 }) {
+  if (previous === null || current === null) {
+    return (
+      <Typography.Text type="secondary">
+        {previous === null ? previousEmpty : currentEmpty}
+      </Typography.Text>
+    )
+  }
+  const oldLines = previous.split('\n')
+  const newLines = current.split('\n')
+  const rows: Array<{
+    kind: 'same' | 'remove' | 'add'
+    old: number | ''
+    next: number | ''
+    text: string
+  }> = []
+  let old = 0
+  let next = 0
+  while (old < oldLines.length || next < newLines.length) {
+    if (oldLines[old] === newLines[next]) {
+      rows.push({ kind: 'same', old: old + 1, next: next + 1, text: oldLines[old] ?? '' })
+      old++
+      next++
+    } else if (
+      old < oldLines.length &&
+      (next >= newLines.length || !newLines.slice(next + 1).includes(oldLines[old]!))
+    ) {
+      rows.push({ kind: 'remove', old: old + 1, next: '', text: oldLines[old]! })
+      old++
+    } else {
+      rows.push({ kind: 'add', old: '', next: next + 1, text: newLines[next] ?? '' })
+      next++
+    }
+  }
   return (
-    <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-      <Typography.Text strong>{title}</Typography.Text>
-      {content === null ? (
-        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
-          {emptyText}
-        </Typography.Paragraph>
-      ) : (
-        <pre
+    <div
+      style={{
+        overflowX: 'auto',
+        border: '1px solid #d0d7de',
+        borderRadius: 6,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 12,
+      }}
+    >
+      {rows.map((row, index) => (
+        <div
+          key={`${row.kind}-${index}`}
           style={{
-            marginTop: 8,
-            padding: 12,
-            background: 'rgba(0, 0, 0, 0.04)',
-            borderRadius: 6,
-            overflowX: 'auto',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontSize: 12,
-            maxHeight: 480,
-            overflowY: 'auto',
+            display: 'grid',
+            gridTemplateColumns: '48px 48px 1fr',
+            whiteSpace: 'pre',
+            background:
+              row.kind === 'remove' ? '#ffebe9' : row.kind === 'add' ? '#dafbe1' : undefined,
           }}
         >
-          {content}
-        </pre>
-      )}
+          <span
+            style={{
+              padding: '2px 8px',
+              textAlign: 'right',
+              color: '#6e7781',
+              borderRight: '1px solid #d0d7de',
+            }}
+          >
+            {row.old}
+          </span>
+          <span
+            style={{
+              padding: '2px 8px',
+              textAlign: 'right',
+              color: '#6e7781',
+              borderRight: '1px solid #d0d7de',
+            }}
+          >
+            {row.next}
+          </span>
+          <span style={{ padding: '2px 12px' }}>
+            <b>{row.kind === 'remove' ? '−' : row.kind === 'add' ? '+' : ' '}</b> {row.text}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

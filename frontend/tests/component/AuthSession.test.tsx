@@ -67,7 +67,7 @@ describe('启动时的认证状态', () => {
     expect(screen.getByRole('status')).toHaveTextContent('正在确认登录状态…')
     expect(screen.queryByText('同学，欢迎回来')).toBeNull()
     expect(screen.queryByRole('button', { name: '通知' })).toBeNull()
-    expect(screen.queryByRole('button', { name: '创建 User Group' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '创建' })).toBeNull()
     expect(invitations).not.toHaveBeenCalled()
     expect(unread).not.toHaveBeenCalled()
   })
@@ -78,7 +78,7 @@ describe('启动时的认证状态', () => {
 
     expect(await screen.findByRole('heading', { name: '同学，欢迎回来' })).toBeVisible()
     expect(screen.getByRole('button', { name: '当前用户 同学' })).toBeVisible()
-    expect(screen.getByRole('button', { name: '创建 User Group' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '创建' })).toBeVisible()
     expect(screen.queryByRole('button', { name: '统一身份认证登录' })).toBeNull()
   })
 
@@ -96,7 +96,7 @@ describe('启动时的认证状态', () => {
     expect(screen.getByText('统一身份认证面向科大用户。')).toBeVisible()
     expect(screen.queryByRole('banner')).toBeNull()
     expect(screen.queryByText('同学，欢迎回来')).toBeNull()
-    expect(screen.queryByRole('button', { name: '创建 User Group' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '创建' })).toBeNull()
     expect(screen.queryByRole('button', { name: '通知' })).toBeNull()
     expect(invitations).not.toHaveBeenCalled()
     expect(unread).not.toHaveBeenCalled()

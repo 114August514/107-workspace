@@ -119,7 +119,7 @@ describe('VersionPanel 未保存变更', () => {
     mocks.workingChangeDetail.mockResolvedValueOnce(detail).mockResolvedValueOnce(addedDetail)
 
     renderPanel(writer)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText(/Working State 有 2 个文件变更/)
 
     fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
 
@@ -143,7 +143,7 @@ describe('VersionPanel 未保存变更', () => {
 
     const onVersionSaved = vi.fn()
     renderPanel(writer, onVersionSaved)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText(/Working State 有 2 个文件变更/)
 
     fireEvent.click(screen.getByRole('button', { name: '修改 a.txt' }))
     fireEvent.click(await screen.findByRole('button', { name: /放弃此变更/ }))
@@ -161,7 +161,7 @@ describe('VersionPanel 未保存变更', () => {
     mocks.workingChangeDetail.mockResolvedValue(detail)
 
     renderPanel(reader)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText(/Working State 有 2 个文件变更/)
 
     expect(screen.queryByRole('button', { name: /保存 Project Version/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /恢复到此版本/ })).not.toBeInTheDocument()
@@ -179,7 +179,7 @@ describe('VersionPanel 未保存变更', () => {
       .mockResolvedValueOnce(detail)
 
     renderPanel(writer)
-    await screen.findByText(/有 2 处未保存的变更/)
+    await screen.findByText(/Working State 有 2 个文件变更/)
     const opener = screen.getByRole('button', { name: '修改 a.txt' })
     opener.focus()
     expect(opener).toHaveFocus()
