@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -15,25 +14,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from workspace107.api.deps import AppContext, build_services
-from workspace107.application.access import AccessGuard
 from workspace107.config import Settings
-from workspace107.infrastructure.db.repositories import SqlRepositories
 from workspace107.infrastructure.db.tables import Base
 from workspace107.main import build_context, create_app
 from workspace107.tools.seed import seed_catalog
-
-
-class FrozenClock:
-    """可控时钟。每次调用推进一秒，保证事件顺序稳定又不需要 sleep。"""
-
-    def __init__(self, start: datetime | None = None) -> None:
-        self._now = start or datetime(2026, 7, 26, 12, 0, 0, tzinfo=UTC)
-
-    def now(self) -> datetime:
-        self._now = self._now.replace(microsecond=0)
-        current = self._now
-        self._now = current.fromtimestamp(current.timestamp() + 1, tz=UTC)
-        return current
 
 
 @pytest.fixture
@@ -83,18 +67,6 @@ def services(context: AppContext, session: AsyncSession):
     它只暴露 application 层的服务，和路由拿到的是同一组东西。
     """
     return build_services(context, session)
-
-
-@pytest.fixture
-def guard(session: AsyncSession) -> AccessGuard:
-    """单独构造 AccessGuard，用于直接测试权限解析。
-
-    Services 容器刻意不暴露它——路由不该自己做权限判断。
-    测试要测这块逻辑，就在这里自己装一个，和被测服务共用同一个 session。
-    """
-    return AccessGuard(SqlRepositories(session))
-
-
 @pytest.fixture
 async def client(context: AppContext) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(context.settings)

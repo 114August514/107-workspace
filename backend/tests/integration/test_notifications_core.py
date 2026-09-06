@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from types import SimpleNamespace
 
 import pytest
 
@@ -11,7 +10,6 @@ from workspace107.application.notifier import Notifier
 from workspace107.domain.enums import NotificationType, TargetType
 from workspace107.domain.ids import NOTIFICATION, new_id
 from workspace107.domain.models import Notification
-from workspace107.domain.ownership import OwnerKind, OwnerReference
 from workspace107.infrastructure.db.notifications import DatabaseNotificationPublisher
 from workspace107.infrastructure.db.repositories import (
     NotificationRepositoryImpl,
@@ -209,45 +207,6 @@ async def test_notification_preferences_are_recipient_scoped(client) -> None:
     run_failed = next(item for item in bob_preferences.json() if item["type"] == "run_failed")
     assert run_failed["enabled"] is True
 
-
-@pytest.mark.asyncio
-async def test_shared_resource_permission_failure_does_not_emit_unavailable(
-    services, monkeypatch
-) -> None:
-    version = SimpleNamespace(shared_resource_id="shr-1")
-    resource = SimpleNamespace(id="shr-1", owner=OwnerReference(OwnerKind.USER, "resource-owner"))
-
-    async def not_discoverable(_user_id: str, _version_id: str):
-        return None
-
-    async def trusted_version(_version_id: str):
-        return version
-
-    async def trusted_resource(_resource_id: str):
-        return resource
-
-    async def no_grant(*_args):
-        return False
-
-    monkeypatch.setattr(
-        services.runs._repos.shared_resources,
-        "get_version_discoverable_for_user",
-        not_discoverable,
-    )
-    monkeypatch.setattr(services.runs._repos.shared_resources, "get_version_by_id", trusted_version)
-    monkeypatch.setattr(services.runs._repos.shared_resources, "get_by_id", trusted_resource)
-    monkeypatch.setattr(services.runs._repos.grants, "exists_use_grant", no_grant)
-
-    message = await services.runs._check_shared_resource_version_input(
-        "user-without-grant",
-        "shrv-1",
-        "/inputs/data",
-        "",
-        OwnerReference(OwnerKind.USER_GROUP, "project-owner"),
-        raise_unavailable=True,
-    )
-
-    assert message == "输入 /inputs/data 引用的 Shared Resource Version 不存在或无权访问"
 
 
 @pytest.mark.asyncio

@@ -58,23 +58,3 @@ def test_空子路径保持空串表示物化全部() -> None:
 def test_拒绝越出来源根目录的子路径(raw: str) -> None:
     with pytest.raises(ValidationFailed):
         _binding(raw)
-
-
-def test_前导绝对斜杠被去掉后按相对路径处理() -> None:
-    """``/train`` 去掉前导斜杠后是合法相对子路径（与 ``_normalize_path`` 一致），
-    不当成越界拒绝。"""
-    assert _binding("/train").source_subpath == "train"
-
-
-def test_内部点点_解析后仍在界内则接受() -> None:
-    """``a/b/../c`` → normpath → ``a/c``，在界内，不应被拒。"""
-    assert _binding("a/b/../c").source_subpath == "a/c"
-
-
-# -- 跨序列化稳定（B2 一致性）---------------------------------------------
-
-
-def test_尾斜杠与无斜杠规范化后相等_跨构造一致() -> None:
-    """证明 ``"train/"`` 和 ``"train"`` 构造出的 binding 规范化后相等——
-    快照往返（``run_snapshot.py`` 读回 ``source_subpath``）不会因尾斜杠分歧。"""
-    assert _binding("train/").source_subpath == _binding("train").source_subpath

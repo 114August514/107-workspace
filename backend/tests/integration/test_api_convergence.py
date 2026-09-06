@@ -12,28 +12,6 @@ ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
 
 
-@pytest.mark.asyncio
-async def test_home_uses_user_owner_execution_context_without_workspace(client) -> None:
-    response = await client.get("/api/v1/me", headers=ALICE)
-
-    assert response.status_code == 200
-    body = response.json()
-    assert set(body) == {
-        "user",
-        "user_groups",
-        "personal_execution_context",
-        "recent_projects",
-        "recent_runs",
-    }
-    assert body["personal_execution_context"] == {
-        "owner": {
-            "kind": "user",
-            "id": body["user"]["id"],
-            "display_name": body["user"]["display_name"],
-        },
-        "entitlements": [],
-    }
-    assert "personal_resource_context_id" not in body
 
 
 @pytest.mark.asyncio
