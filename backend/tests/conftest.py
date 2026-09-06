@@ -67,6 +67,8 @@ def services(context: AppContext, session: AsyncSession):
     它只暴露 application 层的服务，和路由拿到的是同一组东西。
     """
     return build_services(context, session)
+
+
 @pytest.fixture
 async def client(context: AppContext) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(context.settings)

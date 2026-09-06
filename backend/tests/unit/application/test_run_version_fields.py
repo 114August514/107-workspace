@@ -10,7 +10,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from workspace107.api import presenters as p
-from workspace107.api import schemas as s
 from workspace107.application.run_service import RunView
 from workspace107.domain.enums import RunStatus
 from workspace107.domain.models import Run

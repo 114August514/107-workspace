@@ -208,7 +208,6 @@ async def test_notification_preferences_are_recipient_scoped(client) -> None:
     assert run_failed["enabled"] is True
 
 
-
 @pytest.mark.asyncio
 async def test_notification_preference_failure_does_not_break_invitation(
     client, monkeypatch

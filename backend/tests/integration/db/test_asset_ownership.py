@@ -39,9 +39,7 @@ async def test_assets_require_exactly_one_owner(session) -> None:
         ("environments", "env", "", {}),
         ("shared_resources", "shr", ", created_at", {"now": NOW}),
     ):
-        columns = (
-            "id, name, description, owner_user_id, owner_user_group_id" + extra_columns
-        )
+        columns = "id, name, description, owner_user_id, owner_user_group_id" + extra_columns
         values = (
             f"('{id_prefix}_{{kind}}', 'Invalid', '', {{owner}}, {{group}}"
             + (", :now" if extra_values else "")
@@ -114,6 +112,4 @@ async def test_asset_owner_cannot_be_deleted_while_referenced(session) -> None:
             await session.execute(text("DELETE FROM users WHERE id = 'usr_asset_owner'"))
     with pytest.raises(IntegrityError):
         async with session.begin_nested():
-            await session.execute(
-                text("DELETE FROM user_groups WHERE id = 'grp_asset_owner'")
-            )
+            await session.execute(text("DELETE FROM user_groups WHERE id = 'grp_asset_owner'"))

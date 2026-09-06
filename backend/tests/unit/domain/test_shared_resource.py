@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from workspace107.domain.errors import ValidationFailed
 from workspace107.domain.models import (
     SharedResource,
     SharedResourceFile,

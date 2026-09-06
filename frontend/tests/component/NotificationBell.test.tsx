@@ -49,7 +49,6 @@ afterEach(() => {
 })
 
 describe('NotificationBell 未读数轮询契约', () => {
-
   it('未读数拉取失败不打扰用户：铃铛仍可访问', async () => {
     vi.spyOn(api, 'unreadCount').mockRejectedValue(new Error('boom'))
     renderBell()

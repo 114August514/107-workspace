@@ -46,6 +46,8 @@ PLAN = ComputePlan(
 def test_invalid_resource_request_is_rejected_on_construction(payload: dict[str, int]) -> None:
     with pytest.raises(ValidationFailed):
         ComputeRequest(**payload)
+
+
 def test_exceeding_plan_limits_reports_each_reason() -> None:
     request = ComputeRequest(nodes=4, cpus=64, memory_mb=262144, gpus=8, time_limit_minutes=4320)
     problems = check_request_against_plan(PLAN, request)

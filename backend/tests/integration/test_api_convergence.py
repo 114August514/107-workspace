@@ -12,8 +12,6 @@ ALICE = {"X-User": "alice"}
 BOB = {"X-User": "bob"}
 
 
-
-
 @pytest.mark.asyncio
 async def test_user_group_activity_requires_current_membership(client) -> None:
     await client.get("/api/v1/me", headers=BOB)
