@@ -166,6 +166,8 @@ export function ProductRoutes({
   return (
     <Routes>
       <Route path="/" element={<HomePage username={username} home={home} />} />
+      <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
+      <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
       <Route path="/profile" element={<ProfilePage home={home} />} />
       <Route path="/settings" element={<SettingsPage home={home} />} />
       <Route

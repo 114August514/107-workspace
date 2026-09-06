@@ -245,6 +245,7 @@ class FileContentOut(Model):
 class WorkingChangeOut(Model):
     path: str
     change: ChangeKind
+    base_version: str | None = None
 
 
 class WorkingChangeDetailOut(Model):

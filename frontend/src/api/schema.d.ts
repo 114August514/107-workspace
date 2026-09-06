@@ -629,9 +629,7 @@ export interface paths {
         };
         /**
          * 查看未保存变更的内容级详情
-         * @description 校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。
-         *
-         *     每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。
+         * @description 按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。
          */
         get: operations["working_change_detail_api_v1_projects__project_id__changes_detail_get"];
         put?: never;
@@ -3589,6 +3587,8 @@ export interface components {
         };
         /** WorkingChangeOut */
         WorkingChangeOut: {
+            /** Base Version */
+            base_version?: string | null;
             change: components["schemas"]["ChangeKind"];
             /** Path */
             path: string;
@@ -6855,6 +6855,7 @@ export interface operations {
         parameters: {
             query: {
                 path: string;
+                base_version?: string | null;
             };
             header?: {
                 "X-User"?: string | null;

@@ -14,6 +14,8 @@
 - 后端集成测试覆盖当前 User、有效 User Group 成员创建、未接受邀请与跨 Owner 拒绝、创建后的版本空态和名称校验。
 - 组件测试覆盖常规设置保存失败与重试、只读字段以及原有 Variable / Secret 管理闭环；Secret 值不回显。
 
-本地完整检查日志：`/tmp/ddl-check-final.log`。
+本地完整检查日志：`/tmp/ddl-merge-check.log`。
 
-最终 `make check` 通过：后端 435 passed / 3 skipped，前端 290 passed，代理测试 14 passed / 1 skipped；格式、lint、类型、构建和生成契约一致性检查通过。
+最终 `make check` 通过：后端 435 passed / 3 skipped，前端 291 passed，代理测试 14 passed / 1 skipped；格式、lint、类型、构建和生成契约一致性检查通过。
+
+同步 main 的 #94（7ae9068）后再次完成全部检查，并复验最终设置布局、菜单顺序、失败重试和只读权限。

@@ -130,6 +130,7 @@ class VersionDiffEntry:
 class WorkingTreeChange:
     path: str
     change: ChangeKind
+    base_version: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -761,7 +762,7 @@ class ProjectService:
         return ProjectLanguages(languages=languages, total_code_lines=total)
 
     async def working_changes(self, user_id: str, project_id: str) -> list[WorkingTreeChange]:
-        """查看当前未保存的文件变更：工作区与最近一个版本的差异。"""
+        """查看当前未保存的文件变更，并绑定查询时的最新 Version。"""
         await self._guard.project(user_id, project_id, owner_scope=True)
         latest = await self._repos.project_versions.latest(project_id)
         baseline = {f.path: f.content_hash for f in latest.files} if latest else {}
@@ -770,17 +771,21 @@ class ProjectService:
             for f in await self._repos.project_files.list_for_project(project_id)
         }
         return [
-            WorkingTreeChange(path=path, change=change) for path, change in _diff(baseline, current)
+            WorkingTreeChange(path=path, change=change, base_version=latest.id if latest else None)
+            for path, change in _diff(baseline, current)
         ]
 
     async def working_change_detail(
-        self, user_id: str, project_id: str, path: str
+        self, user_id: str, project_id: str, path: str, base_version: str | None = None
     ) -> WorkingChangeDetail:
-        """查看一个未保存变更的内容级详情：基线内容与工作区内容。"""
+        """按 Changes 列表绑定的 Version 查看未保存变更详情。"""
         await self._guard.project(user_id, project_id, owner_scope=True)
         normalized = normalize_path(path)
 
         latest = await self._repos.project_versions.latest(project_id)
+        latest_id = latest.id if latest else None
+        if base_version != latest_id:
+            raise ConflictError("Project Version 已变化，请刷新 Changes 列表后重试")
         baseline = {f.path: f for f in latest.files} if latest else {}
         files = await self._repos.project_files.list_for_project(project_id)
         current = {f.path: f for f in files}
@@ -863,7 +868,7 @@ class ProjectService:
             for f in await self._repos.project_files.list_for_project(project_id)
         }
         return [
-            WorkingTreeChange(path=path, change=change)
+            WorkingTreeChange(path=path, change=change, base_version=latest.id if latest else None)
             for path, change in _diff(
                 {p: f.content_hash for p, f in baseline.items()}, remaining_current
             )

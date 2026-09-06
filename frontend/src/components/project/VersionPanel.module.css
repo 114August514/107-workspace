@@ -1,0 +1,98 @@
+.changesSection {
+  overflow: hidden;
+  border: 1px solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  background: var(--bgColor-default);
+}
+
+.changesHeader {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: var(--base-size-12) var(--base-size-16);
+  color: var(--fgColor-default);
+  font: inherit;
+  font-weight: var(--base-text-weight-semibold);
+  text-align: left;
+  border: 0;
+  background: var(--bgColor-muted);
+  cursor: pointer;
+}
+
+.changesHeader:hover {
+  background: var(--bgColor-neutral-muted);
+}
+
+.changeCount {
+  display: inline-flex;
+  min-width: var(--base-size-24);
+  height: var(--base-size-24);
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding-inline: var(--base-size-6);
+  color: var(--fgColor-onEmphasis);
+  font-size: var(--text-body-size-small);
+  font-weight: var(--base-text-weight-semibold);
+  border-radius: var(--borderRadius-full);
+  background: var(--bgColor-accent-emphasis);
+}
+
+.changeList {
+  display: grid;
+}
+
+.changeRow {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: var(--base-size-8);
+  padding: var(--base-size-12) var(--base-size-16);
+  color: var(--fgColor-default);
+  text-align: left;
+  border-top: 1px solid var(--borderColor-muted);
+  border-radius: 0;
+}
+
+.changeRow:hover {
+  background: var(--bgColor-muted);
+}
+
+.changePath {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--base-text-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changeSource {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--fgColor-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changeStatus {
+  flex: none;
+  min-width: 1.5rem;
+  color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-semibold);
+  text-align: right;
+}
+
+.modified {
+  color: var(--fgColor-attention);
+}
+
+.added {
+  color: var(--fgColor-success);
+}
+
+.removed {
+  color: var(--fgColor-danger);
+}
