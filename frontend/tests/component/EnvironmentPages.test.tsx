@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../src/api/client'
-import type { Environment } from '../../src/api/types'
+import type { Environment, EnvironmentPublicationAttempt } from '../../src/api/types'
 import { EnvironmentListPage } from '../../src/pages/EnvironmentListPage'
 import { EnvironmentPage } from '../../src/pages/EnvironmentPage'
 import { EnvironmentVersionPage } from '../../src/pages/EnvironmentVersionPage'
+import { EnvironmentProvider } from '../../src/components/environment/EnvironmentHeader'
 import { PrimerRoot } from '../../src/primer/setup'
 
 const runtimeFields = {
@@ -26,6 +27,7 @@ const runtimeFields = {
 }
 
 const environment: Environment = {
+  capabilities: ['environment.version.create'],
   id: 'env_cuda',
   name: 'CUDA Research',
   description: 'GPU training base',
@@ -53,15 +55,24 @@ function renderRoute(entry: string, path: string, element: ReactNode) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <PrimerRoot>
-        <Routes>
-          <Route path={path} element={element} />
-        </Routes>
+        <EnvironmentProvider>
+          <Routes>
+            <Route path={path} element={element} />
+          </Routes>
+        </EnvironmentProvider>
       </PrimerRoot>
     </MemoryRouter>,
   )
 }
 
 beforeEach(() => {
+  vi.spyOn(api, 'environmentPublicationOptions').mockResolvedValue({
+    modules: ['cuda/12.6'],
+    architecture: 'x86_64',
+    max_upload_bytes: 1024,
+    max_import_bytes: 4096,
+    import_timeout_seconds: 900,
+  })
   vi.spyOn(api, 'environments').mockResolvedValue([environment])
   vi.spyOn(api, 'environment').mockResolvedValue(environment)
   vi.spyOn(api, 'environmentVersion').mockResolvedValue(environment.versions[0]!)
@@ -96,7 +107,7 @@ describe('Environment Core surfaces', () => {
     renderRoute('/environments/env_cuda', '/environments/:environmentId', <EnvironmentPage />)
 
     expect(await screen.findByRole('heading', { name: 'CUDA Research' })).toBeVisible()
-    expect(screen.getByText('归属：GPU Lab')).toBeVisible()
+    expect(screen.getByText('GPU Lab')).toBeVisible()
     expect(screen.getByRole('link', { name: /12.4/ })).toHaveAttribute(
       'href',
       '/environment-versions/envv_cuda_124',
@@ -104,110 +115,119 @@ describe('Environment Core surfaces', () => {
     expect(screen.getByRole('link', { name: /12.5/ })).toHaveTextContent('不可用')
   })
 
-  it('shows a durable pending publication attempt', async () => {
-    vi.spyOn(api, 'publishModulesEnvironment').mockResolvedValue({
-      id: 'evpa_1',
-      environment_id: 'env_cuda',
-      status: 'pending',
-      version: 'new-modules',
-      description: '',
-      runtime_kind: 'modules',
-      validation_summary: '等待运行环境校验',
-      validation_evidence: {},
-      failure_code: null,
-      failure_reason: null,
-      version_id: null,
-      created_by: 'usr_1',
-      created_at: '2026-08-29T00:00:00Z',
-      started_at: null,
-      finished_at: null,
+  it('publishes ordered modules and shows the persisted history', async () => {
+    const attempt = makeAttempt()
+    const publish = vi.spyOn(api, 'publishModulesEnvironment').mockImplementation(async () => {
+      vi.mocked(api.environmentPublicationAttempts).mockResolvedValue([attempt])
+      return attempt
     })
     renderRoute('/environments/env_cuda', '/environments/:environmentId', <EnvironmentPage />)
-    await screen.findByRole('heading', { name: 'CUDA Research' })
-    fireEvent.change(screen.getAllByRole('textbox')[0]!, { target: { value: 'new-modules' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建发布尝试' }))
-    expect(await screen.findByText('pending')).toBeVisible()
-    expect(screen.getByText(/等待运行环境校验/)).toBeVisible()
-    expect(screen.getByRole('button', { name: '刷新校验状态' })).toBeVisible()
+    fireEvent.click(await screen.findByRole('button', { name: '发布版本' }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(await dialog.findByLabelText(/版本名称/), { target: { value: 'new-modules' } })
+    fireEvent.change(dialog.getByLabelText('说明'), { target: { value: 'For training' } })
+    fireEvent.change(dialog.getByLabelText(/加载模块/), {
+      target: { value: 'cuda/12.6\npython3.12/3.12' },
+    })
+    fireEvent.click(dialog.getByRole('button', { name: '发布版本' }))
+    expect(await screen.findByText('等待处理')).toBeVisible()
+    expect(publish).toHaveBeenCalledWith('env_cuda', {
+      version: 'new-modules',
+      description: 'For training',
+      modules: ['cuda/12.6', 'python3.12/3.12'],
+    })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('hydrates failed attempts and submits Apptainer SIF multipart state', async () => {
+  it('retries failed remote imports with source and description, retaining input on submission errors', async () => {
     vi.mocked(api.environmentPublicationAttempts).mockResolvedValue([
-      {
-        id: 'evpa_failed',
-        environment_id: 'env_cuda',
+      makeAttempt({
         status: 'failed',
-        version: 'bad-sif',
-        description: '',
         runtime_kind: 'apptainer_sif',
-        validation_summary: '运行环境校验失败',
-        validation_evidence: {},
-        failure_code: 'validation_failed',
-        failure_reason: 'Apptainer 拒绝该 SIF',
-        version_id: null,
-        created_by: 'usr_1',
-        created_at: '2026-08-29T00:00:00Z',
-        started_at: '2026-08-29T00:00:01Z',
-        finished_at: '2026-08-29T00:00:02Z',
-      },
+        source_kind: 'import',
+        expected_sha256: 'b'.repeat(64),
+        source_uri: 'docker://alpine:3.22',
+        description: 'Small base',
+        failure_reason: '拉取失败',
+      }),
     ])
-    const pending = {
-      id: 'evpa_sif',
-      environment_id: 'env_cuda',
-      status: 'pending' as const,
-      version: 'sif-v1',
-      description: '',
-      runtime_kind: 'apptainer_sif' as const,
-      validation_summary: '等待运行环境校验',
-      validation_evidence: {},
-      failure_code: null,
-      failure_reason: null,
-      version_id: null,
-      created_by: 'usr_1',
-      created_at: '2026-08-29T00:00:03Z',
-      started_at: null,
-      finished_at: null,
-    }
-    const publish = vi.spyOn(api, 'publishSifEnvironment').mockResolvedValue(pending)
-    const view = renderRoute(
-      '/environments/env_cuda',
+    const publish = vi.spyOn(api, 'importEnvironment').mockRejectedValue(new Error('offline'))
+    renderRoute(
+      '/environments/env_cuda?tab=history',
       '/environments/:environmentId',
       <EnvironmentPage />,
     )
-    expect(await screen.findByText(/Apptainer 拒绝该 SIF/)).toBeVisible()
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'apptainer_sif' } })
-    const file = new File(['sif'], 'runtime.sif', { type: 'application/octet-stream' })
-    const fileInput = view.container.querySelector('input[type="file"]')
-    expect(fileInput).not.toBeNull()
-    fireEvent.change(fileInput!, { target: { files: [file] } })
-    const inputs = screen.getAllByRole('textbox')
-    fireEvent.change(inputs[0]!, { target: { value: 'sif-v1' } })
-    fireEvent.change(inputs[1]!, { target: { value: 'https://example.invalid/runtime.sif' } })
-    fireEvent.change(inputs[2]!, { target: { value: 'sha256:source' } })
-    fireEvent.click(screen.getByRole('button', { name: '创建发布尝试' }))
-    expect(await screen.findByText('pending')).toBeVisible()
+    fireEvent.click(await screen.findByRole('button', { name: '重新发布' }))
+    const dialog = within(screen.getByRole('dialog'))
+    expect(await dialog.findByLabelText(/镜像地址/)).toHaveValue('docker://alpine:3.22')
+    expect(dialog.getByLabelText('说明')).toHaveValue('Small base')
+    fireEvent.click(dialog.getByRole('button', { name: '发布版本' }))
+    expect(await dialog.findByText('offline')).toBeVisible()
+    expect(dialog.getByLabelText(/镜像地址/)).toHaveValue('docker://alpine:3.22')
     expect(publish).toHaveBeenCalledWith('env_cuda', {
-      version: 'sif-v1',
-      sif: file,
-      source_uri: 'https://example.invalid/runtime.sif',
-      source_digest: 'sha256:source',
-      architecture: 'x86_64',
+      version: 'new-modules',
+      description: 'Small base',
+      source_uri: 'docker://alpine:3.22',
+      expected_sha256: 'b'.repeat(64),
     })
   })
-  it('shows exact version identity and execution basis', async () => {
+
+  it('uploads the selected SIF with description and prevents an oversized upload', async () => {
+    const publish = vi.spyOn(api, 'publishSifEnvironment').mockResolvedValue(makeAttempt())
+    renderRoute('/environments/env_cuda', '/environments/:environmentId', <EnvironmentPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '发布版本' }))
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.change(await dialog.findByLabelText(/版本名称/), { target: { value: 'sif-v1' } })
+    fireEvent.change(dialog.getByLabelText('说明'), { target: { value: 'My SIF' } })
+    fireEvent.change(dialog.getByLabelText('运行方式'), { target: { value: 'apptainer_sif' } })
+    fireEvent.change(dialog.getByLabelText('SIF 文件'), {
+      target: { files: [new File(['x'.repeat(2048)], 'large.sif')] },
+    })
+    fireEvent.click(dialog.getByRole('button', { name: '发布版本' }))
+    expect(await dialog.findByText(/请选择不超过/)).toBeVisible()
+    expect(publish).not.toHaveBeenCalled()
+    const file = new File(['sif'], 'runtime.sif')
+    fireEvent.change(dialog.getByLabelText('SIF 文件'), { target: { files: [file] } })
+    fireEvent.click(dialog.getByRole('button', { name: '发布版本' }))
+    await waitFor(() =>
+      expect(publish).toHaveBeenCalledWith('env_cuda', {
+        version: 'sif-v1',
+        description: 'My SIF',
+        sif: file,
+        source_uri: '',
+        source_digest: '',
+        architecture: 'x86_64',
+      }),
+    )
+  })
+
+  it('does not expose publishing or query history for readers', async () => {
+    vi.mocked(api.environment).mockResolvedValue({ ...environment, capabilities: [] })
+    renderRoute(
+      '/environments/env_cuda?tab=history',
+      '/environments/:environmentId',
+      <EnvironmentPage />,
+    )
+    await screen.findByRole('heading', { name: 'CUDA Research' })
+    expect(screen.queryByRole('button', { name: '发布版本' })).not.toBeInTheDocument()
+    expect(api.environmentPublicationAttempts).not.toHaveBeenCalled()
+  })
+
+  it('shows modules and availability while keeping technical details folded', async () => {
     renderRoute(
       '/environment-versions/envv_cuda_124',
       '/environment-versions/:versionId',
       <EnvironmentVersionPage />,
     )
-
-    expect(await screen.findByRole('heading', { name: 'CUDA Research · 12.4' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'CUDA Research' })).toBeVisible()
     expect(screen.getByText('当前可用')).toBeVisible()
-    expect(screen.getByText('envv_cuda_124')).toBeVisible()
-    expect(screen.getByText('modules')).toBeVisible()
+    expect(screen.getByText('cuda/12.6')).toBeVisible()
     expect(screen.getByText('Validated modules')).toBeVisible()
+    const disclosure = screen.getByText('技术信息').closest('details')!
+    expect(disclosure.open).toBe(false)
+    fireEvent.click(screen.getByText('技术信息'))
+    expect(screen.getByText('envv_cuda_124')).toBeVisible()
     expect(screen.getByText(/modules_allowlist_v1/)).toBeVisible()
-    expect(screen.getByText('Current platform evidence')).toBeVisible()
   })
 
   it('offers retry when the environment catalog request fails', async () => {
@@ -218,3 +238,32 @@ describe('Environment Core surfaces', () => {
     expect(screen.getByRole('button', { name: '重试' })).toBeVisible()
   })
 })
+
+function makeAttempt(
+  overrides: Partial<EnvironmentPublicationAttempt> = {},
+): EnvironmentPublicationAttempt {
+  return {
+    id: 'evpa_1',
+    environment_id: 'env_cuda',
+    status: 'pending',
+    version: 'new-modules',
+    description: '',
+    runtime_kind: 'modules',
+    source_kind: 'modules',
+    source_uri: '',
+    stage: '',
+    source_digest: '',
+    expected_sha256: '',
+    modules: [],
+    validation_summary: '等待运行环境校验',
+    validation_evidence: {},
+    failure_code: null,
+    failure_reason: null,
+    version_id: null,
+    created_by: 'usr_1',
+    created_at: '2026-08-29T00:00:00Z',
+    started_at: null,
+    finished_at: null,
+    ...overrides,
+  }
+}

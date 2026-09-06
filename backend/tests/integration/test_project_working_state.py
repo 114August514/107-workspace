@@ -645,39 +645,44 @@ async def setup_project_with_baseline(client: httpx.AsyncClient) -> tuple[str, d
     return project_id, version_response.json()
 
 
-async def change_detail(client: httpx.AsyncClient, project_id: str, path: str) -> httpx.Response:
+async def change_detail(
+    client: httpx.AsyncClient, project_id: str, path: str, base_version: str | None = None
+) -> httpx.Response:
+    params: dict[str, str] = {"path": path}
+    if base_version is not None:
+        params["base_version"] = base_version
     return await client.get(
-        f"/api/v1/projects/{project_id}/changes/detail",
-        params={"path": path},
-        headers=ALICE,
+        f"/api/v1/projects/{project_id}/changes/detail", params=params, headers=ALICE
     )
 
 
 @pytest.mark.asyncio
 async def test_change_detail_returns_both_sides_of_each_change_kind(client) -> None:
-    project_id, _ = await setup_project_with_baseline(client)
+    project_id, baseline_version = await setup_project_with_baseline(client)
     await write_file(client, project_id, "a.txt", "changed a")  # modified
     await write_file(client, project_id, "new.txt", "brand new")  # added
     await client.delete(
         f"/api/v1/projects/{project_id}/files", params={"path": "dir/b.txt"}, headers=ALICE
     )  # removed
+    stale = await change_detail(client, project_id, "a.txt", "pv_stale")
+    assert stale.status_code == 409
 
-    detail = (await change_detail(client, project_id, "a.txt")).json()
+    detail = (await change_detail(client, project_id, "a.txt", baseline_version["id"])).json()
     assert detail["change"] == "modified"
     assert detail["previous"]["content"] == "original a"
     assert detail["current"]["content"] == "changed a"
 
-    added = (await change_detail(client, project_id, "new.txt")).json()
+    added = (await change_detail(client, project_id, "new.txt", baseline_version["id"])).json()
     assert added["change"] == "added"
     assert added["previous"] is None
     assert added["current"]["content"] == "brand new"
 
-    removed = (await change_detail(client, project_id, "dir/b.txt")).json()
+    removed = (await change_detail(client, project_id, "dir/b.txt", baseline_version["id"])).json()
     assert removed["change"] == "removed"
     assert removed["previous"]["content"] == "original b"
     assert removed["current"] is None
 
-    unchanged = await change_detail(client, project_id, "missing.txt")
+    unchanged = await change_detail(client, project_id, "not-changed.txt", baseline_version["id"])
     assert unchanged.status_code == 404
 
 

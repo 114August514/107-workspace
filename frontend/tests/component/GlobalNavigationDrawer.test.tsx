@@ -106,6 +106,10 @@ describe('GlobalNavigationDrawer', () => {
       'href',
       '/environments',
     )
+    expect(within(dialog).getByRole('link', { name: '个人执行上下文' })).toHaveAttribute(
+      'href',
+      '/execution-context',
+    )
     expect(within(dialog).getByRole('heading', { name: '你的 User Group' })).toBeVisible()
     expect(within(dialog).getByRole('heading', { name: '最近使用的 Project' })).toBeVisible()
     expect(hrefs(dialog, '/user-groups/')).toEqual([

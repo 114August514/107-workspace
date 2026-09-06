@@ -103,6 +103,7 @@ async def test_user_group_capabilities_are_governance_only_for_every_role(
             "member.role.manage",
             "member.view",
             "ownership.transfer",
+            "user_group.delete",
             "user_group.update",
             "user_group.view",
         ],

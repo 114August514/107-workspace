@@ -191,6 +191,10 @@
     padding-block: var(--base-size-20) var(--base-size-16);
   }
 
+  .sourceItem {
+    white-space: normal;
+  }
+
   .statusGrid,
   .formatGrid {
     grid-template-columns: 1fr;

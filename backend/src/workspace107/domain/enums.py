@@ -175,6 +175,7 @@ class ActivityAction(StrEnum):
 
     USER_GROUP_CREATED = "user_group_created"
     USER_GROUP_UPDATED = "user_group_updated"
+    USER_GROUP_DELETED = "user_group_deleted"
     MEMBER_INVITED = "member_invited"
     MEMBER_JOINED = "member_joined"
     MEMBER_LEFT = "member_left"
@@ -184,6 +185,7 @@ class ActivityAction(StrEnum):
     PROJECT_CREATED = "project_created"
     PROJECT_UPDATED = "project_updated"
     PROJECT_FORKED = "project_forked"
+    PROJECT_DELETED = "project_deleted"
     VERSION_SAVED = "version_saved"
     VERSION_RESTORED = "version_restored"
     RUN_SUBMITTED = "run_submitted"
@@ -225,3 +227,6 @@ class NotificationType(StrEnum):
     RUN_SUCCEEDED = "run_succeeded"
     RUN_FAILED = "run_failed"
     RUN_SUBMIT_FAILED = "run_submit_failed"
+    ENVIRONMENT_UNAVAILABLE = "environment_unavailable"
+    SHARED_RESOURCE_UNAVAILABLE = "shared_resource_unavailable"
+    PLATFORM_INCIDENT = "platform_incident"

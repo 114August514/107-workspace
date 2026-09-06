@@ -130,6 +130,10 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
       'href',
       '/projects/p-1/runs/r-1',
     )
+    expect(screen.getByRole('link', { name: '管理个人执行上下文' })).toHaveAttribute(
+      'href',
+      '/execution-context',
+    )
   })
 
   it('HomePage 正文不自行渲染导航或重复的 User Group、Project 卡片', async () => {

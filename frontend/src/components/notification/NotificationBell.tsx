@@ -6,18 +6,16 @@ import { Link as RouterLink } from 'react-router-dom'
 import { api } from '../../api/client'
 import type { AsyncErrorView } from '../../api/errors'
 import { toAsyncError } from '../../api/errors'
-import type { Notification, NotificationPage } from '../../api/types'
+import type { Notification, NotificationPage, NotificationPreference } from '../../api/types'
 import { useAsync, usePolling } from '../../api/useAsync'
 import { formatRelative, formatTime } from '../../utils/format'
 import { AsyncState } from '../common/AsyncState'
 import { notificationLabel, notificationPath, notificationVariant } from './notificationTypes'
 import styles from './NotificationBell.module.css'
 
-/** 未读数的轮询间隔。和 Run 状态轮询共用同一套 usePolling。 */
 const POLL_INTERVAL_MS = 30_000
 
 interface Props {
-  /** 切换身份时要重新拉取——未读数是跟人走的。 */
   username: string
 }
 
@@ -32,8 +30,7 @@ export function NotificationBell({ username }: Props) {
       const count = await api.unreadCount()
       if (sequence === requestSequence.current) setUnread(count)
     } catch {
-      // 未读数拉不到不值得打扰用户：铃铛上少个数字而已，
-      // 弹一个报错反而更烦人。
+      // 通知中心不可用时不打断当前页面。
     }
   }, [])
 
@@ -41,7 +38,6 @@ export function NotificationBell({ username }: Props) {
     void refreshCount()
   }, [refreshCount, username])
 
-  // 30 秒一次，一直开着——未读数随时可能变（别人邀请你、你的 Run 跑完了）
   usePolling(() => void refreshCount(), POLL_INTERVAL_MS, true)
 
   return (
@@ -59,7 +55,6 @@ export function NotificationBell({ username }: Props) {
         />
       )}
     >
-      {/* 浮层内容只在展开时挂载，所以列表的加载状态每次打开都会重新走一遍 */}
       <NotificationPanel
         username={username}
         onClose={() => setOpen(false)}
@@ -76,33 +71,46 @@ interface PanelProps {
 }
 
 function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
-  // token 用来在标记已读之后重新拉列表
   const [token, setToken] = useState(0)
-  // 标记已读失败就地显示在浮层里——顶栏操作不该再弹全局 toast
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [markError, setMarkError] = useState<AsyncErrorView | null>(null)
   const notifications = useAsync<NotificationPage>(
     () => api.listNotifications({ page_size: 30 }),
     [username, token],
   )
+  const preferences = useAsync<NotificationPreference[]>(
+    () => api.listNotificationPreferences(),
+    [username],
+  )
 
-  const markAll = async () => {
+  const reload = () => setToken((n) => n + 1)
+  const mark = async (notification: Notification) => {
     setMarkError(null)
     try {
-      await api.markAllNotificationsRead()
-      setToken((n) => n + 1)
+      if (notification.read_at) await api.markNotificationUnread(notification.id)
+      else await api.markNotificationRead(notification.id)
+      reload()
       onChanged()
     } catch (error) {
       setMarkError(toAsyncError(error as Error) ?? null)
     }
   }
 
-  const markOne = async (notification: Notification): Promise<void> => {
-    if (notification.read_at) return
+  const markAll = async () => {
     setMarkError(null)
     try {
-      await api.markNotificationRead(notification.id)
-      setToken((n) => n + 1)
+      await api.markAllNotificationsRead()
+      reload()
       onChanged()
+    } catch (error) {
+      setMarkError(toAsyncError(error as Error) ?? null)
+    }
+  }
+
+  const updatePreference = async (preference: NotificationPreference) => {
+    try {
+      await api.setNotificationPreference(preference.type, !preference.enabled)
+      preferences.reload()
     } catch (error) {
       setMarkError(toAsyncError(error as Error) ?? null)
     }
@@ -115,11 +123,20 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
     <div className={styles.panel}>
       <div className={styles.panelHeader}>
         <Text weight="semibold">通知</Text>
-        {hasUnread && (
-          <Button variant="invisible" size="small" onClick={markAll}>
-            全部标为已读
+        <div>
+          {hasUnread && (
+            <Button variant="invisible" size="small" onClick={markAll}>
+              全部标为已读
+            </Button>
+          )}
+          <Button
+            variant="invisible"
+            size="small"
+            onClick={() => setPreferencesOpen((open) => !open)}
+          >
+            {preferencesOpen ? '收起设置' : '通知设置'}
           </Button>
-        )}
+        </div>
       </div>
       {markError && (
         <div className={styles.panelBanner}>
@@ -128,6 +145,59 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
           </Banner>
         </div>
       )}
+      {preferencesOpen && (
+        <div className={styles.panelBody} aria-label="通知设置">
+          <AsyncState
+            loading={preferences.loading}
+            loadingText="正在加载通知设置…"
+            error={toAsyncError(preferences.error)}
+            onRetry={preferences.reload}
+          >
+            {preferences.data && (
+              <>
+                <Text weight="semibold">可选通知</Text>
+                <ul>
+                  {preferences.data
+                    .filter((preference) => !preference.mandatory)
+                    .map((preference) => (
+                      <li key={preference.type}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={preference.enabled}
+                            onChange={() => void updatePreference(preference)}
+                          />{' '}
+                          {notificationLabel(preference.type)}
+                        </label>
+                      </li>
+                    ))}
+                </ul>
+                <Text weight="semibold">重要系统通知</Text>
+                <ul>
+                  {preferences.data
+                    .filter((preference) => preference.mandatory)
+                    .map((preference) => (
+                      <li key={preference.type}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={preference.enabled}
+                            disabled
+                            readOnly
+                            aria-label={`${notificationLabel(preference.type)}（始终开启）`}
+                          />{' '}
+                          {notificationLabel(preference.type)} <Label size="small">始终开启</Label>
+                        </label>
+                      </li>
+                    ))}
+                </ul>
+                <Text>重要系统通知始终开启。</Text>
+              </>
+            )}
+          </AsyncState>
+        </div>
+      )}
+
       <div className={styles.panelBody}>
         <AsyncState
           loading={notifications.loading}
@@ -143,7 +213,7 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
               <NotificationLine
                 key={notification.id}
                 notification={notification}
-                onRead={() => markOne(notification)}
+                onToggle={() => mark(notification)}
                 onNavigate={onClose}
               />
             ))}
@@ -153,18 +223,18 @@ function NotificationPanel({ username, onClose, onChanged }: PanelProps) {
     </div>
   )
 }
+
 function NotificationLine({
   notification,
-  onRead,
+  onToggle,
   onNavigate,
 }: {
   notification: Notification
-  onRead: () => Promise<void>
+  onToggle: () => Promise<void>
   onNavigate: () => void
 }) {
   const path = notificationPath(notification)
   const unread = !notification.read_at
-
   const title = unread ? (
     <span className={styles.titleUnread}>{notification.title}</span>
   ) : (
@@ -191,25 +261,26 @@ function NotificationLine({
           as={RouterLink}
           to={path}
           onClick={() => {
-            if (unread) void onRead()
+            if (unread) void onToggle()
             onNavigate()
           }}
         >
           {title}
         </Link>
-      ) : unread ? (
-        <Button
-          className={styles.readAction}
-          variant="invisible"
-          size="small"
-          aria-label={`将「${notification.title}」标为已读`}
-          onClick={onRead}
-        >
-          <span className={styles.readActionLabel}>{title}</span>
-        </Button>
       ) : (
         title
       )}
+      <Button
+        className={styles.readAction}
+        variant="invisible"
+        size="small"
+        aria-label={
+          unread ? `将「${notification.title}」标为已读` : `将「${notification.title}」标为未读`
+        }
+        onClick={() => void onToggle()}
+      >
+        {unread ? '标为已读' : '标为未读'}
+      </Button>
       {notification.body && <div className={styles.itemBody}>{notification.body}</div>}
     </li>
   )

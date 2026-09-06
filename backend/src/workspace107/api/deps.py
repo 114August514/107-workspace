@@ -32,6 +32,7 @@ from ..application.shared_resource_publication import SharedResourcePublicationP
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
 from ..config import Settings
+from ..domain.errors import AuthenticationRequired
 from ..domain.models import User
 from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
 from ..domain.ports.clock import Clock
@@ -40,9 +41,11 @@ from ..domain.ports.repositories import Repositories
 from ..domain.ports.scheduler import SchedulerPort
 from ..domain.ports.secret_vault import SecretVault
 from ..domain.ports.storage import StoragePort
+from ..domain.slurm_projection import SlurmProjection
 from ..infrastructure.db.notifications import DatabaseNotificationPublisher
 from ..infrastructure.db.repositories import SqlRepositories
 from ..infrastructure.db.secret_vault import DatabaseSecretVault
+from ..infrastructure.identity import USTCCASIdentityProvider
 
 DEV_USER_HEADER = "X-User"
 DEFAULT_DEV_USER = "student"
@@ -57,6 +60,7 @@ class AppContext:
     session_factory: async_sessionmaker[AsyncSession]
     storage: StoragePort
     scheduler: SchedulerPort
+    slurm_projection: SlurmProjection | None
     clock: Clock
 
 
@@ -105,13 +109,13 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
     # 通知的出口只有这一个端口。以后增加邮件时换成组合实现（站内 + 邮件），
     # 各个用例里的调用不需要改变；端口就是为了隔离具体送达方式。
     publisher: NotificationPublisher = DatabaseNotificationPublisher(repos.notifications)
-    notifier = Notifier(publisher, context.clock, session)
+    notifier = Notifier(publisher, context.clock, session, repos.notifications)
 
     return Services(
         identity=IdentityService(repos, context.clock, session),
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
         configuration=ConfigurationService(repos, guard, vault),
-        entitlements=EntitlementService(repos),
+        entitlements=EntitlementService(repos, context.clock),
         projects=ProjectService(
             repos,
             guard,
@@ -129,6 +133,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
             context.clock,
             context.storage,
             context.scheduler,
+            context.slurm_projection,
             vault,
             activity,
             notifier,
@@ -136,7 +141,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         ),
         catalog=CatalogService(repos, guard),
         environment_publications=EnvironmentPublicationService(
-            repos, guard, context.storage, context.clock
+            repos, guard, context.storage, context.clock, notifier
         ),
         health=HealthService(repos),
         lifecycle=RunLifecycleService(
@@ -182,10 +187,17 @@ async def get_services(
 
 
 async def get_current_user(
+    request: Request,
     services: Annotated[Services, Depends(get_services)],
     x_user: Annotated[str | None, Header(alias=DEV_USER_HEADER)] = None,
 ) -> User:
-    """Resolve the dev identity without creating any ownership container."""
+    """Resolve one internal User at the centralized authentication boundary."""
+    if request.app.state.context.settings.auth_mode == "ustc":
+        profile = USTCCASIdentityProvider().resolve(request.headers)
+        if profile is None:
+            raise AuthenticationRequired("未提供有效的 USTC CAS 身份")
+        return await services.identity.resolve_external_identity(profile)
+
     username = (x_user or DEFAULT_DEV_USER).strip() or DEFAULT_DEV_USER
     return await services.identity.ensure_user(username)
 

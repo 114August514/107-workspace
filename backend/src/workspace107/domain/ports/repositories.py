@@ -8,12 +8,14 @@ application 层通过 :class:`Repositories` 访问持久化，不认识 SQLAlche
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from ..compute import ComputePlan, ResourceEntitlement
 from ..config_scope import ConfigScope
-from ..enums import EnvironmentAvailability
+from ..enums import EnvironmentAvailability, NotificationType
 from ..grant import Grant, GrantTargetKind
 from ..models import (
     Activity,
@@ -21,10 +23,12 @@ from ..models import (
     Environment,
     EnvironmentPublicationAttempt,
     EnvironmentVersion,
+    ExternalIdentity,
     ForkRelation,
     IdempotencyRecord,
     Membership,
     Notification,
+    NotificationPreference,
     Project,
     ProjectFile,
     ProjectVersion,
@@ -43,11 +47,51 @@ from ..pagination import Page, PageRequest
 from ..run_snapshot import RunSnapshot
 
 
+@dataclass(frozen=True, slots=True)
+class UserGroupDeletionSummary:
+    projects: int
+    environments: int
+    shared_resources: int
+    variables: int
+    secrets: int
+    memberships: int
+    grants: int
+    activities: int
+    notifications: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectDeletionPlan:
+    project_id: str
+    working_state_files: int
+    versions: int
+    version_files: int
+    branches: int
+    configurations: int
+    variables: int
+    secrets: int
+    runs: int
+    snapshots: int
+    run_events: int
+    artifacts: int
+    activities: int
+    notifications: int
+    fork_relation: int
+    fork_dependents: int
+    unfinished_runs: int
+
+
 class UserRepository(Protocol):
     async def add(self, user: User) -> None: ...
     async def get(self, user_id: str) -> User | None: ...
     async def get_by_username(self, username: str) -> User | None: ...
     async def list_by_ids(self, user_ids: set[str]) -> dict[str, User]: ...
+    async def update(self, user: User) -> None: ...
+
+
+class ExternalIdentityRepository(Protocol):
+    async def add(self, identity: ExternalIdentity) -> None: ...
+    async def get(self, provider: str, provider_user_id: str) -> ExternalIdentity | None: ...
 
 
 class UserGroupRepository(Protocol):
@@ -80,6 +124,7 @@ class ProjectRepository(Protocol):
     async def add(self, project: Project) -> None: ...
     async def get(self, project_id: str) -> Project | None: ...
     async def update(self, project: Project) -> None: ...
+    async def get_for_update(self, project_id: str) -> Project | None: ...
     async def list_for_user(self, user_id: str, *, limit: int) -> list[Project]:
         """按最近更新时间列出用户可见的 Project，用于个人首页。"""
         ...
@@ -94,6 +139,8 @@ class ProjectRepository(Protocol):
     ) -> Page[Project]:
         """列出用户可发现的 Project，可按 Owner 与名称过滤。"""
         ...
+
+    async def list_using_environment_version(self, version_id: str) -> list[Project]: ...
 
     async def name_exists(self, owner: OwnerReference, name: str) -> bool: ...
 
@@ -177,15 +224,6 @@ class EntitlementRepository(Protocol):
     ) -> ResourceEntitlement | None: ...
     async def add(self, entitlement: ResourceEntitlement) -> None: ...
 
-    async def lock_for_plan(self, user_id: str, compute_plan_id: str) -> ResourceEntitlement | None:
-        """取权益并在当前事务内独占它，直到事务结束。
-
-        用于把「数一数还剩几个并发名额，然后创建 Run」这一段串行化。
-        不加锁的话两个请求会同时读到「还没到上限」，然后都创建成功——
-        并发上限就形同虚设了。
-        """
-        ...
-
 
 class RunConfigurationRepository(Protocol):
     async def add(self, configuration: RunConfiguration) -> None: ...
@@ -215,8 +253,6 @@ class RunRepository(Protocol):
     async def claim_terminal(self, run: Run) -> bool:
         """条件更新把 Run 推进到终态。抢到返回 True，别人已推进过返回 False。"""
         ...
-
-    async def count_unfinished_for_plan(self, user_id: str, compute_plan_id: str) -> int: ...
 
 
 class IdempotencyRepository(Protocol):
@@ -262,7 +298,13 @@ class NotificationRepository(Protocol):
         """标记已读。返回 False 表示这条通知不属于这个人或不存在。"""
         ...
 
+    async def mark_unread(self, user_id: str, notification_id: str) -> bool: ...
     async def mark_all_read(self, user_id: str, at: datetime) -> int: ...
+    async def is_enabled(self, user_id: str, type: NotificationType) -> bool: ...
+    async def list_preferences(self, user_id: str) -> list[NotificationPreference]: ...
+    async def set_preference(
+        self, user_id: str, type: NotificationType, enabled: bool
+    ) -> NotificationPreference: ...
 
 
 class ForkRelationRepository(Protocol):
@@ -298,6 +340,7 @@ class SharedResourceRepository(Protocol):
     async def get_attempt_by_id(
         self, attempt_id: str
     ) -> SharedResourcePublicationAttempt | None: ...
+
     async def add_version(self, version: SharedResourceVersion) -> None: ...
     async def get_version_discoverable_for_user(
         self, user_id: str, version_id: str
@@ -338,10 +381,23 @@ class GrantRepository(Protocol):
         ...
 
 
+class LifecycleRepository(Protocol):
+    """跨聚合生命周期操作的显式持久化边界。"""
+
+    async def user_group_summary(self, user_group_id: str) -> UserGroupDeletionSummary: ...
+    async def project_plan(self, project_id: str) -> ProjectDeletionPlan: ...
+    async def unfinished_run_count(self, project_id: str) -> int: ...
+    def iter_project_run_ids(self, project_id: str) -> AsyncIterator[str]: ...
+    def iter_project_artifact_ids(self, project_id: str) -> AsyncIterator[str]: ...
+    async def delete_user_group(self, user_group_id: str) -> None: ...
+    async def delete_project(self, project_id: str) -> None: ...
+
+
 class Repositories(Protocol):
     """一次工作单元内可用的全部仓储。"""
 
     users: UserRepository
+    external_identities: ExternalIdentityRepository
     user_groups: UserGroupRepository
     memberships: MembershipRepository
     variables: VariableRepository
@@ -362,6 +418,7 @@ class Repositories(Protocol):
     fork_relations: ForkRelationRepository
     shared_resources: SharedResourceRepository
     grants: GrantRepository
+    lifecycle: LifecycleRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

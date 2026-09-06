@@ -84,7 +84,6 @@ def test_entitlement_reports_expiration() -> None:
         id="ent_1",
         user_id="usr_1",
         compute_plan_id=PLAN.id,
-        max_concurrent_runs=2,
         expires_at="2026-01-01T00:00:00+00:00",
     )
     assert entitlement.is_expired("2026-07-26T00:00:00+00:00")
@@ -92,7 +91,5 @@ def test_entitlement_reports_expiration() -> None:
 
 
 def test_entitlement_without_expiration_never_expires() -> None:
-    entitlement = ResourceEntitlement(
-        id="ent_1", user_id="usr_1", compute_plan_id=PLAN.id, max_concurrent_runs=2
-    )
+    entitlement = ResourceEntitlement(id="ent_1", user_id="usr_1", compute_plan_id=PLAN.id)
     assert not entitlement.is_expired("2099-01-01T00:00:00+00:00")

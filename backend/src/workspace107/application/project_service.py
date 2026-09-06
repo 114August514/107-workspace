@@ -8,13 +8,18 @@ Project Working State 可变，Project Version 不可变（GR-201）。
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import io
+import json
+import logging
 import posixpath
 import re
 import stat
+import tempfile
 import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..domain import ids
 from ..domain.capabilities import Capability, capabilities_of, describe
@@ -43,7 +48,7 @@ from ..domain.models import (
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.pagination import Page, PageRequest
 from ..domain.ports.clock import Clock
-from ..domain.ports.repositories import Repositories
+from ..domain.ports.repositories import ProjectDeletionPlan, Repositories
 from ..domain.ports.storage import StoragePort
 from .access import AccessGuard, ProjectAccess
 from .activity import ActivityRecorder
@@ -59,6 +64,14 @@ MAX_INLINE_PREVIEW_BYTES = 512 * 1024
 # 压缩包展开预算的默认值；组合根会用配置覆盖。
 DEFAULT_MAX_ARCHIVE_TOTAL_BYTES = 128 * 1024 * 1024
 DEFAULT_MAX_ARCHIVE_ENTRIES = 500
+
+logger = logging.getLogger(__name__)
+
+
+def project_deletion_problems(plan: ProjectDeletionPlan) -> list[str]:
+    if plan.unfinished_runs == 0:
+        return []
+    return [f"请先取消并等待结束 {plan.unfinished_runs} 个未结束的 Run，再删除 Project"]
 
 
 def normalize_path(raw: str) -> str:
@@ -118,6 +131,7 @@ class VersionDiffEntry:
 class WorkingTreeChange:
     path: str
     change: ChangeKind
+    base_version: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,6 +150,19 @@ class WorkingChangeDetail:
 class ProjectSyncApplyResult:
     scanned_files: int
     changed_files: int
+
+
+@dataclass(frozen=True, slots=True)
+class LanguageStatistic:
+    name: str
+    code_lines: int
+    percentage: float
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectLanguages:
+    languages: tuple[LanguageStatistic, ...]
+    total_code_lines: int
 
 
 class ProjectService:
@@ -184,6 +211,91 @@ class ProjectService:
 
     async def get(self, user_id: str, project_id: str) -> ProjectAccess:
         return await self._guard.project(user_id, project_id)
+
+    async def deletion_impact(
+        self, user_id: str, project_id: str
+    ) -> tuple[ProjectAccess, ProjectDeletionPlan]:
+        access = await self._guard.project(
+            user_id,
+            project_id,
+            needs=Capability.PROJECT_DELETE,
+            owner_scope=True,
+        )
+        return access, await self._repos.lifecycle.project_plan(project_id)
+
+    async def delete(self, user_id: str, project_id: str, *, confirmed: bool = False) -> None:
+        project = await self._repos.projects.get(project_id)
+        if project is None:
+            raise ObjectNotFound("Project", project_id)
+        if (
+            project.owner.kind is OwnerKind.USER_GROUP
+            and (await self._repos.user_groups.get_for_update(project.owner.id)) is None
+        ):
+            raise ObjectNotFound("Project", project_id)
+        if await self._repos.projects.get_for_update(project_id) is None:
+            raise ObjectNotFound("Project", project_id)
+        access = await self._guard.project(
+            user_id,
+            project_id,
+            needs=Capability.PROJECT_DELETE,
+            owner_scope=True,
+        )
+        unfinished_runs = await self._repos.lifecycle.unfinished_run_count(project_id)
+        if unfinished_runs:
+            raise ConflictError(
+                "Project 仍有未结束的 Run",
+                [f"请先取消并等待结束 {unfinished_runs} 个未结束的 Run，再删除 Project"],
+            )
+        if not confirmed:
+            raise ConflictError("删除 Project 需要明确确认", ["请在确认影响范围后重试"])
+        await self._activity.record(
+            actor_id=user_id,
+            owner=access.project.owner,
+            action=ActivityAction.PROJECT_DELETED,
+            target_type=TargetType.PROJECT,
+            target_id=project_id,
+            target_name=access.project.name,
+            detail="Project 及其 Working State、Version、Run 和配置记录已结束生命周期",
+        )
+        # IDs are needed only by post-commit storage cleanup. Spool them before the
+        # database rows disappear, without retaining an unbounded Python collection.
+        with (
+            tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as run_spool,
+            tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8") as artifact_spool,
+        ):
+            async for run_id in self._repos.lifecycle.iter_project_run_ids(project_id):
+                run_spool.write(run_id)
+                run_spool.write("\n")
+            async for artifact_id in self._repos.lifecycle.iter_project_artifact_ids(project_id):
+                artifact_spool.write(artifact_id)
+                artifact_spool.write("\n")
+            run_spool.flush()
+            artifact_spool.flush()
+            await self._repos.lifecycle.delete_project(project_id)
+            # 先提交逻辑删除；文件系统不可参与数据库回滚，清理失败只留下不可访问的存储缓存。
+            await self._repos.commit()
+            run_spool.seek(0)
+            for line in run_spool:
+                run_id = line.rstrip("\n")
+                try:
+                    await self._storage.cleanup_run_directory(run_id)
+                except Exception:
+                    logger.warning(
+                        "Project 删除后 Run 存储清理失败",
+                        extra={"project_id": project_id, "run_id": run_id},
+                        exc_info=True,
+                    )
+            artifact_spool.seek(0)
+            for line in artifact_spool:
+                artifact_id = line.rstrip("\n")
+                try:
+                    await self._storage.delete_artifact_content(artifact_id)
+                except Exception:
+                    logger.warning(
+                        "Project 删除后 Artifact 存储清理失败",
+                        extra={"project_id": project_id, "artifact_id": artifact_id},
+                        exc_info=True,
+                    )
 
     async def create_owned(
         self,
@@ -235,6 +347,8 @@ class ProjectService:
             raise PermissionDenied(
                 f"当前角色（{access.role.value}）无权{describe(Capability.PROJECT_CREATE)}"
             )
+        if await self._repos.user_groups.get_for_update(owner.id) is None:
+            raise ObjectNotFound("Project Owner", owner.id)
 
     async def owner_summary(self, project: Project) -> OwnerSummary:
         summaries = await resolve_owner_summaries(self._repos, [project.owner])
@@ -676,8 +790,32 @@ class ProjectService:
             raise ObjectNotFound("Project Version", version_id) from exc
         return version
 
+    async def latest_languages(self, user_id: str, project_id: str) -> ProjectLanguages:
+        """统计最新不可变 Version 的语言组成，不读取 Project Working State。"""
+        await self._guard.project(user_id, project_id)
+        version = await self._repos.project_versions.latest(project_id)
+        if version is None:
+            return ProjectLanguages(languages=(), total_code_lines=0)
+
+        files = [(entry.path, entry.content_hash) for entry in version.files]
+        async with self._storage.materialize_temporary_files(files) as root:
+            code_lines = await _count_language_code_lines(root)
+
+        total = sum(code_lines.values())
+        if total == 0:
+            return ProjectLanguages(languages=(), total_code_lines=0)
+        languages = tuple(
+            LanguageStatistic(
+                name=name,
+                code_lines=lines,
+                percentage=lines / total * 100,
+            )
+            for name, lines in sorted(code_lines.items(), key=lambda item: (-item[1], item[0]))
+        )
+        return ProjectLanguages(languages=languages, total_code_lines=total)
+
     async def working_changes(self, user_id: str, project_id: str) -> list[WorkingTreeChange]:
-        """查看当前未保存的文件变更：工作区与最近一个版本的差异。"""
+        """查看当前未保存的文件变更，并绑定查询时的最新 Version。"""
         await self._guard.project(user_id, project_id, owner_scope=True)
         latest = await self._repos.project_versions.latest(project_id)
         baseline = {f.path: f.content_hash for f in latest.files} if latest else {}
@@ -686,17 +824,21 @@ class ProjectService:
             for f in await self._repos.project_files.list_for_project(project_id)
         }
         return [
-            WorkingTreeChange(path=path, change=change) for path, change in _diff(baseline, current)
+            WorkingTreeChange(path=path, change=change, base_version=latest.id if latest else None)
+            for path, change in _diff(baseline, current)
         ]
 
     async def working_change_detail(
-        self, user_id: str, project_id: str, path: str
+        self, user_id: str, project_id: str, path: str, base_version: str | None = None
     ) -> WorkingChangeDetail:
-        """查看一个未保存变更的内容级详情：基线内容与工作区内容。"""
+        """按 Changes 列表绑定的 Version 查看未保存变更详情。"""
         await self._guard.project(user_id, project_id, owner_scope=True)
         normalized = normalize_path(path)
 
         latest = await self._repos.project_versions.latest(project_id)
+        latest_id = latest.id if latest else None
+        if base_version != latest_id:
+            raise ConflictError("Project Version 已变化，请刷新 Changes 列表后重试")
         baseline = {f.path: f for f in latest.files} if latest else {}
         files = await self._repos.project_files.list_for_project(project_id)
         current = {f.path: f for f in files}
@@ -779,7 +921,7 @@ class ProjectService:
             for f in await self._repos.project_files.list_for_project(project_id)
         }
         return [
-            WorkingTreeChange(path=path, change=change)
+            WorkingTreeChange(path=path, change=change, base_version=latest.id if latest else None)
             for path, change in _diff(
                 {p: f.content_hash for p, f in baseline.items()}, remaining_current
             )
@@ -1078,6 +1220,40 @@ class ProjectService:
     async def _touch(self, project: Project) -> None:
         project.updated_at = self._clock.now()
         await self._repos.projects.update(project)
+
+
+async def _count_language_code_lines(root: Path) -> dict[str, int]:
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "tokei",
+            str(root),
+            "--output",
+            "json",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("未安装 Tokei CLI，无法统计 Project 语言") from exc
+
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"Tokei 语言统计失败：{detail or 'unknown error'}")
+    try:
+        report = json.loads(stdout)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError("Tokei 未返回有效的 JSON 语言统计") from exc
+    if not isinstance(report, dict):
+        raise RuntimeError("Tokei JSON 语言统计不是对象")
+
+    result: dict[str, int] = {}
+    for name, statistics in report.items():
+        if name == "Total" or not isinstance(name, str) or not isinstance(statistics, dict):
+            continue
+        code = statistics.get("code")
+        if isinstance(code, int) and not isinstance(code, bool) and code > 0:
+            result[name] = code
+    return result
 
 
 def _diff(left: dict[str, str], right: dict[str, str]) -> list[tuple[str, ChangeKind]]:

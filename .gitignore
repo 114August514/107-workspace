@@ -30,6 +30,8 @@ dist/
 
 # Runtime data
 backend/var/
+deploy/cas-revproxy/env
+deploy/cas-revproxy/runtime/
 backend/.alembic-test/
 *.db
 *.sqlite3
@@ -51,3 +53,4 @@ backend/.alembic-test/
 # Local notes and scratch data kept outside the shared project tree
 /.local/
 .qoder/
+.tmp-dev/

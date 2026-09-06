@@ -14,7 +14,7 @@ esbuild 必需的安装脚本。
 setup                  按锁文件安装前后端依赖
 check [target]         运行格式、lint、类型、测试、构建和契约检查
 contract sync|check    重新生成或核对 OpenAPI 与前端类型
-dev                    启动前后端开发服务
+dev                    启动前后端；AUTH_MODE=ustc 时带登录页
 demo / smoke           验证隔离的 Project 到 Artifact 工作流
 migrate / migrate-down 升级或回退一个数据库版本
 coverage               生成后端覆盖率报告（重构期不设全仓门槛）
@@ -23,6 +23,8 @@ doctor                 检查本地工程基线
 ```
 
 `target` 可以是 `all`、`backend`、`frontend`；`check` 还支持 `contract`。
+`dev` 读取 `.env` / `backend/.env`。`WORKSPACE107_AUTH_MODE=ustc` 时启动认证服务并显示
+公开登录页；`dev` 模式仍直接以 `student` 进入。
 
 任务实现按职责分层：
 

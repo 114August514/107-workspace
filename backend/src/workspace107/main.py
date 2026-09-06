@@ -23,9 +23,11 @@ from .api.routes import api_router
 from .application.environment_publication import EnvironmentPublicationProcessor
 from .config import Settings, get_settings
 from .domain.ports.scheduler import SchedulerPort
+from .domain.slurm_projection import SlurmFacts, SlurmProjection
 from .infrastructure.clock import SystemClock
 from .infrastructure.db.repositories import SqlRepositories
 from .infrastructure.db.session import create_engine, create_session_factory
+from .infrastructure.environment_import import RemoteEnvironmentImporter
 from .infrastructure.scheduler import MockScheduler, SlurmRestScheduler
 from .infrastructure.storage.local import LocalStorage
 from .observability import configure_logging
@@ -52,6 +54,7 @@ def build_context(settings: Settings) -> AppContext:
         session_factory=create_session_factory(engine),
         storage=LocalStorage(settings.storage_root),
         scheduler=build_scheduler(settings),
+        slurm_projection=(SlurmProjection(SlurmFacts()) if settings.scheduler == "slurm" else None),
         clock=SystemClock(),
     )
 
@@ -90,7 +93,15 @@ async def _environment_publication_loop(app: FastAPI, interval: float) -> None:
             session = context.session_factory()
             try:
                 processor = EnvironmentPublicationProcessor(
-                    SqlRepositories(session), context.storage, context.clock
+                    SqlRepositories(session),
+                    context.storage,
+                    context.clock,
+                    importer=RemoteEnvironmentImporter(
+                        context.storage,
+                        max_bytes=context.settings.environment_import_max_bytes,
+                        timeout=context.settings.environment_import_timeout_seconds,
+                    ),
+                    checkpoint=session.commit,
                 )
                 claimed = await processor.claim()
                 if claimed is not None:

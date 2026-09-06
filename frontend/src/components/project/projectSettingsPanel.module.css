@@ -1,0 +1,176 @@
+/* Project Settings 的 Variable/Secret 面板（Issue #54）。
+ *
+ * 取色与间距全部走 Primer Primitives 功能 token；表格式样对齐
+ * #94 FileBrowser 的 fileTable——无外框（外框由 Settings 的 Card 壳
+ * 提供）、muted 行分隔线、muted 半粗表头、body-small 字号、hover 灰底。 */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-16);
+  min-width: 0;
+}
+
+/* 分区切换：Primer SegmentedControl，同 #94 RunSummary / RunLogPanel；
+ * 不加 align-self 会被纵向 flex 拉满宽。 */
+.segments {
+  align-self: flex-start;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-12);
+  min-width: 0;
+}
+
+/* GitHub 设置页式标题行：标题居左，主操作居右。 */
+.paneHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--base-size-8);
+}
+
+.paneTitle {
+  margin: 0;
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+  line-height: var(--text-title-lineHeight-medium);
+  color: var(--fgColor-default);
+}
+
+.sectionDescription {
+  margin: 0;
+  font-size: var(--text-body-size-medium);
+  color: var(--fgColor-muted);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--base-size-8) 0;
+  font-size: var(--text-body-size-medium);
+  color: var(--fgColor-muted);
+}
+
+.list {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: var(--fgColor-default);
+  font-size: var(--text-body-size-small);
+}
+
+/* 固定列宽：值的显隐不移动「最近更新」「操作」列。 */
+.colName {
+  width: 25%;
+}
+
+.colNameWide {
+  width: 70%;
+}
+
+.colValue {
+  width: 45%;
+}
+
+.colUpdated {
+  width: 18%;
+}
+
+.colActions {
+  width: 12%;
+}
+
+.th {
+  text-align: left;
+  padding: var(--base-size-8) var(--base-size-12);
+  color: var(--fgColor-muted);
+  font-weight: var(--base-text-weight-semibold);
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td {
+  padding: var(--base-size-8) var(--base-size-12);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row {
+  border-bottom: var(--borderWidth-thin) solid var(--borderColor-muted);
+}
+
+.row:hover {
+  background: var(--bgColor-muted);
+}
+
+.valueInner {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-4);
+  min-width: 0;
+}
+
+.valueText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time {
+  color: var(--fgColor-muted);
+}
+
+.lockIcon {
+  margin-right: var(--base-size-8);
+  color: var(--fgColor-muted);
+  vertical-align: -3px;
+}
+
+.iconCell {
+  text-align: right;
+}
+
+.iconCell > * + * {
+  margin-left: var(--base-size-4);
+}
+
+/* 引用语法以 code 呈现。 */
+.reference {
+  font-family: var(--fontStack-monospace);
+  font-size: var(--text-body-size-small);
+  padding: 0 var(--base-size-4);
+  background: var(--bgColor-neutral-muted);
+  border-radius: var(--borderRadius-small);
+}
+
+/* 窄屏：操作列两枚图标按钮放不下，压缩值列/名称列腾出宽度。
+ * 放在文件末尾，覆盖 .td 的 padding 简写。 */
+@media (max-width: 544px) {
+  .colValue {
+    width: 28%;
+  }
+
+  .colNameWide {
+    width: 54%;
+  }
+
+  .colUpdated {
+    width: 18%;
+  }
+
+  .colActions {
+    width: 28%;
+  }
+
+  .iconCell {
+    padding-left: 4px;
+    padding-right: 8px;
+  }
+}

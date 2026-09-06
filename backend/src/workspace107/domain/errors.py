@@ -20,6 +20,12 @@ class DomainError(Exception):
         self.message = message
 
 
+class AuthenticationRequired(DomainError):
+    """No valid identity assertion was supplied by the trusted authentication boundary."""
+
+    code = "authentication_required"
+
+
 class ObjectNotFound(DomainError):
     """对象不存在，或当前用户没有发现权限。"""
 
@@ -49,6 +55,16 @@ class ConflictError(DomainError):
 
     code = "conflict"
 
+    def __init__(self, message: str, problems: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.problems = problems or []
+
+
+class RunConfirmationChanged(ConflictError):
+    """Execution facts changed since the user's submission preview."""
+
+    code = "run_confirmation_changed"
+
 
 class ImmutableObjectError(ConflictError):
     """试图修改不可变的 Version、Run Snapshot 或 Artifact 内容（GR-201、GR-202、GR-203）。"""
@@ -64,6 +80,16 @@ class PreflightRejected(DomainError):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("提交前检查未通过：" + "；".join(problems))
         self.problems = problems
+
+
+class SharedResourceUnavailable(DomainError):
+    """一个确定的 Shared Resource Version 在提交或物化时不可用。"""
+
+    code = "shared_resource_unavailable"
+
+    def __init__(self, version_id: str, message: str) -> None:
+        super().__init__(message)
+        self.version_id = version_id
 
 
 class SchedulerError(DomainError):

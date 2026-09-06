@@ -8,9 +8,22 @@ from ...application.ownership import OwnerSummary
 from ...domain.ownership import OwnerKind
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, ServicesDep
+from ..deps import CurrentUser, PageDep, ServicesDep
 
 router = APIRouter(tags=["home"])
+
+
+@router.patch("/me", response_model=s.UserOut, summary="更新当前用户资料")
+async def update_me(
+    payload: s.UserProfileUpdateIn, user: CurrentUser, services: ServicesDep
+) -> s.UserOut:
+    """Update the signed-in User's username and display name. Email stays identity-provided."""
+    updated = await services.identity.update_profile(
+        user.id,
+        username=payload.username,
+        display_name=payload.display_name,
+    )
+    return p.user_out(updated)
 
 
 @router.get("/me", response_model=s.HomeOut, summary="获取个人首页")
@@ -39,6 +52,21 @@ async def home(user: CurrentUser, services: ServicesDep) -> s.HomeOut:
         recent_runs=[
             p.run_out(run) for run in await services.runs.list_recent_for_user(user.id, limit=10)
         ],
+    )
+
+
+@router.get(
+    "/me/activities",
+    response_model=s.PageOut[s.ActivityOut],
+    summary="列出个人近期活动",
+)
+async def list_my_activities(
+    user: CurrentUser, services: ServicesDep, page: PageDep
+) -> s.PageOut[s.ActivityOut]:
+    """Return personal Owner Scope activity, including deleted-target snapshots."""
+    return p.page_out(
+        await services.activities.list_for_user(user.id, page),
+        p.activity_out,
     )
 
 

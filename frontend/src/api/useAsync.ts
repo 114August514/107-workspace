@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { ApiError } from './client'
+import { ApiError, reportUnauthorized } from './client'
 
 export interface AsyncState<T> {
   data: T | undefined
@@ -49,6 +49,9 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[]): AsyncSta
         setError(undefined)
       }
     } catch (exc) {
+      if (exc instanceof ApiError && exc.status === 401) {
+        reportUnauthorized()
+      }
       if (alive.current && request === sequence.current && !silent) {
         setError(exc as Error)
       }

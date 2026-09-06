@@ -30,7 +30,7 @@ import zipfile
 from pathlib import Path
 
 from ...domain.enums import InputSourceType, LogStream
-from ...domain.errors import ObjectNotFound, ValidationFailed
+from ...domain.errors import ObjectNotFound, SharedResourceUnavailable, ValidationFailed
 from ...domain.ports.storage import (
     ArtifactContent,
     ArtifactEntry,
@@ -50,7 +50,14 @@ class LocalStorage:
         self._runs = root / "runs"
         self._artifacts = root / "artifacts"
         self._project_sync = root / "project-sync"
-        for path in (self._blobs, self._runs, self._artifacts, self._project_sync):
+        self._temporary = root / "temporary"
+        for path in (
+            self._blobs,
+            self._runs,
+            self._artifacts,
+            self._project_sync,
+            self._temporary,
+        ):
             path.mkdir(parents=True, exist_ok=True)
 
     # -- 内容寻址存储 ---------------------------------------------------
@@ -64,6 +71,25 @@ class LocalStorage:
         if not target.exists():
             await asyncio.to_thread(_write_atomic, target, data)
         return content_hash
+
+    async def write_blob_file(self, path: Path) -> str:
+        return await asyncio.to_thread(self._write_blob_file, path)
+
+    def _write_blob_file(self, path: Path) -> str:
+        digest = _file_sha256(path)
+        target = self._blob_path(digest)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(dir=target.parent)
+        try:
+            with os.fdopen(fd, "wb") as output, path.open("rb") as source:
+                shutil.copyfileobj(source, output, length=1024 * 1024)
+            if _file_sha256(Path(temporary)) != digest:
+                raise ValidationFailed("环境文件在保存时发生变化")
+            os.replace(temporary, target)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary)
+        return digest
 
     async def read_blob(self, content_hash: str) -> bytes:
         target = self._blob_path(content_hash)
@@ -109,6 +135,33 @@ class LocalStorage:
         if actual != content_hash:
             raise ValidationFailed("CAS 文件内容与 Environment SIF 摘要不一致")
         return target.resolve()
+
+    @contextlib.asynccontextmanager
+    async def materialize_temporary_files(self, files: list[tuple[str, str]]):
+        root = Path(
+            await asyncio.to_thread(
+                tempfile.mkdtemp,
+                prefix="project-version-",
+                dir=self._temporary,
+            )
+        )
+        try:
+            await asyncio.to_thread(self._materialize_temporary_files_sync, root, files)
+            yield root
+        finally:
+            await asyncio.to_thread(_force_rmtree, root)
+
+    def _materialize_temporary_files_sync(self, root: Path, files: list[tuple[str, str]]) -> None:
+        resolved_root = root.resolve()
+        for relative_path, content_hash in files:
+            target = (resolved_root / relative_path).resolve()
+            if resolved_root not in target.parents:
+                raise ValidationFailed(f"临时文件路径「{relative_path}」越出了根目录")
+            source = self._blob_path(content_hash)
+            if not source.is_file():
+                raise ObjectNotFound("文件内容", content_hash)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, target)
 
     # -- Run 工作目录 ---------------------------------------------------
 
@@ -191,7 +244,19 @@ class LocalStorage:
                         stripped = relative_path
                     file_target = target / stripped
                     file_target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(self._blob_path(content_hash), file_target)
+                    source = self._blob_path(content_hash)
+                    if not source.is_file():
+                        raise SharedResourceUnavailable(
+                            entry.source_id,
+                            f"输入 {entry.access_path} 引用的 Shared Resource Version 内容不可用",
+                        )
+                    try:
+                        shutil.copyfile(source, file_target)
+                    except FileNotFoundError as exc:
+                        raise SharedResourceUnavailable(
+                            entry.source_id,
+                            f"输入 {entry.access_path} 引用的 Shared Resource Version 内容不可用",
+                        ) from exc
             else:  # pragma: no cover - 枚举封闭，未来加新来源类型时这里会显式失败
                 raise FileNotFoundError(f"未知输入来源类型 {entry.source_type!r}")
 

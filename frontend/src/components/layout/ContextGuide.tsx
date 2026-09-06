@@ -6,7 +6,10 @@ import { contextGuideCopy } from './copy'
 
 const contextGuides = [
   { pattern: '/', message: contextGuideCopy.home },
-  { pattern: '/user-groups/:userGroupId', message: contextGuideCopy.userGroup },
+  { pattern: '/profile', message: contextGuideCopy.profile },
+  { pattern: '/settings', message: contextGuideCopy.settings },
+  { pattern: '/execution-context', message: contextGuideCopy.executionContext },
+  { pattern: '/user-groups/:userGroupId/*', message: contextGuideCopy.userGroup },
   { pattern: '/environments', message: contextGuideCopy.environment },
   { pattern: '/environments/:environmentId', message: contextGuideCopy.environment },
   { pattern: '/environment-versions/:versionId', message: contextGuideCopy.environment },
@@ -19,6 +22,7 @@ interface Props {
 }
 
 export function ContextGuide({ pathname }: Props) {
+  if (pathname === '/projects/new' || pathname === '/user-groups/new') return null
   const guide = contextGuides.find(({ pattern }) => matchPath(pattern, pathname))
   if (!guide) return null
 

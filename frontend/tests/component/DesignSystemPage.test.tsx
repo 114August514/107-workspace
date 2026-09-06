@@ -41,7 +41,16 @@ describe('DesignSystemPage', () => {
     )
 
     expect(screen.getByRole('heading', { name: '107 Primer UI Reference' })).toBeInTheDocument()
-    for (const section of ['Foundations', 'States', 'Patterns', 'Content']) {
+    for (const section of [
+      'Foundations',
+      'Brand',
+      'Marks',
+      'Colors',
+      'Icons',
+      'States',
+      'Patterns',
+      'Content',
+    ]) {
       expect(screen.getByRole('heading', { name: section })).toBeInTheDocument()
     }
     // 旧 Playground 的入口全部不存在
@@ -50,6 +59,53 @@ describe('DesignSystemPage', () => {
     expect(screen.queryByRole('button', { name: '恢复默认值' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/预设$/)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/参考画布$/)).not.toBeInTheDocument()
+  })
+
+  it('呈现最终 107 Brand Mark 及 16/24/32px 样本', () => {
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
+
+    expect(screen.getByLabelText('107 Brand Mark TopBar 示例')).toHaveTextContent('107 Workspace')
+    for (const size of [16, 24, 32]) {
+      expect(screen.getByRole('img', { name: `107 Brand Mark，${size} 像素` })).toHaveAttribute(
+        'width',
+        String(size),
+      )
+    }
+    expect(screen.getByText('16px')).toBeInTheDocument()
+    const monochromeRoles = screen.getByLabelText('107 current monochrome color roles')
+    expect(monochromeRoles).toHaveTextContent('var(--fgColor-default)')
+    expect(monochromeRoles).toHaveTextContent('var(--fgColor-muted)')
+
+    expect(screen.getByText(/C100 M80 Y0 K0/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Primer semantic colors remain distinct')).toHaveTextContent(
+      '继续由 Primer semantic tokens 负责',
+    )
+    expect(screen.getByLabelText('产品对象 Octicon mapping')).toBeInTheDocument()
+    for (const subject of ['Project', 'User Group', 'Run', '共享资源', '通知', '设置', '创建']) {
+      expect(screen.getByText(subject, { selector: 'strong' })).toBeInTheDocument()
+    }
+  })
+
+  it('品牌 affordance 保持可访问名称与真实键盘焦点', () => {
+    render(
+      <PrimerRoot>
+        <DesignSystemPage />
+      </PrimerRoot>,
+    )
+
+    expect(screen.getByRole('link', { name: '品牌链接' })).toHaveAttribute(
+      'href',
+      '#brand-colors-heading',
+    )
+    expect(screen.getByRole('link', { name: '已选导航' })).toHaveAttribute('aria-current', 'page')
+    const focusExample = screen.getByRole('button', { name: 'Focus 示例' })
+    focusExample.focus()
+    expect(focusExample).toHaveFocus()
+    expect(screen.getByRole('button', { name: '主要操作' })).toBeEnabled()
   })
 
   it('六类状态无需任何操作即可直接查看', () => {
@@ -98,6 +154,7 @@ describe('DesignSystemPage', () => {
     expect(screen.getByRole('link', { name: '107 Workspace' })).toHaveAttribute('href', '/')
     expect(screen.getByText('docs/product/ui-copy.md')).toBeInTheDocument()
     expect(screen.getByText('frontend/README.md')).toBeInTheDocument()
+    expect(screen.getByText('docs/references/brand/ustc-vis.md')).toBeInTheDocument()
   })
 
   it('复制范例源码并反馈结果，2 秒后恢复可复制', async () => {

@@ -1,0 +1,40 @@
+.section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-12);
+}
+
+.sectionHeader {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-4);
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--fgColor-default);
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.sectionDescription {
+  margin: 0;
+  color: var(--fgColor-muted);
+  line-height: var(--text-body-lineHeight-medium);
+}
+
+.settingsForm {
+  display: flex;
+  max-width: 36rem;
+  flex-direction: column;
+  gap: var(--base-size-16);
+}
+
+.membersSection {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-24);
+}

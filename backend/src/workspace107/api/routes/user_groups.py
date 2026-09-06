@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
+from ...application.user_group_service import user_group_deletion_problems
 from .. import presenters as p
 from .. import schemas as s
 from ..deps import CurrentUser, PageDep, ServicesDep
@@ -35,6 +36,62 @@ async def get_user_group(
     user_group_id: str, user: CurrentUser, services: ServicesDep
 ) -> s.UserGroupOut:
     return p.user_group_out(await services.user_groups.get(user.id, user_group_id))
+
+
+@router.get(
+    "/{user_group_id}/deletion-impact",
+    response_model=s.DeletionImpactOut,
+    summary="查看 User Group 删除影响",
+)
+async def user_group_deletion_impact(
+    user_group_id: str, user: CurrentUser, services: ServicesDep
+) -> s.DeletionImpactOut:
+    view, summary = await services.user_groups.deletion_impact(user.id, user_group_id)
+    problems = user_group_deletion_problems(summary)
+    return s.DeletionImpactOut(
+        resource_type="user_group",
+        resource_id=user_group_id,
+        resource_name=view.user_group.name,
+        can_delete=not problems,
+        problems=problems,
+        items=[
+            s.DeletionImpactItemOut(kind="projects", count=summary.projects),
+            s.DeletionImpactItemOut(kind="environments", count=summary.environments),
+            s.DeletionImpactItemOut(kind="shared_resources", count=summary.shared_resources),
+            s.DeletionImpactItemOut(kind="variables", count=summary.variables),
+            s.DeletionImpactItemOut(kind="secrets", count=summary.secrets),
+            s.DeletionImpactItemOut(kind="memberships", count=summary.memberships),
+            s.DeletionImpactItemOut(kind="grants", count=summary.grants),
+            s.DeletionImpactItemOut(kind="activities", count=summary.activities),
+            s.DeletionImpactItemOut(kind="notifications", count=summary.notifications),
+        ],
+    )
+
+
+@router.delete(
+    "/{user_group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除 User Group",
+    description=(
+        "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在"
+        "而返回 404。404 只表示目标当前不存在，不能证明由谁删除。"
+    ),
+    responses={
+        204: {"description": "User Group 删除成功。"},
+        404: {
+            "description": (
+                "User Group 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+            )
+        },
+    },
+)
+async def delete_user_group(
+    user_group_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    confirm: bool = Query(False, description="确认已查看删除影响"),
+) -> None:
+    await services.user_groups.delete(user.id, user_group_id, confirmed=confirm)
 
 
 @router.get(

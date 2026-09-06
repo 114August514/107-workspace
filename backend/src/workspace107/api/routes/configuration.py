@@ -24,14 +24,14 @@ async def _project(services, actor: str, target: str, manage: bool):
 
 async def _list_variables(scope, services):
     return [
-        s.VariableOut(name=v.name, value=v.value)
+        s.VariableOut(name=v.name, value=v.value, updated_at=v.updated_at)
         for v in await services.configuration.list_variables(scope)
     ]
 
 
 async def _set_variable(scope, payload, services):
     value = await services.configuration.set_variable(scope, payload.name, payload.value)
-    return s.VariableOut(name=value.name, value=value.value)
+    return s.VariableOut(name=value.name, value=value.value, updated_at=value.updated_at)
 
 
 async def _delete_variable(scope, name, services):
@@ -40,7 +40,10 @@ async def _delete_variable(scope, name, services):
 
 
 async def _list_secrets(scope, services):
-    return await services.configuration.list_secret_names(scope)
+    return [
+        s.SecretOut(name=secret.name, updated_at=secret.updated_at)
+        for secret in await services.configuration.list_secret_summaries(scope)
+    ]
 
 
 async def _set_secret(scope, payload, services):
@@ -70,7 +73,7 @@ async def delete_user_variable(user_id: str, name: str, user: CurrentUser, servi
     return await _delete_variable(await _user(services, user.id, user_id, True), name, services)
 
 
-@router.get("/users/{user_id}/secrets", response_model=list[str])
+@router.get("/users/{user_id}/secrets", response_model=list[s.SecretOut])
 async def list_user_secrets(user_id: str, user: CurrentUser, services: ServicesDep):
     return await _list_secrets(await _user(services, user.id, user_id, False), services)
 
@@ -112,7 +115,7 @@ async def delete_group_variable(
     )
 
 
-@router.get("/user-groups/{user_group_id}/secrets", response_model=list[str])
+@router.get("/user-groups/{user_group_id}/secrets", response_model=list[s.SecretOut])
 async def list_group_secrets(user_group_id: str, user: CurrentUser, services: ServicesDep):
     return await _list_secrets(await _group(services, user.id, user_group_id, False), services)
 
@@ -160,7 +163,7 @@ async def delete_project_variable(
     )
 
 
-@router.get("/projects/{project_id}/secrets", response_model=list[str])
+@router.get("/projects/{project_id}/secrets", response_model=list[s.SecretOut])
 async def list_project_secrets(project_id: str, user: CurrentUser, services: ServicesDep):
     return await _list_secrets(await _project(services, user.id, project_id, False), services)
 

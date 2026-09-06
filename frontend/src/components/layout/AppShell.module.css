@@ -32,25 +32,33 @@
   gap: var(--base-size-8);
 }
 
-.homeMarkVisual {
+.brand {
   display: inline-flex;
-  width: var(--base-size-24);
-  height: var(--base-size-24);
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-body-size-small);
-  font-weight: var(--base-text-weight-semibold);
-  line-height: 1;
+  color: var(--fgColor-default);
+  text-decoration: none;
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.homeContext {
-  min-width: 0;
-  overflow: hidden;
+.brand:focus-visible {
+  outline: var(--borderWidth-thick) solid var(--focus-outlineColor);
+  outline-offset: 2px;
+}
+
+.brand:hover {
   color: var(--fgColor-default);
-  font-size: var(--text-body-size-medium);
-  font-weight: var(--base-text-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .projectContext {
