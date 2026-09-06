@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import codecs
+import hashlib
+import json
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field, replace
@@ -21,7 +23,7 @@ from ..domain.capabilities import Capability
 from ..domain.compute import (
     ComputePlan,
     ComputeRequest,
-    ResourceEntitlement,
+    ResolvedSchedulerConfiguration,
     SchedulerMapping,
     check_request_against_plan,
     resolve_scheduler_configuration,
@@ -40,12 +42,14 @@ from ..domain.errors import (
     ObjectNotFound,
     PermissionDenied,
     PreflightRejected,
+    RunConfirmationChanged,
     SchedulerError,
     SharedResourceUnavailable,
     ValidationFailed,
 )
 from ..domain.models import (
     Artifact,
+    ArtifactCollectionRule,
     EnvironmentVersion,
     InputBinding,
     ProjectVersion,
@@ -89,6 +93,7 @@ class RunDraft:
     environment_version_id_override: str = ""
     input_bindings_override: tuple[InputBinding, ...] | None = None
     compute_request_override: dict[str, int] | None = None
+    confirmation_token: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +108,15 @@ class PreflightResult:
     slurm_projection: SlurmPlanProjection | None = None
     resolved_env_literals: dict[str, str] = field(default_factory=dict)
     resolved_env_secret_refs: dict[str, SecretReference] = field(default_factory=dict)
+
+    configuration_name: str = ""
+    environment_name: str | None = None
+    command: str = ""
+    working_directory: str = "."
+    input_bindings: tuple[InputBinding, ...] = ()
+    artifact_rules: tuple[ArtifactCollectionRule, ...] = ()
+    scheduler: ResolvedSchedulerConfiguration | None = None
+    confirmation_token: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -378,6 +392,7 @@ class RunService:
 
         plan = await self._repos.compute_plans.get(configuration.compute_plan_id)
         request: ComputeRequest | None = None
+        slurm_projection = None
         if plan is None:
             problems.append("运行方案引用的算力方案已不存在")
         else:
@@ -386,10 +401,7 @@ class RunService:
                 problems.append(f"你没有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
-            else:
-                problems.extend(await self._check_concurrency(user_id, entitlement))
 
-            slurm_projection = None
             if self._scheduler.name == "slurm":
                 assert self._slurm_projection is not None
                 user = await self._repos.users.get(user_id)
@@ -427,7 +439,27 @@ class RunService:
             )
         )
 
-        return PreflightResult(
+        environment = (
+            await self._repos.environments.get_by_id(environment_version.environment_id)
+            if environment_version
+            else None
+        )
+        result = PreflightResult(
+            environment_name=environment.name if environment else None,
+            configuration_name=configuration.name,
+            command=command,
+            working_directory=draft.working_directory_override or configuration.working_directory,
+            input_bindings=(
+                draft.input_bindings_override
+                if draft.input_bindings_override is not None
+                else configuration.input_bindings
+            ),
+            artifact_rules=configuration.artifact_rules,
+            scheduler=(
+                resolve_scheduler_configuration(plan, request)
+                if not problems and plan is not None and request is not None
+                else None
+            ),
             problems=problems,
             project_version=version,
             environment_version=environment_version,
@@ -437,6 +469,31 @@ class RunService:
             resolved_env_literals=resolved.literals,
             resolved_env_secret_refs=resolved.secret_refs,
         )
+        if result.ok:
+            assert version is not None and environment_version is not None
+            assert result.scheduler is not None
+            # A change detector, not an authorization token. Never read Secret values here.
+            facts = {
+                "user": user_id,
+                "project": project_id,
+                "configuration": configuration.id,
+                "name": result.configuration_name,
+                "version": version.id,
+                "command": result.command,
+                "working_directory": result.working_directory,
+                "environment": environment_version.id,
+                "environment_hash": environment_version.definition_hash,
+                "runtime": environment_version.execution_spec,
+                "inputs": [b.as_payload() for b in result.input_bindings],
+                "artifacts": [r.as_payload() for r in result.artifact_rules],
+                "plan": plan.id if plan else None,
+                "scheduler": result.scheduler.as_payload(),
+                "variables": result.resolved_env_literals,
+                "secrets": {k: v.as_key() for k, v in result.resolved_env_secret_refs.items()},
+            }
+            token = hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
+            result = replace(result, confirmation_token=token)
+        return result
 
     # -- 创建与提交 -----------------------------------------------------
 
@@ -454,6 +511,8 @@ class RunService:
 
         带幂等键时，同一个键的重复请求返回上一次的结果，不会再跑一次。
         """
+        if await self._repos.projects.get_for_update(project_id) is None:
+            raise ObjectNotFound("Project", project_id)
         access = await self._guard.project(user_id, project_id, needs=Capability.RUN_SUBMIT)
 
         replayed = await self._replay_or_reserve(
@@ -462,21 +521,16 @@ class RunService:
         if replayed is not None:
             return RunSubmission(run=replayed, created=False)
 
-        configuration = await self._repos.run_configurations.get(draft.run_configuration_id)
-        if configuration is None or configuration.project_id != project_id:
-            raise ObjectNotFound("Run Configuration", draft.run_configuration_id)
-
-        # 先独占发起 User 在该算力方案上的权益行，再做提交前检查。
-        #
-        # 并发上限是「数一数还有几个名额 -> 创建 Run」，这两步之间不能被别的请求
-        # 插进来，否则两个请求会同时读到「还没到上限」，然后都创建成功——
-        # 上限就形同虚设。锁一直持有到本次请求的事务结束。
-        await self._repos.entitlements.lock_for_plan(user_id, configuration.compute_plan_id)
-
         result = await self.preflight(user_id, project_id, draft)
         if not result.ok:
             raise PreflightRejected(result.problems)
 
+        if draft.confirmation_token is not None and (
+            draft.confirmation_token != result.confirmation_token
+        ):
+            raise RunConfirmationChanged("运行配置已变化，请刷新摘要后重新提交。")
+
+        assert result.scheduler is not None
         assert result.project_version is not None
         assert result.environment_version is not None
         assert result.compute_plan is not None
@@ -487,24 +541,20 @@ class RunService:
             snapshot_id=ids.new_id(ids.RUN_SNAPSHOT),
             project_id=project_id,
             project_version_id=result.project_version.id,
-            source_run_configuration_id=configuration.id,
-            working_directory=(draft.working_directory_override or configuration.working_directory),
-            command=(draft.command_override or configuration.command).strip(),
+            source_run_configuration_id=draft.run_configuration_id,
+            working_directory=result.working_directory,
+            command=result.command,
             environment_version_id=result.environment_version.id,
             environment_definition_hash=result.environment_version.definition_hash,
             environment_execution_spec=result.environment_version.execution_spec,
             resolved_env=_as_resolved_env(
                 result.resolved_env_literals, result.resolved_env_secret_refs
             ),
-            input_bindings=(
-                draft.input_bindings_override
-                if draft.input_bindings_override is not None
-                else configuration.input_bindings
-            ),
+            input_bindings=result.input_bindings,
             compute_plan_id=result.compute_plan.id,
             compute_request=result.compute_request,
-            scheduler=resolve_scheduler_configuration(result.compute_plan, result.compute_request),
-            artifact_rules=configuration.artifact_rules,
+            scheduler=result.scheduler,
+            artifact_rules=result.artifact_rules,
             initiated_by_user_id=user_id,
             created_at=now,
         )
@@ -516,7 +566,7 @@ class RunService:
             compute_plan_id=snapshot.compute_plan_id,
             project_version_id=snapshot.project_version_id,
             project_version_label=result.project_version.label,
-            source_run_configuration_id=configuration.id,
+            source_run_configuration_id=draft.run_configuration_id,
             source_run_id=None,
             name=draft.name.strip() or f"{access.project.name} · {result.project_version.label}",
             status=RunStatus.QUEUED,
@@ -546,6 +596,8 @@ class RunService:
         同时按重新执行时的权限和资源资格重新校验全部引用（设计稿 §3.4.3）。
         """
         access = await self._guard.run(user_id, run_id, needs=Capability.RUN_SUBMIT)
+        if await self._repos.projects.get_for_update(access.run.project_id) is None:
+            raise ObjectNotFound("Run", run_id)
 
         replayed = await self._replay_or_reserve(
             user_id, idempotency_key, "rerun", source_run_id=run_id
@@ -556,9 +608,6 @@ class RunService:
         source_snapshot = await self._repos.run_snapshots.get(access.run.snapshot_id)
         if source_snapshot is None:  # pragma: no cover
             raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
-
-        # 和 create 一样要先独占权益行——重跑同样占用并发名额。
-        await self._repos.entitlements.lock_for_plan(user_id, source_snapshot.compute_plan_id)
 
         problems = await self._revalidate_snapshot(source_snapshot, access, user_id)
         if problems:
@@ -645,7 +694,6 @@ class RunService:
         source = await self._repos.run_snapshots.get(access.run.snapshot_id)
         if source is None:  # pragma: no cover - 数据损坏才会发生
             raise ObjectNotFound("Run Snapshot", access.run.snapshot_id)
-        await self._repos.entitlements.lock_for_plan(user_id, source.compute_plan_id)
 
         project_version = await self._repos.project_versions.get(draft.project_version_id or "")
         environment_version = await environment_version_for_owner_use(
@@ -731,6 +779,8 @@ class RunService:
 
     async def cancel(self, user_id: str, run_id: str) -> Run:
         access = await self._guard.run(user_id, run_id, needs=Capability.RUN_CANCEL)
+        if await self._repos.projects.get_for_update(access.run.project_id) is None:
+            raise ObjectNotFound("Run", run_id)
         run = access.run
         if run.is_terminal:
             raise ConflictError(f"Run 已处于终态 {run.status}，无法取消")
@@ -1070,27 +1120,6 @@ class RunService:
         if key:
             await self._repos.idempotency.attach_run(user_id, key, run_id)
 
-    async def _check_concurrency(self, user_id: str, entitlement: ResourceEntitlement) -> list[str]:
-        """检查并发上限。
-
-        **数的范围必须和锁的范围一致**：额度按「User × 算力方案」授予，
-        锁的是那个 User 的那一条权益行，所以数的也只能是该 User 在那个方案上
-        发起的 Run。数到别人的 Run 会互相挤占名额；数到别的方案则会串味：
-        CPU 作业占掉 GPU 的名额。
-
-        调用方必须已经通过 ``entitlements.lock_for_plan`` 独占了权益行，
-        否则这里数出来的结果在返回之前就可能过期。
-        """
-        active = await self._repos.runs.count_unfinished_for_plan(
-            user_id, entitlement.compute_plan_id
-        )
-        if active < entitlement.max_concurrent_runs:
-            return []
-        return [
-            f"你在这个算力方案上已有 {active} 个未结束的 Run，"
-            f"达到并发上限 {entitlement.max_concurrent_runs}"
-        ]
-
     async def _check_inputs(
         self,
         user_id: str,
@@ -1236,10 +1265,6 @@ class RunService:
                 problems.append(f"你已不再拥有算力方案「{plan.name}」的使用权益")
             elif entitlement.is_expired(self._clock.now().isoformat()):
                 problems.append(f"算力方案「{plan.name}」的资源权益已过期")
-            else:
-                # 重跑同样要占并发名额。漏掉这一条，用户就能靠反复点「重新运行」
-                # 绕过上限——权益检查在最容易被反复触发的路径上失效。
-                problems.extend(await self._check_concurrency(user_id, entitlement))
 
             if self._scheduler.name == "slurm":
                 assert self._slurm_projection is not None

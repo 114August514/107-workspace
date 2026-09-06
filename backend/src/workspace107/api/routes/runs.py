@@ -44,6 +44,15 @@ async def preflight(
     """
     result = await services.runs.preflight(user.id, project_id, _to_draft(payload))
     return s.PreflightOut(
+        configuration_name=result.configuration_name,
+        command=result.command,
+        working_directory=result.working_directory,
+        input_bindings=[s.InputBindingModel(**b.as_payload()) for b in result.input_bindings],
+        artifact_rules=[s.ArtifactRuleModel(**r.as_payload()) for r in result.artifact_rules],
+        project_version_label=result.project_version.label if result.project_version else None,
+        compute_plan_name=result.compute_plan.name if result.compute_plan else None,
+        environment_name=result.environment_name,
+        confirmation_token=result.confirmation_token,
         ok=result.ok,
         problems=result.problems,
         project_version_id=result.project_version.id if result.project_version else None,
@@ -308,6 +317,7 @@ def _to_input_binding(payload: s.InputBindingModel) -> InputBinding:
 def _to_draft(payload: s.RunDraftIn) -> RunDraft:
     return RunDraft(
         run_configuration_id=payload.run_configuration_id,
+        confirmation_token=payload.confirmation_token,
         project_version_id=payload.project_version_id,
         name=payload.name or "",
         command_override=payload.command_override or "",

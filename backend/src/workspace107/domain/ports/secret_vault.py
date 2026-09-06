@@ -8,6 +8,7 @@ historical redaction boundary and must be replaced by KMS/Vault storage in produ
 from typing import Protocol
 
 from ..config_scope import ConfigScope, SecretReference
+from ..models import Secret
 
 
 class SecretVault(Protocol):
@@ -17,6 +18,10 @@ class SecretVault(Protocol):
 
     async def list_names(self, scope: ConfigScope) -> set[str]:
         """列出一个明确 scope 的 Secret 名称，不返回值。"""
+        ...
+
+    async def list_secrets(self, scope: ConfigScope) -> list[Secret]:
+        """列出 Secret 元数据（名称与更新时间），不含明文。"""
         ...
 
     async def resolve(self, references: list[SecretReference]) -> dict[SecretReference, str]:

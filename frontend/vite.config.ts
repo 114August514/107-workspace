@@ -1,28 +1,38 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+import { authRequestProxy } from './vite.auth-proxy'
+
 // jsdom + Primer/Ant Design 模块很吃内存，worker 不宜无上限；CI（GitHub 4 vCPU runner）
 // 上 4 个 jsdom worker 与主线程互相抢占，会放大单个用例的渲染与查询耗时，是 issue #101
 // 三组用例超出 5s 预算的直接诱因。CI 上降到 2 个 worker；本地多大核工作站保持 4 个。
-// 前端工程没有 @types/node，这里用 globalThis 探测 CI 环境变量。
-const isCI = Boolean(
-  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.CI,
+const isCI = Boolean(process.env.CI)
+
+const authMode = process.env.WORKSPACE107_AUTH_MODE ?? 'dev'
+const loginStack = authMode === 'ustc'
+const backendOrigin = process.env.WORKSPACE107_BACKEND_ORIGIN ?? 'http://127.0.0.1:8000'
+const frontendPort = Number(
+  process.env.WORKSPACE107_DEV_FRONTEND_PORT ??
+    new URL(process.env.WORKSPACE107_PUBLIC_ORIGIN ?? 'http://127.0.0.1:5174').port,
 )
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), loginStack ? authRequestProxy() : null],
   ssr: {
     noExternal: ['@primer/react'],
   },
   server: {
-    port: 5174,
-    // 开发时把 /api 转发到后端，避免前端代码里出现硬编码地址。
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-    },
+    port: frontendPort || 5174,
+    strictPort: true,
+    // AUTH_MODE=dev: 直接把 /api 转到后端。ustc 由 vite.auth-proxy 做 auth_request。
+    proxy: loginStack
+      ? undefined
+      : {
+          '/api': {
+            target: backendOrigin,
+            changeOrigin: true,
+          },
+        },
   },
   test: {
     environment: 'node',

@@ -64,6 +64,11 @@ class UserOut(Model):
     email: str | None = None
 
 
+class UserProfileUpdateIn(Model):
+    username: str | None = Field(default=None, min_length=1, max_length=64)
+    display_name: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 class UserGroupOut(Model):
     id: str
     name: str
@@ -109,6 +114,7 @@ class InvitationResponseIn(Model):
 class VariableOut(Model):
     name: str
     value: str
+    updated_at: datetime
 
 
 class VariableIn(Model):
@@ -121,12 +127,20 @@ class SecretIn(Model):
     value: str = Field(min_length=1)
 
 
+class SecretOut(Model):
+    """Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。"""
+
+    name: str
+    updated_at: datetime
+
+
 class EntitlementOut(Model):
     id: str
     compute_plan_id: str
     compute_plan_name: str
-    max_concurrent_runs: int
     expires_at: str | None
+    status: Literal["active", "expired"]
+    status_reason: str | None
 
 
 # -- Project ----------------------------------------------------------------
@@ -166,11 +180,39 @@ class ProjectUpdateIn(Model):
     visibility: ProjectVisibility | None = None
 
 
+class DeletionImpactItemOut(Model):
+    """删除确认页面展示的一类影响对象数量。"""
+
+    kind: str
+    count: int
+
+
+class DeletionImpactOut(Model):
+    """删除操作的可见影响摘要，不包含 Secret 值或内部内容。"""
+
+    resource_type: Literal["user_group", "project"]
+    resource_id: str
+    resource_name: str
+    can_delete: bool
+    problems: list[str] = Field(default_factory=list)
+    items: list[DeletionImpactItemOut] = Field(default_factory=list)
+
+
 class ProjectFileOut(Model):
     path: str
     size: int
     content_hash: str
     updated_at: datetime | None
+
+
+class ProjectSyncTargetOut(Model):
+    ssh_target: str
+    remote_path: str
+
+
+class ProjectSyncApplyOut(Model):
+    scanned_files: int
+    changed_files: int
 
 
 class FileWriteIn(Model):
@@ -207,6 +249,7 @@ class FileContentOut(Model):
 class WorkingChangeOut(Model):
     path: str
     change: ChangeKind
+    base_version: str | None = None
 
 
 class WorkingChangeDetailOut(Model):
@@ -240,6 +283,17 @@ class ProjectVersionOut(Model):
 
 class ProjectVersionDetailOut(ProjectVersionOut):
     files: list[ProjectVersionFileOut]
+
+
+class ProjectLanguageOut(Model):
+    name: str
+    code_lines: int
+    percentage: float
+
+
+class ProjectLanguagesOut(Model):
+    languages: list[ProjectLanguageOut]
+    total_code_lines: int
 
 
 class VersionCreateIn(Model):
@@ -277,6 +331,21 @@ class ModulesEnvironmentPublicationIn(Model):
     modules: list[str] = Field(min_length=1)
 
 
+class ImportEnvironmentPublicationIn(Model):
+    version: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    source_uri: str = Field(min_length=1, max_length=2048)
+    expected_sha256: str = Field(default="", max_length=64)
+
+
+class EnvironmentPublicationOptionsOut(Model):
+    modules: list[str]
+    max_upload_bytes: int
+    max_import_bytes: int
+    import_timeout_seconds: float
+    architecture: str
+
+
 class EnvironmentPublicationAttemptOut(Model):
     id: str
     environment_id: str
@@ -284,6 +353,12 @@ class EnvironmentPublicationAttemptOut(Model):
     version: str
     description: str
     runtime_kind: EnvironmentRuntimeKind
+    source_kind: Literal["modules", "upload", "import"] = "upload"
+    source_uri: str = ""
+    source_digest: str = ""
+    expected_sha256: str = ""
+    modules: list[str] = Field(default_factory=list)
+    stage: str = ""
     validation_summary: str
     validation_evidence: dict[str, object]
     failure_code: str | None
@@ -311,6 +386,7 @@ class OwnerSummaryOut(Model):
 
 
 class EnvironmentOut(Model):
+    capabilities: list[Capability] = Field(default_factory=list)
     id: str
     name: str
     description: str
@@ -531,6 +607,8 @@ class RunDraftIn(Model):
     """一次提交意图。"""
 
     run_configuration_id: str
+    confirmation_token: str | None = None
+    """Preflight 返回的配置变化检测标识；不能替代当前授权校验。"""
     project_version_id: str | None = None
     """None 表示使用 Project 的最新版本。"""
     name: str | None = None
@@ -560,6 +638,15 @@ class AdjustedRerunIn(Model):
 
 
 class PreflightOut(Model):
+    configuration_name: str
+    command: str
+    working_directory: str
+    input_bindings: list[InputBindingModel]
+    artifact_rules: list[ArtifactRuleModel]
+    project_version_label: str | None
+    compute_plan_name: str | None
+    environment_name: str | None
+    confirmation_token: str | None
     ok: bool
     problems: list[str]
     project_version_id: str | None
@@ -586,7 +673,7 @@ class RunOut(Model):
     exit_code: int | None
     failure_reason: str
     initiated_by_user_id: str
-    """发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。"""
+    """发起本次 Run 的 User（GR-307）：执行身份与通知接收方。"""
     initiated_by_username: str | None
     """当前权威 User.username；User 记录无法解析时为 null。"""
     created_at: datetime | None

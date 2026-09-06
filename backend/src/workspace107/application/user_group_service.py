@@ -16,7 +16,7 @@ from ..domain.errors import ConflictError, ObjectNotFound, PermissionDenied, Val
 from ..domain.models import Membership, User, UserGroup
 from ..domain.ownership import OwnerKind, OwnerReference
 from ..domain.ports.clock import Clock
-from ..domain.ports.repositories import Repositories
+from ..domain.ports.repositories import Repositories, UserGroupDeletionSummary
 from .access import AccessGuard, UserGroupAccess
 from .activity import ActivityRecorder
 from .notifier import Notifier
@@ -25,6 +25,23 @@ from .notifier import Notifier
 def _reject_owner_role(role: MembershipRole) -> None:
     if role is MembershipRole.OWNER:
         raise ConflictError("不能直接把成员设为 Owner，请使用转让所有权")
+
+
+def user_group_deletion_problems(summary: UserGroupDeletionSummary) -> list[str]:
+    problems: list[str] = []
+    if summary.projects:
+        problems.append(f"请先处理该 User Group 拥有的 {summary.projects} 个 Project")
+    if summary.environments:
+        problems.append(f"请先处理该 User Group 拥有的 {summary.environments} 个 Environment")
+    if summary.shared_resources:
+        problems.append(
+            f"请先处理该 User Group 拥有的 {summary.shared_resources} 个 Shared Resource"
+        )
+    if summary.variables:
+        problems.append(f"请先删除该 User Group 的 {summary.variables} 个 Variable")
+    if summary.secrets:
+        problems.append(f"请先删除该 User Group 的 {summary.secrets} 个 Secret")
+    return problems
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +178,40 @@ class UserGroupService:
             target_name=group.name,
         )
         return group
+
+    async def deletion_impact(
+        self, user_id: str, user_group_id: str
+    ) -> tuple[UserGroupView, UserGroupDeletionSummary]:
+        access = await self._guard.user_group(
+            user_id, user_group_id, needs=UserGroupCapability.USER_GROUP_DELETE
+        )
+        view = UserGroupView(
+            user_group=access.user_group,
+            role=access.role,
+            capabilities=access.capabilities,
+        )
+        return view, await self._repos.lifecycle.user_group_summary(user_group_id)
+
+    async def delete(self, user_id: str, user_group_id: str, *, confirmed: bool = False) -> None:
+        access = await self._lock_and_authorize_mutation(
+            user_id, user_group_id, needs=UserGroupCapability.USER_GROUP_DELETE
+        )
+        summary = await self._repos.lifecycle.user_group_summary(user_group_id)
+        problems = user_group_deletion_problems(summary)
+        if problems:
+            raise ConflictError("User Group 仍有未处理的归属对象", problems)
+        if not confirmed:
+            raise ConflictError("删除 User Group 需要明确确认", ["请在确认影响范围后重试"])
+        await self._activity.record(
+            actor_id=user_id,
+            owner=OwnerReference(OwnerKind.USER, user_id),
+            action=ActivityAction.USER_GROUP_DELETED,
+            target_type=TargetType.USER_GROUP,
+            target_id=user_group_id,
+            target_name=access.user_group.name,
+            detail="User Group 及其 Membership、配置和授权记录已结束生命周期",
+        )
+        await self._repos.lifecycle.delete_user_group(user_group_id)
 
     async def list_invitations(self, user_id: str) -> list[InvitationView]:
         result: list[InvitationView] = []

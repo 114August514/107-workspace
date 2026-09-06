@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, Query, UploadFile, status
 from fastapi.responses import Response
 
+from ...application.project_service import project_deletion_problems
 from ...application.run_configuration_service import RunConfigurationInput
 from ...domain.enums import ProjectStatus
 from ...domain.errors import ValidationFailed
 from ...domain.ownership import OwnerKind, OwnerReference
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, PageDep, ServicesDep
+from ..deps import ContextDep, CurrentUser, PageDep, ServicesDep
 
 router = APIRouter(tags=["project"])
 
@@ -131,7 +133,110 @@ async def update_project(
     )
 
 
+@router.get(
+    "/projects/{project_id}/deletion-impact",
+    response_model=s.DeletionImpactOut,
+    summary="查看 Project 删除影响",
+)
+async def project_deletion_impact(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.DeletionImpactOut:
+    access, plan = await services.projects.deletion_impact(user.id, project_id)
+    problems = project_deletion_problems(plan)
+    return s.DeletionImpactOut(
+        resource_type="project",
+        resource_id=project_id,
+        resource_name=access.project.name,
+        can_delete=not problems,
+        problems=problems,
+        items=[
+            s.DeletionImpactItemOut(kind="working_state_files", count=plan.working_state_files),
+            s.DeletionImpactItemOut(kind="versions", count=plan.versions),
+            s.DeletionImpactItemOut(kind="branches", count=plan.branches),
+            s.DeletionImpactItemOut(kind="configurations", count=plan.configurations),
+            s.DeletionImpactItemOut(kind="variables", count=plan.variables),
+            s.DeletionImpactItemOut(kind="secrets", count=plan.secrets),
+            s.DeletionImpactItemOut(kind="runs", count=plan.runs),
+            s.DeletionImpactItemOut(kind="snapshots", count=plan.snapshots),
+            s.DeletionImpactItemOut(kind="run_events", count=plan.run_events),
+            s.DeletionImpactItemOut(kind="artifacts", count=plan.artifacts),
+            s.DeletionImpactItemOut(kind="activities", count=plan.activities),
+            s.DeletionImpactItemOut(kind="notifications", count=plan.notifications),
+            s.DeletionImpactItemOut(kind="fork_relation", count=plan.fork_relation),
+            s.DeletionImpactItemOut(kind="fork_dependents_preserved", count=plan.fork_dependents),
+        ],
+    )
+
+
+@router.delete(
+    "/projects/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="删除 Project",
+    description=(
+        "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在"
+        "而返回 404。404 只表示目标当前不存在，不能证明由谁删除。"
+    ),
+    responses={
+        204: {"description": "Project 删除成功。"},
+        404: {
+            "description": (
+                "Project 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+            )
+        },
+    },
+)
+async def delete_project(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    confirm: bool = Query(False, description="确认已查看删除影响"),
+) -> None:
+    await services.projects.delete(user.id, project_id, confirmed=confirm)
+
+
 # -- 文件 -------------------------------------------------------------------
+
+
+@router.post(
+    "/projects/{project_id}/sync",
+    response_model=s.ProjectSyncTargetOut,
+    summary="准备受控的 Project rsync 暂存目标",
+)
+async def prepare_project_sync(
+    project_id: str,
+    user: CurrentUser,
+    services: ServicesDep,
+    context: ContextDep,
+) -> s.ProjectSyncTargetOut:
+    """要求内容写入权限，返回当前用户不可自选的稳定 SSH 暂存目标。"""
+    key = await services.projects.prepare_sync(user.id, project_id)
+    settings = context.settings
+    if not settings.project_sync_ssh_target or not settings.project_sync_remote_root:
+        raise ValidationFailed("当前部署尚未配置 Project rsync 同步入口")
+    remote_root = PurePosixPath(settings.project_sync_remote_root)
+    if not remote_root.is_absolute() or ".." in remote_root.parts:
+        raise ValidationFailed("Project rsync 远端暂存根配置必须是绝对路径")
+
+    return s.ProjectSyncTargetOut(
+        ssh_target=settings.project_sync_ssh_target,
+        remote_path=(remote_root / key).as_posix(),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/sync/apply",
+    response_model=s.ProjectSyncApplyOut,
+    summary="将 rsync 暂存内容应用到 Project Working State",
+)
+async def apply_project_sync(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.ProjectSyncApplyOut:
+    """要求内容写入权限，只创建或覆盖暂存内容对应的路径，不删除额外文件。"""
+    result = await services.projects.apply_sync(user.id, project_id)
+    return s.ProjectSyncApplyOut(
+        scanned_files=result.scanned_files,
+        changed_files=result.changed_files,
+    )
 
 
 @router.get(
@@ -354,7 +459,10 @@ async def working_changes(
     尚无历史版本时以空内容为基线，结果只表示新增、修改或删除，不写入数据。
     """
     changes = await services.projects.working_changes(user.id, project_id)
-    return [s.WorkingChangeOut(path=c.path, change=c.change) for c in changes]
+    return [
+        s.WorkingChangeOut(path=c.path, change=c.change, base_version=c.base_version)
+        for c in changes
+    ]
 
 
 @router.get(
@@ -367,12 +475,10 @@ async def working_change_detail(
     user: CurrentUser,
     services: ServicesDep,
     path: str = Query(min_length=1),
+    base_version: str | None = Query(default=None, min_length=1),
 ) -> s.WorkingChangeDetailOut:
-    """校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。
-
-    每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。
-    """
-    detail = await services.projects.working_change_detail(user.id, project_id, path)
+    """按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。"""
+    detail = await services.projects.working_change_detail(user.id, project_id, path, base_version)
     return s.WorkingChangeDetailOut(
         path=detail.path,
         change=detail.change,
@@ -403,7 +509,10 @@ async def discard_changes(
     返回剩余的未保存变更。
     """
     remaining = await services.projects.discard_changes(user.id, project_id, list(payload.paths))
-    return [s.WorkingChangeOut(path=c.path, change=c.change) for c in remaining]
+    return [
+        s.WorkingChangeOut(path=c.path, change=c.change, base_version=c.base_version)
+        for c in remaining
+    ]
 
 
 # -- 版本 -------------------------------------------------------------------
@@ -420,6 +529,29 @@ async def list_versions(
     """校验 Project 查看权限后，分页返回已保存的不可变历史版本。"""
     result = await services.projects.list_versions(user.id, project_id, page)
     return p.page_out(result, p.version_out)
+
+
+@router.get(
+    "/projects/{project_id}/languages",
+    response_model=s.ProjectLanguagesOut,
+    summary="统计 Project 最新版本的语言",
+)
+async def project_languages(
+    project_id: str, user: CurrentUser, services: ServicesDep
+) -> s.ProjectLanguagesOut:
+    """校验 Project 查看权限后，用 Tokei 统计最新不可变版本，不包含 Working State。"""
+    result = await services.projects.latest_languages(user.id, project_id)
+    return s.ProjectLanguagesOut(
+        languages=[
+            s.ProjectLanguageOut(
+                name=language.name,
+                code_lines=language.code_lines,
+                percentage=language.percentage,
+            )
+            for language in result.languages
+        ],
+        total_code_lines=result.total_code_lines,
+    )
 
 
 @router.post(

@@ -1,105 +1,95 @@
-import { ContainerIcon, HomeIcon } from '@primer/octicons-react'
-import { Label, Link, Text } from '@primer/react'
-import { Link as RouterLink, useParams } from 'react-router-dom'
-
-import { api } from '../api/client'
-import type { Environment, EnvironmentVersion } from '../api/types'
-import { useAsync } from '../api/useAsync'
+import { Label } from '@primer/react'
+import { Link } from 'react-router-dom'
 import { AsyncState } from '../components/common/AsyncState'
 import { normalizeError } from '../components/common/asyncStateError'
+import { useCurrentEnvironment } from '../components/environment/environmentContext'
+import { EnvironmentLayout } from '../components/environment/EnvironmentLayout'
+import overview from '../components/usergroup/overview.module.css'
 import styles from './Environment.module.css'
 
-interface VersionView {
-  environment: Environment
-  version: EnvironmentVersion
-}
-
 export function EnvironmentVersionPage() {
-  const { versionId = '' } = useParams()
-  const detail = useAsync<VersionView>(async () => {
-    const version = await api.environmentVersion(versionId)
-    const environment = await api.environment(version.environment_id)
-    return { environment, version }
-  }, [versionId])
-
+  const detail = useCurrentEnvironment()
+  const environment = detail.data?.environment
+  const version = detail.data?.version
+  const definition = version?.definition ?? {}
   return (
-    <div className={styles.page}>
-      <AsyncState
-        loading={detail.loading}
-        loadingText="正在加载运行环境版本…"
-        error={normalizeError(detail.error)}
-        onRetry={detail.reload}
-      >
-        {detail.data ? (
-          <>
-            <header className={styles.header}>
-              <nav className={styles.breadcrumb} aria-label="面包屑">
-                <HomeIcon aria-hidden="true" />
-                <Link as={RouterLink} to="/">
-                  首页
-                </Link>
-                <span aria-hidden="true">/</span>
-                <Link as={RouterLink} to="/environments">
-                  运行环境
-                </Link>
-                <span aria-hidden="true">/</span>
-                <Link as={RouterLink} to={`/environments/${detail.data.environment.id}`}>
-                  {detail.data.environment.name}
-                </Link>
-                <span aria-hidden="true">/</span>
-                <span>{detail.data.version.version}</span>
-              </nav>
-              <div className={styles.titleRow}>
-                <ContainerIcon className={styles.titleIcon} size={24} aria-hidden="true" />
-                <h1 className={styles.title}>
-                  {detail.data.environment.name} · {detail.data.version.version}
-                </h1>
-                <Label
-                  variant={
-                    detail.data.version.availability === 'available' ? 'success' : 'attention'
-                  }
-                >
-                  {detail.data.version.availability === 'available' ? '当前可用' : '当前不可用'}
-                </Label>
-              </div>
-              <Text as="p" className={styles.description}>
-                {detail.data.version.description || '这个版本还没有填写说明。'}
-              </Text>
-            </header>
-
+    <AsyncState
+      loading={detail.loading}
+      loadingText="正在加载运行环境版本…"
+      error={normalizeError(detail.error)}
+      onRetry={detail.reload}
+    >
+      {environment && version && (
+        <EnvironmentLayout environment={environment}>
+          <Link to={`/environments/${environment.id}?tab=versions`}>返回版本列表</Link>
+          <div className={styles.sectionHeading}>
+            <h2 className={overview.sectionTitle}>{version.version}</h2>
+            <Label variant={version.availability === 'available' ? 'success' : 'attention'}>
+              {version.availability === 'available' ? '当前可用' : '当前不可用'}
+            </Label>
+          </div>
+          <p className={styles.description}>{version.description || '这个版本还没有填写说明。'}</p>
+          <dl className={styles.detailGrid}>
+            <dt>运行方式</dt>
+            <dd>{version.runtime_kind === 'modules' ? 'Environment Modules' : 'Apptainer SIF'}</dd>
+            {version.runtime_kind === 'modules' ? (
+              <>
+                <dt>加载模块</dt>
+                <dd>
+                  <ol className={styles.modules}>
+                    {(Array.isArray(definition.modules) ? definition.modules : []).map(
+                      (module, index) => (
+                        <li key={index}>{String(module)}</li>
+                      ),
+                    )}
+                  </ol>
+                </dd>
+              </>
+            ) : (
+              <>
+                <dt>镜像文件</dt>
+                <dd>
+                  SIF ·{' '}
+                  {typeof definition.size === 'number'
+                    ? `${(definition.size / 1024 ** 2).toFixed(1)} MiB`
+                    : '大小未记录'}
+                </dd>
+                <dt>文件 SHA-256</dt>
+                <dd className={styles.monoMeta}>{String(definition.sha256 ?? '未记录')}</dd>
+                <dt>架构</dt>
+                <dd>{String(definition.architecture ?? '未记录')}</dd>
+                {Boolean(definition.source_uri) && (
+                  <>
+                    <dt>镜像来源</dt>
+                    <dd>{String(definition.source_uri)}</dd>
+                  </>
+                )}
+              </>
+            )}
+            <dt>验证结果</dt>
+            <dd>{version.validation_summary}</dd>
+            <dt>可用性</dt>
+            <dd>{version.availability_detail || version.availability_reason}</dd>
+            <dt>最近检查</dt>
+            <dd>{new Date(version.availability_checked_at).toLocaleString()}</dd>
+          </dl>
+          <details className={styles.disclosure}>
+            <summary>技术信息</summary>
             <dl className={styles.detailGrid}>
-              <dt>Owner</dt>
-              <dd>{detail.data.environment.owner.display_name}</dd>
               <dt>确定版本 ID</dt>
-              <dd className={styles.monoMeta}>{detail.data.version.id}</dd>
-              <dt>Runtime kind</dt>
-              <dd className={styles.monoMeta}>{detail.data.version.runtime_kind}</dd>
+              <dd>{version.id}</dd>
               <dt>Definition SHA-256</dt>
-              <dd className={styles.monoMeta}>{detail.data.version.definition_hash}</dd>
-              <dt>不可变定义</dt>
-              <dd>
-                <code className={styles.codeBlock}>
-                  {JSON.stringify(detail.data.version.definition)}
-                </code>
-              </dd>
-              <dt>验证摘要</dt>
-              <dd>{detail.data.version.validation_summary}</dd>
-              <dt>验证证据</dt>
-              <dd>
-                <code className={styles.codeBlock}>
-                  {JSON.stringify(detail.data.version.validation_evidence)}
-                </code>
-              </dd>
-              <dt>可用性</dt>
-              <dd>
-                {detail.data.version.availability_detail || detail.data.version.availability_reason}
-              </dd>
-              <dt>检查时间</dt>
-              <dd>{new Date(detail.data.version.availability_checked_at).toLocaleString()}</dd>
+              <dd>{version.definition_hash}</dd>
             </dl>
-          </>
-        ) : null}
-      </AsyncState>
-    </div>
+            <h3 className={overview.sectionTitle}>不可变定义</h3>
+            <pre className={styles.codeBlock}>{JSON.stringify(version.definition, null, 2)}</pre>
+            <h3 className={overview.sectionTitle}>验证证据</h3>
+            <pre className={styles.codeBlock}>
+              {JSON.stringify(version.validation_evidence, null, 2)}
+            </pre>
+          </details>
+        </EnvironmentLayout>
+      )}
+    </AsyncState>
   )
 }

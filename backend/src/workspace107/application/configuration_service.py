@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from ..domain.capabilities import Capability
 from ..domain.config_scope import ConfigScope
 from ..domain.errors import ObjectNotFound
-from ..domain.models import Variable
+from ..domain.models import Secret, Variable
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.secret_vault import SecretVault
 from .access import AccessGuard
@@ -24,6 +26,8 @@ class ConfigurationService:
 
     async def group_scope(self, actor_id: str, group_id: str, *, manage: bool) -> ConfigScope:
         await self._guard.scoped_config_group(actor_id, group_id, manage=manage)
+        if manage and await self._repos.user_groups.get_for_update(group_id) is None:
+            raise ObjectNotFound("User Group", group_id)
         return ConfigScope.user_group(group_id)
 
     async def project_scope(self, actor_id: str, project_id: str, *, manage: bool) -> ConfigScope:
@@ -32,21 +36,24 @@ class ConfigurationService:
             project_id,
             needs=Capability.CONFIG_MANAGE if manage else Capability.CONFIG_VIEW,
         )
+        if manage and await self._repos.projects.get_for_update(project_id) is None:
+            raise ObjectNotFound("Project", project_id)
         return ConfigScope.project(project_id)
 
     async def list_variables(self, scope: ConfigScope) -> list[Variable]:
         return await self._repos.variables.list_for_scope(scope)
 
     async def set_variable(self, scope: ConfigScope, name: str, value: str) -> Variable:
-        variable = Variable(scope=scope, name=name, value=value)
+        variable = Variable(scope=scope, name=name, value=value, updated_at=datetime.now(UTC))
         await self._repos.variables.upsert(variable)
         return variable
 
     async def delete_variable(self, scope: ConfigScope, name: str) -> None:
         await self._repos.variables.delete(scope, name)
 
-    async def list_secret_names(self, scope: ConfigScope) -> list[str]:
-        return sorted(await self._secrets.list_names(scope))
+    async def list_secret_summaries(self, scope: ConfigScope) -> list[Secret]:
+        """按名称排序的 Secret 元数据；明文永远不出 vault。"""
+        return sorted(await self._secrets.list_secrets(scope), key=lambda s: s.name)
 
     async def set_secret(self, scope: ConfigScope, name: str, value: str) -> None:
         await self._secrets.set_secret(scope, name, value)

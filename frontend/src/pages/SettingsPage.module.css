@@ -1,0 +1,43 @@
+.page {
+  display: flex;
+  width: min(100%, 960px);
+  min-width: 0;
+  margin-inline: auto;
+  flex-direction: column;
+  gap: var(--base-size-24);
+}
+
+.title,
+.subtitle,
+.sectionTitle {
+  margin: 0;
+}
+
+.title {
+  font-size: var(--text-title-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.subtitle {
+  margin-top: var(--base-size-4);
+  color: var(--fgColor-muted);
+}
+
+.section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--base-size-12);
+}
+
+.sectionTitle {
+  font-size: var(--text-body-size-medium);
+  font-weight: var(--base-text-weight-semibold);
+}
+
+.form {
+  display: flex;
+  max-width: 36rem;
+  flex-direction: column;
+  gap: var(--base-size-16);
+}

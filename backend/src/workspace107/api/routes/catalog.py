@@ -2,15 +2,53 @@
 
 from __future__ import annotations
 
+import asyncio
+import tempfile
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, UploadFile, status
 
+from ...application.environment_publication import ALLOWED_MODULES
+from ...domain.errors import ValidationFailed
 from .. import presenters as p
 from .. import schemas as s
-from ..deps import CurrentUser, ServicesDep
+from ..deps import ContextDep, CurrentUser, ServicesDep
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
+
+
+@router.get("/environment-publication-options", response_model=s.EnvironmentPublicationOptionsOut)
+async def environment_publication_options(
+    user: CurrentUser, context: ContextDep
+) -> s.EnvironmentPublicationOptionsOut:
+    return s.EnvironmentPublicationOptionsOut(
+        modules=sorted(ALLOWED_MODULES),
+        max_upload_bytes=min(
+            context.settings.environment_import_max_bytes,
+            max(0, context.settings.max_request_bytes - 65536),
+        ),
+        max_import_bytes=context.settings.environment_import_max_bytes,
+        import_timeout_seconds=context.settings.environment_import_timeout_seconds,
+        architecture="x86_64",
+    )
+
+
+@router.post(
+    "/environments/{environment_id}/publication-attempts/import",
+    response_model=s.EnvironmentPublicationAttemptOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def import_environment(
+    environment_id: str,
+    body: s.ImportEnvironmentPublicationIn,
+    user: CurrentUser,
+    services: ServicesDep,
+) -> s.EnvironmentPublicationAttemptOut:
+    attempt = await services.environment_publications.create_import(
+        user.id, environment_id, **body.model_dump()
+    )
+    return p.environment_publication_attempt_out(attempt)
 
 
 @router.get(
@@ -100,6 +138,7 @@ async def publish_modules_environment(
 )
 async def publish_apptainer_environment(
     environment_id: str,
+    context: ContextDep,
     user: CurrentUser,
     services: ServicesDep,
     version: Annotated[str, Form()],
@@ -109,17 +148,29 @@ async def publish_apptainer_environment(
     source_digest: Annotated[str, Form()] = "",
     architecture: Annotated[str, Form()] = "x86_64",
 ) -> s.EnvironmentPublicationAttemptOut:
-    content = await sif.read()
-    attempt = await services.environment_publications.create_sif(
-        user.id,
-        environment_id,
-        version=version,
-        description=description,
-        content=content,
-        source_uri=source_uri,
-        source_digest=source_digest,
-        architecture=architecture,
+    await services.environment_publications.authorize(user.id, environment_id)
+    limit = min(
+        context.settings.environment_import_max_bytes, context.settings.max_request_bytes - 65536
     )
+    with tempfile.TemporaryDirectory(prefix="workspace107-upload-") as directory:
+        path = Path(directory) / "image.sif"
+        size = 0
+        with path.open("wb") as output:
+            while chunk := await sif.read(1024 * 1024):
+                size += len(chunk)
+                if size > limit:
+                    raise ValidationFailed("SIF 文件超过平台上传大小上限")
+                await asyncio.to_thread(output.write, chunk)
+        attempt = await services.environment_publications.create_sif_file(
+            user.id,
+            environment_id,
+            version=version,
+            description=description,
+            path=path,
+            source_uri=source_uri,
+            source_digest=source_digest,
+            architecture=architecture,
+        )
     return p.environment_publication_attempt_out(attempt)
 
 

@@ -215,10 +215,10 @@ Project 与项目文件
 │   ├── [V1] 将 Project 更新推送到外部仓库
 │   ├── [V1] 查看最近一次拉取或推送结果
 │   ├── [V1] 从科大云盘导入文件或目录
+│   ├── [V1] 通过 CLI 增量同步本地目录
 │   │
 │   ├── [V2] 管理多个外部 Git 仓库
 │   ├── [V2] 配置分支同步关系
-│   ├── [V2] 通过 CLI 增量同步本地目录
 │   ├── [V2] 将项目文件导出到科大云盘
 │   ├── [V2] 处理外部仓库同步冲突
 │   │
@@ -316,6 +316,19 @@ Project 派生、模板发布与复用
 
 Environment Version 当前只支持 `modules` 与 `apptainer_sif` 两种显式 runtime；发布必须通过对应类型校验，失败不得形成可用 Version。
 Run Configuration 与 Run Snapshot 使用确定的 Environment Version；版本不可用或不兼容时明确失败，不自动回退或替换为其他版本。
+
+环境展示沿用 User Group 的导航、标题和左列表右 About 布局。版本详情优先展示说明、
+有序模块或 SIF 文件大小／架构／摘要、当前可用性；原始定义和校验证据按需展开。
+发布操作通过独立弹窗进入，依据后端返回的当前 capability 显示，不从组角色推断权限。
+
+发布 `modules` 时填写平台允许的有序模块；发布 `apptainer_sif` 时选择上传已有 SIF，
+或填写公开 HTTPS、`docker://`、`oras://`、`library://` 地址。Docker 来源先转换为 SIF，
+其他来源下载已有 SIF。校验后的最终文件保存在平台内容寻址存储中，Run 复用这份文件，
+不重新解析来源标签。版本名称和说明直接可见，来源摘要等可选参数折叠到高级设置。
+
+发布记录显示持久化的真实处理阶段、结果和失败原因，失败可重新提交，不生成可用版本。
+公开导入不包含私有仓库凭据、在线 Dockerfile 构建或镜像内部文件浏览；网络、文件和
+转换限制见 [部署说明](../operations/deployment.md#环境文件上传与远程导入)。
 
 ```text
 运行环境
@@ -1139,6 +1152,27 @@ Run Configuration
 └── Artifact Collection Rules
 ```
 
+Simple Run 的默认编辑表面只突出 Command、Environment Version 与 Compute Plan。
+Command 是 shell command，不增加语言专用的 entry file 字段。
+有确定的默认环境版本或唯一可用环境版本时可以预选；算力默认选择使用后端返回的当前权益事实。
+用户无需填写底层 cluster、account、partition、QoS、GRES 或原始 SBATCH 参数。
+CPU、Memory、GPU、Time 等数量按需展开调整，并受 Compute Plan 范围约束。
+折叠设置不改变已经填写的值；恢复方案默认资源必须是明确操作。
+方案名称与说明在表单顶部常显；Input Bindings、Variable / Secret 引用、Working Directory 默认放在高级设置。
+高级设置在折叠时提示已有输入、参数和自定义工作目录；字段错误应展开相应设置。
+
+Core Run 是非交互式 batch execution，stdin 固定连接 `/dev/null`，Mock 与 Slurm 保持一致。
+stdout / stderr 由平台自动捕获为日志，用户无需配置其文件名或存储路径。
+新建方案明确预填 `outputs/` 作为可修改、可删除的 optional Artifact Collection Rule；
+路径相对于工作目录，目录不存在不因此使 Run 失败。空规则列表表示不收集产物，
+编辑已有方案不得自动补回默认规则，也不扫描未声明路径。
+
+日常提交以运行方案、确定 Project Version 和已解析执行配置摘要为主，不重复编辑完整方案。
+Preflight 自动执行；本次提交显式携带摘要中的 Project Version。
+确认标识只用于检测执行配置变化，不构成授权或提前创建的 Snapshot。
+创建时重新校验当前资格并解析配置；与已确认事实不一致时拒绝创建并要求刷新摘要。
+Secret 值不参与确认标识，继续按 exact reference 在执行时读取当前有效值。
+
 界面可以在用户编辑 Run Configuration 时，根据默认值、推荐值或别名帮助选择版本；保存 Run Configuration 前，平台必须将这些可变选择解析为具体的 Environment Version 和 Shared Resource Version。Run Configuration 和 Run Snapshot 只保存具体版本的精确引用。创建或执行 Run 时不得再次解析默认值、推荐值或别名，也不得自动切换到其他版本。
 
 创建 Run 时，平台将当前 Project Version 与 Run Configuration 中的配置解析为确定内容，并生成 Run Snapshot：
@@ -1938,6 +1972,8 @@ User Group 仅可基于该组拥有的 Profile，或 PUBLIC Profile 中的确定
 
 User 拥有的资产不会仅因该 User 是某个 User Group 的成员而进入组活动汇总。被多个 Project 引用的资产发生变化时，Activity 只记录在该资产上；需要提醒时，向相关 User 发送 Notification。
 
+生命周期治理 Activity 归属于受影响的 Owner Scope，不归属于被结束生命周期的对象。删除 User Group-owned Project 时记录在该 User Group Activity；删除 User-owned Project 时记录在该 User Activity；删除 User Group 时记录在执行操作的 User Activity。删除后仍保留目标名称与身份快照，以便解释历史事实。
+
 ##### **GR-603 — Activity 查看权限**
 
 Activity 必须按作用对象归入对象的当前 Owner 边界授权。Project、Environment 或 Shared Resource 的 Activity 仅允许 Owner User，或 exact owning User Group 中具有有效 Membership 且 Role / Status 允许的 User 查看；User Group 直接 Activity 仅允许该组中具有相应权限的有效成员查看。User Group 或个人视图不得绕过这些边界，PUBLIC Project 与 USE Grant 均不公开 Activity。
@@ -1959,6 +1995,8 @@ Activity 没有未读、完成或送达状态，也不替代 Notification、Audi
 ##### 删除 User Group
 
 删除 User Group 前必须先处理其拥有的资产、Variable 和 Secret；删除不得移除 User 身份，也不得影响 User 在其他 User Group 中的 Membership。
+
+删除请求成功完成时返回 204。若目标当前不存在则返回 404；删除已经成功但响应丢失时，客户端重试也会得到 404。该 404 只说明目标不存在，不能证明由谁删除，因此界面必须将“本次已删除”和“目标已不存在”作为不同结果反馈，并继续呈现其他失败。
 
 ##### 管理 Membership
 
@@ -2006,6 +2044,13 @@ Project Version 创建后内容不可变，用于固定某一确定的 Project �
 
 后续对 Working State 的修改不得改变已有 Project Version。
 
+本地目录同步使用平台签发的受控 Project 暂存目标和 `rsync + SSH`。暂存目标按 Project
+与发起 User 隔离并稳定复用，使重复同步可以只传输变化内容；客户端不能自选远端路径。
+传输完成后，平台重新校验当前 User 的内容写入权限、Project 相对路径、文件大小与命名空间，
+再把暂存内容创建或覆盖到 Working State。默认同步不删除 Working State 中仅远端存在的文件，
+也不自动创建 Project Version。项目根目录的 `.107ignore` 使用 gitignore-style pattern；
+`.git/`、`.venv/`、`node_modules/`、`__pycache__/` 和常见构建产物默认不进入同步。
+
 ##### 管理 Project Branch
 
 Project 可以创建、移动和删除 Project Branch。
@@ -2029,6 +2074,8 @@ Project Branch 是指向本 Project 某一确定 Project Version 的可变引用
 Project 删除时，其 Working State、Project Version、Project Branch、Run Configuration、Project scoped Variable 与 Secret，以及归属于该 Project 的 Run 和 Run 从属对象随其生命周期结束。
 
 源 Project 删除不影响已经形成独立生命周期的对象。Template Revision 的保留按 GR-206 处理，实时来源导航与读取按 GR-508 处理。
+
+删除请求成功完成时返回 204。若目标当前不存在则返回 404；删除已经成功但响应丢失时，客户端重试也会得到 404。该 404 只说明目标不存在，不能证明由谁删除，因此界面必须将“本次已删除”和“目标已不存在”作为不同结果反馈，并继续呈现其他失败。
 
 #### 3.4.3 Run 生命周期与执行操作
 

@@ -35,12 +35,21 @@ WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持，�
 
 ```bash
 ./scripts/platform/posix/bootstrap.sh
+cp .env.example backend/.env
+# 填写 WORKSPACE107_AUTH_SECRET_KEY 和 WORKSPACE107_LOCAL_ADMIN_PASSWORD
 make migrate
 make dev
 ```
 
 后端接口文档默认位于 <http://127.0.0.1:8000/docs>，前端默认位于
-<http://127.0.0.1:5174>。
+<http://127.0.0.1:5174>。模板里 `WORKSPACE107_AUTH_MODE=ustc`：`make dev` 会再拉起认证服务，
+Vite 对 `/api` 做 `auth_request`，浏览器看到公开登录页（账密 + 统一身份认证）。
+账密和会话密钥都写在 `backend/.env`，不要提交。把 `WORKSPACE107_AUTH_MODE` 改成 `dev`
+则仍直接以 `student` 进入，没有登录页。
+
+Compose 默认栈的 `:8107` 仍是 `dev`，没有登录页。独立 Nginx 入口见
+[`deploy/cas-revproxy/README.md`](deploy/cas-revproxy/README.md)，不要和 Compose 同时占用
+`:8107`。
 
 提交前运行统一检查：
 
@@ -49,6 +58,15 @@ make check
 ```
 
 任务入口、可选目标和平台边界见 [`scripts/README.md`](scripts/README.md)。
+
+安装后端包后可用 rsync 将本地代码目录增量同步到有写权限的 Project：
+
+```bash
+107 project sync ./my-project <project-id-or-exact-name>
+```
+
+该入口需要部署方先配置受控 SSH 暂存目标；具体配置与 `.107ignore` 行为见
+[`backend/README.md`](backend/README.md#project-本地目录同步)。
 
 ## 架构
 
@@ -76,5 +94,8 @@ cp .env.example .env
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
-浏览器访问 <http://127.0.0.1:8107>。部署和共享存储约束见
+浏览器访问 <http://127.0.0.1:8107>。Compose 默认仍是 `AUTH_MODE=dev`，打开即已登录为
+开发用户，**没有登录页**。带登录页的 `:8107` 是
+[`deploy/cas-revproxy/`](deploy/cas-revproxy/README.md) 那套 Nginx（`auth_request` +
+`/login` / `/login/password`），不是这个 `web` 容器。部署和共享存储约束见
 [`docs/operations/deployment.md`](docs/operations/deployment.md)。

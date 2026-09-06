@@ -1,16 +1,26 @@
 import pytest
 
+# 前端把 ISO 串交给 RelativeTime 换算相对时间；无时区后缀会被当成
+# 本地时间，导致「刚刚创建显示 8 小时前」（UTC vs GMT+8）。
+_UTC_SUFFIX = ("Z", "+00:00")
+
 
 async def _crud(client, base: str, *, secret_value: str) -> None:
     variable = await client.put(f"{base}/variables", json={"name": "SAME", "value": "value"})
     assert variable.status_code == 200
-    assert (await client.get(f"{base}/variables")).json() == [{"name": "SAME", "value": "value"}]
+    assert variable.json()["name"] == "SAME"
+    assert variable.json()["value"] == "value"
+    assert variable.json()["updated_at"].endswith(_UTC_SUFFIX)
+    listed_variables = (await client.get(f"{base}/variables")).json()
+    assert [v["name"] for v in listed_variables] == ["SAME"]
+    assert listed_variables[0]["updated_at"].endswith(_UTC_SUFFIX)
     assert (await client.delete(f"{base}/variables/SAME")).status_code == 204
     secret = await client.put(f"{base}/secrets", json={"name": "TOKEN", "value": secret_value})
     assert secret.status_code == 204
     listed = await client.get(f"{base}/secrets")
     assert listed.status_code == 200
-    assert listed.json() == ["TOKEN"]
+    assert [s["name"] for s in listed.json()] == ["TOKEN"]
+    assert listed.json()[0]["updated_at"].endswith(_UTC_SUFFIX)
     assert "value" not in listed.text
     assert secret_value not in listed.text
     assert (await client.delete(f"{base}/secrets/TOKEN")).status_code == 204

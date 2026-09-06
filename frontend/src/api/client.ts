@@ -8,11 +8,11 @@
  * 上层保留一组按领域命名的函数，组件不必关心 HTTP 细节；
  * 但每个函数内部都走类型检查过的调用，不存在「手写字符串路径」这种东西。
  *
- * 开发模式下用 X-User 请求头识别身份（后端 auth_mode=dev）。
- * 接入学校统一身份认证之后，改这里的中间件即可，调用方不用动。
+ * 正常客户端不发送 X-User / X-User-ID。身份由同源会话 Cookie 交给反向代理注入。
+ * 任意业务 API 返回 401 时通知认证层，由认证层清除会话并卸载业务界面。
  */
 
-import createClient, { type Middleware } from 'openapi-fetch'
+import createClient from 'openapi-fetch'
 
 import type { paths } from './schema'
 import type {
@@ -23,8 +23,11 @@ import type {
   ComputeRequest,
   InputBinding,
   Entitlement,
+  DeletionImpact,
   Environment,
   EnvironmentPublicationAttempt,
+  EnvironmentPublicationOptions,
+  ImportEnvironmentPublicationInput,
   EnvironmentVersion,
   FileContent,
   Home,
@@ -41,6 +44,7 @@ import type {
   OwnerReference,
   Project,
   ProjectPage,
+  ProjectLanguages,
   ProjectFile,
   ProjectVersion,
   ProjectVersionPage,
@@ -51,6 +55,7 @@ import type {
   RunDetail,
   RunDraft,
   RunPage,
+  Secret,
   SharedResource,
   SharedResourceCreate,
   SharedResourceDetail,
@@ -61,8 +66,12 @@ import type {
   VersionDiff,
   WorkingChange,
   WorkingChangeDetail,
+  User,
   UserGroup,
+  Variable,
 } from './types'
+
+export type DeleteResult = 'deleted' | 'absent'
 
 /** 后端统一的错误响应结构。 */
 export class ApiError extends Error {
@@ -114,21 +123,18 @@ export function newIdempotencyKey(): string {
   return `key-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-let currentUser = 'student'
+const unauthorizedListeners = new Set<() => void>()
 
-export function setCurrentUser(username: string): void {
-  currentUser = username
+/** 订阅业务 API 的 401。返回取消订阅函数。 */
+export function onUnauthorized(listener: () => void): () => void {
+  unauthorizedListeners.add(listener)
+  return () => {
+    unauthorizedListeners.delete(listener)
+  }
 }
 
-export function getCurrentUser(): string {
-  return currentUser
-}
-
-const identity: Middleware = {
-  onRequest({ request }) {
-    request.headers.set('X-User', currentUser)
-    return request
-  },
+export function reportUnauthorized(): void {
+  for (const listener of unauthorizedListeners) listener()
 }
 
 /**
@@ -146,12 +152,13 @@ const safeFetch: typeof fetch = async (input, init) => {
 }
 
 const http = createClient<paths>({ baseUrl: '', fetch: safeFetch })
-http.use(identity)
 
 /** 把 openapi-fetch 的 `{ data, error }` 转成「成功返回值 / 抛 ApiError」。 */
 function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
   if (result.error !== undefined) {
-    throw toApiError(result.error, result.response)
+    const error = toApiError(result.error, result.response)
+    if (error.status === 401) reportUnauthorized()
+    throw error
   }
   return result.data as T
 }
@@ -184,6 +191,12 @@ export function toApiError(body: unknown, response: Response): ApiError {
 export const api = {
   // -- 首页与目录 --------------------------------------------------------
   home: async (): Promise<Home> => unwrap(await http.GET('/api/v1/me')),
+  updateProfile: async (payload: { username?: string; display_name?: string }): Promise<User> =>
+    unwrap(
+      await http.PATCH('/api/v1/me', {
+        body: payload,
+      }),
+    ),
   environments: async (): Promise<Environment[]> =>
     unwrap(await http.GET('/api/v1/catalog/environments')),
   environment: async (id: string): Promise<Environment> =>
@@ -196,6 +209,18 @@ export const api = {
     unwrap(
       await http.GET('/api/v1/catalog/environment-versions/{version_id}', {
         params: { path: { version_id: id } },
+      }),
+    ),
+  environmentPublicationOptions: async (): Promise<EnvironmentPublicationOptions> =>
+    unwrap(await http.GET('/api/v1/catalog/environment-publication-options')),
+  importEnvironment: async (
+    id: string,
+    body: ImportEnvironmentPublicationInput,
+  ): Promise<EnvironmentPublicationAttempt> =>
+    unwrap(
+      await http.POST('/api/v1/catalog/environments/{environment_id}/publication-attempts/import', {
+        params: { path: { environment_id: id } },
+        body,
       }),
     ),
   publishModulesEnvironment: async (
@@ -213,6 +238,7 @@ export const api = {
     payload: {
       version: string
       sif: File
+      description?: string
       source_uri: string
       source_digest: string
       architecture: 'x86_64'
@@ -224,7 +250,7 @@ export const api = {
     form.append('source_uri', payload.source_uri)
     form.append('source_digest', payload.source_digest)
     form.append('architecture', payload.architecture)
-    form.append('description', '')
+    form.append('description', payload.description ?? '')
     return unwrap(
       await http.POST(
         '/api/v1/catalog/environments/{environment_id}/publication-attempts/apptainer-sif',
@@ -272,6 +298,27 @@ export const api = {
         params: { path: { user_group_id: id } },
       }),
     ),
+
+  getUserGroupDeletionImpact: async (id: string): Promise<DeletionImpact> =>
+    unwrap(
+      await http.GET('/api/v1/user-groups/{user_group_id}/deletion-impact', {
+        params: { path: { user_group_id: id } },
+      }),
+    ),
+
+  deleteUserGroup: async (id: string): Promise<DeleteResult> => {
+    try {
+      unwrap(
+        await http.DELETE('/api/v1/user-groups/{user_group_id}', {
+          params: { path: { user_group_id: id }, query: { confirm: true } },
+        }),
+      )
+      return 'deleted'
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return 'absent'
+      throw error
+    }
+  },
 
   createUserGroup: async (name: string, description: string): Promise<UserGroup> =>
     unwrap(await http.POST('/api/v1/user-groups', { body: { name, description } })),
@@ -353,6 +400,57 @@ export const api = {
   listEntitlements: async (): Promise<Entitlement[]> =>
     unwrap(await http.GET('/api/v1/me/entitlements')),
 
+  // -- Personal execution context -------------------------------------
+  listUserVariables: async (userId: string): Promise<Variable[]> =>
+    unwrap(
+      await http.GET('/api/v1/users/{user_id}/variables', {
+        params: { path: { user_id: userId } },
+      }),
+    ),
+
+  setUserVariable: async (
+    userId: string,
+    variable: { name: string; value: string },
+  ): Promise<Variable> =>
+    unwrap(
+      await http.PUT('/api/v1/users/{user_id}/variables', {
+        params: { path: { user_id: userId } },
+        body: variable,
+      }),
+    ),
+
+  deleteUserVariable: async (userId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/users/{user_id}/variables/{name}', {
+        params: { path: { user_id: userId, name } },
+      }),
+    )
+  },
+
+  listUserSecrets: async (userId: string): Promise<Secret[]> =>
+    unwrap(
+      await http.GET('/api/v1/users/{user_id}/secrets', {
+        params: { path: { user_id: userId } },
+      }),
+    ),
+
+  setUserSecret: async (userId: string, secret: { name: string; value: string }): Promise<void> => {
+    unwrap(
+      await http.PUT('/api/v1/users/{user_id}/secrets', {
+        params: { path: { user_id: userId } },
+        body: secret,
+      }),
+    )
+  },
+
+  deleteUserSecret: async (userId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/users/{user_id}/secrets/{name}', {
+        params: { path: { user_id: userId, name } },
+      }),
+    )
+  },
+
   // -- Project -----------------------------------------------------------
   listOwnerProjects: async (
     owner: OwnerReference,
@@ -373,11 +471,48 @@ export const api = {
   /** 当前 User 可见的 Project：自有、有效 User Group 拥有的与 PUBLIC。分页。 */
   listProjects: async (query: PageQuery = {}): Promise<ProjectPage> =>
     unwrap(await http.GET('/api/v1/projects', { params: { query } })),
+  createProject: async (payload: {
+    owner: OwnerReference
+    name: string
+    description: string
+  }): Promise<Project> =>
+    unwrap(
+      await http.POST('/api/v1/projects', {
+        body: { ...payload, visibility: 'owner_scope' },
+      }),
+    ),
 
   getProject: async (id: string): Promise<Project> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}', { params: { path: { project_id: id } } }),
     ),
+  projectLanguages: async (id: string): Promise<ProjectLanguages> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/languages', {
+        params: { path: { project_id: id } },
+      }),
+    ),
+
+  getProjectDeletionImpact: async (id: string): Promise<DeletionImpact> =>
+    unwrap(
+      await http.GET('/api/v1/projects/{project_id}/deletion-impact', {
+        params: { path: { project_id: id } },
+      }),
+    ),
+
+  deleteProject: async (id: string): Promise<DeleteResult> => {
+    try {
+      unwrap(
+        await http.DELETE('/api/v1/projects/{project_id}', {
+          params: { path: { project_id: id }, query: { confirm: true } },
+        }),
+      )
+      return 'deleted'
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return 'absent'
+      throw error
+    }
+  },
 
   updateProject: async (
     id: string,
@@ -385,7 +520,7 @@ export const api = {
       name?: string
       description?: string
       environment_version_id?: string | null
-      default_run_configuration_id?: string
+      default_run_configuration_id?: string | null
     },
   ): Promise<Project> =>
     unwrap(
@@ -499,7 +634,7 @@ export const api = {
    * 下载 Project 文件。
    *
    * 走 fetch 拿 blob 再触发浏览器下载，而不是直接给 `<a href>`——
-   * 请求要带身份头，理由同 `downloadArtifactFile`。
+   * 同源请求会带上会话 Cookie，理由同 `downloadArtifactFile`。
    */
   downloadFile: async (id: string, path: string): Promise<void> => {
     const blob = unwrap(
@@ -526,10 +661,17 @@ export const api = {
       }),
     ),
 
-  workingChangeDetail: async (id: string, path: string): Promise<WorkingChangeDetail> =>
+  workingChangeDetail: async (
+    id: string,
+    path: string,
+    baseVersion: string | null,
+  ): Promise<WorkingChangeDetail> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/changes/detail', {
-        params: { path: { project_id: id }, query: { path } },
+        params: {
+          path: { project_id: id },
+          query: { path, base_version: baseVersion ?? undefined },
+        },
       }),
     ),
 
@@ -584,19 +726,58 @@ export const api = {
       }),
     ),
 
-  listProjectVariables: async (projectId: string): Promise<{ name: string; value: string }[]> =>
+  listProjectVariables: async (projectId: string): Promise<Variable[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/variables', {
         params: { path: { project_id: projectId } },
       }),
     ),
 
-  listProjectSecrets: async (projectId: string): Promise<string[]> =>
+  listProjectSecrets: async (projectId: string): Promise<Secret[]> =>
     unwrap(
       await http.GET('/api/v1/projects/{project_id}/secrets', {
         params: { path: { project_id: projectId } },
       }),
     ),
+
+  putProjectVariable: async (
+    projectId: string,
+    payload: { name: string; value: string },
+  ): Promise<Variable> =>
+    unwrap(
+      await http.PUT('/api/v1/projects/{project_id}/variables', {
+        params: { path: { project_id: projectId } },
+        body: payload,
+      }),
+    ),
+
+  deleteProjectVariable: async (projectId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/projects/{project_id}/variables/{name}', {
+        params: { path: { project_id: projectId, name } },
+      }),
+    )
+  },
+
+  putProjectSecret: async (
+    projectId: string,
+    payload: { name: string; value: string },
+  ): Promise<void> => {
+    unwrap(
+      await http.PUT('/api/v1/projects/{project_id}/secrets', {
+        params: { path: { project_id: projectId } },
+        body: payload,
+      }),
+    )
+  },
+
+  deleteProjectSecret: async (projectId: string, name: string): Promise<void> => {
+    unwrap(
+      await http.DELETE('/api/v1/projects/{project_id}/secrets/{name}', {
+        params: { path: { project_id: projectId, name } },
+      }),
+    )
+  },
 
   // -- 运行方案 ----------------------------------------------------------
   listRunConfigurations: async (projectId: string): Promise<RunConfiguration[]> =>
@@ -925,6 +1106,9 @@ export const api = {
         params: { path: { project_id: id }, query },
       }),
     ),
+
+  listMyActivities: async (query: PageQuery = {}): Promise<ActivityPage> =>
+    unwrap(await http.GET('/api/v1/me/activities', { params: { query } })),
 
   // -- 通知 ---------------------------------------------------------------
   listNotifications: async (

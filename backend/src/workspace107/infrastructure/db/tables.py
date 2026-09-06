@@ -43,6 +43,20 @@ class UserRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class ExternalIdentityRow(Base):
+    __tablename__ = "external_identities"
+
+    id: Mapped[str] = mapped_column(ID, primary_key=True)
+    provider: Mapped[str] = mapped_column(String(64))
+    provider_user_id: Mapped[str] = mapped_column(String(255))
+    user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_external_identity_provider_user"),
+    )
+
+
 class UserGroupRow(Base):
     __tablename__ = "user_groups"
 
@@ -84,6 +98,7 @@ class VariableRow(Base):
     scope_id: Mapped[str] = mapped_column(ID, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class SecretRow(Base):
@@ -295,7 +310,6 @@ class ResourceEntitlementRow(Base):
     id: Mapped[str] = mapped_column(ID, primary_key=True)
     user_id: Mapped[str] = mapped_column(ID, ForeignKey("users.id"), index=True)
     compute_plan_id: Mapped[str] = mapped_column(ID, ForeignKey("compute_plans.id"))
-    max_concurrent_runs: Mapped[int] = mapped_column(Integer)
     expires_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (UniqueConstraint("user_id", "compute_plan_id", name="uq_entitlement"),)
@@ -334,9 +348,8 @@ class RunRow(Base):
     project_id: Mapped[str] = mapped_column(ID, ForeignKey("projects.id"), index=True)
     snapshot_id: Mapped[str] = mapped_column(ID, ForeignKey("run_snapshots.id"))
     # 从快照里冗余出来的一列。快照是 JSON，没法索引也没法跨库稳定地查；
-    # 而并发上限口径是「Initiated By User × 算力方案」（GR-307），
-    # 数未结束 Run 时必须能按方案过滤。方案在快照创建时就固定、之后不再变，
-    # 冗余是安全的。
+    # Compute Plan 在快照创建时固定，重跑 preflight 和 Run History 都需要
+    # 直接使用这项 identity，因此冗余不会漂移。
     compute_plan_id: Mapped[str] = mapped_column(ID, index=True)
     # 从快照里冗余出来的列——project_version_id 只存在于快照 JSON 里，
     # 无法在 Run 列表查询中直接获取。冗余到列后 Run History 可直接展示

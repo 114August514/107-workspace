@@ -13,7 +13,12 @@ cp .env.example .env
 docker compose --project-directory . --file deploy/compose.yaml up -d --build
 ```
 
-打开 <http://127.0.0.1:8107>。停止服务但保留数据：
+打开 <http://127.0.0.1:8107>。Compose 默认 `WORKSPACE107_AUTH_MODE=dev`，Web 容器只反代
+`/api`，没有登录页。本地带登录页请用 `make dev`（`backend/.env` 里 `AUTH_MODE=ustc`）。
+独立 Nginx 入口见 [`deploy/cas-revproxy/README.md`](../../deploy/cas-revproxy/README.md)，
+不要与本 Compose 栈同时占用 `:8107`。
+
+停止服务但保留数据：
 
 ```bash
 docker compose --project-directory . --file deploy/compose.yaml down
@@ -57,10 +62,12 @@ API 容器启动时会执行 Alembic 升级和幂等的本地开发 Compute Plan
 | `WORKSPACE107_HTTP_PORT` | Web 暴露端口，默认 `8107` |
 | `WORKSPACE107_SCHEDULER` | `mock` 或 `slurm` |
 | `WORKSPACE107_STORAGE_MOUNT` | API 与计算节点需要共同看到的存储来源 |
+| `WORKSPACE107_PROJECT_SYNC_SSH_TARGET` | 固定的 Project rsync SSH 目标；留空时禁用 |
+| `WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT` | SSH 主机看到的 `storage/project-sync` 绝对路径 |
 | `WORKSPACE107_SLURM_API_BASE_URL` | slurmrestd 地址 |
 | `WORKSPACE107_SLURM_API_USER` | Slurm API 用户 |
 | `WORKSPACE107_SLURM_JWT` | 等价于密码，只能从环境注入 |
-| `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；真实部署必须替换 |
+| `WORKSPACE107_AUTH_MODE` | `dev` 仅用于本地；`ustc` 的代理字段与信任边界见 [`authentication.md`](authentication.md) |
 | `WORKSPACE107_SEED_DEMO` | 仅本地/受信任演示；`true` 时载入演示资产与 Project |
 | `WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME` | 平台演示资产组首次 bootstrap Owner；组已存在时忽略 |
 | `WORKSPACE107_SHARED_RESOURCE_PUBLICATION_INTERVAL_SECONDS` | API 内 publication loop 的扫描间隔（秒），默认 `1.0`；设为 `0` 会停用自动处理，已持久化 attempt 不会丢失 |
@@ -112,6 +119,13 @@ Docker 命名卷只在单机 Docker 内可见，不满足真实 Slurm 计算节�
 3. 只读 Input Binding 在目标文件系统和运行身份下确实不可修改。
 4. 日志与 Artifact 的并发写入、清理和失败恢复行为符合平台要求。
 
+Project 本地同步还要求 SSH 入口看到同一共享存储。API 在
+`<WORKSPACE107_STORAGE_ROOT>/project-sync/<project>/<actor-key>` 创建稳定且受控的暂存区；
+`WORKSPACE107_PROJECT_SYNC_REMOTE_ROOT` 必须指向 SSH 主机对 `project-sync` 的同一物理目录。
+SSH 运行身份需要写入这些目录，但不应获得共享存储其他区域的任意写权限。部署还应验证
+API UID/GID 与 SSH 身份的组权限、rsync 可执行文件、主机密钥信任和断线重试。CLI 从 API
+获取 exact 目标，不接受用户提供任意远端路径。
+
 只修改 `WORKSPACE107_STORAGE_MOUNT` 不会改变容器内应用路径；如果计算节点不能提供上述
 固定路径，必须先调整部署映射和应用配置并完成端到端验证。
 
@@ -133,6 +147,37 @@ Environment 与 Shared Resource publication processor 当前都是 API 进程内
 [`2026-08-29-1615-issue46-environment-publication.md`](../archive/2026-08-29-1615-issue46-environment-publication.md)；
 它不覆盖 live 107。Workspace 身份、共享挂载、独立 Worker、Slurm 凭据和执行接缝的 107
 平台端到端验收仍属于 #7。
+
+### 环境文件上传与远程导入
+
+Environment 页面通过独立发布弹窗提交 Modules、SIF 文件或公开镜像地址。
+HTTPS、ORAS、Library 获取已有 SIF；Docker 镜像由 API 主机上的 Apptainer 拉取并转换。
+校验通过后，最终 SIF 字节写入 `WORKSPACE107_STORAGE_ROOT/blobs/<sha256前两位>/<sha256>`；
+运行使用这份 CAS 文件，不重新拉取来源标签。页面中的来源地址仅用于追溯，不能用来替代固定版本。
+
+默认上传上限是 `max_request_bytes` 减去 64 KiB multipart 开销，并受导入大小上限约束。
+远程导入默认最多 4 GiB、15 分钟，可通过以下应用配置调整：
+
+```dotenv
+WORKSPACE107_ENVIRONMENT_IMPORT_MAX_BYTES=4294967296
+WORKSPACE107_ENVIRONMENT_IMPORT_TIMEOUT_SECONDS=900
+```
+
+发布选项 API 返回实际限制与平台模块清单，前端不另设一套上限。调整上传限制时，
+还需要同步入口反向代理的请求体限制；远程导入不经过浏览器上传请求体。
+
+API 主机需安装 Apptainer、`prlimit` 和 `unshare`，并允许非特权 user/network namespace。
+CLI 拉取在独立网络命名空间运行，仅通过 Unix socket 转接到公网 HTTPS CONNECT 代理；
+代理检查每次连接的全部 DNS 结果并连接已校验的数字 IP，覆盖重定向、Registry 鉴权和 blob 请求。
+不支持内部地址、私有仓库凭据、带查询参数的初始链接或非标准 HTTPS 端口。
+容器部署如果禁止 user namespace，拉取会失败，不能关闭隔离来降级运行；需先验证部署环境的
+namespace 能力。HTTPS 文件下载不需要 namespace，但最终 SIF 校验仍需要 Apptainer。
+
+处理器持久化等待、下载／拉取转换、校验、发布和最终结果；失败不生成版本，可重新发布。
+单 API 进程重启后重新认领 `processing` 记录，已入库的镜像复用其 CAS 字节。
+单次导入限制最终文件大小、网络流量（文件上限的三倍）、临时文件总量（三倍）、单文件大小、
+CPU 时间及总耗时。正常完成、失败或取消会删除该次临时目录；宿主机强制终止后的临时残留
+由主机临时目录清理策略回收。此流程不引入多副本任务租约，也不替代共享存储的容量监控。
 
 ## 探针和排障
 

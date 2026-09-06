@@ -3,24 +3,27 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import hashlib
 import json
-import os
 import tempfile
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
+from pathlib import Path
 
+from ..domain.capabilities import Capability
 from ..domain.enums import (
     EnvironmentAvailability,
     EnvironmentPublicationStatus,
     EnvironmentRuntimeKind,
 )
-from ..domain.errors import ObjectNotFound, ValidationFailed
+from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
 from ..domain.ids import ENVIRONMENT_VERSION, new_id
 from ..domain.models import EnvironmentPublicationAttempt, EnvironmentVersion
 from ..domain.ports.clock import Clock
+from ..domain.ports.environment_import import EnvironmentImportPort
 from ..domain.ports.repositories import Repositories
 from ..domain.ports.storage import StoragePort
+from .access import AccessGuard
 
 CLUSTER_PROFILE_ID = "107"
 MODULE_SYSTEM = "environment_modules"
@@ -78,10 +81,20 @@ def definition_hash(definition: dict[str, object]) -> str:
 
 
 class EnvironmentPublicationProcessor:
-    def __init__(self, repos: Repositories, storage: StoragePort, clock: Clock) -> None:
+    def __init__(
+        self,
+        repos: Repositories,
+        storage: StoragePort,
+        clock: Clock,
+        *,
+        importer: EnvironmentImportPort | None = None,
+        checkpoint: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self._repos = repos
         self._storage = storage
         self._clock = clock
+        self._importer = importer
+        self._checkpoint = checkpoint
 
     async def claim(self) -> EnvironmentPublicationAttempt | None:
         return await self._repos.environments.claim_pending_attempt(self._clock.now())
@@ -108,9 +121,51 @@ class EnvironmentPublicationProcessor:
             )
             await self._repos.environments.update_attempt(failed)
             return failed
+
+        async def progress(stage: str, message: str) -> None:
+            nonlocal attempt
+            attempt = replace(
+                attempt, validation_summary=message, validation_evidence={"stage": stage}
+            )
+            await self._repos.environments.update_attempt(attempt)
+            if self._checkpoint:
+                await self._checkpoint()
+
         try:
+            await AccessGuard(self._repos).environment(
+                attempt.created_by,
+                attempt.environment_id,
+                needs=Capability.ENVIRONMENT_VERSION_CREATE,
+            )
+            # End the claim/read transaction before external work. Each real phase is durable.
+            await progress("validating", "正在校验运行环境")
+            if attempt.candidate_definition.get(
+                "import_source"
+            ) and not attempt.candidate_definition.get("locator"):
+                if self._importer is None:
+                    raise ValidationFailed("当前处理器未配置镜像导入能力")
+                candidate = await self._importer.import_image(
+                    str(attempt.candidate_definition["source_uri"]),
+                    str(attempt.candidate_definition.get("expected_sha256", "")),
+                    progress,
+                )
+                attempt = replace(
+                    attempt,
+                    candidate_definition={
+                        **candidate,
+                        "import_source": True,
+                        "expected_sha256": attempt.candidate_definition.get("expected_sha256", ""),
+                    },
+                )
+                await progress("validating", "镜像已保存，正在校验 SIF")
             definition, execution, summary, evidence = await self._validate(attempt)
-        except ValidationFailed as exc:
+            await progress("publishing", "校验通过，正在发布版本")
+            await AccessGuard(self._repos).environment(
+                attempt.created_by,
+                attempt.environment_id,
+                needs=Capability.ENVIRONMENT_VERSION_CREATE,
+            )
+        except (ValidationFailed, ObjectNotFound, PermissionDenied, OSError, TimeoutError) as exc:
             failed = replace(
                 attempt,
                 status=EnvironmentPublicationStatus.FAILED,
@@ -231,16 +286,16 @@ class EnvironmentPublicationProcessor:
             or not isinstance(expected_size, int)
         ):
             raise ValidationFailed("SIF 候选缺少 locator、sha256 或 size")
-        content = await self._storage.read_blob(locator)
-        actual_hash = hashlib.sha256(content).hexdigest()
-        if actual_hash != expected_hash or len(content) != expected_size:
+        path = await self._storage.resolve_blob_path(locator)
+        actual_hash = locator
+        if actual_hash != expected_hash or path.stat().st_size != expected_size:
             raise ValidationFailed("SIF 候选字节的 SHA-256 或大小不一致")
         if architecture not in {"x86_64", "amd64"}:
             raise ValidationFailed("SIF architecture 必须是 x86_64")
-        evidence = await _inspect_sif(content)
+        evidence = await _inspect_sif_path(path)
         definition = {
             "sha256": actual_hash,
-            "size": len(content),
+            "size": expected_size,
             "locator": locator,
             "source_uri": source_uri or "",
             "source_digest": source_digest or "",
@@ -256,28 +311,35 @@ class EnvironmentPublicationProcessor:
             "sha256": actual_hash,
         }
         evidence.update(
-            {"canonical_definition_sha256": definition_hash(definition), "byte_size": len(content)}
+            {"canonical_definition_sha256": definition_hash(definition), "byte_size": expected_size}
         )
         return definition, execution, "SIF 字节、摘要与 Apptainer inspect 校验通过", evidence
 
 
-async def _inspect_sif(content: bytes) -> dict[str, object]:
+async def _inspect_sif_path(path: Path) -> dict[str, object]:
     executable = _find_apptainer()
     if executable is None:
         raise ValidationFailed("未安装 Apptainer CLI，无法验证 SIF；不会降级或伪造成功")
-    fd, filename = tempfile.mkstemp(suffix=".sif")
-    try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(content)
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
         process = await asyncio.create_subprocess_exec(
             executable,
             "inspect",
             "--json",
-            filename,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            str(path),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=stderr_file,
         )
-        stdout, stderr = await process.communicate()
+        try:
+            await asyncio.wait_for(process.wait(), timeout=60)
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read(1024 * 1024)
+        stderr = stderr_file.read(4096)
         if process.returncode != 0:
             detail = stderr.decode(errors="replace").strip()
             raise ValidationFailed(f"Apptainer 拒绝该 SIF：{detail or 'inspect failed'}")
@@ -310,9 +372,6 @@ async def _inspect_sif(content: bytes) -> dict[str, object]:
             "architecture": normalized_architecture,
             "inspect_sha256": hashlib.sha256(stdout).hexdigest(),
         }
-    finally:
-        with contextlib.suppress(FileNotFoundError):
-            os.unlink(filename)
 
 
 def _find_apptainer() -> str | None:

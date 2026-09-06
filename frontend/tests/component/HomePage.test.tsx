@@ -130,6 +130,10 @@ describe('HomePage 各栏目渲染内容而不只是标题', () => {
       'href',
       '/projects/p-1/runs/r-1',
     )
+    expect(screen.getByRole('link', { name: '管理个人执行上下文' })).toHaveAttribute(
+      'href',
+      '/execution-context',
+    )
   })
 
   it('没有数据时栏目显示空态说明，而不是只剩标题', async () => {

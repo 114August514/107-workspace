@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 
-import { api, setCurrentUser } from '../../src/api/client'
-import type { Home, Project } from '../../src/api/types'
+import { api } from '../../src/api/client'
+import type { Home, Project, User } from '../../src/api/types'
 import type { AsyncState } from '../../src/api/useAsync'
 import { App } from '../../src/App'
 import { AppShell } from '../../src/components/layout/AppShell'
@@ -91,6 +91,12 @@ function readyProject(data: Project | undefined = projectData): AsyncState<Proje
 
 const contextGuideCases = [
   ['/', '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。'],
+  ['/profile', '这里查看自己的身份信息、所属 User Group，并进入个人执行上下文。'],
+  ['/settings', '这里修改显示名称和用户名；邮箱由登录身份提供。'],
+  [
+    '/execution-context',
+    '这里管理发起 Run 的个人身份、算力权益与 User 配置；已有 Run Snapshot 不会被后续修改回写。',
+  ],
   [
     '/user-groups/grp-1',
     '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
@@ -112,7 +118,7 @@ function LocationProbe() {
 }
 
 function renderShell(
-  username: string,
+  user: User | undefined = homeData.user,
   home = readyHome(),
   initialEntry = '/',
   project = readyProject(),
@@ -120,7 +126,7 @@ function renderShell(
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <PrimerRoot>
-        <AppShell username={username} onUsernameChange={() => {}} home={home} project={project}>
+        <AppShell user={user} home={home} project={project}>
           <p>页面内容</p>
           <LocationProbe />
         </AppShell>
@@ -131,14 +137,22 @@ function renderShell(
 
 afterEach(() => {
   cleanup()
-  window.localStorage.removeItem('workspace107.devUser')
-  setCurrentUser('student')
   vi.restoreAllMocks()
 })
 
 describe('AppShell 壳层', () => {
+  it('TopBar 品牌链接包含装饰性 Brand Mark', () => {
+    renderShell()
+
+    const brand = screen.getByRole('link', { name: '107 Workspace 首页' })
+    const mark = brand.querySelector('img')
+    expect(mark).not.toBeNull()
+    expect(mark).toHaveAttribute('width', '32')
+    expect(mark).toHaveAttribute('height', '32')
+  })
+
   it.each(contextGuideCases)('路由 %s 显示对应的页面引导', (pathname, message) => {
-    renderShell('student', readyHome(), pathname)
+    renderShell(homeData.user, readyHome(), pathname)
 
     const guide = screen.getByRole('complementary', { name: '页面引导' })
     expect(guide).toHaveTextContent(message)
@@ -147,7 +161,7 @@ describe('AppShell 壳层', () => {
   })
 
   it('不为未匹配的嵌套路径显示页面引导', () => {
-    renderShell('student', readyHome(), '/projects/p-1/extra')
+    renderShell(homeData.user, readyHome(), '/projects/p-1/extra')
 
     expect(screen.queryByRole('complementary', { name: '页面引导' })).toBeNull()
   })
@@ -155,32 +169,40 @@ describe('AppShell 壳层', () => {
   it.each(['/runs/r-1', '/projects/p-1/runs/r-1'])(
     'Run route %s relies on page navigation instead of explanatory footer copy',
     (pathname) => {
-      renderShell('student', readyHome(), pathname)
+      renderShell(homeData.user, readyHome(), pathname)
 
       expect(screen.queryByRole('complementary', { name: '页面引导' })).toBeNull()
     },
   )
 
-  it('首页在 Home Mark 后显示产品名 context', () => {
-    renderShell('student')
+  it('首页显示 107 Workspace 品牌链接', () => {
+    renderShell()
 
     const header = screen.getByRole('banner')
-    expect(within(header).getByText('107 Workspace')).toBeVisible()
-    expect(within(header).getByRole('link', { name: '107 Workspace 首页' })).toHaveAttribute(
-      'href',
-      '/',
-    )
+    const brand = within(header).getByRole('link', { name: '107 Workspace 首页' })
+    expect(brand).toHaveAttribute('href', '/')
+    const mark = brand.querySelector('img')
+    expect(mark).not.toBeNull()
+    expect(mark).toHaveAttribute('width', '32')
+    expect(mark).toHaveAttribute('height', '32')
+    const workspace = within(header).getByRole('link', { name: '107 Workspace' })
+    expect(workspace).toHaveAttribute('href', '/')
+    expect(within(header).getByText('107 Workspace', { selector: 'span' })).toBeVisible()
+    expect(
+      within(header).queryByRole('link', { name: '107 Workspace 107 Workspace 首页' }),
+    ).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Project navigation' })).toBeNull()
   })
 
   it('用独立 Home Mark、Project context 和三级本地导航表达壳层层级', () => {
-    renderShell('student', readyHome(), '/projects/p-1/runs/r-1')
+    renderShell(homeData.user, readyHome(), '/projects/p-1/runs/r-1')
 
     const header = screen.getByRole('banner')
     expect(within(header).getByRole('link', { name: '107 Workspace 首页' })).toHaveAttribute(
       'href',
       '/',
     )
+    expect(within(header).queryByText('107 Workspace')).toBeNull()
     const context = within(header).getByRole('group', { name: '当前 Project' })
     expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
       'href',
@@ -216,7 +238,7 @@ describe('AppShell 壳层', () => {
       total: 2,
       has_more: false,
     })
-    renderShell('student', readyHome(), '/projects/p-1')
+    renderShell(homeData.user, readyHome(), '/projects/p-1')
 
     fireEvent.click(screen.getByRole('button', { name: '切换 Project' }))
     const search = await screen.findByPlaceholderText('搜索 Project')
@@ -254,7 +276,7 @@ describe('AppShell 壳层', () => {
         total: 2,
         has_more: false,
       })
-    renderShell('student', readyHome(), '/projects/p-1')
+    renderShell(homeData.user, readyHome(), '/projects/p-1')
 
     fireEvent.click(screen.getByRole('button', { name: '切换 Project' }))
     expect(await screen.findByText('无法加载 Project。')).toBeVisible()
@@ -266,7 +288,7 @@ describe('AppShell 壳层', () => {
 
   it('Project context 加载失败时保留壳层导航并提供重试', () => {
     const reload = vi.fn()
-    renderShell('student', readyHome(), '/projects/p-1', {
+    renderShell(homeData.user, readyHome(), '/projects/p-1', {
       data: undefined,
       loading: false,
       error: new Error('offline'),
@@ -280,7 +302,7 @@ describe('AppShell 壳层', () => {
   })
 
   it('header 菜单打开 overlay 工作导航，并通过真实链接导航后关闭', async () => {
-    renderShell('student')
+    renderShell()
 
     const trigger = screen.getByRole('button', { name: '打开导航' })
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
@@ -309,7 +331,7 @@ describe('AppShell 壳层', () => {
   })
 
   it('Escape 关闭导航并把焦点返回 header 菜单按钮', async () => {
-    renderShell('student')
+    renderShell()
 
     const trigger = screen.getByRole('button', { name: '打开导航' })
     fireEvent.click(trigger)
@@ -321,7 +343,7 @@ describe('AppShell 壳层', () => {
   })
 
   it('Close 关闭导航并把焦点返回 header 菜单按钮', async () => {
-    renderShell('student')
+    renderShell()
 
     const trigger = screen.getByRole('button', { name: '打开导航' })
     fireEvent.click(trigger)
@@ -333,7 +355,7 @@ describe('AppShell 壳层', () => {
   })
 
   it('导航加载时显示权威文案且不渲染导航列表', async () => {
-    renderShell('student', {
+    renderShell(homeData.user, {
       data: undefined,
       loading: true,
       error: undefined,
@@ -350,7 +372,7 @@ describe('AppShell 壳层', () => {
 
   it('导航加载失败只影响抽屉，重试调用共享 Home state 的 reload', async () => {
     const reload = vi.fn()
-    renderShell('student', {
+    renderShell(homeData.user, {
       data: undefined,
       loading: false,
       error: new Error('offline'),
@@ -370,7 +392,7 @@ describe('AppShell 壳层', () => {
   })
 
   it('header 紧凑创建按钮通过可访问名称打开创建 User Group 弹窗', async () => {
-    renderShell('student')
+    renderShell()
     const trigger = screen.getByRole('button', { name: '创建 User Group' })
     expect(trigger.textContent).toBe('')
     fireEvent.click(trigger)
@@ -378,10 +400,12 @@ describe('AppShell 壳层', () => {
     expect(screen.getByText('创建 User Group', { selector: 'h1' })).toBeTruthy()
   })
 
-  it('身份切换器展示当前身份并展开可选身份', async () => {
-    renderShell('student')
-    fireEvent.click(screen.getByRole('button', { name: '切换身份，当前 student' }))
-    expect(await screen.findByRole('menuitem', { name: 'teacher' })).toBeVisible()
+  it('已登录时用户菜单展示姓名、资料、设置和退出', async () => {
+    renderShell()
+    fireEvent.click(screen.getByRole('button', { name: '当前用户 同学' }))
+    expect(await screen.findByRole('menuitem', { name: '个人资料' })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: '设置' })).toBeVisible()
+    expect(screen.getByRole('menuitem', { name: '退出登录' })).toBeVisible()
   })
 
   it('Drawer 展开和重开只使用一次共享 /me 请求，并重置为前五项', async () => {
@@ -422,55 +446,6 @@ describe('AppShell 壳层', () => {
     expect(within(dialog).getByRole('button', { name: '显示其余 2 个 Project' })).toBeVisible()
     expect(home).toHaveBeenCalledTimes(1)
   })
-
-  it('切换身份时不短暂显示旧用户的工作入口', async () => {
-    let resolveStudent!: (home: Home) => void
-    const teacherHome: Home = {
-      ...homeData,
-      user: { id: 'u-2', username: 'teacher', display_name: '老师' },
-      user_groups: [
-        {
-          id: 'grp-teacher',
-          name: '教师用户组',
-          description: '',
-          created_by_id: 'u-2',
-          created_at: '2026-08-15T10:00:00Z',
-          role: 'owner',
-          capabilities: [],
-        },
-      ],
-      recent_projects: [],
-    }
-    const home = vi
-      .spyOn(api, 'home')
-      .mockImplementationOnce(
-        () =>
-          new Promise<Home>((resolve) => {
-            resolveStudent = resolve
-          }),
-      )
-      .mockResolvedValueOnce(teacherHome)
-    vi.spyOn(api, 'listInvitations').mockResolvedValue([])
-    vi.spyOn(api, 'computePlans').mockResolvedValue([])
-    vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
-    window.localStorage.setItem('workspace107.devUser', 'student')
-    setCurrentUser('student')
-
-    render(
-      <MemoryRouter>
-        <App />
-      </MemoryRouter>,
-    )
-    fireEvent.click(screen.getByRole('button', { name: '切换身份，当前 student' }))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'teacher' }))
-
-    fireEvent.click(screen.getByRole('button', { name: '打开导航' }))
-    const dialog = await screen.findByRole('dialog', { name: '107 Workspace' })
-    expect(within(dialog).getByRole('link', { name: '教师用户组' })).toBeVisible()
-    await act(async () => resolveStudent(homeData))
-    expect(within(dialog).queryByRole('link', { name: '计算物理课题组' })).toBeNull()
-    expect(home).toHaveBeenCalledTimes(2)
-  })
 })
 
 describe('AppShell 身份切换的乱序防护', () => {
@@ -480,7 +455,6 @@ describe('AppShell 身份切换的乱序防护', () => {
     vi.spyOn(api, 'unreadCount').mockImplementation(() => {
       calls += 1
       if (calls === 1) {
-        // student 的请求在网络上悬着，等身份已切换到 teacher 后才返回
         return new Promise<number>((resolve) => {
           resolveFirst = resolve
         })
@@ -488,16 +462,12 @@ describe('AppShell 身份切换的乱序防护', () => {
       return Promise.resolve(7)
     })
 
-    const { rerender } = renderShell('student')
+    const teacher: User = { id: 'u-2', username: 'teacher', display_name: '老师' }
+    const { rerender } = renderShell()
     rerender(
       <MemoryRouter>
         <PrimerRoot>
-          <AppShell
-            username="teacher"
-            onUsernameChange={() => {}}
-            home={readyHome()}
-            project={readyProject()}
-          >
+          <AppShell user={teacher} home={readyHome()} project={readyProject()}>
             <p>页面内容</p>
           </AppShell>
         </PrimerRoot>
@@ -525,7 +495,7 @@ describe('AppShell Header 的 User Group 分区导航', () => {
   it('User Group 路由下分区导航渲染在 Header 第二行', async () => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
-    renderShell('student', readyHome(), '/user-groups/grp-1/settings')
+    renderShell(homeData.user, readyHome(), '/user-groups/grp-1/settings')
 
     const nav = await screen.findByRole('navigation', { name: 'User Group 分区导航' })
     expect(screen.getByRole('banner')).toContainElement(nav)
@@ -540,7 +510,7 @@ describe('AppShell Header 的 User Group 分区导航', () => {
   it('User Group 路由下 Header 第一行显示组名并可返回组概览', async () => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
-    renderShell('student', readyHome(), '/user-groups/grp-1/members')
+    renderShell(homeData.user, readyHome(), '/user-groups/grp-1/members')
 
     const context = await screen.findByRole('group', { name: '当前 User Group' })
     expect(within(context).getByRole('link', { name: '计算物理课题组' })).toHaveAttribute(
@@ -552,7 +522,7 @@ describe('AppShell Header 的 User Group 分区导航', () => {
   it('离开 User Group 路由后 Header 恢复单行，不再渲染分区导航', async () => {
     vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
     vi.spyOn(api, 'unreadCount').mockResolvedValue(0)
-    renderShell('student', readyHome(), '/user-groups/grp-1')
+    renderShell(homeData.user, readyHome(), '/user-groups/grp-1')
 
     await screen.findByRole('navigation', { name: 'User Group 分区导航' })
     fireEvent.click(screen.getByRole('link', { name: '107 Workspace 首页' }))

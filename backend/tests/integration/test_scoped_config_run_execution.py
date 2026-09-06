@@ -179,7 +179,7 @@ async def test_run_snapshot_current_secret_rotation_and_redaction(client, sessio
 
 
 @pytest.mark.asyncio
-async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> None:
+async def test_rerun_rechecks_plan_limits(client, session) -> None:
     await client.get("/api/v1/me")
     _, env_version_id = await use_default_environment(session, client)
     project = await create_project_with_version(client, name="rerun-guards")
@@ -207,22 +207,6 @@ async def test_rerun_rechecks_concurrency_and_plan_limits(client, session) -> No
     assert run.status_code == 201
     await wait_for_run(client, run.json()["id"])
     before = (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"]
-    await session.execute(
-        text(
-            "UPDATE resource_entitlements SET max_concurrent_runs=1 "
-            "WHERE user_id=(SELECT id FROM users WHERE username='student')"
-        )
-    )
-    await session.execute(
-        text("UPDATE runs SET status='running' WHERE id=:id"), {"id": run.json()["id"]}
-    )
-    await session.commit()
-    blocked = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")
-    assert blocked.status_code == 422
-    assert (await client.get(f"/api/v1/projects/{project['id']}/runs")).json()["total"] == before
-    await session.execute(
-        text("UPDATE runs SET status='succeeded' WHERE id=:id"), {"id": run.json()["id"]}
-    )
     await session.execute(text("UPDATE compute_plans SET max_cpus=1 WHERE id='plan_cpu_quick'"))
     await session.commit()
     blocked_plan = await client.post(f"/api/v1/runs/{run.json()['id']}/rerun")

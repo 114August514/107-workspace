@@ -104,7 +104,6 @@ class ResourceEntitlement:
     id: str
     user_id: str
     compute_plan_id: str
-    max_concurrent_runs: int
     expires_at: str | None = None
 
     def is_expired(self, now_iso: str) -> bool:

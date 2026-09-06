@@ -1,7 +1,6 @@
 export const appShellCopy = {
-  homeMark: '107',
+  brand: '107 Workspace',
   homeMarkLabel: '107 Workspace 首页',
-  homeContext: '107 Workspace',
   openNavigation: '打开导航',
   createUserGroup: '创建 User Group',
   sidebarLabel: '首页工作入口',
@@ -12,6 +11,7 @@ export const appShellCopy = {
   projectError: 'Project context 加载失败，重试',
   files: 'Files',
   runs: 'Runs',
+  activity: 'Activity',
   settings: 'Settings',
 } as const
 
@@ -21,7 +21,6 @@ export const globalNavigationCopy = {
   heading: '全局导航',
   close: '关闭导航',
   home: '首页',
-  environments: '运行环境',
   userGroupsGroup: '你的 User Group',
   userGroupsEmpty: '还没有可进入的 User Group',
   recentProjectsGroup: '最近使用的 Project',
@@ -37,6 +36,10 @@ export const globalNavigationCopy = {
 export const contextGuideCopy = {
   ariaLabel: '页面引导',
   home: '从最近的 Project 或 User Group 开始；进入 Project 后可选择版本发起 Run。',
+  profile: '这里查看自己的身份信息、所属 User Group，并进入个人执行上下文。',
+  settings: '这里修改显示名称和用户名；邮箱由登录身份提供。',
+  executionContext:
+    '这里管理发起 Run 的个人身份、算力权益与 User 配置；已有 Run Snapshot 不会被后续修改回写。',
   userGroup:
     '这里管理 User Group 的成员、设置和组拥有的 Project、共享资源与运行环境；资源详情在各自页面打开。',
   environment: '运行环境是独立的版本化资产；Run Configuration 保存后固定引用一个确定版本。',

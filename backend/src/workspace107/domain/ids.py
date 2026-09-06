@@ -8,6 +8,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 USER = "usr"
+EXTERNAL_IDENTITY = "eid"
 USER_GROUP = "grp"
 LEGACY_WORKSPACE = "ws"
 MEMBERSHIP = "mbr"

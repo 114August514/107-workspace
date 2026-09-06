@@ -6,6 +6,7 @@
         "enum": [
           "user_group_created",
           "user_group_updated",
+          "user_group_deleted",
           "member_invited",
           "member_joined",
           "member_left",
@@ -15,6 +16,7 @@
           "project_created",
           "project_updated",
           "project_forked",
+          "project_deleted",
           "version_saved",
           "version_restored",
           "run_submitted",
@@ -389,6 +391,7 @@
           "project.view",
           "project.create",
           "project.update",
+          "project.delete",
           "project.content.write",
           "run_configuration.manage",
           "run.view",
@@ -522,6 +525,72 @@
         "title": "ComputeRequestModel",
         "type": "object"
       },
+      "DeletionImpactItemOut": {
+        "description": "删除确认页面展示的一类影响对象数量。",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "DeletionImpactItemOut",
+        "type": "object"
+      },
+      "DeletionImpactOut": {
+        "description": "删除操作的可见影响摘要，不包含 Secret 值或内部内容。",
+        "properties": {
+          "can_delete": {
+            "title": "Can Delete",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeletionImpactItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "resource_name": {
+            "title": "Resource Name",
+            "type": "string"
+          },
+          "resource_type": {
+            "enum": [
+              "user_group",
+              "project"
+            ],
+            "title": "Resource Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_type",
+          "resource_id",
+          "resource_name",
+          "can_delete"
+        ],
+        "title": "DeletionImpactOut",
+        "type": "object"
+      },
       "DiscardChangesIn": {
         "properties": {
           "paths": {
@@ -565,17 +634,33 @@
             "title": "Id",
             "type": "string"
           },
-          "max_concurrent_runs": {
-            "title": "Max Concurrent Runs",
-            "type": "integer"
+          "status": {
+            "enum": [
+              "active",
+              "expired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
           }
         },
         "required": [
           "id",
           "compute_plan_id",
           "compute_plan_name",
-          "max_concurrent_runs",
-          "expires_at"
+          "expires_at",
+          "status",
+          "status_reason"
         ],
         "title": "EntitlementOut",
         "type": "object"
@@ -591,6 +676,13 @@
       },
       "EnvironmentOut": {
         "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/Capability"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -643,6 +735,11 @@
             "title": "Environment Id",
             "type": "string"
           },
+          "expected_sha256": {
+            "default": "",
+            "title": "Expected Sha256",
+            "type": "string"
+          },
           "failure_code": {
             "anyOf": [
               {
@@ -681,8 +778,40 @@
             "title": "Id",
             "type": "string"
           },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modules",
+            "type": "array"
+          },
           "runtime_kind": {
             "$ref": "#/components/schemas/EnvironmentRuntimeKind"
+          },
+          "source_digest": {
+            "default": "",
+            "title": "Source Digest",
+            "type": "string"
+          },
+          "source_kind": {
+            "default": "upload",
+            "enum": [
+              "modules",
+              "upload",
+              "import"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_uri": {
+            "default": "",
+            "title": "Source Uri",
+            "type": "string"
+          },
+          "stage": {
+            "default": "",
+            "title": "Stage",
+            "type": "string"
           },
           "started_at": {
             "anyOf": [
@@ -742,6 +871,42 @@
           "finished_at"
         ],
         "title": "EnvironmentPublicationAttemptOut",
+        "type": "object"
+      },
+      "EnvironmentPublicationOptionsOut": {
+        "properties": {
+          "architecture": {
+            "title": "Architecture",
+            "type": "string"
+          },
+          "import_timeout_seconds": {
+            "title": "Import Timeout Seconds",
+            "type": "number"
+          },
+          "max_import_bytes": {
+            "title": "Max Import Bytes",
+            "type": "integer"
+          },
+          "max_upload_bytes": {
+            "title": "Max Upload Bytes",
+            "type": "integer"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Modules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "modules",
+          "max_upload_bytes",
+          "max_import_bytes",
+          "import_timeout_seconds",
+          "architecture"
+        ],
+        "title": "EnvironmentPublicationOptionsOut",
         "type": "object"
       },
       "EnvironmentPublicationStatus": {
@@ -1184,6 +1349,39 @@
           "recent_runs"
         ],
         "title": "HomeOut",
+        "type": "object"
+      },
+      "ImportEnvironmentPublicationIn": {
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "expected_sha256": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Expected Sha256",
+            "type": "string"
+          },
+          "source_uri": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Source Uri",
+            "type": "string"
+          },
+          "version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "source_uri"
+        ],
+        "title": "ImportEnvironmentPublicationIn",
         "type": "object"
       },
       "InputBindingModel": {
@@ -1814,6 +2012,17 @@
       },
       "PreflightOut": {
         "properties": {
+          "artifact_rules": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactRuleModel"
+            },
+            "title": "Artifact Rules",
+            "type": "array"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
           "compute_plan_id": {
             "anyOf": [
               {
@@ -1825,6 +2034,17 @@
             ],
             "title": "Compute Plan Id"
           },
+          "compute_plan_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compute Plan Name"
+          },
           "compute_request": {
             "anyOf": [
               {
@@ -1835,6 +2055,32 @@
               }
             ]
           },
+          "configuration_name": {
+            "title": "Configuration Name",
+            "type": "string"
+          },
+          "confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Token"
+          },
+          "environment_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment Name"
+          },
           "environment_version": {
             "anyOf": [
               {
@@ -1844,6 +2090,13 @@
                 "type": "null"
               }
             ]
+          },
+          "input_bindings": {
+            "items": {
+              "$ref": "#/components/schemas/InputBindingModel"
+            },
+            "title": "Input Bindings",
+            "type": "array"
           },
           "ok": {
             "title": "Ok",
@@ -1866,6 +2119,17 @@
               }
             ],
             "title": "Project Version Id"
+          },
+          "project_version_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Version Label"
           },
           "resolved_environment_variables": {
             "additionalProperties": {
@@ -1891,9 +2155,22 @@
                 "type": "null"
               }
             ]
+          },
+          "working_directory": {
+            "title": "Working Directory",
+            "type": "string"
           }
         },
         "required": [
+          "configuration_name",
+          "command",
+          "working_directory",
+          "input_bindings",
+          "artifact_rules",
+          "project_version_label",
+          "compute_plan_name",
+          "environment_name",
+          "confirmation_token",
           "ok",
           "problems",
           "project_version_id",
@@ -1969,6 +2246,50 @@
           "updated_at"
         ],
         "title": "ProjectFileOut",
+        "type": "object"
+      },
+      "ProjectLanguageOut": {
+        "properties": {
+          "code_lines": {
+            "title": "Code Lines",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "percentage": {
+            "title": "Percentage",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "code_lines",
+          "percentage"
+        ],
+        "title": "ProjectLanguageOut",
+        "type": "object"
+      },
+      "ProjectLanguagesOut": {
+        "properties": {
+          "languages": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectLanguageOut"
+            },
+            "title": "Languages",
+            "type": "array"
+          },
+          "total_code_lines": {
+            "title": "Total Code Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "languages",
+          "total_code_lines"
+        ],
+        "title": "ProjectLanguagesOut",
         "type": "object"
       },
       "ProjectOut": {
@@ -2076,6 +2397,42 @@
         ],
         "title": "ProjectStatus",
         "type": "string"
+      },
+      "ProjectSyncApplyOut": {
+        "properties": {
+          "changed_files": {
+            "title": "Changed Files",
+            "type": "integer"
+          },
+          "scanned_files": {
+            "title": "Scanned Files",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scanned_files",
+          "changed_files"
+        ],
+        "title": "ProjectSyncApplyOut",
+        "type": "object"
+      },
+      "ProjectSyncTargetOut": {
+        "properties": {
+          "remote_path": {
+            "title": "Remote Path",
+            "type": "string"
+          },
+          "ssh_target": {
+            "title": "Ssh Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ssh_target",
+          "remote_path"
+        ],
+        "title": "ProjectSyncTargetOut",
+        "type": "object"
       },
       "ProjectUpdateIn": {
         "properties": {
@@ -2589,6 +2946,18 @@
               }
             ]
           },
+          "confirmation_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Preflight 返回的配置变化检测标识；不能替代当前授权校验。",
+            "title": "Confirmation Token"
+          },
           "environment_version_id_override": {
             "anyOf": [
               {
@@ -2757,7 +3126,7 @@
             "type": "string"
           },
           "initiated_by_user_id": {
-            "description": "发起本次 Run 的 User（GR-307）：执行身份、并发额度与通知接收方。",
+            "description": "发起本次 Run 的 User（GR-307）：执行身份与通知接收方。",
             "title": "Initiated By User Id",
             "type": "string"
           },
@@ -3050,6 +3419,26 @@
           "value"
         ],
         "title": "SecretIn",
+        "type": "object"
+      },
+      "SecretOut": {
+        "description": "Secret 元数据；明文永远不出 vault，这里只有名称与更新时间。",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "updated_at"
+        ],
+        "title": "SecretOut",
         "type": "object"
       },
       "SharedResourceDetailOut": {
@@ -3631,6 +4020,7 @@
         "enum": [
           "user_group.view",
           "user_group.update",
+          "user_group.delete",
           "member.view",
           "member.invite",
           "member.remove",
@@ -3783,6 +4173,38 @@
         "title": "UserOut",
         "type": "object"
       },
+      "UserProfileUpdateIn": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "UserProfileUpdateIn",
+        "type": "object"
+      },
       "VariableIn": {
         "properties": {
           "name": {
@@ -3810,6 +4232,11 @@
             "title": "Name",
             "type": "string"
           },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -3817,7 +4244,8 @@
         },
         "required": [
           "name",
-          "value"
+          "value",
+          "updated_at"
         ],
         "title": "VariableOut",
         "type": "object"
@@ -3892,6 +4320,17 @@
       },
       "WorkingChangeOut": {
         "properties": {
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
           "change": {
             "$ref": "#/components/schemas/ChangeKind"
           },
@@ -3985,6 +4424,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4099,6 +4548,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4202,6 +4661,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4311,6 +4780,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4368,6 +4847,115 @@
         ]
       }
     },
+    "/api/v1/catalog/environment-publication-options": {
+      "get": {
+        "operationId": "environment_publication_options_api_v1_catalog_environment_publication_options_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPublicationOptionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "Environment Publication Options",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v1/catalog/environment-versions/{version_id}": {
       "get": {
         "operationId": "get_environment_version_api_v1_catalog_environment_versions__version_id__get",
@@ -4418,6 +5006,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4527,6 +5125,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -4630,6 +5238,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4738,6 +5356,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4850,6 +5478,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -4969,6 +5607,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5021,6 +5669,134 @@
           }
         },
         "summary": "上传并发布受控 Apptainer SIF 候选",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v1/catalog/environments/{environment_id}/publication-attempts/import": {
+      "post": {
+        "operationId": "import_environment_api_v1_catalog_environments__environment_id__publication_attempts_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "environment_id",
+            "required": true,
+            "schema": {
+              "title": "Environment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportEnvironmentPublicationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPublicationAttemptOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "Import Environment",
         "tags": [
           "catalog"
         ]
@@ -5086,6 +5862,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -5263,6 +6049,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5371,6 +6167,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5473,6 +6279,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5554,6 +6370,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -5659,6 +6485,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5759,6 +6595,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -5814,6 +6660,261 @@
         "tags": [
           "home"
         ]
+      },
+      "patch": {
+        "description": "Update the signed-in User's username and display name. Email stays identity-provided.",
+        "operationId": "update_me_api_v1_me_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserProfileUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "更新当前用户资料",
+        "tags": [
+          "home"
+        ]
+      }
+    },
+    "/api/v1/me/activities": {
+      "get": {
+        "description": "Return personal Owner Scope activity, including deleted-target snapshots.",
+        "operationId": "list_my_activities_api_v1_me_activities_get",
+        "parameters": [
+          {
+            "description": "页码，从 1 开始",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码，从 1 开始",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageOut_ActivityOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "列出个人近期活动",
+        "tags": [
+          "home"
+        ]
       }
     },
     "/api/v1/me/entitlements": {
@@ -5862,6 +6963,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6002,6 +7113,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6104,6 +7225,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6222,6 +7353,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6322,6 +7463,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6421,6 +7572,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6524,6 +7685,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6624,6 +7795,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -6807,6 +7988,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6914,6 +8105,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -6972,6 +8173,121 @@
       }
     },
     "/api/v1/projects/{project_id}": {
+      "delete": {
+        "description": "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。",
+        "operationId": "delete_project_api_v1_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "确认已查看删除影响",
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "确认已查看删除影响",
+              "title": "Confirm",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Project 删除成功。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "description": "Project 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "删除 Project",
+        "tags": [
+          "project"
+        ]
+      },
       "get": {
         "description": "校验当前用户可查看该 Project 后，返回项目设置与当前状态。",
         "operationId": "get_project_api_v1_projects__project_id__get",
@@ -7022,6 +8338,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7139,6 +8465,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7276,6 +8612,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7389,6 +8735,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7448,7 +8804,7 @@
     },
     "/api/v1/projects/{project_id}/changes/detail": {
       "get": {
-        "description": "校验 Owner 范围查看权限后，返回该路径基线与工作区两侧的文本预览。\n\n每侧最多返回前 256 KiB；新增时 ``previous`` 为空，删除时 ``current`` 为空。",
+        "description": "按 Changes 列表绑定的 Version 返回该路径基线与工作区的文本预览。",
         "operationId": "working_change_detail_api_v1_projects__project_id__changes_detail_get",
         "parameters": [
           {
@@ -7468,6 +8824,23 @@
               "minLength": 1,
               "title": "Path",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "base_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Base Version"
             }
           },
           {
@@ -7507,6 +8880,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7631,6 +9014,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7683,6 +9076,124 @@
           }
         },
         "summary": "放弃指定的未保存变更",
+        "tags": [
+          "project"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/deletion-impact": {
+      "get": {
+        "operationId": "project_deletion_impact_api_v1_projects__project_id__deletion_impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionImpactOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "查看 Project 删除影响",
         "tags": [
           "project"
         ]
@@ -7742,6 +9253,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -7855,6 +9376,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -7965,6 +9496,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8082,6 +9623,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8216,6 +9767,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -8334,6 +9895,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8458,6 +10029,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -8578,6 +10159,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -8696,6 +10287,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8819,6 +10420,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -8953,6 +10564,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9070,6 +10691,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9122,6 +10753,125 @@
           }
         },
         "summary": "这个 Project 从哪儿来的",
+        "tags": [
+          "project"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/languages": {
+      "get": {
+        "description": "校验 Project 查看权限后，用 Tokei 统计最新不可变版本，不包含 Working State。",
+        "operationId": "project_languages_api_v1_projects__project_id__languages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLanguagesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "统计 Project 最新版本的语言",
         "tags": [
           "project"
         ]
@@ -9182,6 +10932,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9299,6 +11059,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9435,6 +11205,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9579,6 +11359,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9698,6 +11488,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -9791,7 +11591,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List Project Secrets Api V1 Projects  Project Id  Secrets Get",
                   "type": "array"
@@ -9809,6 +11609,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -9918,6 +11728,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10029,6 +11849,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10086,6 +11916,244 @@
         ]
       }
     },
+    "/api/v1/projects/{project_id}/sync": {
+      "post": {
+        "description": "要求内容写入权限，返回当前用户不可自选的稳定 SSH 暂存目标。",
+        "operationId": "prepare_project_sync_api_v1_projects__project_id__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSyncTargetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "准备受控的 Project rsync 暂存目标",
+        "tags": [
+          "project"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/sync/apply": {
+      "post": {
+        "description": "要求内容写入权限，只创建或覆盖暂存内容对应的路径，不删除额外文件。",
+        "operationId": "apply_project_sync_api_v1_projects__project_id__sync_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectSyncApplyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "将 rsync 暂存内容应用到 Project Working State",
+        "tags": [
+          "project"
+        ]
+      }
+    },
     "/api/v1/projects/{project_id}/variables": {
       "get": {
         "operationId": "list_project_variables_api_v1_projects__project_id__variables_get",
@@ -10140,6 +12208,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10257,6 +12335,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10366,6 +12454,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10503,6 +12601,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10620,6 +12728,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -10701,6 +12819,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10813,6 +12941,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -10931,6 +13069,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11012,6 +13160,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11122,6 +13280,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11230,6 +13398,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11343,6 +13521,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11464,6 +13652,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11599,6 +13797,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -11745,6 +13953,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11854,6 +14072,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -11962,6 +14190,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12083,6 +14321,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "text/plain": {
@@ -12202,6 +14450,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -12305,6 +14563,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12414,6 +14682,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -12522,6 +14800,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12639,6 +14927,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12769,6 +15067,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -12871,6 +15179,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -12979,6 +15297,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13037,6 +15365,121 @@
       }
     },
     "/api/v1/user-groups/{user_group_id}": {
+      "delete": {
+        "description": "删除成功返回 204。目标不存在时返回 404；响应丢失后的重试也可能因目标已不存在而返回 404。404 只表示目标当前不存在，不能证明由谁删除。",
+        "operationId": "delete_user_group_api_v1_user_groups__user_group_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_group_id",
+            "required": true,
+            "schema": {
+              "title": "User Group Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "确认已查看删除影响",
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "确认已查看删除影响",
+              "title": "Confirm",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "User Group 删除成功。"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "description": "User Group 不存在，包括删除已成功但响应丢失后的重试；该响应不能证明由谁删除。"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "删除 User Group",
+        "tags": [
+          "user-group"
+        ]
+      },
       "get": {
         "operationId": "get_user_group_api_v1_user_groups__user_group_id__get",
         "parameters": [
@@ -13086,6 +15529,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13202,6 +15655,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13338,6 +15801,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13390,6 +15863,124 @@
           }
         },
         "summary": "列出 User Group 近期活动",
+        "tags": [
+          "user-group"
+        ]
+      }
+    },
+    "/api/v1/user-groups/{user_group_id}/deletion-impact": {
+      "get": {
+        "operationId": "user_group_deletion_impact_api_v1_user_groups__user_group_id__deletion_impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_group_id",
+            "required": true,
+            "schema": {
+              "title": "User Group Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionImpactOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象可见，但当前角色无权执行该操作"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "对象不存在，或当前用户没有发现权限"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "与现有状态冲突，例如重名或对象不可修改"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "参数校验或提交前检查未通过，problems 列出全部原因"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "底层调度系统返回错误"
+          }
+        },
+        "summary": "查看 User Group 删除影响",
         "tags": [
           "user-group"
         ]
@@ -13448,6 +16039,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13549,6 +16150,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13661,6 +16272,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -13778,6 +16399,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -13887,6 +16518,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14013,6 +16654,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14106,7 +16757,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List Group Secrets Api V1 User Groups  User Group Id  Secrets Get",
                   "type": "array"
@@ -14124,6 +16775,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14233,6 +16894,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14344,6 +17015,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14453,6 +17134,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14565,6 +17256,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -14682,6 +17383,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14792,6 +17503,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -14885,7 +17606,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/SecretOut"
                   },
                   "title": "Response List User Secrets Api V1 Users  User Id  Secrets Get",
                   "type": "array"
@@ -14903,6 +17624,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15013,6 +17744,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15122,6 +17863,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15234,6 +17985,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15351,6 +18112,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15461,6 +18232,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15569,6 +18350,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15693,6 +18484,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -15811,6 +18612,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {
@@ -15931,6 +18742,16 @@
             },
             "description": "请求不合法"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
+          },
           "403": {
             "content": {
               "application/json": {
@@ -16043,6 +18864,16 @@
               }
             },
             "description": "请求不合法"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "请求没有有效的认证身份"
           },
           "403": {
             "content": {

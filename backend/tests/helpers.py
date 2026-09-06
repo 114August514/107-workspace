@@ -65,7 +65,6 @@ async def grant_test_entitlement(
     username: str,
     compute_plan_id: str = "plan_cpu_quick",
     *,
-    max_concurrent_runs: int = 2,
     expires_at: str | None = None,
 ) -> None:
     """Seed the entitlement of the user named ``username``; nothing grants one implicitly."""
@@ -77,7 +76,6 @@ async def grant_test_entitlement(
             id=ids.new_id(ids.ENTITLEMENT),
             user_id=user.id,
             compute_plan_id=compute_plan_id,
-            max_concurrent_runs=max_concurrent_runs,
             expires_at=expires_at,
         )
     )

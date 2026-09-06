@@ -32,6 +32,7 @@ from ..application.shared_resource_publication import SharedResourcePublicationP
 from ..application.shared_resource_service import SharedResourceService
 from ..application.user_group_service import UserGroupService
 from ..config import Settings
+from ..domain.errors import AuthenticationRequired
 from ..domain.models import User
 from ..domain.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, PageRequest
 from ..domain.ports.clock import Clock
@@ -44,6 +45,7 @@ from ..domain.slurm_projection import SlurmProjection
 from ..infrastructure.db.notifications import DatabaseNotificationPublisher
 from ..infrastructure.db.repositories import SqlRepositories
 from ..infrastructure.db.secret_vault import DatabaseSecretVault
+from ..infrastructure.identity import USTCCASIdentityProvider
 
 DEV_USER_HEADER = "X-User"
 DEFAULT_DEV_USER = "student"
@@ -113,7 +115,7 @@ def build_services(context: AppContext, session: AsyncSession) -> Services:
         identity=IdentityService(repos, context.clock, session),
         user_groups=UserGroupService(repos, guard, context.clock, activity, notifier),
         configuration=ConfigurationService(repos, guard, vault),
-        entitlements=EntitlementService(repos),
+        entitlements=EntitlementService(repos, context.clock),
         projects=ProjectService(
             repos,
             guard,
@@ -185,10 +187,17 @@ async def get_services(
 
 
 async def get_current_user(
+    request: Request,
     services: Annotated[Services, Depends(get_services)],
     x_user: Annotated[str | None, Header(alias=DEV_USER_HEADER)] = None,
 ) -> User:
-    """Resolve the dev identity without creating any ownership container."""
+    """Resolve one internal User at the centralized authentication boundary."""
+    if request.app.state.context.settings.auth_mode == "ustc":
+        profile = USTCCASIdentityProvider().resolve(request.headers)
+        if profile is None:
+            raise AuthenticationRequired("未提供有效的 USTC CAS 身份")
+        return await services.identity.resolve_external_identity(profile)
+
     username = (x_user or DEFAULT_DEV_USER).strip() or DEFAULT_DEV_USER
     return await services.identity.ensure_user(username)
 

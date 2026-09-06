@@ -20,6 +20,12 @@ class DomainError(Exception):
         self.message = message
 
 
+class AuthenticationRequired(DomainError):
+    """No valid identity assertion was supplied by the trusted authentication boundary."""
+
+    code = "authentication_required"
+
+
 class ObjectNotFound(DomainError):
     """对象不存在，或当前用户没有发现权限。"""
 
@@ -48,6 +54,16 @@ class ConflictError(DomainError):
     """与现有状态冲突，例如重名或状态不允许。"""
 
     code = "conflict"
+
+    def __init__(self, message: str, problems: list[str] | None = None) -> None:
+        super().__init__(message)
+        self.problems = problems or []
+
+
+class RunConfirmationChanged(ConflictError):
+    """Execution facts changed since the user's submission preview."""
+
+    code = "run_confirmation_changed"
 
 
 class ImmutableObjectError(ConflictError):
