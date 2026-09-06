@@ -1,0 +1,19 @@
+# ddl 前 GUI 收口验证
+
+本地 Chromium，真实 Vite + FastAPI，SQLite 演示数据与 Mock Scheduler。
+桌面 1440×1000、窄屏 375×812；截图仅使用演示数据，未访问真实集群。
+
+- 实际创建 User Group 所属的运行环境与共享资源，详情页可进入现有版本发布流程。
+- 使用临时 Project 验证名称与说明保存，顶部项目上下文同步；验证后通过设置页的删除确认删除该临时 Project。
+- Files / Runs / Activity 不显示删除按钮；删除仅位于常规设置底部。
+- 设置页面不再重复显示 Settings 标题、项目说明、Owner 和可见范围。
+- 环境变量保留 Variables / Secrets 标签栏；去掉标签内容的重复大标题。键盘切换及 375px 窄屏无横向溢出。
+- 创建菜单顺序为 Project、共享资源、运行环境、分隔线、User Group。
+- Runs 无方案时可跳转运行方案页；已有方案时能进入现有提交确认。此次没有提交新的运行作业。
+- 浏览器 HTTP 边界替换响应，验证创建失败后输入保留、所属范围加载失败后重试、失效 Owner 不会静默变成个人 Owner、只读用户不暴露修改与删除操作。这些状态截图不代表真实服务故障。
+- 后端集成测试覆盖当前 User、有效 User Group 成员创建、未接受邀请与跨 Owner 拒绝、创建后的版本空态和名称校验。
+- 组件测试覆盖常规设置保存失败与重试、只读字段以及原有 Variable / Secret 管理闭环；Secret 值不回显。
+
+本地完整检查日志：`/tmp/ddl-check-final.log`。
+
+最终 `make check` 通过：后端 435 passed / 3 skipped，前端 290 passed，代理测试 14 passed / 1 skipped；格式、lint、类型、构建和生成契约一致性检查通过。

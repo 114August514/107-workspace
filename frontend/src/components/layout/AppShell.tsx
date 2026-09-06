@@ -68,11 +68,20 @@ export function AppShell({ user, home, project, children }: Props) {
       ? undefined
       : matchPath('/projects/:projectId/*', location.pathname)?.params.projectId
   const currentProject = project.data?.id === projectId ? project.data : undefined
-  const isEnvironment = /^\/(environments|environment-versions)\/[^/]+$/.test(location.pathname)
+  const isEnvironment =
+    location.pathname !== '/environments/new' &&
+    /^\/(environments|environment-versions)\/[^/]+$/.test(location.pathname)
   const isUserGroupAssetList =
     matchPath('/user-groups/:userGroupId/projects', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/shared-resources', location.pathname) !== null ||
     matchPath('/user-groups/:userGroupId/environments', location.pathname) !== null
+  const groupId = matchPath('/user-groups/:userGroupId/*', location.pathname)?.params.userGroupId
+  const creationOwner =
+    groupId && groupId !== 'new' ? { kind: 'user_group', id: groupId } : currentProject?.owner
+  const ownerQuery = creationOwner
+    ? `?owner=${encodeURIComponent(`${creationOwner.kind}:${creationOwner.id}`)}`
+    : ''
+
   const projectPath = projectId ? `/projects/${projectId}` : ''
   const projectSubpath = projectPath ? location.pathname.slice(projectPath.length) : ''
   const projectArea = projectSubpath.startsWith('/runs')
@@ -197,6 +206,13 @@ export function AppShell({ user, home, project, children }: Props) {
                           <ActionList.LinkItem href="/projects/new">
                             创建 Project
                           </ActionList.LinkItem>
+                          <ActionList.LinkItem href={`/shared-resources/new${ownerQuery}`}>
+                            创建共享资源
+                          </ActionList.LinkItem>
+                          <ActionList.LinkItem href={`/environments/new${ownerQuery}`}>
+                            创建运行环境
+                          </ActionList.LinkItem>
+                          <ActionList.Divider />
                           <ActionList.LinkItem href="/user-groups/new">
                             创建 User Group
                           </ActionList.LinkItem>

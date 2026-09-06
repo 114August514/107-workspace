@@ -1,3 +1,4 @@
+import { CreateAssetPage } from './pages/CreateAssetPage'
 import { App as AntdApp, ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { lazy, Suspense } from 'react'
@@ -167,6 +168,14 @@ export function ProductRoutes({
       <Route path="/" element={<HomePage username={username} home={home} />} />
       <Route path="/profile" element={<ProfilePage home={home} />} />
       <Route path="/settings" element={<SettingsPage home={home} />} />
+      <Route
+        path="/environments/new"
+        element={<CreateAssetPage key="environment" kind="environment" home={home} />}
+      />
+      <Route
+        path="/shared-resources/new"
+        element={<CreateAssetPage key="shared-resource" kind="shared-resource" home={home} />}
+      />
       <Route path="/projects/new" element={<CreateProjectPage home={home} />} />
       <Route path="/user-groups/new" element={<CreateUserGroupPage />} />
       <Route

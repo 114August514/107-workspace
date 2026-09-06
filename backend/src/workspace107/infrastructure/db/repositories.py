@@ -726,6 +726,19 @@ class EnvironmentRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def add(self, environment: Environment) -> None:
+        owner_user_id, owner_user_group_id = _owner_columns(environment.owner)
+        self._session.add(
+            t.EnvironmentRow(
+                id=environment.id,
+                name=environment.name,
+                description=environment.description,
+                owner_user_id=owner_user_id,
+                owner_user_group_id=owner_user_group_id,
+            )
+        )
+        await self._session.flush()
+
     async def list_discoverable_for_user(self, user_id: str) -> list[Environment]:
         stmt = (
             select(t.EnvironmentRow)

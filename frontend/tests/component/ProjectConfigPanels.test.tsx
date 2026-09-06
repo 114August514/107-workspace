@@ -98,14 +98,14 @@ describe('ProjectVariablesPanel', () => {
 
     expect(await screen.findByText('EPOCHS')).toBeInTheDocument()
     expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /新建 Variable/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /添加变量/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '复制 EPOCHS 的值' })).toBeInTheDocument()
     const time = container.querySelector('relative-time')
     expect(time).not.toBeNull()
     expect(time!.getAttribute('datetime')).toMatch(/^2026-09-01T10:00:00/)
   })
 
-  it('新建 Variable 提交 PUT 并刷新列表', async () => {
+  it('添加变量 提交 PUT 并刷新列表', async () => {
     mockPutProjectVariable.mockResolvedValue({
       name: 'DATASET_URL',
       value: 'http://x',
@@ -117,7 +117,7 @@ describe('ProjectVariablesPanel', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /新建 Variable/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /添加变量/ }))
     fireEvent.change(await screen.findByLabelText(/^名称/), { target: { value: 'DATASET_URL' } })
     fireEvent.change(screen.getByLabelText(/^值/), { target: { value: 'http://x' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
@@ -140,7 +140,7 @@ describe('ProjectVariablesPanel', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /新建 Variable/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /添加变量/ }))
     fireEvent.change(await screen.findByLabelText(/^名称/), { target: { value: '1ABC' } })
     fireEvent.change(screen.getByLabelText(/^值/), { target: { value: 'x' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
@@ -190,9 +190,7 @@ describe('ProjectVariablesPanel', () => {
     )
 
     expect(await within(container).findByText('EPOCHS')).toBeInTheDocument()
-    expect(
-      within(container).queryByRole('button', { name: /新建 Variable/ }),
-    ).not.toBeInTheDocument()
+    expect(within(container).queryByRole('button', { name: /添加变量/ })).not.toBeInTheDocument()
     expect(within(container).queryByRole('button', { name: /编辑/ })).not.toBeInTheDocument()
     expect(within(container).queryByRole('button', { name: /删除/ })).not.toBeInTheDocument()
   })
@@ -213,7 +211,7 @@ describe('ProjectSecretsPanel', () => {
     expect(time!.getAttribute('datetime')).toMatch(/^2026-09-01T10:00:00/)
   })
 
-  it('新建 Secret 的值输入框是密码框，提交后不回显', async () => {
+  it('添加敏感变量 的值输入框是密码框，提交后不回显', async () => {
     mockPutProjectSecret.mockResolvedValue(undefined)
     render(
       <MemoryRouter>
@@ -221,7 +219,7 @@ describe('ProjectSecretsPanel', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /新建 Secret/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /添加敏感变量/ }))
     const valueInput = screen.getByLabelText(/^值/)
     expect(valueInput).toHaveAttribute('type', 'password')
     fireEvent.change(screen.getByLabelText(/^名称/), { target: { value: 'HF_TOKEN' } })
@@ -271,9 +269,49 @@ describe('ProjectSecretsPanel', () => {
 })
 
 describe('ProjectSettingsPanel', () => {
-  it('SegmentedControl 在 Variables 和 Secrets 分区之间切换', async () => {
+  it('常规设置保存名称和说明，失败后保留输入并可重试', async () => {
+    const onChanged = vi.fn()
+    mockUpdateProject.mockRejectedValueOnce(new Error('名称已存在')).mockResolvedValueOnce(manager)
     render(
       <MemoryRouter>
+        <ProjectSettingsPanel
+          projectId="proj-1"
+          access={makeProject(['project.update'])}
+          onChanged={onChanged}
+        />
+      </MemoryRouter>,
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: /^名称/ }), {
+      target: { value: '新名称' },
+    })
+    fireEvent.change(screen.getByLabelText('说明', { exact: true }), {
+      target: { value: '新的说明' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+    expect(await screen.findByText('名称已存在')).toBeVisible()
+    expect(screen.getByRole('textbox', { name: /^名称/ })).toHaveValue('新名称')
+    fireEvent.click(screen.getByRole('button', { name: '保存更改' }))
+    expect(await screen.findByText('Project 设置已保存。')).toBeVisible()
+    expect(mockUpdateProject).toHaveBeenLastCalledWith('proj-1', {
+      name: '新名称',
+      description: '新的说明',
+    })
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('只读用户只能查看基本信息', () => {
+    render(
+      <MemoryRouter>
+        <ProjectSettingsPanel projectId="proj-1" access={viewer} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('textbox', { name: /^名称/ })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: '保存更改' })).toBeNull()
+  })
+
+  it('SegmentedControl 在 Variables 和 Secrets 分区之间切换', async () => {
+    render(
+      <MemoryRouter initialEntries={['/?section=variables']}>
         <ProjectSettingsPanel projectId="proj-1" access={manager} />
       </MemoryRouter>,
     )

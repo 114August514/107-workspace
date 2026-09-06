@@ -1,3 +1,4 @@
+import type { EnvironmentCreate } from './types'
 /**
  * 后端 API 客户端。
  *
@@ -199,6 +200,9 @@ export const api = {
     ),
   environments: async (): Promise<Environment[]> =>
     unwrap(await http.GET('/api/v1/catalog/environments')),
+  createEnvironment: async (payload: EnvironmentCreate): Promise<Environment> =>
+    unwrap(await http.POST('/api/v1/catalog/environments', { body: payload })),
+
   environment: async (id: string): Promise<Environment> =>
     unwrap(
       await http.GET('/api/v1/catalog/environments/{environment_id}', {

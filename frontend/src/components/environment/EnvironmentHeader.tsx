@@ -13,7 +13,10 @@ import {
 
 export function EnvironmentProvider({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
-  const environmentId = matchPath('/environments/:environmentId', pathname)?.params.environmentId
+  const environmentId =
+    pathname === '/environments/new'
+      ? undefined
+      : matchPath('/environments/:environmentId', pathname)?.params.environmentId
   const versionId = matchPath('/environment-versions/:versionId', pathname)?.params.versionId
   const state = useAsync<EnvironmentDetail | null>(async () => {
     if (versionId) {

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..domain.capabilities import Capability
+from ..domain import ids
+from ..domain.capabilities import Capability, capabilities_of
 from ..domain.compute import ComputePlan
-from ..domain.errors import ObjectNotFound
+from ..domain.errors import ObjectNotFound, PermissionDenied, ValidationFailed
 from ..domain.grant import GrantTargetKind
 from ..domain.models import Environment, EnvironmentVersion
 from ..domain.ownership import OwnerKind, OwnerReference
@@ -30,6 +31,27 @@ class CatalogService:
     def __init__(self, repos: Repositories, guard: AccessGuard) -> None:
         self._repos = repos
         self._guard = guard
+
+    async def create_environment(
+        self, user_id: str, *, owner: OwnerReference, name: str, description: str = ""
+    ) -> EnvironmentView:
+        name = name.strip()
+        if not name or len(name) > 128 or len(description) > 4096:
+            raise ValidationFailed("运行环境名称不能为空且不超过 128 字符，说明不超过 4096 字符")
+        if owner.kind is OwnerKind.USER:
+            if owner.id != user_id or await self._repos.users.get(owner.id) is None:
+                raise ObjectNotFound("Environment Owner", owner.id)
+        else:
+            access = await self._guard.user_group(user_id, owner.id)
+            if Capability.ENVIRONMENT_VERSION_CREATE not in capabilities_of(access.role):
+                raise PermissionDenied("当前角色无权创建运行环境")
+            if await self._repos.user_groups.get_for_update(owner.id) is None:
+                raise ObjectNotFound("Environment Owner", owner.id)
+        environment = Environment(
+            id=ids.new_id(ids.ENVIRONMENT), owner=owner, name=name, description=description.strip()
+        )
+        await self._repos.environments.add(environment)
+        return (await self._views([environment], user_id))[0]
 
     async def list_environments(self, user_id: str) -> list[EnvironmentView]:
         contexts = await self._owner_contexts(user_id)

@@ -375,6 +375,10 @@ Run Configuration 与 Run Snapshot 使用确定的 Environment Version；版本�
     └── [V2] 查看兼容性和安全检查结果
 ```
 
+GUI 创建入口统一位于右上角创建菜单，并在 User Group 对应资源列表保留就地入口。
+Environment 对象创建支持当前 User 或当前有效成员所属 User Group，组内授权沿用
+Environment Version 创建能力；创建完成后进入详情页发布版本。
+
 ### 2.6 共享资源与数据
 
 Shared Resource 是由 User 或 User Group 拥有、独立于 Project 的可版本化内容资产。Run Configuration 通过 Input Binding 引用确定的 Shared Resource Version。
