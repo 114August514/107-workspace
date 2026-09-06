@@ -49,7 +49,7 @@ WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持，�
 ### 方式一：本地开发（`make dev`）
 
 ```bash
-./scripts/platform/posix/bootstrap.sh     # 安装后端与前端依赖
+make setup                                # 安装后端与前端依赖（等价 scripts/platform/posix/bootstrap.sh）
 cp .env.example backend/.env              # 本地开发用 backend/.env
 # 编辑 backend/.env，至少填：
 #   WORKSPACE107_AUTH_SECRET_KEY=<随机长字符串>     # ustc 登录会话签名，必填
