@@ -27,7 +27,6 @@ export interface RepoListItem {
 }
 
 interface Props {
-  action?: ReactNode
   titleId: string
   title?: string
   listLabel: string
@@ -46,7 +45,6 @@ interface Props {
 }
 
 export function RepoList({
-  action,
   titleId,
   title,
   listLabel,
@@ -86,7 +84,6 @@ export function RepoList({
           <h2 id={titleId} className={styles.title}>
             {title ?? copy.list.types[type]}
           </h2>
-          {action}
           <div className={styles.search}>
             <TextInput
               block

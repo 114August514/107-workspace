@@ -1,5 +1,3 @@
-import { Button } from '@primer/react'
-import { Link } from 'react-router-dom'
 import { Label } from '@primer/react'
 import { useOutletContext } from 'react-router-dom'
 
@@ -63,17 +61,6 @@ export function EnvironmentsSection() {
 
   return (
     <RepoList
-      action={
-        <div>
-          <Button
-            as={Link}
-            variant="primary"
-            to={`/environments/new?owner=${encodeURIComponent('user_group:' + userGroup.id)}`}
-          >
-            创建运行环境
-          </Button>
-        </div>
-      }
       titleId="user-group-environments-title"
       listLabel="运行环境列表"
       searchPlaceholder={copy.list.searchEnvironments}

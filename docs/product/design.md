@@ -375,7 +375,7 @@ Run Configuration 与 Run Snapshot 使用确定的 Environment Version；版本�
     └── [V2] 查看兼容性和安全检查结果
 ```
 
-GUI 创建入口统一位于右上角创建菜单，并在 User Group 对应资源列表保留就地入口。
+User Group 页面的 GUI 创建入口统一位于右上角创建菜单，自动带入当前组；资源列表不重复展示创建按钮。
 Environment 对象创建支持当前 User 或当前有效成员所属 User Group，组内授权沿用
 Environment Version 创建能力；创建完成后进入详情页发布版本。
 

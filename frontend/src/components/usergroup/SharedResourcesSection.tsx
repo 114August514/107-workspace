@@ -1,5 +1,3 @@
-import { Button } from '@primer/react'
-import { Link } from 'react-router-dom'
 import { useOutletContext } from 'react-router-dom'
 
 import { api } from '../../api/client'
@@ -47,17 +45,6 @@ export function SharedResourcesSection() {
 
   return (
     <RepoList
-      action={
-        <div>
-          <Button
-            as={Link}
-            variant="primary"
-            to={`/shared-resources/new?owner=${encodeURIComponent('user_group:' + userGroup.id)}`}
-          >
-            创建共享资源
-          </Button>
-        </div>
-      }
       titleId="user-group-shared-resources-title"
       listLabel="共享资源列表"
       searchPlaceholder={copy.list.searchSharedResources}

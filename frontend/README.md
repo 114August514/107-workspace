@@ -154,7 +154,7 @@ Project Settings 默认进入“常规”，提供名称、说明编辑；所属
 “环境变量”分区保留 Variables / Secrets 标签栏，Secret 值不回显。
 
 右上角创建菜单将 Project、共享资源、运行环境放在同组，分隔线下单独放 User Group；
-User Group 资源列表也提供携带当前所属范围的创建入口。Runs 中的“提交 Run”
+User Group 页面通过右上角菜单创建资源，并自动带入当前所属范围；资源列表不再重复提供创建按钮。Runs 中的“提交 Run”
 复用已有运行方案与确认弹窗。创建 Environment 对象使用
 `POST /api/v1/catalog/environments`，发布版本继续在环境详情页完成。
 
