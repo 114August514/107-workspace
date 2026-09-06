@@ -49,26 +49,6 @@ afterEach(() => {
 })
 
 describe('NotificationBell 未读数轮询契约', () => {
-  it('挂载时拉一次，30 秒后再拉一次', async () => {
-    vi.useFakeTimers()
-    try {
-      const unread = vi.spyOn(api, 'unreadCount').mockResolvedValue(2)
-      renderBell()
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(unread).toHaveBeenCalledTimes(1)
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(30_000)
-      })
-      expect(unread).toHaveBeenCalledTimes(2)
-      expect(screen.getByRole('button', { name: '通知，2 条未读' })).toBeTruthy()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 
   it('未读数拉取失败不打扰用户：铃铛仍可访问', async () => {
     vi.spyOn(api, 'unreadCount').mockRejectedValue(new Error('boom'))

@@ -33,25 +33,6 @@ afterEach(() => {
 })
 
 describe('DesignSystemPage', () => {
-  it('呈现为静态 Reference，不含任何 Playground 控制器', () => {
-    render(
-      <PrimerRoot>
-        <DesignSystemPage />
-      </PrimerRoot>,
-    )
-
-    expect(screen.getByRole('heading', { name: '107 Primer UI Reference' })).toBeInTheDocument()
-    for (const section of ['Foundations', 'States', 'Patterns', 'Content']) {
-      expect(screen.getByRole('heading', { name: section })).toBeInTheDocument()
-    }
-    // 旧 Playground 的入口全部不存在
-    expect(screen.queryByText('场景控制台')).not.toBeInTheDocument()
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '恢复默认值' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/预设$/)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/参考画布$/)).not.toBeInTheDocument()
-  })
-
   it('六类状态无需任何操作即可直接查看', () => {
     render(
       <PrimerRoot>

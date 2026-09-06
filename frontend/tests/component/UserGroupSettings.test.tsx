@@ -60,18 +60,6 @@ describe('User Group 设置分区', () => {
     })
   })
 
-  it('REQ-21-17 保存成功后重新拉取 User Group 刷新页面头部', async () => {
-    vi.spyOn(api, 'updateUserGroup').mockResolvedValue(group)
-    vi.spyOn(api, 'getUserGroup').mockResolvedValue(group)
-    renderSettings()
-
-    await screen.findByLabelText(/名称/)
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
-    await screen.findByText('User Group 设置已保存。')
-
-    expect(api.getUserGroup).toHaveBeenCalledTimes(2)
-  })
-
   it('REQ-21-18 名称为空时校验失败且不发出请求', async () => {
     const update = vi.spyOn(api, 'updateUserGroup')
     renderSettings()

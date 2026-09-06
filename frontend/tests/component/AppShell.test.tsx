@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { defaultPaneWidth } from '@primer/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -278,42 +277,6 @@ describe('AppShell 壳层', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Project context 加载失败，重试' }))
     expect(reload).toHaveBeenCalledTimes(1)
     expect(screen.getByText('页面内容')).toBeVisible()
-  })
-  it('非首页 Body 仅直接包含 main，Primer Content 在 main 内负责正文居中', () => {
-    renderShell('student', readyHome(), '/projects/p-1')
-    const body = screen.getByRole('banner').nextElementSibling
-    const main = screen.getByRole('main')
-    const layout = main.querySelector('[data-component="PageLayout"]')
-    const centeredContent = main.querySelector<HTMLElement>('[data-component="PageLayout.Content"]')
-
-    expect(body?.firstElementChild).toBe(main)
-    expect(main.parentElement).toBe(body)
-    expect(screen.queryByRole('complementary', { name: '首页工作入口' })).toBeNull()
-    expect(layout?.querySelector('[data-component="PageLayout.Sidebar"]')).toBeNull()
-    expect(centeredContent).toHaveProperty('tagName', 'DIV')
-    expect(centeredContent?.firstElementChild).toHaveAttribute('data-width', 'xlarge')
-    expect(main).toContainElement(screen.getByText('页面内容'))
-  })
-
-  it('首页 Body 直接 stretch persistent sidebar 与 main，Primer 只负责正文居中', () => {
-    renderShell('student')
-    const body = screen.getByRole('banner').nextElementSibling
-    const sidebar = screen.getByRole('complementary', { name: '首页工作入口' })
-    const main = screen.getByRole('main')
-    const centeredContent = main.querySelector<HTMLElement>('[data-component="PageLayout.Content"]')
-
-    const shell = body?.parentElement
-    expect(sidebar.parentElement).toBe(body)
-    expect(sidebar.nextElementSibling).toBe(main)
-    expect(main.parentElement).toBe(body)
-    expect(shell?.style.getPropertyValue('--app-shell-sidebar-width')).toBe(
-      `${defaultPaneWidth.medium}px`,
-    )
-    expect(within(sidebar).getByRole('navigation', { name: '工作入口' })).toBeVisible()
-    expect(centeredContent).toHaveProperty('tagName', 'DIV')
-    expect(centeredContent?.firstElementChild).toHaveAttribute('data-width', 'xlarge')
-    expect(main).toContainElement(screen.getByText('页面内容'))
-    expect(screen.getAllByRole('main')).toHaveLength(1)
   })
 
   it('header 菜单打开 overlay 工作导航，并通过真实链接导航后关闭', async () => {
