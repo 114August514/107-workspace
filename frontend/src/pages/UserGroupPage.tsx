@@ -1,5 +1,5 @@
 import { OrganizationIcon } from '@primer/octicons-react'
-import { Banner, Button, Dialog, Label, Stack, Text } from '@primer/react'
+import { Banner, Dialog, Label, Stack, Text } from '@primer/react'
 import { useState } from 'react'
 import { Outlet, matchPath, useLocation, useNavigate } from 'react-router-dom'
 
@@ -20,6 +20,7 @@ export interface UserGroupOutletContext {
   userGroup: UserGroup
   reload: () => void
   onMembershipChanged?: () => void
+  onDelete?: () => void
 }
 
 export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: () => void }) {
@@ -52,11 +53,6 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
                     </Label>
                   </div>
                 </div>
-                {can(group.userGroup, 'user_group.delete') ? (
-                  <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-                    {governanceCopy.delete.action}
-                  </Button>
-                ) : null}
               </header>
             ) : null}
 
@@ -67,6 +63,10 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
                     userGroup: group.userGroup,
                     reload: group.reload,
                     onMembershipChanged,
+                    onDelete:
+                      group.userGroup.role === 'owner' && can(group.userGroup, 'user_group.delete')
+                        ? () => setDeleteOpen(true)
+                        : undefined,
                   } satisfies UserGroupOutletContext
                 }
               />

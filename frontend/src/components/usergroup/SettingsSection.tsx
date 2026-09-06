@@ -13,7 +13,8 @@ interface Feedback {
 }
 
 export function SettingsSection() {
-  const { userGroup, reload, onMembershipChanged } = useOutletContext<UserGroupOutletContext>()
+  const { userGroup, reload, onMembershipChanged, onDelete } =
+    useOutletContext<UserGroupOutletContext>()
   const canUpdate = can(userGroup, 'user_group.update')
   const canLeave = userGroup.role !== 'owner'
   const nameRef = useRef<HTMLInputElement>(null)
@@ -107,6 +108,22 @@ export function SettingsSection() {
               </Button>
             </div>
           </form>
+        </section>
+      ) : null}
+
+      {onDelete ? (
+        <section className={styles.section} aria-labelledby="user-group-delete-title">
+          <header className={styles.sectionHeader}>
+            <h2 id="user-group-delete-title" className={styles.sectionTitle}>
+              删除 User Group
+            </h2>
+            <p className={styles.sectionDescription}>
+              删除前会检查组内资源和影响范围。若只想退出，请先转让所有权。
+            </p>
+          </header>
+          <Button variant="danger" onClick={onDelete}>
+            删除 User Group
+          </Button>
         </section>
       ) : null}
 
