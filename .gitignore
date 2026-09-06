@@ -30,6 +30,8 @@ dist/
 
 # Runtime data
 backend/var/
+deploy/cas-revproxy/env
+deploy/cas-revproxy/runtime/
 backend/.alembic-test/
 *.db
 *.sqlite3

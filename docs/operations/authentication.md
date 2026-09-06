@@ -9,7 +9,8 @@ Workspace、Project、Run 等业务权限仍只依赖内部 `User`、Ownership �
 
 - `dev`：仅用于本地开发和受信任演示。读取 `X-User`，缺省为 `student`，并按用户名创建
   开发用户。
-- `ustc`：读取受信任反向代理注入的 USTC CAS 身份。没有有效身份时返回 `401`。
+- `ustc`：读取受信任反向代理注入的身份。没有有效身份时返回 `401`。
+  默认 `provider=ustc-cas`；代理在本地密码登录成功后注入 `X-User-Provider: local`。
 
 本地模拟登录：
 
@@ -18,13 +19,23 @@ WORKSPACE107_AUTH_MODE=dev uv run uvicorn workspace107.main:create_app --factory
 curl -H 'X-User: alice' http://127.0.0.1:8000/api/v1/me
 ```
 
+`make dev` 读取仓库根目录 `.env` 和 `backend/.env`。`WORKSPACE107_AUTH_MODE=ustc` 时会
+同时启动认证服务，Vite 对 `/login`、`/login/password`、`/logout` 和 `/api/` 做与 Nginx
+`auth_request` 相同的分流，浏览器打开 <http://127.0.0.1:5174> 就是公开登录页。
+账密、会话密钥、CAS 代理都使用 `.env.example` 里的 `WORKSPACE107_*` 字段。
+
+`WORKSPACE107_AUTH_MODE=dev` 时仍直接以 `student` 进入。Compose 默认 `web` 容器没有这些
+路由，应保持 `AUTH_MODE=dev`。独立 Nginx 入口见
+[`deploy/cas-revproxy/`](../../deploy/cas-revproxy/README.md)。
+
 ## revproxy 与 Backend 的字段约定
 
 `ustc` 模式使用以下请求头：
 
 | Header | 必填 | 含义 |
 | :--- | :---: | :--- |
-| `X-User-ID` | 是 | CAS 中稳定且唯一的用户标识，保存为 `provider_user_id` |
+| `X-User-ID` | 是 | 稳定且唯一的用户标识，保存为 `provider_user_id` |
+| `X-User-Provider` | 否 | `ustc-cas`（缺省）或 `local`（账密管理员） |
 | `X-User-Name` | 否 | 首次创建内部 User 时使用的显示名；缺省为 `X-User-ID` |
 | `X-User-Email` | 否 | 首次创建内部 User 时保存的邮箱 |
 
@@ -41,6 +52,15 @@ HTTP Header 本身不能证明请求经过 CAS。真实部署必须同时满足�
 3. Backend 端口只对 revproxy 所在受信任网络开放，外部请求不能绕过代理直连；
 4. 面向用户的入口使用 HTTPS，并由 revproxy 管理 CAS 会话。
 
-当前仓库不包含 `ustccas-revproxy` 的部署配置，也无法在应用内区分“代理注入”与“客户端
-伪造”的同名 Header。真实上线前必须在目标部署中完成 Header 清洗、网络隔离和端到端
-验收；仅把 `WORKSPACE107_AUTH_MODE` 改为 `ustc` 不构成安全接入。
+可审查的代理配置、上游补丁和运行说明保存在
+[`deploy/cas-revproxy/`](../../deploy/cas-revproxy/README.md)。后端仍然无法自行区分
+“代理注入”与“客户端伪造”的同名 Header。真实上线前必须由反向代理清洗 Header、
+把 Backend 端口限制在受信任网络，并完成端到端验收；仅把 `WORKSPACE107_AUTH_MODE`
+改为 `ustc` 不构成安全接入。
+
+前端通过 `GET /api/v1/me` 确认当前用户。未登录显示公开首页；`GET /login`、
+`POST /login/password` 与 `POST /logout` 由代理处理，前端只做整页跳转和同源表单提交。
+
+本地管理员账密只用于受信任演示：登录后映射为 `provider=local` 的内部 User，并通过
+「平台资产」User Group 的普通 Membership 管理平台 Environment / Shared Resource。
+这不是设计文档 2.12 的 Platform Admin 控制台，也不授予业务数据特权。密码不得提交到仓库。

@@ -185,3 +185,70 @@
     border-bottom: none;
   }
 }
+
+.publishButton {
+  margin-left: auto;
+  flex: none;
+}
+.sectionHeading,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-8);
+}
+.sectionHeading {
+  justify-content: space-between;
+}
+.aboutSection {
+  margin-top: var(--base-size-24);
+}
+.wrappedMeta {
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  overflow-wrap: anywhere;
+}
+.disclosure {
+  min-width: 0;
+  font-size: var(--text-body-size-medium);
+}
+.disclosure summary {
+  cursor: pointer;
+  color: var(--fgColor-muted);
+}
+.disclosure[open] > :not(summary) {
+  margin-top: var(--base-size-12);
+}
+.codeBlock {
+  overflow-wrap: anywhere;
+}
+.fileCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--base-size-12);
+  padding: var(--base-size-16);
+  border: var(--borderWidth-thin) solid var(--borderColor-default);
+  border-radius: var(--borderRadius-medium);
+  overflow-wrap: anywhere;
+}
+.fileInput {
+  display: none;
+}
+.attempt {
+  padding: var(--base-size-16);
+  overflow-wrap: anywhere;
+}
+.attempt p {
+  margin: var(--base-size-8) 0;
+}
+.modules {
+  margin: 0;
+  padding-left: var(--base-size-16);
+}
+
+.hint {
+  margin: 0;
+  color: var(--fgColor-muted);
+  font-size: var(--text-body-size-small);
+  line-height: var(--text-body-lineHeight-small);
+}

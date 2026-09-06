@@ -64,6 +64,11 @@ class UserOut(Model):
     email: str | None = None
 
 
+class UserProfileUpdateIn(Model):
+    username: str | None = Field(default=None, min_length=1, max_length=64)
+    display_name: str | None = Field(default=None, min_length=1, max_length=128)
+
+
 class UserGroupOut(Model):
     id: str
     name: str
@@ -173,6 +178,24 @@ class ProjectUpdateIn(Model):
     default_run_configuration_id: str | None = None
     status: ProjectStatus | None = None
     visibility: ProjectVisibility | None = None
+
+
+class DeletionImpactItemOut(Model):
+    """删除确认页面展示的一类影响对象数量。"""
+
+    kind: str
+    count: int
+
+
+class DeletionImpactOut(Model):
+    """删除操作的可见影响摘要，不包含 Secret 值或内部内容。"""
+
+    resource_type: Literal["user_group", "project"]
+    resource_id: str
+    resource_name: str
+    can_delete: bool
+    problems: list[str] = Field(default_factory=list)
+    items: list[DeletionImpactItemOut] = Field(default_factory=list)
 
 
 class ProjectFileOut(Model):
@@ -298,6 +321,21 @@ class ModulesEnvironmentPublicationIn(Model):
     modules: list[str] = Field(min_length=1)
 
 
+class ImportEnvironmentPublicationIn(Model):
+    version: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    source_uri: str = Field(min_length=1, max_length=2048)
+    expected_sha256: str = Field(default="", max_length=64)
+
+
+class EnvironmentPublicationOptionsOut(Model):
+    modules: list[str]
+    max_upload_bytes: int
+    max_import_bytes: int
+    import_timeout_seconds: float
+    architecture: str
+
+
 class EnvironmentPublicationAttemptOut(Model):
     id: str
     environment_id: str
@@ -305,6 +343,12 @@ class EnvironmentPublicationAttemptOut(Model):
     version: str
     description: str
     runtime_kind: EnvironmentRuntimeKind
+    source_kind: Literal["modules", "upload", "import"] = "upload"
+    source_uri: str = ""
+    source_digest: str = ""
+    expected_sha256: str = ""
+    modules: list[str] = Field(default_factory=list)
+    stage: str = ""
     validation_summary: str
     validation_evidence: dict[str, object]
     failure_code: str | None
@@ -332,6 +376,7 @@ class OwnerSummaryOut(Model):
 
 
 class EnvironmentOut(Model):
+    capabilities: list[Capability] = Field(default_factory=list)
     id: str
     name: str
     description: str
@@ -552,6 +597,8 @@ class RunDraftIn(Model):
     """一次提交意图。"""
 
     run_configuration_id: str
+    confirmation_token: str | None = None
+    """Preflight 返回的配置变化检测标识；不能替代当前授权校验。"""
     project_version_id: str | None = None
     """None 表示使用 Project 的最新版本。"""
     name: str | None = None
@@ -581,6 +628,15 @@ class AdjustedRerunIn(Model):
 
 
 class PreflightOut(Model):
+    configuration_name: str
+    command: str
+    working_directory: str
+    input_bindings: list[InputBindingModel]
+    artifact_rules: list[ArtifactRuleModel]
+    project_version_label: str | None
+    compute_plan_name: str | None
+    environment_name: str | None
+    confirmation_token: str | None
     ok: bool
     problems: list[str]
     project_version_id: str | None

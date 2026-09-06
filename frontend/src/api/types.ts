@@ -41,6 +41,7 @@ export type User = Schemas['UserOut']
 export type UserGroup = Schemas['UserGroupOut']
 export type Member = Schemas['MemberOut']
 export type Invitation = Schemas['InvitationOut']
+export type DeletionImpact = Schemas['DeletionImpactOut']
 export type Variable = Schemas['VariableOut']
 export type Secret = Schemas['SecretOut']
 export type Entitlement = Schemas['EntitlementOut']
@@ -134,9 +135,9 @@ export type ApiErrorBody = Schemas['ErrorOut']
 // -- 权限 -------------------------------------------------------------------
 
 /** UI capability checks mirror the server-provided list; authorization remains server-side. */
-export function can(
-  context: { capabilities?: Capability[] } | undefined,
-  capability: Capability,
+export function can<T extends string>(
+  context: { capabilities?: T[] } | undefined,
+  capability: T,
 ): boolean {
   return context?.capabilities?.includes(capability) ?? false
 }
@@ -174,3 +175,6 @@ export const TERMINAL_STATUSES = [
 export function isTerminal(status: RunStatus): boolean {
   return (TERMINAL_STATUSES as readonly RunStatus[]).includes(status)
 }
+
+export type EnvironmentPublicationOptions = Schemas['EnvironmentPublicationOptionsOut']
+export type ImportEnvironmentPublicationInput = Schemas['ImportEnvironmentPublicationIn']

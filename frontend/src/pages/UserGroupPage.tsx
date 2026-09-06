@@ -1,13 +1,17 @@
 import { OrganizationIcon } from '@primer/octicons-react'
-import { Label } from '@primer/react'
-import { Outlet, matchPath, useLocation } from 'react-router-dom'
+import { Banner, Button, Dialog, Label, Stack, Text } from '@primer/react'
+import { useState } from 'react'
+import { Outlet, matchPath, useLocation, useNavigate } from 'react-router-dom'
 
-import type { UserGroup } from '../api/types'
+import { api, type DeleteResult } from '../api/client'
 import { toAsyncError } from '../api/errors'
+import { can, type DeletionImpact, type UserGroup } from '../api/types'
+import { useAsync } from '../api/useAsync'
 import { AsyncState } from '../components/common/AsyncState'
+import { userGroupGovernanceCopy as governanceCopy } from '../components/workspace/memberCopy'
 import { useCurrentUserGroup } from '../components/usergroup/userGroupContext'
 import {
-  userGroupPageCopy as copy,
+  userGroupPageCopy as pageCopy,
   userGroupRoleLabel,
 } from '../components/usergroup/userGroupCopy'
 import styles from './UserGroupPage.module.css'
@@ -21,13 +25,15 @@ export interface UserGroupOutletContext {
 export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: () => void }) {
   const group = useCurrentUserGroup()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const isOverview = matchPath('/user-groups/:userGroupId', pathname) !== null
 
   return (
     <div className={styles.page}>
       <AsyncState
         loading={group.loading && !group.userGroup}
-        loadingText={copy.page.loading}
+        loadingText={pageCopy.page.loading}
         error={toAsyncError(group.error)}
         onRetry={group.reload}
       >
@@ -46,6 +52,11 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
                     </Label>
                   </div>
                 </div>
+                {can(group.userGroup, 'user_group.delete') ? (
+                  <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+                    {governanceCopy.delete.action}
+                  </Button>
+                ) : null}
               </header>
             ) : null}
 
@@ -60,9 +71,145 @@ export function UserGroupPage({ onMembershipChanged }: { onMembershipChanged?: (
                 }
               />
             </div>
+            {deleteOpen ? (
+              <DeleteUserGroupDialog
+                userGroup={group.userGroup}
+                onClose={() => setDeleteOpen(false)}
+                onDeleted={() => navigate('/')}
+              />
+            ) : null}
           </div>
         ) : null}
       </AsyncState>
     </div>
+  )
+}
+
+function DeleteUserGroupDialog({
+  userGroup,
+  onClose,
+  onDeleted,
+}: {
+  userGroup: UserGroup
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const impact = useAsync<DeletionImpact>(
+    () => api.getUserGroupDeletionImpact(userGroup.id),
+    [userGroup.id],
+  )
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<Error | undefined>()
+  const [result, setResult] = useState<DeleteResult>()
+  const viewError = toAsyncError(submitError ?? impact.error)
+  const canConfirm = impact.data?.can_delete === true && !submitting
+  const items = impact.data?.items ?? []
+  const problems = impact.data?.problems ?? []
+
+  const submit = async () => {
+    if (!canConfirm) return
+    setSubmitting(true)
+    setSubmitError(undefined)
+    try {
+      setResult(await api.deleteUserGroup(userGroup.id))
+      setSubmitting(false)
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error : new Error('delete failed'))
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog
+      title={
+        result === 'deleted'
+          ? governanceCopy.delete.success
+          : result === 'absent'
+            ? 'User Group 不存在'
+            : governanceCopy.delete.title(userGroup.name)
+      }
+      width="large"
+      onClose={() => {
+        if (result) onDeleted()
+        else if (!submitting) onClose()
+      }}
+      footerButtons={
+        result
+          ? [
+              {
+                content: governanceCopy.delete.returnHome,
+                onClick: onDeleted,
+              },
+            ]
+          : [
+              {
+                content: governanceCopy.delete.cancel,
+                disabled: submitting,
+                onClick: onClose,
+              },
+              {
+                content: governanceCopy.delete.confirm,
+                buttonType: 'danger',
+                loading: submitting,
+                disabled: !canConfirm,
+                onClick: () => void submit(),
+              },
+            ]
+      }
+    >
+      {result ? (
+        <Text as="p">
+          {result === 'deleted' ? governanceCopy.delete.success : governanceCopy.delete.absent}
+        </Text>
+      ) : (
+        <Stack gap="normal">
+          <Text as="p">{governanceCopy.delete.description}</Text>
+          {impact.loading ? <Text>{governanceCopy.delete.loading}</Text> : null}
+          {impact.data ? (
+            <>
+              <Text as="h3">{governanceCopy.delete.impactTitle}</Text>
+              <ul>
+                {items
+                  .filter((item) => item.count > 0)
+                  .map((item) => (
+                    <li key={item.kind}>
+                      {governanceCopy.delete.itemLabels[item.kind] ?? item.kind}：{item.count}
+                    </li>
+                  ))}
+              </ul>
+              {items.every((item) => item.count === 0) ? (
+                <Text>{governanceCopy.delete.empty}</Text>
+              ) : null}
+              {problems.length > 0 ? (
+                <Banner variant="critical">
+                  <Banner.Title>{governanceCopy.delete.blockedTitle}</Banner.Title>
+                  <Banner.Description>
+                    <ul>
+                      {problems.map((problem) => (
+                        <li key={problem}>{problem}</li>
+                      ))}
+                    </ul>
+                  </Banner.Description>
+                  <Banner.Description>{governanceCopy.delete.blockedNext}</Banner.Description>
+                </Banner>
+              ) : null}
+            </>
+          ) : null}
+          {viewError ? (
+            <Banner variant="critical">
+              <Banner.Title>{viewError.message}</Banner.Title>
+              {viewError.problems?.map((problem) => (
+                <Banner.Description key={problem}>{problem}</Banner.Description>
+              ))}
+              {impact.error && !submitError ? (
+                <Banner.PrimaryAction onClick={() => void impact.reload()}>
+                  重试读取影响
+                </Banner.PrimaryAction>
+              ) : null}
+            </Banner>
+          ) : null}
+        </Stack>
+      )}
+    </Dialog>
   )
 }

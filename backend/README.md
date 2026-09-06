@@ -70,9 +70,9 @@ uv run python -m workspace107.tools.seed --demo
 uv run python -m workspace107.tools.seed --demo --platform-owner-username <username>
 ```
 
-Owner 选择顺序是 CLI、`WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME`、`student`，且只在
-`grp_platform_assets` 首次不存在时生效。User Group 已存在时不会创建新配置的 User，也
-不会改回或协调已转让的 Owner。演示 Project 使用 `grp_demo` 自己的 Environment；它与
+Owner 选择顺序是 CLI、`WORKSPACE107_DEMO_PLATFORM_OWNER_USERNAME`、`platform-admin`，且只在
+`grp_platform_assets` 首次不存在时生效。组已存在时仍确保账密管理员 User 存在，尚未加入则补为
+管理员，不改已有 Owner。演示 Project 使用 `grp_demo` 自己的 Environment；它与
 `grp_platform_assets` 持有的两条平台演示 Environment 是不同资产。这不是 production
 provisioning 接口。
 
@@ -95,7 +95,7 @@ cp ../.env.example .env
 | `WORKSPACE107_STORAGE_ROOT` | Project 文件、Run 目录、日志和 Artifact 的根目录 |
 | `WORKSPACE107_SCHEDULER` | `mock`（本机子进程真实执行）或 `slurm` |
 | `WORKSPACE107_SLURM_JWT` | **等价于密码**，只能从环境注入 |
-| `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 请求头识别用户 |
+| `WORKSPACE107_AUTH_MODE` | `dev` 用 `X-User` 缺省 `student`；`ustc` 只接受代理注入的身份。`make dev` 在 `ustc` 时带登录页，字段见仓库 `.env.example` |
 
 ## 开发模式下的身份
 
@@ -109,7 +109,7 @@ curl -X POST -H 'X-User: student' -H 'Content-Type: application/json' \
   http://127.0.0.1:8000/api/v1/user-groups
 ```
 
-接入学校统一身份认证后只需替换 `api/deps.py` 中的 `get_current_user`。
+公开登录页走 `make dev` + `AUTH_MODE=ustc`，字段见仓库 `.env.example`。
 
 ## 调度适配器
 

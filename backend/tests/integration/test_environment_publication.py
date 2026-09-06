@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import grant_test_entitlement
@@ -49,14 +50,14 @@ def _install_apptainer_inspect_double(monkeypatch, *, architecture: str) -> None
     class SuccessfulInspect:
         returncode = 0
 
-        async def communicate(self) -> tuple[bytes, bytes]:
-            return stdout, b""
+        async def wait(self) -> int:
+            return 0
 
     async def create_subprocess_exec(*args, **kwargs):
         assert args[:3] == ("/usr/bin/apptainer", "inspect", "--json")
         assert await asyncio.to_thread(Path(args[3]).is_file)
-        assert kwargs["stdout"] is asyncio.subprocess.PIPE
-        assert kwargs["stderr"] is asyncio.subprocess.PIPE
+        kwargs["stdout"].write(stdout)
+        kwargs["stdout"].flush()
         return SuccessfulInspect()
 
     monkeypatch.setattr(
@@ -350,3 +351,87 @@ async def test_validated_sif_run_resolves_real_cas_path_before_scheduler_submiss
     )
     assert preflight.status_code == 200
     assert any("当前unavailable" in problem for problem in preflight.json()["problems"])
+
+
+async def test_remote_import_is_authorized_durable_and_resumes_stored_image(
+    client, session, context, monkeypatch
+):
+    environment_id = await _environment(client, session)
+    path = f"/api/v1/catalog/environments/{environment_id}/publication-attempts/import"
+    body = {"version": "remote-1", "source_uri": "docker://python:3.12"}
+    assert (await client.post(path, json=body, headers=BOB)).status_code == 404
+    denied = await client.post(
+        path, json={**body, "source_uri": "https://127.0.0.1/image.sif"}, headers=ALICE
+    )
+    assert denied.status_code == 422
+    response = await client.post(path, json=body, headers=ALICE)
+    assert response.status_code == 202
+    attempt_id = response.json()["id"]
+    assert response.json()["source_uri"] == body["source_uri"]
+    assert (
+        "environment.version.create"
+        in (
+            await client.get(f"/api/v1/catalog/environments/{environment_id}", headers=ALICE)
+        ).json()["capabilities"]
+    )
+    _install_apptainer_inspect_double(monkeypatch, architecture="x86_64")
+    blob = await context.storage.write_blob(b"imported SIF bytes")
+    phases = []
+
+    class Importer:
+        async def import_image(self, uri, digest, progress):
+            await progress("converting", "正在拉取并转换")
+            observed = await client.get(
+                f"/api/v1/catalog/environment-publication-attempts/{attempt_id}", headers=ALICE
+            )
+            phases.append(observed.json()["stage"])
+            return {
+                "locator": blob,
+                "sha256": blob,
+                "size": len(b"imported SIF bytes"),
+                "source_uri": uri,
+                "source_digest": "",
+                "architecture": "x86_64",
+            }
+
+    async with context.session_factory() as worker:
+        processor = EnvironmentPublicationProcessor(
+            SqlRepositories(worker),
+            context.storage,
+            context.clock,
+            importer=Importer(),
+            checkpoint=worker.commit,
+        )
+        await processor.claim()
+        original_validate = processor._validate
+
+        async def interrupt_after_storage(attempt):
+            raise asyncio.CancelledError
+
+        monkeypatch.setattr(processor, "_validate", interrupt_after_storage)
+        with pytest.raises(asyncio.CancelledError):
+            await processor.process(attempt_id)
+        # The imported bytes and checkpoint survive interruption and a fresh session.
+        monkeypatch.setattr(processor, "_validate", original_validate)
+    async with context.session_factory() as worker:
+        processor = EnvironmentPublicationProcessor(
+            SqlRepositories(worker),
+            context.storage,
+            context.clock,
+            importer=Importer(),
+            checkpoint=worker.commit,
+        )
+        reclaimed = await processor.claim()
+        assert reclaimed is not None and reclaimed.id == attempt_id
+        result = await processor.process(attempt_id)
+        await worker.commit()
+        replay = await processor.process(attempt_id)
+        assert replay.version_id == result.version_id
+        assert len(await SqlRepositories(worker).environments.list_versions(environment_id)) == 1
+    assert result.status.value == "succeeded"
+    assert phases == ["converting"]
+    version = (
+        await client.get(f"/api/v1/catalog/environment-versions/{result.version_id}", headers=ALICE)
+    ).json()
+    assert version["definition"]["sha256"] == blob
+    assert version["definition"]["source_uri"] == body["source_uri"]
