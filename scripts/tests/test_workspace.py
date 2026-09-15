@@ -58,7 +58,9 @@ class WorkspaceCliTests(unittest.TestCase):
         run_check.assert_called_once_with("contract")
 
     def test_contract_artifacts_have_explicit_owners(self) -> None:
-        self.assertEqual(contract.OPENAPI_PATH, REPO_ROOT / "contracts" / "openapi.json")
+        self.assertEqual(
+            contract.OPENAPI_PATH, REPO_ROOT / "backend" / "contracts" / "openapi.json"
+        )
         self.assertEqual(
             contract.SCHEMA_PATH,
             REPO_ROOT / "frontend" / "src" / "api" / "schema.d.ts",

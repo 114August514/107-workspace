@@ -27,6 +27,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.UV_PYTHON }}
@@ -54,66 +57,6 @@ jobs:
       - name: Run the same check used locally
         run: make check
 
-  migration-check:
-    name: migration-up-down-up
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.UV_PYTHON }}
-      - uses: astral-sh/setup-uv@v6
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - run: uv run --no-project python scripts/workspace.py setup backend
-      - name: Upgrade, downgrade to common parent, and upgrade again
-        env:
-          WORKSPACE107_DATABASE_URL: sqlite+aiosqlite:///./var/ci-migration.db
-        run: |
-          uv run --no-project python scripts/workspace.py migrate
-          (cd backend && uv run alembic downgrade d71f3a9c2b4e)
-          uv run --no-project python scripts/workspace.py migrate
-
-  postgres-behavior:
-    name: postgres-migration-and-owner-race
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: workspace107_ci
-          POSTGRES_USER: workspace107
-          POSTGRES_PASSWORD: ci-throwaway-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U workspace107 -d workspace107_ci"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ env.UV_PYTHON }}
-      - uses: astral-sh/setup-uv@v6
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - name: Run PostgreSQL migration and owner race evidence
-        env:
-          WORKSPACE107_TEST_POSTGRESQL_URL: postgresql+asyncpg://workspace107:ci-throwaway-password@127.0.0.1:5432/workspace107_ci
-        run: |
-          uv run --no-project python scripts/workspace.py setup backend
-          test -n "$WORKSPACE107_TEST_POSTGRESQL_URL"
-          cd backend
-          WORKSPACE107_DATABASE_URL="$WORKSPACE107_TEST_POSTGRESQL_URL" uv run alembic upgrade head
-          uv run pytest -q tests/integration/postgres
-
-
   docker-build:
     name: compose-build-and-smoke
     runs-on: ubuntu-latest
@@ -123,6 +66,9 @@ jobs:
       WORKSPACE107_SEED_DEMO: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
       - uses: docker/setup-buildx-action@v3
       - run: docker compose --project-directory . --file deploy/compose.yaml build
       - run: docker compose --project-directory . --file deploy/compose.yaml up -d --wait

@@ -1,4 +1,4 @@
-# 107 Workspace
+# 107 Workspace · 项目索引
 
 面向中国科学技术大学 107 算力平台的协作式计算工作空间。用户可以在浏览器中管理
 Workspace 和 Project、保存 Project Version、配置并提交 Run，以及查看日志和
@@ -8,6 +8,31 @@ Artifact。
 现有实现覆盖 FastAPI 后端、React 控制台、数据库迁移、本地内容存储、Mock 调度和
 Slurm REST 适配器；真实 Git、Shared FS、独立 Worker、Apptainer、学校认证和真实
 Slurm 环境仍需要按现行 Milestone 验证或实现。
+
+## 仓库导航
+
+本仓库维护项目索引、产品与架构文档、部署编排和集成检查。
+前后端源码由独立仓库维护；下列目录是固定提交的 Git 子模块。
+
+| 仓库 | 本地入口 | 职责 |
+| :--- | :--- | :--- |
+| [107-backend](https://github.com/114August514/107-backend) | `backend/` | API、业务、数据库迁移、CLI、调度与存储、后端镜像 |
+| [107-frontend](https://github.com/114August514/107-frontend) | `frontend/` | 网页、API 消费快照、前端镜像 |
+| [107-workspace](https://github.com/114August514/107-workspace) | 本仓库 | 全局文档、认证适配、部署、联调、版本组合 |
+
+```bash
+git clone --recurse-submodules git@github.com:114August514/107-workspace.git
+cd 107-workspace
+# 已有 clone 在拉取迁移提交后执行：
+git submodule update --init --recursive
+```
+
+只开发组件时可以单独 clone 对应仓库并运行 `make setup && make check`。
+完整环境的启动步骤见下文。前端独立构建不需要 Python 或后端源码。
+子模块记录精确提交，不自动跟踪各仓库的最新 main。
+
+文档不另建仓库：全局规则维护在本仓库 `docs/`，组件说明维护在组件仓库。
+操作方法、升级顺序与发布关系见 [多仓库协作](docs/contributing/multi-repo.md)。
 
 ## 事实来源
 
@@ -164,7 +189,7 @@ api -> application -> domain ports <- infrastructure
 
 - `backend/`：FastAPI、SQLAlchemy/Alembic、Scheduler/Storage 适配器和测试。
 - `frontend/`：React、TypeScript、Vite 和从 OpenAPI 生成的接口类型。
-- `contracts/`：后端导出、前端消费的 OpenAPI 机器契约。
+- `contracts/`：契约索引；后端与前端各自保存生产契约和消费快照。
 - `deploy/`：可执行的容器编排和部署入口，不存放服务自己的镜像构建文件。
 - `scripts/`：仓库公共 Python 任务实现和 Linux 引导脚本。
 - `docs/operations/`：当前容器部署方式和上线前仍需满足的约束。

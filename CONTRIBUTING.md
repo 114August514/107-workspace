@@ -22,7 +22,8 @@ make check
 WSL2 的 Linux filesystem。原生 Windows / PowerShell runtime 不受支持。
 
 修改 API DTO 或路由后运行 `make contract`，并提交
-`contracts/openapi.json` 与 `frontend/src/api/schema.d.ts` 的对应变化。
+后端 `contracts/openapi.json`、前端消费快照、来源记录与生成类型的对应变化。
+组件分别提交后，再更新索引仓库的子模块指针，见 [多仓库协作](docs/contributing/multi-repo.md)。
 
 提交前检查 `git status` 和暂存区 diff，只提交与当前 Issue 相关的文件。不要提交
 `.env`、密钥、数据库、用户文件、Run 输出、虚拟环境、依赖目录或构建产物。

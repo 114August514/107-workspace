@@ -168,11 +168,8 @@ git remote remove <远程仓库名称>
 
 ## 三. 分支模型
 
-项目最终只保留一个长期分支 `main`。当前远程默认分支仍为 `master`；在 GitHub 默认
-分支、保护规则和协作者设置完成迁移前，`master` 仍是共享主分支，本文命令中的
-`main` 应替换为 `master`。
-
-CI 暂时同时监听 `main` 和 `master`，只用于覆盖改名窗口，不表示并行维护两条主线。
+三个仓库均以 `main` 为长期默认分支；开发使用短期分支和 PR。
+CI 同时接受 main/master，方便已有分支迁移。
 迁移完成后应删除 `master` 监听和本段过渡说明。
 
 无论主分支当前叫什么，它始终代表：
@@ -1051,20 +1048,9 @@ git tag -a v0.1.0 -m "完成核心运行闭环"
 git push origin v0.1.0
 ```
 
-推送 Tag 本身不会发布镜像。确认 Tag 与 CI 后，在 GitHub Actions 中手动运行
-`Release` workflow：
-
-```text
-source_ref: v0.1.0
-version: 0.1.0（不带 v，不使用 +build metadata）
-publish_latest: 仅稳定版本按需选择
-```
-
-`source_ref` 必须是与 `version` 匹配的 `v<SemVer>` annotated Tag。工作流显式检出
-`refs/tags/<source_ref>` 并解析为不可变提交，再为 API 与 Web 构建并发布带版本号的
-GHCR 镜像；只有显式选择时才更新 `latest`，预发布版本不能更新 `latest`。为避免不同
-版本折叠到同一个 OCI Tag，发布版本不接受 SemVer build metadata。工作流不会创建或
-移动 Tag，也不会代替 GitHub Release notes。
+前后端在各自仓库创建 annotated Tag，并运行组件仓库的 Release workflow。
+索引仓库固定已验证的子模块提交，不再执行统一镜像发布。
+参数和升级顺序见 [多仓库协作](multi-repo.md)。
 
 镜像发布成功后，在 GitHub 创建 Release，填写：
 
