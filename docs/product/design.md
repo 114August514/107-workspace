@@ -2368,7 +2368,7 @@ API Backend 与 Background Worker 共享同一套 Application、Domain 与 Port�
 | 类别 | 技术选型 | 主要职责 |
 | ---- | ----- | --------- |
 | JavaScript 运行时 | **Node.js 24 LTS** | 前端开发、构建、测试及代码生成 |
-| 包管理器 | **pnpm 11** | 依赖安装、脚本执行及前端 Monorepo 管理 |
+| 包管理器 | **pnpm 11** | 前端依赖安装与脚本执行 |
 | 前端框架 | **React** | 构建组件化用户界面 |
 | 开发语言 | **TypeScript** | 提供静态类型检查和前端模型约束 |
 | 构建工具 | **Vite** | 开发服务器、热更新及生产构建 |
@@ -2431,66 +2431,45 @@ Vitest + React Testing Library + MSW + Playwright
 
 ### 5.1 仓库与目录组织
 
-项目采用 Monorepo：
+项目采用独立组件仓库与索引仓库，见 [ADR-0005](../decisions/0005-multi-repo.md)。
+索引仓库通过 Git 子模块固定组件提交；前后端可独立安装、检查、构建和发布。
 
 ```text
-107-workspace/
-├── frontend/ # 暂未形成稳定版本，fronted 需要重构，当前代码仅作为参考
-│   ├── src/
-│   │   ├── app/
-│   │   ├── features/
-│   │   ├── components/
-│   │   ├── layouts/
-│   │   ├── api/
-│   │   └── lib/
-│   └── tests/
-│
-├── backend/
-│   ├── src/
-│   │   └── workspace107/
-│   │       ├── api/
-│   │       ├── user_group/
-│   │       ├── project/
-│   │       ├── run/
-│   │       ├── resource/
-│   │       ├── template/
-│   │       ├── profile/
-│   │       ├── infrastructure/
-│   │       ├── worker/
-│   │       └── bootstrap/
+107-workspace/                  # 索引、全局文档、部署和集成
+├── backend/                    # 107-backend 子模块
+│   ├── src/workspace107/
 │   ├── tests/
 │   ├── migrations/
+│   ├── contracts/openapi.json   # 后端路由导出的机器契约
 │   ├── pyproject.toml
 │   └── uv.lock
-│
-├── contracts/
-│   ├── README.md
-│   └── openapi.json
-│
-├── deploy/
-│   ├── README.md
-│   └── compose.yaml
-│
-├── docs/
-│   ├── product/
-│   ├── contributing/
-│   ├── operations/
-│   ├── decisions/
-│   ├── journal/
-│   ├── references/
-│   └── archive/
-├── scripts/
-│   ├── workspace.py
-│   ├── tasks/
-│   └── platform/
+├── frontend/                   # 107-frontend 子模块
+│   ├── src/
+│   ├── tests/
+│   ├── contracts/              # 固定契约快照与来源提交
+│   ├── package.json
+│   └── pnpm-lock.yaml
+├── contracts/README.md          # 跨仓契约索引
+├── deploy/                     # 组件编排和认证适配
+├── docs/                       # 产品、决策、运维、测试等全局文档
+├── scripts/                    # 集成工程入口和跨仓检查
+├── .gitmodules
 ├── .github/
 ├── Makefile
 └── README.md
 ```
 
-后端优先按领域责任组织，各领域模块内部再按实际需要划分 Domain、Application 和 Port；Infrastructure 承载 PostgreSQL、Git、Slurm、Shared FS、Secret 等具体实现。
+后端当前仍采用分层单体；按领域组织模块是后续工程方向，由
+[后端模块化任务](https://github.com/114August514/107-backend/issues/3) 跟踪。
+各领域内部继续按实际需要划分 Domain、Application 和 Port；
+Infrastructure 承载具体技术实现。目录规划不能作为 Git、Shared FS 或独立 Worker 已实现的证明。
 
-目录是当前工程基线，不是永久兼容契约；真实责任边界变化时允许调整。
+全局文档在索引仓库维护，组件开发说明随组件维护，不另建 docs 仓库。
+组件任务在对应仓库跟踪，跨仓目标与验收在索引仓库跟踪；具体操作见
+[多仓库协作](../contributing/multi-repo.md)。
+
+目录不是永久兼容契约；真实责任边界变化时允许调整。
+
 
 ### 5.2 垂直切片与持续设计
 
@@ -2559,7 +2538,7 @@ End-to-End
 → 少量核心路径
 ```
 
-仓库提供统一工程入口：
+索引仓库提供整套系统的统一工程入口；组件独立入口见各自 README：
 
 ```text
 make setup
@@ -2691,7 +2670,7 @@ Roadmap 和 Milestone 可以根据实现反馈调整，但范围变化应显式�
 
 | Milestone | 核心目标 | 关键能力 | 默认推进定位 |
 | :---: | :---: | :--- | :---: |
-| **M0 Engineering Baseline** | 建立可持续开发的工程基线 | Monorepo、Backend、Worker、测试、配置、统一工程入口 | 工程基线优先 |
+| **M0 Engineering Baseline** | 建立可持续开发的工程基线 | 多仓集成、Backend、Worker、测试、配置、统一工程入口 | 工程基线优先 |
 | **M1 Executable Skeleton** | 跑通最薄真实执行链路 | Run / Snapshot、Worker、Git / Shared FS、slurmrestd / Slurm、状态回写 | 真实链路优先 |
 | **M2 Single-user Compute Loop** | 形成单用户完整计算闭环 | User-owned Project / Version、Run Configuration、Run、Log、Artifact | 可见闭环优先 |
 | **M3 Reusable Run** | 使已验证计算工作能够复用 | 重跑、Fork、Environment / Shared Resource 校验与不可变版本发布、确定引用 | 随可见切片推进 |

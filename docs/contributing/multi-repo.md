@@ -64,3 +64,15 @@ WORKSPACE107_IMAGE_API 与 WORKSPACE107_IMAGE_WEB 为明确版本或 digest，
 索引仓库保留原始完整历史、Issue 和 PR 链接，不重写共享历史。
 回退某个集成版本时检出相应索引提交，再执行 git submodule update --init --recursive。
 这只切换代码，不代表数据库迁移可逆；持久化回退继续遵循运维规范。
+
+## Issue 与任务归属
+
+- 单组件实现和缺陷在对应组件仓库维护；跨组件产品目标、部署与整体验收在索引仓库维护。
+- 使用跨仓完整链接或 `owner/repo#number`；裸编号只引用当前仓库。
+- 转移前先核对实现和验收：已完成项关闭并保留原历史，部分完成项明确剩余工作。
+- 父任务记录完整用户结果，子任务记录具体交付；拆出子任务不等于完成父任务。
+- [Core 索引](https://github.com/114August514/107-workspace/issues/43) 和
+  [V1/Optional 索引](https://github.com/114August514/107-workspace/issues/53) 作为跨仓入口，
+  不再复制一份独立的全量 Markdown backlog。
+
+首次整理的映射和证据见 [2026-09-16 审计记录](../archive/2026-09-16-issue-audit.md)。
