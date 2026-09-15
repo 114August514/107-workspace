@@ -89,7 +89,6 @@
 
 | 测试文件 | 保护目标 | 来源 |
 |---|---|---|
-| `architecture/test_docs_references.py` | 活动代码与文档引用指向当前事实源 | 待进入 design.md |
 | `architecture/test_dependency_direction.py` | 后端分层依赖方向符合架构约束 | §4.3 |
 
 ## 前端
@@ -144,6 +143,12 @@
 | `unit/api/client.test.ts` | API 错误信封、401 信号与删除 404 解析 | §3.4.2 / 待进入 design.md |
 | `unit/api/sharedResources.test.ts` | 共享资源发布上传与版本文件文本读取 | §2.6 / GR-201 |
 | `unit/api/useAsync.test.tsx` | 异步请求 latest-wins 与静默刷新顺序 | 待进入 design.md |
+
+## 索引仓库
+
+| 测试文件 | 保护目标 | 来源 |
+|---|---|---|
+| `scripts/tests/test_docs_references.py` | 跨仓活动代码与文档引用指向当前事实源 | ADR-0005 |
 
 ## 说明
 

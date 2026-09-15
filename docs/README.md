@@ -39,5 +39,5 @@
 读取当前适用的 [`decisions/`](decisions/README.md)。
 
 跨前后端的生成式 API 契约属于机器契约，
-统一保存在 [`contracts/`](../contracts/README.md)，
+由后端导出、前端保存固定消费快照；入口见 [`contracts/`](../contracts/README.md)，
 不要从历史文档或手写说明推断其当前形状。
