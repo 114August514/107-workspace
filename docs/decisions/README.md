@@ -15,3 +15,5 @@
 
 `archive/workspace107/docs/decisions/` 中的文件属于来源快照，只解释来源实现的历史，
 不是当前仓库的活动 ADR。
+
+- [ADR-0005：独立组件仓库与索引仓库](0005-multi-repo.md)

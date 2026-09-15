@@ -173,6 +173,15 @@ def run_check(target: Target = "all") -> None:
         )
     if target in {"all", "contract"}:
         steps.append(("API contract", check_contract))
+    if target == "all":
+        steps.append(
+            (
+                "documentation integration",
+                lambda: backend_uv(
+                    "run", "pytest", "-q", "../scripts/tests/test_docs_references.py"
+                ),
+            )
+        )
 
     failures: list[str] = []
     for label, action in steps:

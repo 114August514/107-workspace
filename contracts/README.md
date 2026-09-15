@@ -1,29 +1,8 @@
-# 接口契约
+# API 契约索引
 
-本目录保存跨组件共享的机器可读契约，不保存人工维护的产品或接口说明。当前只有
-[`openapi.json`](openapi.json)，它由 FastAPI 后端导出，并用于生成前端 TypeScript 类型。
+[后端契约](../backend/contracts/openapi.json) 由后端路由导出；
+[前端消费快照](../frontend/contracts/openapi.json) 随前端提交固定。
 
-```text
-backend 路由与 DTO
-        |
-        v
-contracts/openapi.json
-        |
-        v
-frontend/src/api/schema.d.ts
-```
-
-两个生成物都不得手工编辑。在仓库根目录运行统一入口：
-
-```bash
-make contract
-make contract-check
-```
-
-修改后端 DTO 或路由时，应提交 `openapi.json` 与
-`frontend/src/api/schema.d.ts` 的对应变化。`make check` 会重新生成两者并拒绝未提交的
-漂移。
-
-面向人的产品、工程与运维说明仍放在 [`docs/`](../docs/README.md)；后端实现细节属于
-[`backend/`](../backend/README.md)，前端类型消费方式见
-[`frontend/README.md`](../frontend/README.md)。
+`make contract` 在集成工作区导出后端契约、更新前端快照与来源记录并生成类型。
+`make contract-check` 验证所选前后端版本的契约和生成类型一致。
+前后端仓库各自的检查无需其他仓库。

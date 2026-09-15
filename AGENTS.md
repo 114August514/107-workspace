@@ -1,4 +1,4 @@
-# 107 Workspace
+# 107 Workspace 索引仓库
 
 本文件是 Coding Agent 在 107 Workspace 中工作的项目入口。
 
@@ -58,6 +58,10 @@
 
 判断代码位置和职责时，优先阅读当前实现和相关 ADR，
 不要从本文件推导详细架构。
+
+backend/ 与 frontend/ 是独立 Git 子模块，组件规则以各自 AGENTS.md 为准。
+组件修改先在组件仓库提交，再由本仓库记录已发布的提交指针。
+文档归属和工作流见 docs/contributing/multi-repo.md。
 
 主要工作区域：
 
